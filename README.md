@@ -1,194 +1,152 @@
-# AI20K Agent Template
+# VIVI Cabin Copilot
 
-Template chính thức cho học viên VinUni AI20K Build Phase: cấu trúc dự án, code
-mẫu và hướng dẫn kỹ thuật để xây dựng một AI Agent hoàn chỉnh — từ kiến trúc,
-code, test cho đến deploy và nộp bài Demo Day.
+> **DEV-01 · AI20K Cohort 4 · Team P-126**
+> Trợ lý cabin tiếng Việt chạy offline-first trên edge, hỗ trợ điều khiển xe mô phỏng và tra cứu sổ tay có trích dẫn, với safety policy và human-in-the-loop (HITL) cho thao tác nhạy cảm.
 
-Technical Guidebook: <https://phoenix.note.transformerlabs.ai/technical-book>
+## Trạng thái
 
-## Template có sẵn những gì
+Dự án đang ở **Gate G1 — chốt đề tài và thiết kế**. Kiến trúc và kế hoạch trong repository là thiết kế mục tiêu; code trong `src/` hiện vẫn là starter scaffold và chưa đại diện cho toàn bộ chức năng được mô tả.
 
-- **Cấu trúc thư mục tách lớp** — `agents/`, `api/`, `services/`, `models/` đã
-  chia sẵn, không phải bàn lại từ đầu.
-- **Code mẫu chạy được** — LangGraph agent (state, node, tool), FastAPI routes,
-  Pydantic settings, schema.
-- **Docker và CI** — Dockerfile multi-stage, `docker-compose.yml`, workflow
-  GitHub Actions chạy `ruff` + `pytest` khi push lên `main`/`develop` và khi mở
-  pull request vào `main`.
-- **Technical Guidebook 10 chương** trong `docs/guide/`, đồng thời đọc được
-  online.
-- **Checklist 10 deliverables** của Demo Day.
-- **AI usage logging** — hook cài sẵn cho 6 công cụ AI, log tự động gửi lên
-  grading server mỗi lần `git push`.
+## Bài toán
 
-## Yêu cầu
+Trợ lý trong xe phụ thuộc cloud có thể phản hồi chậm hoặc mất một phần năng lực khi xe đi qua khu vực mạng yếu. Đồng thời, dùng mô hình ngôn ngữ để điều khiển chức năng vật lý tạo ra rủi ro gọi sai tool, dùng sai tham số hoặc trả lời sổ tay không có căn cứ.
 
-- Python 3.11 (phiên bản CI đang dùng)
-- Git
-- Docker — tuỳ chọn, chỉ cần nếu chạy `docker compose`
+VIVI Cabin Copilot tập trung vào bốn giá trị:
 
-## Bắt đầu
+- Hoạt động offline cho các luồng cốt lõi bằng SLM lượng tử hóa chạy local.
+- Điều khiển **vehicle digital twin** qua typed tools và MQTT; không kết nối CAN hoặc xe thật.
+- Tra cứu sổ tay bằng RAG, bắt buộc có citation hoặc từ chối trả lời.
+- Đặt deterministic safety policy và HITL giữa agent và mọi thao tác nhạy cảm.
 
-### 1. Clone repo của đội
+## Phạm vi MVP
 
-Khi đội được chốt, hệ thống tự sinh repo cho đội từ template này, nằm trong org
-GitHub của khoá bạn đang học và đặt tên theo mã đội. Copy URL ở trang đội trên
-Phoenix rồi clone về:
+- Hai vai trò: tài xế và kỹ sư hệ thống.
+- Nhập lệnh tiếng Việt bằng text và voice, luôn có text fallback.
+- Tối thiểu năm intent điều khiển cabin mô phỏng.
+- RAG sổ tay theo dòng/phiên bản xe, có trang hoặc section nguồn.
+- R0-R3 safety policy; cửa và kính thuộc R2, cần xác nhận một lần có thời hạn.
+- SLM Q4 chạy local; core flow được kiểm thử khi chặn WAN.
+- Trace và metric cho intent, grounding, tool success và end-to-end latency.
 
-```bash
-git clone https://github.com/<ORG-CỦA-KHOÁ>/<MÃ-ĐỘI>.git
-cd <MÃ-ĐỘI>
+Không thuộc MVP: điều khiển xe thật, phanh/lái/truyền động, chứng nhận automotive safety, bản đồ toàn quốc, voice biometrics và OTA thật.
+
+## Gate G1 deliverables
+
+| Deliverable | Tài liệu |
+|---|---|
+| 1-page Brief | [`docs/BRIEF.md`](docs/BRIEF.md) |
+| Product Requirements Document | [`docs/PRD.md`](docs/PRD.md) |
+| Wireframe và UI Flow | [`docs/UI_FLOW.md`](docs/UI_FLOW.md) |
+| GitHub Repo & AI Log Setup | [`docs/AI_LOG_SETUP.md`](docs/AI_LOG_SETUP.md) |
+
+Tài liệu hỗ trợ:
+
+- [Kiến trúc mục tiêu](docs/architecture_diagram.md)
+- [Kế hoạch triển khai 5 tuần](docs/project_plan_5_weeks.md)
+
+## Kiến trúc tóm tắt
+
+```mermaid
+flowchart LR
+    User[Driver voice or text] --> API[FastAPI gateway]
+    API --> Agent[LangGraph orchestrator]
+    Agent --> RAG[Grounded handbook RAG]
+    Agent --> Policy[Deterministic safety policy]
+    Policy -->|R2| HITL[Driver confirmation]
+    Policy -->|allowed| Tools[Typed vehicle tools]
+    HITL -->|approved| Tools
+    Tools --> MQTT[MQTT broker]
+    MQTT <--> Twin[Vehicle digital twin]
+    Twin --> API
+    RAG --> API
+    API --> User
 ```
 
-Không cần `rm -rf .git`, `git init` hay `git remote add`: repo sinh từ template
-đã bắt đầu bằng lịch sử riêng của đội và remote trỏ sẵn đúng chỗ. Chưa thấy repo
-của đội thì báo BTC — repo tự tạo nằm ngoài org sẽ không được chấm.
+LLM chỉ đề xuất intent, kế hoạch và tool call. Policy code kiểm tra quyền, trạng thái xe, giới hạn tham số và xác nhận; acknowledgement từ simulator mới là nguồn sự thật về kết quả hành động.
 
-### 2. Cài môi trường
-
-```bash
-python3.11 -m venv .venv
-source .venv/bin/activate      # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-```
-
-### 3. Cấu hình biến môi trường
-
-```bash
-cp .env.example .env
-```
-
-Mở `.env` và điền `OPENAI_API_KEY`. Riêng `AI_LOG_API_KEY`, mỗi thành viên tự
-tạo key riêng tại [dashboard Phoenix](https://phoenix.note.transformerlabs.ai/api-keys)
-rồi thay vào chỗ `<get-your-api-key-from-dashboard-phoenix>` — giá trị trong
-`.env.example` chỉ là placeholder, để nguyên thì log không vào được hệ thống chấm.
-
-### 4. Cài hook ghi log AI
-
-```bash
-bash scripts/setup_hooks.sh                                      # Linux / macOS / Git Bash
-powershell -ExecutionPolicy Bypass -File scripts\setup_hooks.ps1 # Windows PowerShell
-```
-
-Chạy một lần sau khi clone. Hook ghi lại prompt khi bạn dùng Claude Code, Cursor,
-Codex CLI, Gemini CLI, Antigravity hoặc GitHub Copilot, và cài pre-push hook để
-đẩy log lên server.
-
-### 5. Chạy server
-
-```bash
-uvicorn src.main:app --reload --port 8000
-```
-
-Swagger UI ở <http://localhost:8000/docs>. Hoặc dùng `make run`, `make test`,
-`make lint` — xem `Makefile`.
-
-## Cấu trúc thư mục
-
-```
-src/
-  agents/            LangGraph agent
-    graph.py         State graph (nodes + edges)
-    state.py         State schema (TypedDict)
-    nodes/           Node functions
-    tools/           Agent tools (@tool)
-  api/routes.py      FastAPI endpoints
-  models/schemas.py  Pydantic schemas
-  services/llm.py    LLM client
-  config.py          Pydantic Settings
-  main.py            App entry point
-tests/               pytest suite
-scripts/             Hook ghi log AI + installer
-docs/
-  guide/             Technical Guidebook (nguồn của bản online)
-  architecture_diagram.md
-eval/                Kết quả evaluation
-presentation/        Slide và video Demo Day
-.claude/ .codex/ .cursor/ .gemini/ .agents/ .github/hooks/
-                     Config hook cho từng công cụ
-.github/workflows/   CI
-Dockerfile           Multi-stage build
-docker-compose.yml   Chạy backend bằng Docker
-README_boilerplate.md  Khung README cho dự án của đội
-```
-
-## Technical Guidebook
-
-| Chương | Nội dung | Thời gian |
-|---|---|---|
-| 1 | Lời mở đầu — mục tiêu, cách sử dụng | 15 phút |
-| 2 | Khởi tạo dự án — clone, setup, git workflow | 4 giờ |
-| 3 | Thiết kế kiến trúc — 3-tier, diagram, ADR | 6 giờ |
-| 4 | LangGraph Agent — state, node, edge, tool, RAG | 8 giờ |
-| 5 | FastAPI — routes, validation, error handling, streaming | 6 giờ |
-| 6 | Giao diện — Next.js và Streamlit | 6 giờ |
-| 7 | DevOps — Docker, CI/CD, deploy, logging | 6 giờ |
-| 8 | Kiểm thử — unit test, integration test, RAGAS | 4 giờ |
-| 9 | Demo Day — 10 deliverables, checklist | 2 giờ |
-| 10 | Tài nguyên — khoá học, tài liệu, BMAD method | tham khảo |
-
-Đọc online tại <https://phoenix.note.transformerlabs.ai/technical-book>: đăng
-nhập bằng GitHub (đúng account đã được BTC mời vào org của khoá), chọn tab
-**Technical Book** ở sidebar trái. Bản offline nằm trong `docs/guide/`, mở được
-bằng bất kỳ markdown viewer nào.
-
-## 10 deliverables cho Demo Day
-
-| # | Deliverable | Vị trí | Template lo tới đâu |
-|---|---|---|---|
-| 1 | Source code | `src/` | Khung sẵn |
-| 2 | README | copy `README_boilerplate.md` thành `README.md` | Khung sẵn |
-| 3 | Architecture diagram | `docs/architecture_diagram.md` | Khung sẵn |
-| 4 | AI logs | LangSmith (3 biến môi trường) + auto AI usage logging | Cấu hình sẵn |
-| 5 | Live URL | deploy lên Render/Vercel | CI/CD sẵn |
-| 6 | Video demo | `presentation/` | Đội tự làm |
-| 7 | Pitch deck | `presentation/` | Đội tự làm |
-| 8 | Development journal | `JOURNAL.md` | Khung sẵn |
-| 9 | Worklog | `WORKLOG.md` | Khung sẵn |
-| 10 | Evaluation evidence | `eval/` | Đội tự làm |
-
-## Tech stack
+## Tech stack dự kiến
 
 | Lớp | Công nghệ |
 |---|---|
-| Agent | LangGraph + LangChain 0.3 |
-| Backend | FastAPI 0.115 + Uvicorn |
-| LLM | OpenAI, mặc định `gpt-4o-mini` (đổi trong `src/config.py`) |
-| Giao diện | Next.js hoặc Streamlit (đội tự chọn, hướng dẫn ở chương 6) |
-| Lint / test | ruff + pytest 8 |
-| DevOps | Docker + GitHub Actions |
+| Agent | LangGraph, typed tool schemas |
+| Local inference | llama.cpp hoặc Ollama; Qwen2.5-3B/Phi-3-mini GGUF Q4 |
+| Speech | PhoWhisper hoặc whisper.cpp; VietTTS/Piper |
+| Backend | FastAPI, Pydantic, WebSocket |
+| RAG | Chroma hoặc FAISS, multilingual embeddings |
+| Simulator | MQTT/Mosquitto, Python vehicle digital twin |
+| Frontend | Next.js/React |
+| Persistence | SQLite và local metrics |
+| Delivery | Docker Compose, GitHub Actions |
+
+## Quick start hiện tại
+
+Yêu cầu Python 3.11. Starter backend cần API key để chạy agent mẫu; implementation offline sẽ thay thế phụ thuộc này theo kế hoạch dự án.
+
+```bash
+git clone https://github.com/AI20K-Build-Phase-Cohort-4/P-126.git
+cd P-126
+
+python3.11 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+
+cp .env.example .env
+uvicorn src.main:app --reload --port 8000
+```
+
+Kiểm tra tại <http://localhost:8000/health> và Swagger tại <http://localhost:8000/docs>.
+
+```bash
+make lint
+make test
+```
 
 ## AI usage logging
 
-Mọi prompt được ghi vào `.ai-log/session.jsonl` và tự động gửi lên grading server
-ở bước pre-push.
-
-| Công cụ | Cấu hình | Thời điểm ghi |
-|---|---|---|
-| Claude Code | `.claude/settings.json` | mỗi prompt (`UserPromptSubmit`) |
-| Cursor | `.cursor/hooks.json` | mỗi prompt và khi dừng |
-| OpenAI Codex CLI | `.codex/hooks.json` | mỗi prompt và khi dừng |
-| Gemini CLI | `.gemini/settings.json` | mỗi lượt agent chạy |
-| GitHub Copilot | `.github/hooks/hooks.json` | mỗi prompt và cuối session |
-| Antigravity IDE | `.agents/hooks.json` | mỗi prompt, kèm lần quét lại lúc `git push` |
-
-Dùng ChatGPT hay công cụ web khác thì log thủ công:
+Repository đã có hook cho Claude Code, Cursor, Codex CLI, Gemini CLI, GitHub Copilot và Antigravity. Mỗi thành viên chạy một lần:
 
 ```bash
-bash scripts/_pyrun.sh scripts/log_manual.py --tool chatgpt --prompt "What you asked"
+cp .env.example .env
+# Điền AI_LOG_API_KEY cá nhân trong .env
+bash scripts/setup_hooks.sh
 ```
 
-## Đóng góp
+Với ChatGPT hoặc công cụ web không có hook:
 
-Repo này là open source. Đọc [CONTRIBUTING.md](CONTRIBUTING.md) trước khi mở PR.
+```bash
+bash scripts/_pyrun.sh scripts/log_manual.py \
+  --tool chatgpt \
+  --prompt "Tóm tắt mục đích sử dụng AI" \
+  --result "Quyết định hoặc đầu ra đã được thành viên kiểm tra"
+```
 
-Nội dung trong `docs/guide/` là nguồn của Technical Book và được đồng bộ lên bản
-online, nên mọi thay đổi ở đó cần review của
-[@AI20K-Build-Phase/book-maintainers](https://github.com/orgs/AI20K-Build-Phase/teams/book-maintainers)
-— xem [.github/CODEOWNERS](.github/CODEOWNERS).
+Chi tiết và checklist xác minh: [`docs/AI_LOG_SETUP.md`](docs/AI_LOG_SETUP.md).
 
-Báo lỗ hổng bảo mật theo [SECURITY.md](SECURITY.md), đừng mở public issue.
+## Cấu trúc repository
+
+```text
+src/                    Starter backend và LangGraph scaffold
+tests/                  Unit/API tests
+docs/                   Brief, PRD, UI flow, kiến trúc và kế hoạch
+eval/                   Evaluation evidence và report
+presentation/           Pitch deck và video
+scripts/                AI logging và setup scripts
+.github/workflows/      CI
+JOURNAL.md              Tổng kết theo tuần
+WORKLOG.md              Theo dõi công việc hằng ngày
+```
+
+## Nhóm và ownership dự kiến
+
+| Thành viên | Ownership chính |
+|---|---|
+| Hùng | Platform, FastAPI, MQTT simulator, Docker và observability |
+| Phong | Edge SLM, STT/TTS và inference benchmark |
+| Dương | LangGraph, RAG, safety/HITL và evaluation |
+| Khải | UI/UX, edge optimization, multimodal spike và quality evidence |
+
+Mỗi hạng mục cần một người chịu trách nhiệm trực tiếp và ít nhất một người review. Ownership có thể được điều chỉnh trong `WORKLOG.md` khi triển khai.
 
 ## License
 
-[MIT](LICENSE) — dùng tự do cho mục đích giáo dục.
+[MIT](LICENSE). Vehicle actions trong dự án chỉ là mô phỏng phục vụ giáo dục.
