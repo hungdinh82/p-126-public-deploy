@@ -1,0 +1,10 @@
+.env
+.venv/
+.venv-ai/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+data/
+models/
+.DS_Store
+tmp/
