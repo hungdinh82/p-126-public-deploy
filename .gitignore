@@ -58,3 +58,13 @@ out/
 # AI logs — tracked structure, ignored content
 .ai-log/*.jsonl
 .ai-log/archive/
+.env
+.venv/
+.venv-ai/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+data/
+models/
+.DS_Store
+tmp/

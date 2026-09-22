@@ -1,0 +1,12 @@
+# Optional local AI runtime. Python 3.11 or 3.12 is recommended because
+# PyTorch/ONNX wheels may not yet exist for the newest Python releases.
+-r requirements.txt
+accelerate>=1.2
+numpy>=2.0
+openai>=2.0
+google-genai>=1.0
+soundfile>=0.13
+torch>=2.4
+transformers>=4.46
+zerotts
+
