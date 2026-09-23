@@ -135,6 +135,7 @@ Các intent MVP ban đầu:
 - `vehicle.get_status`
 - `manual.search`
 - `conversation.clarify`
+- `conversation.respond` — câu trả lời hội thoại, không thực thi thao tác xe
 
 ## 5. State machine hội thoại
 

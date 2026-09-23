@@ -23,7 +23,10 @@ class Orchestrator:
         llm_ms = (time.perf_counter() - llm_started) * 1000
         safety = validate(proposal, vehicle)
         if safety.allowed:
-            vehicle, message = await self.vehicle.execute(request.session_id, request.turn_id, proposal)
+            if proposal.intent == "conversation.respond":
+                message = proposal.spoken_response
+            else:
+                vehicle, message = await self.vehicle.execute(request.session_id, request.turn_id, proposal)
             status = "verified"
         else:
             message, status = safety.message, safety.status
@@ -40,4 +43,3 @@ class Orchestrator:
         )
         self.store.append_event(response.model_dump())
         return response
-

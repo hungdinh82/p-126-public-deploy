@@ -11,17 +11,11 @@ cp .env.example .env
 .venv-ai/bin/python run.py
 ```
 
-Mở http://127.0.0.1:8787. Backend chỉ bind `127.0.0.1`. Lần đầu dùng STT/TTS sẽ tải model; các lần sau có thể chạy offline từ cache. Font Google Fonts có fallback font hệ thống khi offline.
+Mở http://127.0.0.1:8787 (hoặc cổng `VIVI_PORT` trong `.env`). Backend chỉ bind `127.0.0.1`. ZeroTTS và voice VIVI được nạp trong lúc backend khởi động; server chỉ sẵn sàng khi nạp xong. Lần đầu khởi động có thể tải model; các lần sau dùng cache local. PhoWhisper vẫn nạp khi nhận audio đầu tiên. Font Google Fonts có fallback font hệ thống khi offline.
 
 Voice ZeroTTS của ViVi nằm trong `voices/VIVI.zip` với ID `VIVI` (`ZEROTTS_VOICE=VIVI`). Pack này chứa giọng community “Mai Chi”; backend nạp trực tiếp từ ZIP, không cần cài voice vào thư mục người dùng.
 
-Nếu chỉ phát triển backend/UI mà chưa cần model nặng:
-
-```sh
-python3 -m venv .venv
-.venv/bin/python -m pip install -r requirements.txt
-.venv/bin/python run.py
-```
+Backend hiện yêu cầu cài `requirements-ai.txt` và có voice pack VIVI để khởi động. Nếu thiếu model/dependency/voice pack, quá trình startup sẽ báo lỗi thay vì chạy với TTS chưa sẵn sàng. `/api/v1/health` trả `tts.detail=loaded` khi model đã ở trong bộ nhớ.
 
 ## Các luồng có thể thử
 
@@ -30,7 +24,7 @@ python3 -m venv .venv
 - Chuyển sang “Đang lái xe” rồi thử mở cửa sổ để thấy policy minh họa chặn lệnh.
 - Nhập “Đặt nhiệt độ 35 độ” để thử kiểm tra giới hạn.
 - Mở cẩm nang để xem cách trình bày câu trả lời với nguồn của prototype.
-- Bật “Mai Chi” để phát phản hồi bằng ZeroTTS local; SpeechSynthesis của trình duyệt là fallback khi TTS chưa sẵn sàng.
+- Bật “Mai Chi” để phát phản hồi VIVI theo luồng từ ZeroTTS local; có thể tắt giọng để ngắt phát. SpeechSynthesis của trình duyệt là fallback nếu TTS chưa phát được.
 - Mở thiết lập để giảm chuyển động. Giao diện cũng tôn trọng prefers-reduced-motion.
 
 ## Phạm vi
@@ -48,12 +42,15 @@ Chọn một provider trong `.env`:
 
 OpenAI/Google cần mạng. Chỉ `rules` và `local` đáp ứng runtime offline. Nếu provider được chọn nhưng cấu hình thiếu, server khởi động an toàn bằng `rules` và báo chi tiết ở `/api/v1/health`.
 
+Để ViVi trả lời câu hỏi tự nhiên (ví dụ “Bạn là ai?”), chọn `openai`, `google` hoặc `local` và khởi động lại backend. `rules` chỉ xử lý kịch bản cố định. `/api/v1/health` cho biết provider thực tế đang chạy; nếu giao diện báo backend offline thì nó sẽ dùng kịch bản demo tại trình duyệt. Lệnh điều khiển xe vẫn phải qua safety gateway và vehicle simulator; phản hồi hội thoại không thực hiện thao tác xe.
+
 ## API local
 
 - `GET /api/v1/health`
 - `POST /api/v1/stt` — multipart audio, `session_id`, `turn_id`
 - `POST /api/v1/turn` — transcript và trạng thái xe
 - `POST /api/v1/tts` — text sang WAV Mai Chi
+- `POST /api/v1/tts/stream` — PCM mono 16-bit little-endian theo luồng; sample rate ở header `X-ViVi-Sample-Rate`, giọng ở `X-ViVi-Voice`. Frontend dùng endpoint này để phát ngay khi có chunk đầu.
 
 ## Kiểm thử
 

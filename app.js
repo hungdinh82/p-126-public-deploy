@@ -160,20 +160,83 @@ function say(text) {
   if (voice) utterance.voice = voice;
   speechSynthesis.speak(utterance);
 }
-let currentAudio;
+let ttsAudioContext = null;
+let currentPlayback = null;
+async function ensureTtsAudioContext() {
+  ttsAudioContext ||= new AudioContext();
+  if (ttsAudioContext.state === 'suspended') await ttsAudioContext.resume();
+  return ttsAudioContext;
+}
+function stopPlayback() {
+  if (!currentPlayback) return;
+  const playback = currentPlayback;
+  currentPlayback = null;
+  playback.cancelled = true;
+  playback.controller.abort();
+  for (const source of playback.sources) { try { source.stop(); } catch { /* already stopped */ } }
+  playback.sources.clear();
+  playback.finish();
+}
 async function speak(text, turnId = crypto.randomUUID()) {
   if (!state.sound) return;
-  if (currentAudio) { currentAudio.pause(); currentAudio = null; }
+  stopPlayback();
+  if ('speechSynthesis' in window) speechSynthesis.cancel();
   if (state.ttsAvailable) {
+    const playback = { controller: new AbortController(), sources: new Set(), cancelled: false, streamDone: false, played: false, nextStart: 0 };
+    playback.done = new Promise(resolve => { playback.finish = resolve; });
+    currentPlayback = playback;
     try {
       setPhase('synthesizing', text);
-      const response = await fetch(`${API_BASE}/api/v1/tts`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, session_id: sessionId, turn_id: turnId }) });
+      const context = await ensureTtsAudioContext();
+      const response = await fetch(`${API_BASE}/api/v1/tts/stream`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: playback.controller.signal,
+        body: JSON.stringify({ text, session_id: sessionId, turn_id: turnId })
+      });
       if (!response.ok) throw new Error((await response.json()).detail || 'TTS lỗi');
-      currentAudio = new Audio(URL.createObjectURL(await response.blob()));
-      await currentAudio.play();
+      if (!response.body || response.headers.get('X-ViVi-Audio-Format') !== 'pcm_s16le') throw new Error('Định dạng TTS streaming không hợp lệ');
+      const sampleRate = Number(response.headers.get('X-ViVi-Sample-Rate'));
+      if (!Number.isFinite(sampleRate) || sampleRate <= 0) throw new Error('Tần số mẫu TTS không hợp lệ');
+      const reader = response.body.getReader();
+      let leftover = new Uint8Array(0);
+      try {
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done || playback.cancelled) break;
+          const bytes = new Uint8Array(leftover.length + value.length);
+          bytes.set(leftover); bytes.set(value, leftover.length);
+          const usable = bytes.length - bytes.length % 2;
+          leftover = bytes.slice(usable);
+          if (!usable) continue;
+          const samples = new Float32Array(usable / 2);
+          const pcm = new DataView(bytes.buffer, bytes.byteOffset, usable);
+          for (let i = 0; i < samples.length; i++) samples[i] = pcm.getInt16(i * 2, true) / 32768;
+          const buffer = context.createBuffer(1, samples.length, sampleRate);
+          buffer.copyToChannel(samples, 0);
+          const source = context.createBufferSource();
+          source.buffer = buffer; source.connect(context.destination);
+          source.onended = () => {
+            playback.sources.delete(source);
+            source.disconnect();
+            if (playback.streamDone && !playback.sources.size) playback.finish();
+          };
+          playback.sources.add(source);
+          playback.nextStart = Math.max(context.currentTime + .04, playback.nextStart);
+          source.start(playback.nextStart);
+          playback.nextStart += buffer.duration;
+          if (!playback.played) { playback.played = true; setPhase('speaking', text); }
+        }
+      } finally { reader.releaseLock(); }
+      if (leftover.length && !playback.cancelled) throw new Error('Luồng PCM TTS bị thiếu byte cuối');
+      playback.streamDone = true;
+      if (!playback.sources.size) playback.finish();
+      await playback.done;
+      if (currentPlayback === playback) currentPlayback = null;
       return;
     } catch (error) {
-      console.warn('ZeroTTS fallback:', error);
+      if (playback.cancelled) return;
+      console.warn('ZeroTTS streaming:', error);
+      if (currentPlayback === playback) stopPlayback();
+      if (playback.played) return;
     }
   }
   say(text);
@@ -366,7 +429,7 @@ $('#sound-toggle').addEventListener('click', () => {
   state.sound = !state.sound;
   $('#sound-toggle').setAttribute('aria-pressed', String(state.sound));
   $('#sound-toggle span').textContent = `Mai Chi: ${state.sound ? 'bật' : 'tắt'}`;
-  if (state.sound) speak('Mình là ViVi, sẵn sàng đồng hành cùng bạn.'); else { currentAudio?.pause(); if ('speechSynthesis' in window) speechSynthesis.cancel(); }
+  if (state.sound) speak('Mình là ViVi, sẵn sàng đồng hành cùng bạn.'); else { stopPlayback(); if ('speechSynthesis' in window) speechSynthesis.cancel(); }
 });
 
 const dialog = $('#info-dialog');

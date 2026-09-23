@@ -1,5 +1,11 @@
 # Trạng thái dự án ViVi
 
+> Cập nhật 2026-09-23: Luồng hội thoại `conversation.respond` đã được thêm. `.env` local hiện chọn OpenAI; thử thật `POST /api/v1/turn` với “Bạn là ai?” trả `provider=openai`, `intent=conversation.respond`, HTTP 200 và lời giới thiệu tự nhiên. Lệnh mở cửa sổ khi đang lái vẫn bị safety gateway chặn. Cần chạy lại backend để áp dụng `.env` mới. Các bảng snapshot bên dưới ghi lại trạng thái lịch sử 2026-09-22.
+
+> Cập nhật TTS 2026-09-23: ZeroTTS và voice pack VIVI được nạp sẵn trong FastAPI startup, giữ trong bộ nhớ suốt vòng đời backend. Thử startup thật cho `tts.detail=loaded`; `/api/v1/tts` trả WAV 48 kHz với `X-ViVi-Voice: VIVI`. Lỗi nạp model làm startup thất bại rõ ràng.
+
+> Cập nhật streaming 2026-09-23: `/api/v1/tts/stream` truyền PCM theo chunk từ `synthesize_stream()`; frontend phát từng chunk bằng Web Audio và hủy fetch/playback khi tắt giọng. Endpoint WAV cũ vẫn giữ. Thử HTTP thật với giọng VIVI: chunk đầu sau khoảng 162 ms, tổng 7 chunk cho một câu thử nghiệm; đây là số đo trên máy hiện tại, không phải cam kết độ trễ.
+
 > Snapshot: 2026-09-22  
 > Mục đích: Ghi lại sự thật hiện tại của repo. Cập nhật file này sau mỗi mốc tích hợp.
 

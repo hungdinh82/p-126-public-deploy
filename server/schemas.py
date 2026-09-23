@@ -13,6 +13,7 @@ Intent = Literal[
     "vehicle.get_status",
     "manual.search",
     "conversation.clarify",
+    "conversation.respond",
 ]
 
 
@@ -24,7 +25,27 @@ class ActionProposal(BaseModel):
     spoken_response: str = ""
 
 
-ACTION_JSON_SCHEMA = ActionProposal.model_json_schema()
+ACTION_JSON_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "intent": {"type": "string", "enum": list(Intent.__args__)},
+        "arguments": {
+            "type": "object",
+            "properties": {
+                "value_celsius": {"type": ["number", "null"]},
+                "position_percent": {"type": ["number", "null"]},
+                "query": {"type": ["string", "null"]},
+            },
+            "required": ["value_celsius", "position_percent", "query"],
+            "additionalProperties": False,
+        },
+        "needs_clarification": {"type": "boolean"},
+        "clarification_question": {"type": ["string", "null"]},
+        "spoken_response": {"type": "string"},
+    },
+    "required": ["intent", "arguments", "needs_clarification", "clarification_question", "spoken_response"],
+    "additionalProperties": False,
+}
 
 
 class VehicleState(BaseModel):
@@ -68,4 +89,3 @@ class TTSRequest(BaseModel):
     text: str = Field(min_length=1, max_length=1000)
     session_id: str
     turn_id: str
-

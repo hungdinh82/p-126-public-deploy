@@ -25,9 +25,16 @@ class ZeroTTSAdapter:
         try:
             import numpy  # noqa: F401
             import zerotts  # noqa: F401
-            return True, "ready-to-load"
         except ImportError:
             return False, "Cài requirements-ai.txt để dùng ZeroTTS"
+        loaded = self._model is not None and self._voice is not None
+        return loaded, "loaded" if loaded else "not-loaded"
+
+    async def preload(self) -> None:
+        async with self._lock:
+            await asyncio.to_thread(self._load)
+            if self._voice is None:
+                raise RuntimeError("Giọng TTS chưa được nạp")
 
     def _load(self):
         if self._model is None:
@@ -91,3 +98,38 @@ class ZeroTTSAdapter:
             raise RuntimeError(reason)
         async with self._lock:
             return await asyncio.to_thread(self._synthesize, text)
+
+    async def stream(self, text: str):
+        """Yield little-endian signed 16-bit mono PCM while ZeroTTS generates it."""
+        import numpy as np
+
+        available, reason = self.availability()
+        if not available:
+            raise RuntimeError(reason)
+        async with self._lock:
+            chunks = self._model.synthesize_stream(text, voice=self._voice)
+
+            def next_chunk():
+                try:
+                    return next(chunks)
+                except StopIteration:
+                    return None
+
+            try:
+                while True:
+                    next_task = asyncio.create_task(asyncio.to_thread(next_chunk))
+                    try:
+                        chunk = await asyncio.shield(next_task)
+                    except asyncio.CancelledError:
+                        # Keep the model lock until the in-flight inference step ends.
+                        await next_task
+                        raise
+                    if chunk is None:
+                        break
+                    pcm = (np.clip(np.asarray(chunk, dtype=np.float32).reshape(-1), -1, 1) * 32767).astype("<i2")
+                    if pcm.size:
+                        yield pcm.tobytes()
+            finally:
+                close = getattr(chunks, "close", None)
+                if close is not None:
+                    close()

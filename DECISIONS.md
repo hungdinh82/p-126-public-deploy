@@ -91,6 +91,22 @@ Tài liệu này ghi lại “vì sao” của các lựa chọn quan trọng. M
 - **Quyết định:** Sau thao tác, vehicle adapter đọc lại trạng thái hoặc nhận acknowledgement đáng tin cậy. Chỉ khi verify thành công ViVi mới nói “đã”.
 - **Hệ quả:** Tăng một bước và độ trễ nhưng tránh phản hồi sai. Timeout verify trả lời rằng chưa thể xác nhận, không giả định thành công.
 
+## ADR-011 — Tách hội thoại tự nhiên khỏi thao tác xe
+
+- **Trạng thái:** Accepted
+- **Ngày:** 2026-09-23
+- **Bối cảnh:** Schema chỉ có intent điều khiển và hỏi lại, khiến câu “Bạn là ai?” rơi vào kịch bản ngay cả khi có LLM.
+- **Quyết định:** Thêm `conversation.respond` cho câu hỏi thông thường. Nội dung từ LLM được chuyển đến UI/TTS nhưng không gọi vehicle adapter. Lệnh xe vẫn đi qua safety gateway rồi mới được thực thi và xác minh.
+- **Hệ quả:** Có thể trò chuyện tự nhiên khi chọn provider LLM thật; `rules` vẫn là fallback kịch bản. OpenAI/Google cần kết nối mạng.
+
+## ADR-012 — Phát TTS theo luồng PCM
+
+- **Trạng thái:** Accepted
+- **Ngày:** 2026-09-23
+- **Bối cảnh:** ZeroTTS hỗ trợ `synthesize_stream()` nhưng endpoint WAV cũ đợi tổng hợp xong toàn câu mới phát.
+- **Quyết định:** Giữ endpoint WAV để tương thích; thêm `/api/v1/tts/stream` xuất PCM mono signed 16-bit little-endian, sample rate trong header. Frontend dùng Web Audio để xếp các chunk liên tiếp và cho phép hủy luồng/phát.
+- **Hệ quả:** Giảm thời gian đến âm thanh đầu tiên, nhưng frontend phải giải mã PCM và xử lý ngắt kết nối; mỗi adapter chỉ tổng hợp một lượt tại một thời điểm để bảo vệ model.
+
 ## Các quyết định còn chờ
 
 | ID tạm | Cần quyết định | Dữ liệu cần có |

@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import time
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, Response, StreamingResponse
 
 from .adapters.llm import create_llm
 from .adapters.stt import PhoWhisperAdapter
@@ -30,7 +31,14 @@ orchestrator = Orchestrator(llm, vehicle, store)
 stt = PhoWhisperAdapter(settings)
 tts = ZeroTTSAdapter(settings)
 
-app = FastAPI(title="ViVi Local API", version="0.1.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await tts.preload()
+    yield
+
+
+app = FastAPI(title="ViVi Local API", version="0.1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://127.0.0.1:5173", "http://localhost:5173", "http://127.0.0.1:8787", "http://localhost:8787"],
@@ -96,6 +104,23 @@ async def synthesize(request: TTSRequest):
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"ZeroTTS chưa sẵn sàng: {exc}") from exc
     return Response(audio, media_type="audio/wav", headers={"X-ViVi-Voice": settings.zerotts_voice})
+
+
+@app.post("/api/v1/tts/stream")
+async def synthesize_stream(request: TTSRequest):
+    available, reason = tts.availability()
+    if not available:
+        raise HTTPException(status_code=503, detail=f"ZeroTTS chưa sẵn sàng: {reason}")
+    return StreamingResponse(
+        tts.stream(request.text),
+        media_type="application/octet-stream",
+        headers={
+            "X-ViVi-Voice": settings.zerotts_voice,
+            "X-ViVi-Audio-Format": "pcm_s16le",
+            "X-ViVi-Sample-Rate": str(tts._model.sample_rate),
+            "Cache-Control": "no-store",
+        },
+    )
 
 
 @app.get("/")
