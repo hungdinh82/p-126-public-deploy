@@ -162,6 +162,7 @@ function say(text) {
 }
 let ttsAudioContext = null;
 let currentPlayback = null;
+const TTS_START_BUFFER_SECONDS = 1;
 async function ensureTtsAudioContext() {
   ttsAudioContext ||= new AudioContext();
   if (ttsAudioContext.state === 'suspended') await ttsAudioContext.resume();
@@ -198,6 +199,34 @@ async function speak(text, turnId = crypto.randomUUID()) {
       if (!Number.isFinite(sampleRate) || sampleRate <= 0) throw new Error('Tần số mẫu TTS không hợp lệ');
       const reader = response.body.getReader();
       let leftover = new Uint8Array(0);
+      let startupChunks = [];
+      let startupSeconds = 0;
+      const schedule = (samples) => {
+        const buffer = context.createBuffer(1, samples.length, sampleRate);
+        buffer.copyToChannel(samples, 0);
+        const source = context.createBufferSource();
+        source.buffer = buffer; source.connect(context.destination);
+        source.onended = () => {
+          playback.sources.delete(source);
+          source.disconnect();
+          if (playback.streamDone && !playback.sources.size) playback.finish();
+        };
+        playback.sources.add(source);
+        if (!playback.played) {
+          playback.nextStart = context.currentTime + .06;
+          playback.played = true;
+          setPhase('speaking', text);
+        }
+        // Keep one continuous audio timeline; only recover to "now" after an actual underrun.
+        if (playback.nextStart < context.currentTime) playback.nextStart = context.currentTime + .01;
+        source.start(playback.nextStart);
+        playback.nextStart += buffer.duration;
+      };
+      const startBufferedPlayback = () => {
+        if (playback.cancelled || !startupChunks.length) return;
+        for (const samples of startupChunks) schedule(samples);
+        startupChunks = [];
+      };
       try {
         while (true) {
           const { value, done } = await reader.read();
@@ -210,23 +239,17 @@ async function speak(text, turnId = crypto.randomUUID()) {
           const samples = new Float32Array(usable / 2);
           const pcm = new DataView(bytes.buffer, bytes.byteOffset, usable);
           for (let i = 0; i < samples.length; i++) samples[i] = pcm.getInt16(i * 2, true) / 32768;
-          const buffer = context.createBuffer(1, samples.length, sampleRate);
-          buffer.copyToChannel(samples, 0);
-          const source = context.createBufferSource();
-          source.buffer = buffer; source.connect(context.destination);
-          source.onended = () => {
-            playback.sources.delete(source);
-            source.disconnect();
-            if (playback.streamDone && !playback.sources.size) playback.finish();
-          };
-          playback.sources.add(source);
-          playback.nextStart = Math.max(context.currentTime + .04, playback.nextStart);
-          source.start(playback.nextStart);
-          playback.nextStart += buffer.duration;
-          if (!playback.played) { playback.played = true; setPhase('speaking', text); }
+          if (playback.played) schedule(samples);
+          else {
+            startupChunks.push(samples);
+            startupSeconds += samples.length / sampleRate;
+            if (startupSeconds >= TTS_START_BUFFER_SECONDS) startBufferedPlayback();
+          }
         }
       } finally { reader.releaseLock(); }
       if (leftover.length && !playback.cancelled) throw new Error('Luồng PCM TTS bị thiếu byte cuối');
+      // Short replies may finish before reaching the startup buffer target.
+      startBufferedPlayback();
       playback.streamDone = true;
       if (!playback.sources.size) playback.finish();
       await playback.done;

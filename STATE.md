@@ -6,6 +6,8 @@
 
 > Cập nhật streaming 2026-09-23: `/api/v1/tts/stream` truyền PCM theo chunk từ `synthesize_stream()`; frontend phát từng chunk bằng Web Audio và hủy fetch/playback khi tắt giọng. Endpoint WAV cũ vẫn giữ. Thử HTTP thật với giọng VIVI: chunk đầu sau khoảng 162 ms, tổng 7 chunk cho một câu thử nghiệm; đây là số đo trên máy hiện tại, không phải cam kết độ trễ.
 
+> Cập nhật độ mượt 2026-09-23: Đo chunk VIVI thật cho thấy chunk đầu dài 80 ms, các chunk sau có khoảng cách lớn hơn thời lượng phát tích lũy. Frontend nay đệm khoảng 1 giây audio trước khi bắt đầu, sau đó lên lịch liên tục trên Web Audio timeline; đổi lại thời gian nghe tiếng đầu tăng để tránh ngắt quãng.
+
 > Snapshot: 2026-09-22  
 > Mục đích: Ghi lại sự thật hiện tại của repo. Cập nhật file này sau mỗi mốc tích hợp.
 

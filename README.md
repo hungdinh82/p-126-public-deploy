@@ -50,7 +50,9 @@ OpenAI/Google cần mạng. Chỉ `rules` và `local` đáp ứng runtime offlin
 - `POST /api/v1/stt` — multipart audio, `session_id`, `turn_id`
 - `POST /api/v1/turn` — transcript và trạng thái xe
 - `POST /api/v1/tts` — text sang WAV Mai Chi
-- `POST /api/v1/tts/stream` — PCM mono 16-bit little-endian theo luồng; sample rate ở header `X-ViVi-Sample-Rate`, giọng ở `X-ViVi-Voice`. Frontend dùng endpoint này để phát ngay khi có chunk đầu.
+- `POST /api/v1/tts/stream` — PCM mono 16-bit little-endian theo luồng; sample rate ở header `X-ViVi-Sample-Rate`, giọng ở `X-ViVi-Voice`. Frontend nhận các chunk để đệm và phát liên tục.
+
+Frontend giữ khoảng 1 giây audio trong bộ đệm trước khi phát để tránh hụt tiếng giữa các chunk đầu của ZeroTTS. Câu trả lời ngắn hơn được phát ngay khi tổng hợp xong; tắt giọng vẫn hủy luồng và playback.
 
 ## Kiểm thử
 

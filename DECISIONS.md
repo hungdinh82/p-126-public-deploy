@@ -105,7 +105,7 @@ Tài liệu này ghi lại “vì sao” của các lựa chọn quan trọng. M
 - **Ngày:** 2026-09-23
 - **Bối cảnh:** ZeroTTS hỗ trợ `synthesize_stream()` nhưng endpoint WAV cũ đợi tổng hợp xong toàn câu mới phát.
 - **Quyết định:** Giữ endpoint WAV để tương thích; thêm `/api/v1/tts/stream` xuất PCM mono signed 16-bit little-endian, sample rate trong header. Frontend dùng Web Audio để xếp các chunk liên tiếp và cho phép hủy luồng/phát.
-- **Hệ quả:** Giảm thời gian đến âm thanh đầu tiên, nhưng frontend phải giải mã PCM và xử lý ngắt kết nối; mỗi adapter chỉ tổng hợp một lượt tại một thời điểm để bảo vệ model.
+- **Hệ quả:** Frontend phải giải mã PCM và xử lý ngắt kết nối; mỗi adapter chỉ tổng hợp một lượt tại một thời điểm để bảo vệ model. Để tránh hụt tiếng ở các chunk đầu ngắn, frontend đệm khoảng 1 giây audio trước khi phát, đánh đổi một phần độ trễ lấy độ mượt.
 
 ## Các quyết định còn chờ
 
