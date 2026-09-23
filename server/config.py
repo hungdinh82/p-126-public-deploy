@@ -6,8 +6,8 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-
 load_dotenv()
+load_dotenv("data/mqtt/credentials.env", override=True)
 
 
 def _bool(name: str, default: bool) -> bool:
@@ -22,6 +22,13 @@ class Settings:
     data_dir: Path = Path(os.getenv("VIVI_DATA_DIR", "./data")).resolve()
     store_audio: bool = _bool("VIVI_STORE_AUDIO", True)
     store_transcripts: bool = _bool("VIVI_STORE_TRANSCRIPTS", True)
+    vehicle_provider: str = os.getenv("VIVI_VEHICLE_PROVIDER", "memory")
+    vehicle_id: str = os.getenv("VIVI_VEHICLE_ID", "demo-car-1")
+    mqtt_host: str = os.getenv("MQTT_HOST", "127.0.0.1")
+    mqtt_port: int = int(os.getenv("MQTT_PORT", "1883"))
+    mqtt_api_username: str = os.getenv("MQTT_API_USERNAME", "")
+    mqtt_api_password: str = os.getenv("MQTT_API_PASSWORD", "")
+    mqtt_timeout_seconds: float = float(os.getenv("MQTT_TIMEOUT_SECONDS", "3"))
 
     stt_provider: str = os.getenv("STT_PROVIDER", "phowhisper")
     phowhisper_model: str = os.getenv("PHOWHISPER_MODEL", "vinai/PhoWhisper-medium")

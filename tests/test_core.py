@@ -3,6 +3,7 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from fastapi.testclient import TestClient
 
@@ -11,8 +12,8 @@ from server.app import app
 from server.config import Settings
 from server.data_store import DataStore
 from server.orchestrator import Orchestrator
-from server.schemas import ActionProposal, TurnRequest, VehicleState
 from server.safety import validate
+from server.schemas import ActionProposal, TurnRequest, VehicleState
 from server.vehicle import VehicleSimulator
 
 
@@ -63,11 +64,15 @@ class APITests(unittest.TestCase):
         self.assertEqual(response.json()["status"], "ok")
 
     def test_rule_turn(self):
-        response = TestClient(app).post("/api/v1/turn", json={
-            "transcript": "Đặt nhiệt độ 25 độ",
-            "session_id": "api-session",
-            "turn_id": "api-turn",
-        })
+        local_orchestrator = Orchestrator(
+            RulesAdapter(), VehicleSimulator(), DataStore(Settings(store_transcripts=False))
+        )
+        with patch("server.app.orchestrator", local_orchestrator):
+            response = TestClient(app).post("/api/v1/turn", json={
+                "transcript": "Đặt nhiệt độ 25 độ",
+                "session_id": "api-session",
+                "turn_id": "api-turn",
+            })
         self.assertEqual(response.status_code, 200)
         payload = response.json()
         self.assertEqual(payload["status"], "verified")
@@ -76,4 +81,3 @@ class APITests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

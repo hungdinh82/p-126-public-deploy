@@ -15,7 +15,7 @@ from .data_store import DataStore
 from .orchestrator import Orchestrator
 from .schemas import STTResponse, TTSRequest, TurnRequest, TurnResponse
 from .vehicle import VehicleSimulator
-
+from .vehicle_mqtt import MqttVehicleAdapter
 
 ROOT = Path(__file__).resolve().parent.parent
 store = DataStore(settings)
@@ -25,7 +25,17 @@ try:
 except Exception as exc:
     from .adapters.llm import RulesAdapter
     llm, llm_error = RulesAdapter(), str(exc)
-vehicle = VehicleSimulator()
+if settings.vehicle_provider == "mqtt":
+    vehicle = MqttVehicleAdapter(
+        settings.vehicle_id,
+        host=settings.mqtt_host,
+        port=settings.mqtt_port,
+        username=settings.mqtt_api_username or None,
+        password=settings.mqtt_api_password or None,
+        timeout=settings.mqtt_timeout_seconds,
+    )
+else:
+    vehicle = VehicleSimulator()
 orchestrator = Orchestrator(llm, vehicle, store)
 stt = PhoWhisperAdapter(settings)
 tts = ZeroTTSAdapter(settings)
@@ -39,6 +49,12 @@ app.add_middleware(
 )
 
 
+@app.on_event("shutdown")
+def close_vehicle_adapter():
+    if isinstance(vehicle, MqttVehicleAdapter):
+        vehicle.close()
+
+
 @app.get("/api/v1/health")
 async def health():
     stt_ok, stt_detail = stt.availability()
@@ -50,7 +66,16 @@ async def health():
         "stt": {"provider": stt.name, "available": stt_ok, "detail": stt_detail},
         "tts": {"provider": tts.name, "voice": settings.zerotts_voice, "available": tts_ok, "detail": tts_detail},
         "storage": {"audio": settings.store_audio, "transcripts": settings.store_transcripts, "path": str(settings.data_dir)},
+        "vehicle": {"provider": vehicle.name, "connected": vehicle.is_connected(), "vehicle_id": settings.vehicle_id},
     }
+
+
+@app.get("/api/v1/vehicle/state")
+async def vehicle_state():
+    try:
+        return await vehicle.get_state("api-read")
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="Xe mô phỏng chưa sẵn sàng") from exc
 
 
 @app.post("/api/v1/turn", response_model=TurnResponse)
@@ -108,4 +133,3 @@ async def asset(asset_name: str):
     if asset_name not in {"app.js", "style.css"}:
         raise HTTPException(status_code=404)
     return FileResponse(ROOT / asset_name)
-

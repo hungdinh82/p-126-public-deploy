@@ -4,7 +4,6 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-
 Intent = Literal[
     "climate.set_temperature",
     "window.set_position",
@@ -28,12 +27,17 @@ ACTION_JSON_SCHEMA = ActionProposal.model_json_schema()
 
 
 class VehicleState(BaseModel):
+    vehicle_id: str = "demo-car-1"
+    state_version: int = 0
     temperature_celsius: float = 23
     window_driver_percent: int = 0
     media_playing: bool = False
     driving: bool = False
     battery_percent: int = 82
     range_km: int = 328
+    door_driver_locked: bool = False
+    door_driver_open: bool = False
+    seat_driver_heat_level: int = 0
 
 
 class TurnRequest(BaseModel):
@@ -48,9 +52,9 @@ class TurnResponse(BaseModel):
     turn_id: str
     transcript: str
     provider: str
-    status: Literal["verified", "clarify", "blocked", "error"]
+    status: Literal["verified", "clarify", "blocked", "unverified", "error"]
     action: ActionProposal
-    vehicle_state: VehicleState
+    vehicle_state: VehicleState | None
     message: str
     latency_ms: dict[str, float] = Field(default_factory=dict)
 
@@ -68,4 +72,3 @@ class TTSRequest(BaseModel):
     text: str = Field(min_length=1, max_length=1000)
     session_id: str
     turn_id: str
-

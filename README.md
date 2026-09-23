@@ -31,6 +31,44 @@ python3 -m venv .venv
 - Bật “Mai Chi” để phát phản hồi bằng ZeroTTS local; SpeechSynthesis của trình duyệt là fallback khi TTS chưa sẵn sàng.
 - Mở thiết lập để giảm chuyển động. Giao diện cũng tôn trọng prefers-reduced-motion.
 
+## Vehicle Simulator service qua MQTT
+
+Service mô phỏng xe chạy độc lập với ViVi. Để dùng MQTT trên máy local, cài Mosquitto và tạo cấu hình broker (mỗi lệnh chỉ cần làm một lần):
+
+```sh
+.venv/bin/python scripts/setup_mqtt_broker.py
+```
+
+Lệnh này sinh mật khẩu ngẫu nhiên và ACL trong `data/mqtt/` (đã bị Git bỏ qua). Broker chỉ nghe tại `127.0.0.1:1883`; tài khoản ViVi chỉ gửi command, tài khoản simulator chỉ gửi ACK/state/availability. Mở ba terminal:
+
+```sh
+mosquitto -c data/mqtt/mosquitto.conf
+```
+
+Trên Homebrew macOS, có thể cần dùng `/opt/homebrew/opt/mosquitto/sbin/mosquitto` thay cho `mosquitto`.
+
+```sh
+.venv/bin/python -m vehicle_simulator --mqtt --db data/vehicle-simulator.sqlite3
+```
+
+```sh
+.venv/bin/python run.py
+```
+
+Mở http://127.0.0.1:8787 và thử “Đặt nhiệt độ 25 độ”, “Phát nhạc” hoặc “Trạng thái xe”. Backend lấy state qua MQTT, kiểm tra ACK đúng command và state sau lệnh rồi mới báo thành công. Khi ACK mất hoặc service ngắt, kết quả là “chưa xác minh”, không báo đã làm. Giao diện không cho bật trạng thái lái khi dùng MQTT; muốn thử các fixture/fault, khởi động simulator thêm `--enable-test-control` và dùng HTTP test API.
+
+Nếu muốn chạy service HTTP độc lập mà chưa bật MQTT:
+
+```sh
+.venv/bin/python -m vehicle_simulator --db data/vehicle-simulator.sqlite3
+```
+
+Mặc định service chỉ nghe tại `127.0.0.1:8788`. Mở `http://127.0.0.1:8788/docs` để xem và thử API: đọc state ở `GET /api/v1/vehicles/{vehicle_id}/state`, gửi lệnh ở `POST /api/v1/vehicles/{vehicle_id}/commands`. Command có `command_id`, `correlation_id`, `idempotency_key`, expiry và `expected_state_version`; phản hồi gồm acknowledgement và state hiện hành. State và kết quả chống lặp được lưu trong SQLite qua lần khởi động lại.
+
+Để thử các tình huống lỗi và fixture trạng thái xe trong demo, khởi động với `--enable-test-control`; khi đó các API `/api/v1/test/vehicles/{vehicle_id}/...` xuất hiện trong trang `/docs`. Chỉ dùng chế độ này trên máy local. Chi tiết catalog, fault mode và tiêu chí nghiệm thu ở [đặc tả Vehicle Simulator](docs/VEHICLE_SIMULATOR_SPEC.md).
+
+Để quay lại simulator trong bộ nhớ, đổi `VIVI_VEHICLE_PROVIDER=memory` trong `data/mqtt/credentials.env` hoặc tạm đổi tên file này, rồi chạy lại backend. Không cần broker khi dùng chế độ memory. Lệnh cửa kính qua ViVi hiện bị chặn trong chế độ MQTT cho tới khi có giao diện xác nhận; MQTT simulator vẫn hỗ trợ command cửa kính trực tiếp để kiểm thử.
+
 ## Phạm vi
 
 Đây là concept độc lập, chưa phải sản phẩm VinFast chính thức. Xe vẫn là simulator; policy chặn mở cửa khi lái chỉ là quy tắc demo. Audio, transcript và metadata được lưu trong `data/` cho đến khi người vận hành tự xóa. Thư mục này không được commit.
@@ -50,7 +88,8 @@ OpenAI/Google cần mạng. Chỉ `rules` và `local` đáp ứng runtime offlin
 
 - `GET /api/v1/health`
 - `POST /api/v1/stt` — multipart audio, `session_id`, `turn_id`
-- `POST /api/v1/turn` — transcript và trạng thái xe
+- `POST /api/v1/turn` — transcript; với MQTT, backend bỏ qua trạng thái xe từ trình duyệt
+- `GET /api/v1/vehicle/state` — state xe hiện hành, đọc qua MQTT khi bật service
 - `POST /api/v1/tts` — text sang WAV Mai Chi
 
 ## Kiểm thử
