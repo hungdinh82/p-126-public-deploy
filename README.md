@@ -11,7 +11,7 @@ cp .env.example .env
 .venv-ai/bin/python run.py
 ```
 
-Mở http://127.0.0.1:8787 (hoặc cổng `VIVI_PORT` trong `.env`). Backend chỉ bind `127.0.0.1`. ZeroTTS và voice VIVI được nạp trong lúc backend khởi động; server chỉ sẵn sàng khi nạp xong. Lần đầu khởi động có thể tải model; các lần sau dùng cache local. PhoWhisper vẫn nạp khi nhận audio đầu tiên. Font Google Fonts có fallback font hệ thống khi offline.
+Mở http://127.0.0.1:8787 (hoặc cổng `VIVI_PORT` trong `.env`). Backend chỉ bind `127.0.0.1`. ZeroTTS, voice VIVI và PhoWhisper được nạp/warm trong lúc backend khởi động; server chỉ sẵn sàng khi hoàn tất. Lần đầu khởi động có thể tải model; các lần sau dùng cache local. Có thể đặt `PHOWHISPER_PRELOAD=false` nếu ưu tiên khởi động nhanh hơn độ trễ của lượt nói đầu tiên. Font Google Fonts có fallback font hệ thống khi offline.
 
 Voice ZeroTTS của ViVi nằm trong `voices/VIVI.zip` với ID `VIVI` (`ZEROTTS_VOICE=VIVI`). Pack này chứa giọng community “Mai Chi”; backend nạp trực tiếp từ ZIP, không cần cài voice vào thư mục người dùng.
 
@@ -50,6 +50,7 @@ OpenAI/Google cần mạng. Chỉ `rules` và `local` đáp ứng runtime offlin
 - `POST /api/v1/stt` — multipart audio, `session_id`, `turn_id`
 - `POST /api/v1/turn` — transcript và trạng thái xe
 - `POST /api/v1/tts` — text sang WAV Mai Chi
+- `POST /api/v1/turn/stream` — NDJSON gồm các mệnh đề hội thoại có thể đọc sớm và một sự kiện `final` chứa kết quả chính thức. Lệnh điều khiển xe không phát trước khi qua safety/acknowledgement.
 - `POST /api/v1/tts/stream` — PCM mono 16-bit little-endian theo luồng; sample rate ở header `X-ViVi-Sample-Rate`, giọng ở `X-ViVi-Voice`. Frontend nhận các chunk để đệm và phát liên tục.
 
 Frontend giữ khoảng 1 giây audio trong bộ đệm trước khi phát để tránh hụt tiếng giữa các chunk đầu của ZeroTTS. Câu trả lời ngắn hơn được phát ngay khi tổng hợp xong; tắt giọng vẫn hủy luồng và playback.
@@ -57,7 +58,7 @@ Frontend giữ khoảng 1 giây audio trong bộ đệm trước khi phát để
 ## Kiểm thử
 
 ```sh
-.venv/bin/python -m unittest discover -s tests -v
+.venv/bin/python -m unittest tests.test_core -v
 node --check app.js
 ```
 
@@ -69,4 +70,4 @@ node --check app.js
 - `server/`: orchestration API, provider adapters, safety gateway, storage và vehicle simulator.
 - `tests/`: test contract, safety, idempotency và API.
 
-Pipeline hiện tại: thu âm → PhoWhisper → LLM/rules → safety gateway → vehicle simulator → verify → ZeroTTS. Khi nối xe thật, chỉ báo thành công sau acknowledgement từ vehicle adapter thật.
+Pipeline hiện tại: thu âm → PhoWhisper → LLM/rules → safety gateway → vehicle simulator → verify → ZeroTTS. PhoWhisper được preload/warm và dùng FP16 tự động trên MPS/CUDA. Với hội thoại, LLM chuyển từng mệnh đề hoàn chỉnh sang hàng đợi ZeroTTS ngay khi sinh ra; với thao tác xe, chỉ báo thành công sau acknowledgement từ vehicle adapter thật.

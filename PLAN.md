@@ -193,6 +193,7 @@ Nhánh lỗi có thể đi từ mọi trạng thái về `recoverable_error` ho�
 
 - Cài adapter LLM với base URL, model name và API key qua biến môi trường.
 - Yêu cầu structured output theo JSON Schema; từ chối output không hợp lệ.
+- Stream structured output; với `conversation.respond`, chuyển từng mệnh đề hoàn chỉnh sang TTS ngay khi sinh ra. Không phát trước đối với intent điều khiển xe.
 - Giới hạn context, timeout, retry có kiểm soát và circuit breaker.
 - Tách system prompt thành file có version; thêm test prompt regression.
 - Chỉ đưa action đã qua safety gateway vào vehicle simulator.
@@ -204,6 +205,7 @@ Nhánh lỗi có thể đi từ mọi trạng thái về `recoverable_error` ho�
 - Tích hợp local package `zerotts` với model `zeroweight-ai/ZeroTTS`.
 - Khóa voice mặc định là `VIVI`, nạp từ `voices/VIVI.zip` (tên hiển thị “Mai Chi”).
 - Dùng streaming synthesis; adapter nhận các chunk mono `float32` 48 kHz rồi truyền/phát theo contract nội bộ.
+- Dùng chung một Web Audio timeline cho các mệnh đề liên tiếp để tổng hợp đoạn sau trong khi đoạn trước đang phát.
 - Chuẩn hóa văn bản nói: số, đơn vị, ký hiệu và câu quá dài.
 - Hỗ trợ hủy request/playback khi người dùng tạo lượt mới.
 - Cache các câu hệ thống ngắn, không chứa dữ liệu riêng tư, để giảm độ trễ.

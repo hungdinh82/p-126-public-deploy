@@ -26,6 +26,9 @@ class Settings:
     stt_provider: str = os.getenv("STT_PROVIDER", "phowhisper")
     phowhisper_model: str = os.getenv("PHOWHISPER_MODEL", "vinai/PhoWhisper-medium")
     phowhisper_device: str = os.getenv("PHOWHISPER_DEVICE", "auto")
+    phowhisper_dtype: str = os.getenv("PHOWHISPER_DTYPE", "auto")
+    phowhisper_preload: bool = _bool("PHOWHISPER_PRELOAD", True)
+    phowhisper_language: str = os.getenv("PHOWHISPER_LANGUAGE", "vi")
 
     llm_provider: str = os.getenv("LLM_PROVIDER", "rules")
     llm_timeout_seconds: float = float(os.getenv("LLM_TIMEOUT_SECONDS", "30"))

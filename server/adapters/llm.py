@@ -4,6 +4,7 @@ import json
 import re
 import unicodedata
 from abc import ABC, abstractmethod
+from collections.abc import AsyncIterator
 
 import httpx
 
@@ -30,6 +31,15 @@ class LLMAdapter(ABC):
     @abstractmethod
     async def propose(self, transcript: str, vehicle: VehicleState) -> ActionProposal:
         raise NotImplementedError
+
+    async def stream_json(self, transcript: str, vehicle: VehicleState) -> AsyncIterator[str]:
+        """Yield the structured proposal as it is generated.
+
+        Providers without native streaming retain correct behavior through this
+        fallback; they simply yield one complete JSON document.
+        """
+        proposal = await self.propose(transcript, vehicle)
+        yield proposal.model_dump_json()
 
 
 class RulesAdapter(LLMAdapter):
@@ -75,16 +85,26 @@ class OpenAIAdapter(LLMAdapter):
         if not config.openai_api_key:
             raise RuntimeError("OPENAI_API_KEY chưa được cấu hình")
         self.config = config
+        from openai import AsyncOpenAI
+        self.client = AsyncOpenAI(api_key=config.openai_api_key, timeout=config.llm_timeout_seconds)
 
     async def propose(self, transcript: str, vehicle: VehicleState) -> ActionProposal:
-        from openai import AsyncOpenAI
-        client = AsyncOpenAI(api_key=self.config.openai_api_key, timeout=self.config.llm_timeout_seconds)
-        response = await client.responses.create(
+        response = await self.client.responses.create(
             model=self.config.openai_model,
             input=_prompt(transcript, vehicle),
             text={"format": {"type": "json_schema", "name": "vivi_action", "strict": True, "schema": ACTION_JSON_SCHEMA}},
         )
         return ActionProposal.model_validate_json(response.output_text)
+
+    async def stream_json(self, transcript: str, vehicle: VehicleState) -> AsyncIterator[str]:
+        async with self.client.responses.stream(
+            model=self.config.openai_model,
+            input=_prompt(transcript, vehicle),
+            text={"format": {"type": "json_schema", "name": "vivi_action", "strict": True, "schema": ACTION_JSON_SCHEMA}},
+        ) as stream:
+            async for event in stream:
+                if event.type == "response.output_text.delta":
+                    yield event.delta
 
 
 class GoogleAdapter(LLMAdapter):
@@ -94,17 +114,28 @@ class GoogleAdapter(LLMAdapter):
         if not config.google_api_key:
             raise RuntimeError("GOOGLE_API_KEY chưa được cấu hình")
         self.config = config
+        from google import genai
+        self.client = genai.Client(api_key=config.google_api_key)
 
     async def propose(self, transcript: str, vehicle: VehicleState) -> ActionProposal:
-        from google import genai
         from google.genai import types
-        client = genai.Client(api_key=self.config.google_api_key)
-        response = await client.aio.models.generate_content(
+        response = await self.client.aio.models.generate_content(
             model=self.config.google_model,
             contents=_prompt(transcript, vehicle),
             config=types.GenerateContentConfig(response_mime_type="application/json", response_json_schema=ACTION_JSON_SCHEMA),
         )
         return ActionProposal.model_validate_json(response.text)
+
+    async def stream_json(self, transcript: str, vehicle: VehicleState) -> AsyncIterator[str]:
+        from google.genai import types
+        stream = self.client.aio.models.generate_content_stream(
+            model=self.config.google_model,
+            contents=_prompt(transcript, vehicle),
+            config=types.GenerateContentConfig(response_mime_type="application/json", response_json_schema=ACTION_JSON_SCHEMA),
+        )
+        async for chunk in stream:
+            if chunk.text:
+                yield chunk.text
 
 
 class LocalAPIAdapter(LLMAdapter):
@@ -131,6 +162,32 @@ class LocalAPIAdapter(LLMAdapter):
         if isinstance(content, list):
             content = "".join(part.get("text", "") for part in content)
         return ActionProposal.model_validate_json(content)
+
+    async def stream_json(self, transcript: str, vehicle: VehicleState) -> AsyncIterator[str]:
+        url = self.config.local_llm_base_url.rstrip("/") + "/chat/completions"
+        payload = {
+            "model": self.config.local_llm_model,
+            "messages": [{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": _prompt(transcript, vehicle)}],
+            "temperature": 0,
+            "stream": True,
+            "response_format": {"type": "json_schema", "json_schema": {"name": "vivi_action", "strict": True, "schema": ACTION_JSON_SCHEMA}},
+        }
+        headers = {"Authorization": f"Bearer {self.config.local_llm_api_key}"}
+        async with httpx.AsyncClient(timeout=self.config.llm_timeout_seconds) as client:
+            async with client.stream("POST", url, json=payload, headers=headers) as response:
+                response.raise_for_status()
+                async for line in response.aiter_lines():
+                    if not line.startswith("data:"):
+                        continue
+                    data = line[5:].strip()
+                    if not data or data == "[DONE]":
+                        continue
+                    payload = json.loads(data)
+                    content = payload.get("choices", [{}])[0].get("delta", {}).get("content", "")
+                    if isinstance(content, list):
+                        content = "".join(part.get("text", "") for part in content)
+                    if content:
+                        yield content
 
 
 def create_llm(config: Settings) -> LLMAdapter:

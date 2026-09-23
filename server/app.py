@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import time
 from contextlib import asynccontextmanager
 from dataclasses import replace
@@ -40,6 +41,8 @@ tts = ZeroTTSAdapter(settings)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await tts.preload()
+    if settings.phowhisper_preload:
+        await stt.preload()
     yield
 
 
@@ -66,7 +69,13 @@ async def health():
                 for provider, model in LLM_MODELS.items()
             ],
         },
-        "stt": {"provider": stt.name, "available": stt_ok, "detail": stt_detail},
+        "stt": {
+            "provider": stt.name,
+            "available": stt_ok,
+            "detail": stt_detail,
+            "device": stt.device,
+            "dtype": stt.dtype,
+        },
         "tts": {"provider": tts.name, "voice": settings.zerotts_voice, "available": tts_ok, "detail": tts_detail},
         "storage": {"audio": settings.store_audio, "transcripts": settings.store_transcripts, "path": str(settings.data_dir)},
     }
@@ -82,6 +91,23 @@ async def turn(request: TurnRequest):
         return await orchestrator.run(request, llm=adapter)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Không xử lý được lượt hội thoại: {exc}") from exc
+
+
+@app.post("/api/v1/turn/stream")
+async def turn_stream(request: TurnRequest):
+    selected = request.llm_provider or llm.name
+    adapter = llm_adapters.get(selected)
+    if adapter is None:
+        raise HTTPException(status_code=400, detail=llm_errors.get(selected, "LLM provider không khả dụng"))
+
+    async def events():
+        try:
+            async for event in orchestrator.run_stream(request, llm=adapter):
+                yield json.dumps(event, ensure_ascii=False) + "\n"
+        except Exception as exc:
+            yield json.dumps({"type": "error", "detail": f"Không xử lý được lượt hội thoại: {exc}"}, ensure_ascii=False) + "\n"
+
+    return StreamingResponse(events(), media_type="application/x-ndjson", headers={"Cache-Control": "no-store"})
 
 
 @app.post("/api/v1/stt", response_model=STTResponse)

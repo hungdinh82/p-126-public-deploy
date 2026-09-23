@@ -29,6 +29,10 @@ ACTION_JSON_SCHEMA = {
     "type": "object",
     "properties": {
         "intent": {"type": "string", "enum": list(Intent.__args__)},
+        # Keep spoken_response immediately after intent. Structured-output
+        # providers preserve schema order, allowing safe conversational speech
+        # to start while the remaining metadata is still arriving.
+        "spoken_response": {"type": "string"},
         "arguments": {
             "type": "object",
             "properties": {
@@ -41,7 +45,6 @@ ACTION_JSON_SCHEMA = {
         },
         "needs_clarification": {"type": "boolean"},
         "clarification_question": {"type": ["string", "null"]},
-        "spoken_response": {"type": "string"},
     },
     "required": ["intent", "arguments", "needs_clarification", "clarification_question", "spoken_response"],
     "additionalProperties": False,

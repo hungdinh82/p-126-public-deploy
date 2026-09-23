@@ -91,16 +91,19 @@ class RulesTests(unittest.IsolatedAsyncioTestCase):
 
 class TTSTests(unittest.TestCase):
     def test_tts_preload_failure_stops_app_startup(self):
-        with patch("server.app.tts.preload", new_callable=AsyncMock, side_effect=RuntimeError("voice pack invalid")):
+        with patch("server.app.tts.preload", new_callable=AsyncMock, side_effect=RuntimeError("voice pack invalid")), \
+             patch("server.app.stt.preload", new_callable=AsyncMock):
             with self.assertRaisesRegex(RuntimeError, "voice pack invalid"):
                 with TestClient(app):
                     pass
 
     def test_preload_runs_at_app_startup(self):
-        with patch("server.app.tts.preload", new_callable=AsyncMock) as preload:
+        with patch("server.app.tts.preload", new_callable=AsyncMock) as preload, \
+             patch("server.app.stt.preload", new_callable=AsyncMock) as stt_preload:
             with TestClient(app) as client:
                 response = client.get("/api/v1/health")
         preload.assert_awaited_once()
+        stt_preload.assert_awaited_once()
         self.assertEqual(response.status_code, 200)
 
     def test_vivi_pack_uses_vivi_id(self):
@@ -205,6 +208,70 @@ class APITests(unittest.TestCase):
         payload = response.json()
         self.assertEqual(payload["status"], "verified")
         self.assertEqual(payload["vehicle_state"]["temperature_celsius"], 25)
+
+    def test_stream_route_returns_speech_then_final_ndjson(self):
+        class StreamingAdapter(RulesAdapter):
+            name = "local"
+
+            async def stream_json(self, transcript, vehicle):
+                yield '{"intent":"conversation.respond","spoken_response":"Xin chào. Mình là ViVi.",'
+                yield '"arguments":{},"needs_clarification":false,"clarification_question":null}'
+
+        with tempfile.TemporaryDirectory() as directory:
+            config = Settings(data_dir=Path(directory))
+            test_orchestrator = Orchestrator(RulesAdapter(), VehicleSimulator(), DataStore(config))
+            with patch("server.app.orchestrator", test_orchestrator), patch.dict("server.app.llm_adapters", {"local": StreamingAdapter()}):
+                response = TestClient(app).post("/api/v1/turn/stream", json={
+                    "transcript": "Bạn là ai", "session_id": "stream-api", "turn_id": "stream-api-1", "llm_provider": "local",
+                })
+
+        events = [json.loads(line) for line in response.text.splitlines()]
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.headers["content-type"], "application/x-ndjson")
+        self.assertEqual([event["type"] for event in events], ["speech", "speech", "final"])
+        self.assertEqual(events[-1]["response"]["status"], "verified")
+
+
+class TurnStreamingTests(unittest.IsolatedAsyncioTestCase):
+    async def test_conversation_speech_arrives_before_final_response(self):
+        class StreamingChat(RulesAdapter):
+            name = "stream-test"
+
+            async def stream_json(self, transcript, vehicle):
+                chunks = [
+                    '{"intent":"conversation.respond","spoken_response":"Xin chào bạn. ',
+                    'Mình là ViVi.","arguments":{},"needs_clarification":false,',
+                    '"clarification_question":null}',
+                ]
+                for chunk in chunks:
+                    yield chunk
+
+        with tempfile.TemporaryDirectory() as directory:
+            config = Settings(data_dir=Path(directory))
+            orchestrator = Orchestrator(StreamingChat(), VehicleSimulator(), DataStore(config))
+            request = TurnRequest(transcript="Bạn là ai", session_id="stream", turn_id="stream-chat")
+            events = [event async for event in orchestrator.run_stream(request)]
+
+        self.assertEqual(events[0], {"type": "speech", "text": "Xin chào bạn."})
+        self.assertEqual(events[1], {"type": "speech", "text": "Mình là ViVi."})
+        self.assertEqual(events[-1]["type"], "final")
+        self.assertTrue(events[-1]["streamed_speech"])
+
+    async def test_vehicle_action_is_not_spoken_before_verification(self):
+        class StreamingAction(RulesAdapter):
+            async def stream_json(self, transcript, vehicle):
+                yield '{"intent":"window.set_position","spoken_response":"Đang mở cửa sổ.",'
+                yield '"arguments":{"position_percent":100},"needs_clarification":false,"clarification_question":null}'
+
+        with tempfile.TemporaryDirectory() as directory:
+            config = Settings(data_dir=Path(directory))
+            orchestrator = Orchestrator(StreamingAction(), VehicleSimulator(), DataStore(config))
+            request = TurnRequest(transcript="Mở cửa sổ", session_id="stream", turn_id="stream-action")
+            events = [event async for event in orchestrator.run_stream(request)]
+
+        self.assertEqual([event["type"] for event in events], ["final"])
+        self.assertFalse(events[0]["streamed_speech"])
+        self.assertEqual(events[0]["response"]["vehicle_state"]["window_driver_percent"], 100)
 
 
 if __name__ == "__main__":

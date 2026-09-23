@@ -178,13 +178,26 @@ function stopPlayback() {
   playback.sources.clear();
   playback.finish();
 }
-async function speak(text, turnId = crypto.randomUUID()) {
+function createTtsPlayback() {
+  const playback = { controller: new AbortController(), sources: new Set(), cancelled: false, streamDone: false, played: false, nextStart: 0 };
+  playback.done = new Promise(resolve => { playback.finish = resolve; });
+  return playback;
+}
+async function finishTtsPlayback(playback) {
+  if (!playback) return;
+  playback.streamDone = true;
+  if (!playback.sources.size) playback.finish();
+  await playback.done;
+  if (currentPlayback === playback) currentPlayback = null;
+}
+async function speak(text, turnId = crypto.randomUUID(), sequencePlayback = null) {
   if (!state.sound) return;
-  stopPlayback();
-  if ('speechSynthesis' in window) speechSynthesis.cancel();
+  if (!sequencePlayback) {
+    stopPlayback();
+    if ('speechSynthesis' in window) speechSynthesis.cancel();
+  }
   if (state.ttsAvailable) {
-    const playback = { controller: new AbortController(), sources: new Set(), cancelled: false, streamDone: false, played: false, nextStart: 0 };
-    playback.done = new Promise(resolve => { playback.finish = resolve; });
+    const playback = sequencePlayback || createTtsPlayback();
     currentPlayback = playback;
     try {
       setPhase('synthesizing', text);
@@ -250,10 +263,7 @@ async function speak(text, turnId = crypto.randomUUID()) {
       if (leftover.length && !playback.cancelled) throw new Error('Luồng PCM TTS bị thiếu byte cuối');
       // Short replies may finish before reaching the startup buffer target.
       startBufferedPlayback();
-      playback.streamDone = true;
-      if (!playback.sources.size) playback.finish();
-      await playback.done;
-      if (currentPlayback === playback) currentPlayback = null;
+      if (!sequencePlayback) await finishTtsPlayback(playback);
       return;
     } catch (error) {
       if (playback.cancelled) return;
@@ -338,12 +348,53 @@ async function runBackendCommand(command, turnId = crypto.randomUUID()) {
   state.busy = true; state.lastCommand = command; lockControls(true); $('#command-input').value = '';
   try {
     setPhase('thinking', `“${command}”`);
-    const response = await fetch(`${API_BASE}/api/v1/turn`, {
+    const response = await fetch(`${API_BASE}/api/v1/turn/stream`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ transcript: command, session_id: sessionId, turn_id: turnId, llm_provider: state.llmProvider, vehicle_state: { temperature_celsius: state.temp, window_driver_percent: state.window ? 100 : 0, media_playing: state.music, driving: state.driving, battery_percent: 82, range_km: 328 } })
     });
-    const payload = await response.json();
-    if (!response.ok) throw new Error(payload.detail || 'Backend không phản hồi');
+    if (!response.ok) {
+      const payload = await response.json();
+      throw new Error(payload.detail || 'Backend không phản hồi');
+    }
+    if (!response.body) throw new Error('Backend không hỗ trợ streaming');
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let payload = null;
+    let streamedSpeech = false;
+    let voiceStreamed = false;
+    let spokenText = '';
+    let speechQueue = Promise.resolve();
+    let speechPlayback = null;
+    const handleEvent = (event) => {
+      if (event.type === 'error') throw new Error(event.detail || 'Pipeline streaming bị lỗi');
+      if (event.type === 'speech' && event.text) {
+        streamedSpeech = true;
+        spokenText = `${spokenText} ${event.text}`.trim();
+        setPhase('speaking', spokenText);
+        if (state.sound && state.ttsAvailable) {
+          speechPlayback ||= createTtsPlayback();
+          voiceStreamed = true;
+          // Fetch/synthesize the next clause as soon as the previous clause is
+          // buffered, while sharing one Web Audio timeline for gapless speech.
+          speechQueue = speechQueue.then(() => speak(event.text, turnId, speechPlayback));
+        }
+      } else if (event.type === 'final') {
+        payload = event.response;
+        streamedSpeech ||= Boolean(event.streamed_speech);
+      }
+    };
+    while (true) {
+      const { value, done } = await reader.read();
+      buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+      for (const line of lines) if (line.trim()) handleEvent(JSON.parse(line));
+      if (done) break;
+    }
+    if (buffer.trim()) handleEvent(JSON.parse(buffer));
+    if (!payload) throw new Error('Backend kết thúc luồng trước khi trả kết quả');
     setPhase('validating', 'Safety gateway đã kiểm tra yêu cầu.');
     await wait(180);
     applyBackendState(payload.vehicle_state);
@@ -354,7 +405,10 @@ async function runBackendCommand(command, turnId = crypto.randomUUID()) {
       const card = payload.action.intent.startsWith('climate.') ? '#climate-card' : payload.action.intent.startsWith('window.') ? '#window-card' : payload.action.intent.startsWith('media.') ? '#music-card' : null;
       if (card) highlight(card);
     }
-    await speak(payload.message, turnId);
+    if (voiceStreamed) {
+      await speechQueue;
+      await finishTtsPlayback(speechPlayback);
+    } else if (!streamedSpeech || state.sound) await speak(payload.message, turnId);
     await wait(500);
     setPhase('idle');
   } catch (error) {
