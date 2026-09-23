@@ -6,6 +6,15 @@ from .schemas import ActionProposal, VehicleState
 
 
 class VehicleSimulator:
+    ALLOWED_INTENTS = {
+        "climate.set_temperature",
+        "window.set_position",
+        "door.set_open",
+        "media.play",
+        "media.pause",
+        "vehicle.get_status",
+    }
+
     def __init__(self):
         self._states: dict[str, VehicleState] = {}
         self._executed: dict[str, tuple[VehicleState, str]] = {}
@@ -18,9 +27,12 @@ class VehicleSimulator:
 
     async def execute(self, session_id: str, turn_id: str, action: ActionProposal) -> tuple[VehicleState, str]:
         async with self._lock:
-            if turn_id in self._executed:
-                state, message = self._executed[turn_id]
+            execution_key = f"{session_id}:{turn_id}"
+            if execution_key in self._executed:
+                state, message = self._executed[execution_key]
                 return state.model_copy(deep=True), message
+            if action.intent not in self.ALLOWED_INTENTS:
+                raise ValueError(f"Action is not executable: {action.intent}")
             state = self._states.setdefault(session_id, VehicleState())
             if action.intent == "climate.set_temperature":
                 state.temperature_celsius = float(action.arguments["value_celsius"])
@@ -28,6 +40,9 @@ class VehicleSimulator:
             elif action.intent == "window.set_position":
                 state.window_driver_percent = int(action.arguments["position_percent"])
                 message = f"Mình đã đặt cửa sổ bên tài ở mức {state.window_driver_percent} phần trăm."
+            elif action.intent == "door.set_open":
+                state.driver_door_open = action.arguments["open"]
+                message = "Mình đã mở cửa bên tài." if state.driver_door_open else "Mình đã đóng cửa bên tài."
             elif action.intent == "media.play":
                 state.media_playing = True
                 message = "Mình đã phát nhạc trong xe mô phỏng."
@@ -36,11 +51,9 @@ class VehicleSimulator:
                 message = "Mình đã dừng nhạc trong xe mô phỏng."
             elif action.intent == "vehicle.get_status":
                 message = f"Xe còn {state.battery_percent} phần trăm pin, nhiệt độ {state.temperature_celsius:g} độ."
-            elif action.intent == "manual.search":
-                message = "Mình đã mở cẩm nang minh họa."
             else:
-                message = action.spoken_response
+                raise ValueError(f"Action is not executable: {action.intent}")
             verified = state.model_copy(deep=True)
-            self._executed[turn_id] = (verified, message)
+            self._executed[execution_key] = (verified, message)
             return verified, message
 
