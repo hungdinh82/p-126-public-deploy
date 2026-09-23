@@ -108,4 +108,3 @@ async def asset(asset_name: str):
     if asset_name not in {"app.js", "style.css"}:
         raise HTTPException(status_code=404)
     return FileResponse(ROOT / asset_name)
-

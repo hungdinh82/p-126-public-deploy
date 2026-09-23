@@ -2,7 +2,9 @@ const $ = (selector) => document.querySelector(selector);
 const canvas = $('#universe-canvas');
 const ctx = canvas.getContext('2d');
 const motionPreference = matchMedia('(prefers-reduced-motion: reduce)');
-const API_BASE = location.port === '8787' ? '' : 'http://127.0.0.1:8787';
+// The FastAPI backend serves this UI, so API calls follow the configured
+// VIVI_PORT automatically instead of being tied to a hard-coded port.
+const API_BASE = '';
 const sessionId = localStorage.getItem('vivi-session-id') || crypto.randomUUID();
 localStorage.setItem('vivi-session-id', sessionId);
 const state = { phase: 'idle', temp: 23, window: false, music: false, driving: false, reduced: motionPreference.matches, sound: false, busy: false, backendAvailable: false, sttAvailable: false, ttsAvailable: false, lastCommand: '', progress: 0 };
@@ -196,8 +198,8 @@ function resolveCommand(command) {
     if (/\b(bat|tat)\b/.test(text)) return { type: 'clarify', message: 'Bản demo hiện hỗ trợ đặt nhiệt độ từ 16 đến 30 độ. Bạn muốn đặt bao nhiêu độ?' };
     const number = text.match(/(\d+(?:[.,]\d+)?)\s*(?:do|°)/);
     const amount = number ? Number(number[1].replace(',', '.')) : 2;
-    const lower = /giam|ha|nong|mat hon/.test(text);
-    const relative = /tang|giam|ha|them|bot/.test(text);
+    const lower = /\b(giam|ha)\b|\bnong\b|\bmat hon\b/.test(text);
+    const relative = /\b(tang|giam|ha|them|bot)\b/.test(text);
     const value = number && !relative ? amount : state.temp + (lower ? -amount : amount);
     if (value < 16 || value > 30) return { type: 'blocked', message: 'Nhiệt độ của xe mô phỏng chỉ nhận từ 16 đến 30 độ. Bạn muốn đặt bao nhiêu độ?' };
     return { type: 'climate', value };

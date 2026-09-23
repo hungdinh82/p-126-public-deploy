@@ -7,6 +7,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from server.adapters.llm import RulesAdapter
+from server.adapters.tts import ZeroTTSAdapter
 from server.app import app
 from server.config import Settings
 from server.data_store import DataStore
@@ -41,6 +42,14 @@ class RulesTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.intent, "climate.set_temperature")
         self.assertEqual(result.arguments["value_celsius"], 25)
 
+    async def test_word_hai_is_not_mistaken_for_lower_command(self):
+        result = await RulesAdapter().propose(
+            "Tôi hơi lạnh, tăng nhiệt độ thêm hai độ",
+            VehicleState(temperature_celsius=23),
+        )
+        self.assertEqual(result.intent, "climate.set_temperature")
+        self.assertEqual(result.arguments["value_celsius"], 25)
+
     async def test_negation_clarifies(self):
         result = await RulesAdapter().propose("Đừng mở cửa sổ", VehicleState())
         self.assertEqual(result.intent, "conversation.clarify")
@@ -54,6 +63,14 @@ class RulesTests(unittest.IsolatedAsyncioTestCase):
             second = await orchestrator.run(request)
             self.assertEqual(first.vehicle_state.temperature_celsius, 24)
             self.assertEqual(second.vehicle_state.temperature_celsius, 24)
+
+
+class TTSTests(unittest.TestCase):
+    def test_mai_chi_display_name_resolves_to_voice_key(self):
+        self.assertEqual(ZeroTTSAdapter._normalize_voice_name("Mai Chi"), "maichi")
+
+    def test_voice_key_normalization_ignores_common_separators(self):
+        self.assertEqual(ZeroTTSAdapter._normalize_voice_name("MAI-CHI"), "maichi")
 
 
 class APITests(unittest.TestCase):
@@ -76,4 +93,3 @@ class APITests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

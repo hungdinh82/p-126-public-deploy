@@ -56,8 +56,8 @@ class RulesAdapter(LLMAdapter):
                 return ActionProposal(intent="conversation.clarify", needs_clarification=True, clarification_question="Bạn muốn đặt nhiệt độ bao nhiêu?", spoken_response="Bạn muốn đặt nhiệt độ bao nhiêu?")
             number = re.search(r"(\d+(?:[.,]\d+)?)\s*(?:do|°)", text)
             amount = float(number.group(1).replace(",", ".")) if number else 2
-            lower = bool(re.search(r"giam|ha|nong|mat hon", text))
-            relative = bool(re.search(r"tang|giam|ha|them|bot", text))
+            lower = bool(re.search(r"\b(?:giam|ha)\b|\bnong\b|\bmat hon\b", text))
+            relative = bool(re.search(r"\b(?:tang|giam|ha|them|bot)\b", text))
             value = amount if number and not relative else vehicle.temperature_celsius + (-amount if lower else amount)
             return ActionProposal(intent="climate.set_temperature", arguments={"value_celsius": value}, spoken_response=f"Mình sẽ đặt nhiệt độ ở {value:g} độ.")
         return ActionProposal(intent="conversation.clarify", needs_clarification=True, clarification_question="Bạn muốn mình điều chỉnh nhiệt độ, cửa sổ, âm nhạc hay xem trạng thái xe?", spoken_response="Mình có thể chỉnh nhiệt độ, cửa sổ, âm nhạc hoặc xem trạng thái xe.")
@@ -138,4 +138,3 @@ def create_llm(config: Settings) -> LLMAdapter:
     if not cls:
         raise RuntimeError(f"LLM_PROVIDER không hợp lệ: {config.llm_provider}")
     return cls() if cls is RulesAdapter else cls(config)
-
