@@ -252,20 +252,35 @@ async function runBackendCommand(command, turnId = crypto.randomUUID()) {
   state.busy = true; state.lastCommand = command; lockControls(true); $('#command-input').value = '';
   try {
     setPhase('thinking', `“${command}”`);
-    const response = await fetch(`${API_BASE}/api/v1/turn`, {
+    let response = await fetch(`${API_BASE}/api/v1/turn`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ transcript: command, session_id: sessionId, turn_id: turnId, vehicle_state: { temperature_celsius: state.temp, window_driver_percent: state.window ? 100 : 0, media_playing: state.music, driving: state.driving, battery_percent: 82, range_km: 328 } })
     });
-    const payload = await response.json();
+    let payload = await response.json();
     if (!response.ok) throw new Error(payload.detail || 'Backend không phản hồi');
     setPhase('validating', 'Safety gateway đã kiểm tra yêu cầu.');
+    if (payload.status === 'confirmation_required' && payload.confirmation) {
+      const approved = window.confirm(payload.confirmation.preview);
+      turnId = crypto.randomUUID();
+      response = await fetch(`${API_BASE}/api/v1/turn`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          transcript: command, session_id: sessionId, turn_id: turnId,
+          confirmation_id: payload.confirmation.confirmation_id,
+          confirmation_decision: approved ? 'approve' : 'deny'
+        })
+      });
+      payload = await response.json();
+      if (!response.ok) throw new Error(payload.detail || 'Backend không phản hồi');
+    }
     await wait(180);
     applyBackendState(payload.vehicle_state);
-    if (payload.action.intent === 'manual.search' && payload.status === 'verified') openPanel('manual');
+    if (payload.action?.intent === 'manual.search' && payload.status === 'verified') openPanel('manual');
     const phase = payload.status === 'verified' ? 'speaking' : payload.status;
     setPhase(phase, payload.message);
     if (payload.status === 'verified') {
-      const card = payload.action.intent.startsWith('climate.') ? '#climate-card' : payload.action.intent.startsWith('window.') ? '#window-card' : payload.action.intent.startsWith('media.') ? '#music-card' : null;
+      const intent = payload.action?.intent || '';
+      const card = intent.startsWith('climate.') ? '#climate-card' : intent.startsWith('window.') ? '#window-card' : intent.startsWith('media.') ? '#music-card' : null;
       if (card) highlight(card);
     }
     await speak(payload.message, turnId);
