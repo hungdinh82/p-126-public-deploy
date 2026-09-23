@@ -15,11 +15,12 @@ class Orchestrator:
         self.vehicle = vehicle
         self.store = store
 
-    async def run(self, request: TurnRequest) -> TurnResponse:
+    async def run(self, request: TurnRequest, llm: LLMAdapter | None = None) -> TurnResponse:
+        llm = llm or self.llm
         started = time.perf_counter()
         vehicle = self.vehicle.state_for(request.session_id, request.vehicle_state)
         llm_started = time.perf_counter()
-        proposal = await self.llm.propose(request.transcript, vehicle)
+        proposal = await llm.propose(request.transcript, vehicle)
         llm_ms = (time.perf_counter() - llm_started) * 1000
         safety = validate(proposal, vehicle)
         if safety.allowed:
@@ -34,7 +35,7 @@ class Orchestrator:
             session_id=request.session_id,
             turn_id=request.turn_id,
             transcript=request.transcript,
-            provider=self.llm.name,
+            provider=llm.name,
             status=status,
             action=proposal,
             vehicle_state=vehicle,

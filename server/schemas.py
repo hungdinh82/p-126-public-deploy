@@ -62,6 +62,7 @@ class TurnRequest(BaseModel):
     session_id: str = Field(min_length=1, max_length=100)
     turn_id: str = Field(min_length=1, max_length=100)
     vehicle_state: VehicleState | None = None
+    llm_provider: Literal["rules", "openai", "google", "local"] | None = None
 
 
 class TurnResponse(BaseModel):

@@ -160,6 +160,35 @@ class APITests(unittest.TestCase):
         response = TestClient(app).get("/api/v1/health")
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["status"], "ok")
+        options = response.json()["llm"]["options"]
+        self.assertEqual({item["provider"] for item in options}, {"rules", "openai", "google", "local"})
+        self.assertTrue(next(item for item in options if item["provider"] == "rules")["available"])
+
+    def test_turn_uses_selected_provider_without_changing_default(self):
+        class SelectedAdapter(RulesAdapter):
+            name = "local"
+
+            async def propose(self, transcript, vehicle):
+                return ActionProposal(intent="conversation.respond", spoken_response="Mình là ViVi local.")
+
+        with tempfile.TemporaryDirectory() as directory:
+            config = Settings(data_dir=Path(directory))
+            test_orchestrator = Orchestrator(RulesAdapter(), VehicleSimulator(), DataStore(config))
+            with patch("server.app.orchestrator", test_orchestrator), patch.dict("server.app.llm_adapters", {"local": SelectedAdapter()}):
+                response = TestClient(app).post("/api/v1/turn", json={
+                    "transcript": "Bạn là ai", "session_id": "model-session", "turn_id": "model-1", "llm_provider": "local",
+                })
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["provider"], "local")
+        self.assertEqual(response.json()["message"], "Mình là ViVi local.")
+        self.assertEqual(test_orchestrator.llm.name, "rules")
+
+    def test_unavailable_provider_is_rejected(self):
+        with patch.dict("server.app.llm_adapters", clear=True):
+            response = TestClient(app).post("/api/v1/turn", json={
+                "transcript": "Bạn là ai", "session_id": "model-session", "turn_id": "model-2", "llm_provider": "local",
+            })
+        self.assertEqual(response.status_code, 400)
 
     def test_rule_turn(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -170,6 +199,7 @@ class APITests(unittest.TestCase):
                     "transcript": "Đặt nhiệt độ 25 độ",
                     "session_id": "api-session",
                     "turn_id": "api-turn",
+                    "llm_provider": "rules",
                 })
         self.assertEqual(response.status_code, 200)
         payload = response.json()

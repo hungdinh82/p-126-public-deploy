@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 from contextlib import asynccontextmanager
+from dataclasses import replace
 from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
@@ -20,12 +21,16 @@ from .vehicle import VehicleSimulator
 
 ROOT = Path(__file__).resolve().parent.parent
 store = DataStore(settings)
-try:
-    llm = create_llm(settings)
-    llm_error = None
-except Exception as exc:
-    from .adapters.llm import RulesAdapter
-    llm, llm_error = RulesAdapter(), str(exc)
+LLM_MODELS = {"rules": "Kịch bản", "openai": settings.openai_model, "google": settings.google_model, "local": settings.local_llm_model}
+llm_adapters = {}
+llm_errors = {}
+for provider in LLM_MODELS:
+    try:
+        llm_adapters[provider] = create_llm(replace(settings, llm_provider=provider))
+    except Exception as exc:
+        llm_errors[provider] = str(exc)
+llm = llm_adapters.get(settings.llm_provider, llm_adapters["rules"])
+llm_error = llm_errors.get(settings.llm_provider) or (f"LLM_PROVIDER không hợp lệ: {settings.llm_provider}" if settings.llm_provider not in LLM_MODELS else None)
 vehicle = VehicleSimulator()
 orchestrator = Orchestrator(llm, vehicle, store)
 stt = PhoWhisperAdapter(settings)
@@ -54,7 +59,13 @@ async def health():
     return {
         "status": "ok",
         "runtime": "local",
-        "llm": {"provider": llm.name, "configured": llm_error is None, "detail": llm_error},
+        "llm": {
+            "provider": llm.name, "configured": llm_error is None, "detail": llm_error,
+            "options": [
+                {"provider": provider, "model": model, "available": provider in llm_adapters, "detail": llm_errors.get(provider)}
+                for provider, model in LLM_MODELS.items()
+            ],
+        },
         "stt": {"provider": stt.name, "available": stt_ok, "detail": stt_detail},
         "tts": {"provider": tts.name, "voice": settings.zerotts_voice, "available": tts_ok, "detail": tts_detail},
         "storage": {"audio": settings.store_audio, "transcripts": settings.store_transcripts, "path": str(settings.data_dir)},
@@ -63,8 +74,12 @@ async def health():
 
 @app.post("/api/v1/turn", response_model=TurnResponse)
 async def turn(request: TurnRequest):
+    selected = request.llm_provider or llm.name
+    adapter = llm_adapters.get(selected)
+    if adapter is None:
+        raise HTTPException(status_code=400, detail=llm_errors.get(selected, "LLM provider không khả dụng"))
     try:
-        return await orchestrator.run(request)
+        return await orchestrator.run(request, llm=adapter)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Không xử lý được lượt hội thoại: {exc}") from exc
 

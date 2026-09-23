@@ -7,7 +7,7 @@ const motionPreference = matchMedia('(prefers-reduced-motion: reduce)');
 const API_BASE = '';
 const sessionId = localStorage.getItem('vivi-session-id') || crypto.randomUUID();
 localStorage.setItem('vivi-session-id', sessionId);
-const state = { phase: 'idle', temp: 23, window: false, music: false, driving: false, reduced: motionPreference.matches, sound: false, busy: false, backendAvailable: false, sttAvailable: false, ttsAvailable: false, lastCommand: '', progress: 0 };
+const state = { phase: 'idle', temp: 23, window: false, music: false, driving: false, reduced: motionPreference.matches, sound: false, busy: false, backendAvailable: false, sttAvailable: false, ttsAvailable: false, llmProvider: '', llmOptions: [], lastCommand: '', progress: 0 };
 const phaseLabels = { idle: 'ViVi đang ở đây', listening: 'Mình đang nghe bạn', transcribing: 'Mình đang nhận diện lời nói', thinking: 'Để mình xem nhé', validating: 'Đang kiểm tra an toàn', acting: 'Đang chăm sóc không gian của bạn', synthesizing: 'Đang chuẩn bị giọng Mai Chi', speaking: 'Một chút dễ chịu, dành cho bạn', clarify: 'Mình chờ bạn nói thêm', blocked: 'Mình giữ nguyên trạng thái xe' };
 const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 let width = 1, height = 1, tick = 0, previous = 0;
@@ -340,7 +340,7 @@ async function runBackendCommand(command, turnId = crypto.randomUUID()) {
     setPhase('thinking', `“${command}”`);
     const response = await fetch(`${API_BASE}/api/v1/turn`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ transcript: command, session_id: sessionId, turn_id: turnId, vehicle_state: { temperature_celsius: state.temp, window_driver_percent: state.window ? 100 : 0, media_playing: state.music, driving: state.driving, battery_percent: 82, range_km: 328 } })
+      body: JSON.stringify({ transcript: command, session_id: sessionId, turn_id: turnId, llm_provider: state.llmProvider, vehicle_state: { temperature_celsius: state.temp, window_driver_percent: state.window ? 100 : 0, media_playing: state.music, driving: state.driving, battery_percent: 82, range_km: 328 } })
     });
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.detail || 'Backend không phản hồi');
@@ -427,12 +427,23 @@ async function checkBackend() {
   try {
     const response = await fetch(`${API_BASE}/api/v1/health`); if (!response.ok) throw new Error();
     const health = await response.json(); state.backendAvailable = true; state.sttAvailable = health.stt.available; state.ttsAvailable = health.tts.available;
-    $('#backend-status').classList.remove('offline'); $('#backend-status').innerHTML = `<i></i> Local · ${health.llm.provider}`;
-    $('#runtime-note').innerHTML = `<span class="mini-dot"></span> STT ${health.stt.available ? 'sẵn sàng' : 'chưa cài'} · TTS ${health.tts.available ? 'Mai Chi' : 'chưa cài'} · LLM ${health.llm.provider}`;
+    state.llmOptions = health.llm.options || [];
+    const saved = localStorage.getItem('vivi-llm-provider');
+    state.llmProvider = state.llmOptions.some(item => item.provider === saved && item.available) ? saved : health.llm.provider;
+    updateModelStatus();
+    $('#backend-status').classList.remove('offline'); $('#backend-status').innerHTML = '<i></i> Local · <span id="backend-model"></span>';
+    $('#backend-model').textContent = state.llmProvider;
+    $('#runtime-note').innerHTML = `<span class="mini-dot"></span> STT ${health.stt.available ? 'sẵn sàng' : 'chưa cài'} · TTS ${health.tts.available ? 'Mai Chi' : 'chưa cài'} · LLM <span id="runtime-model"></span>`;
+    $('#runtime-model').textContent = state.llmProvider;
   } catch {
     state.backendAvailable = false; $('#backend-status').classList.add('offline'); $('#backend-status').innerHTML = '<i></i> Local backend offline';
     $('#runtime-note').innerHTML = '<span class="mini-dot"></span> Chế độ prototype · hãy chạy python run.py';
   }
+}
+
+function updateModelStatus() {
+  if ($('#backend-model')) $('#backend-model').textContent = state.llmProvider;
+  if ($('#runtime-model')) $('#runtime-model').textContent = state.llmProvider;
 }
 
 $('#command-form').addEventListener('submit', event => { event.preventDefault(); runCommand($('#command-input').value); });
@@ -456,25 +467,57 @@ $('#sound-toggle').addEventListener('click', () => {
 });
 
 const dialog = $('#info-dialog');
+const modelLabels = { rules: 'Kịch bản', openai: 'OpenAI', google: 'Google', local: 'Local API' };
+const modelModes = { rules: 'Phản hồi định sẵn', openai: 'Cloud · cần Internet', google: 'Cloud · cần Internet', local: 'On-device · riêng tư' };
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>'"]/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character]);
+}
+function modelOptionsMarkup() {
+  if (!state.backendAvailable) return '<div class="config-empty"><i></i><span>Backend chưa kết nối</span><small>Chạy python run.py để tải danh sách model.</small></div>';
+  return state.llmOptions.map(item => {
+    const selected = item.provider === state.llmProvider;
+    const label = modelLabels[item.provider] || item.provider;
+    const model = item.model || 'Chưa cấu hình';
+    return `<button type="button" class="model-option${selected ? ' selected' : ''}" data-llm-provider="${escapeHtml(item.provider)}" aria-pressed="${selected}" ${item.available ? '' : 'disabled'}><span class="model-option-head"><strong>${escapeHtml(label)}</strong><i></i></span><span class="model-id">${escapeHtml(model)}</span><small>${item.available ? escapeHtml(modelModes[item.provider] || '') : 'Chưa cấu hình trong .env'}</small></button>`;
+  }).join('');
+}
+function selectLlmProvider(provider) {
+  const selected = state.llmOptions.find(item => item.provider === provider && item.available);
+  if (!selected) return;
+  state.llmProvider = provider;
+  localStorage.setItem('vivi-llm-provider', provider);
+  document.querySelectorAll('[data-llm-provider]').forEach(button => {
+    const active = button.dataset.llmProvider === provider;
+    button.classList.toggle('selected', active);
+    button.setAttribute('aria-pressed', String(active));
+  });
+  const activeModel = $('#active-model');
+  if (activeModel) activeModel.textContent = `${modelLabels[provider] || provider} · ${selected.model || 'Chưa cấu hình'}`;
+  updateModelStatus();
+}
 function openPanel(view) {
-  if (view === 'home') { if (dialog.open) dialog.close(); document.querySelectorAll('.rail-main .rail-button').forEach(button => button.classList.toggle('active', button.dataset.view === 'home')); return; }
+  if (view === 'home') { if (dialog.open) dialog.close(); document.querySelectorAll('.rail-main .rail-button').forEach(button => button.classList.toggle('active', button.dataset.view === 'home')); $('.settings-button').classList.remove('active'); return; }
   document.querySelectorAll('.rail-main .rail-button').forEach(button => button.classList.toggle('active', button.dataset.view === view));
+  $('.settings-button').classList.toggle('active', view === 'settings');
+  const currentModel = state.llmOptions.find(item => item.provider === state.llmProvider);
   const contents = {
     vehicle: `<h2>Không gian của bạn</h2><p>Digital Twin · trạng thái được mô phỏng trong phiên trải nghiệm này.</p><div class="detail-row"><span>Pin còn lại</span><strong>82% / 328 km</strong></div><div class="detail-row"><span>Nhiệt độ cài đặt</span><strong>${state.temp}°C</strong></div><div class="detail-row"><span>Cửa sổ bên tài</span><strong>${state.window ? 'Đang mở' : 'Đang đóng'}</strong></div><div class="detail-row"><span>Multimedia</span><strong>${state.music ? 'Đang phát (mô phỏng)' : 'Đang dừng'}</strong></div><div class="detail-row"><span>Chế độ</span><strong>${state.driving ? 'Đang lái xe (demo)' : 'Đang đỗ xe'}</strong></div><p class="dialog-note">Chưa kết nối xe thật, cảm biến hoặc dịch vụ VinFast.</p>`,
     journey: '<h2>Mỗi hành trình, một khám phá.</h2><p>Không gian dành cho địa điểm yêu thích, trạm sạc và chỉ đường trong phiên bản tiếp theo.</p><div class="detail-row"><span>Điểm đến</span><strong>Chưa thiết lập</strong></div><div class="detail-row"><span>Dịch vụ bản đồ</span><strong>Chưa kết nối</strong></div><p class="dialog-note">Prototype hiện tập trung vào trải nghiệm trợ lý và các thao tác cabin.</p>',
     manual: '<h2>Hiểu chiếc xe của bạn</h2><p>Đây là bản xem trước cách ViVi trình bày một câu trả lời có nguồn tham khảo.</p><div class="detail-row"><span>Ví dụ câu hỏi</span><strong>Điều chỉnh nhiệt độ thế nào?</strong></div><p>Trong demo, bạn có thể nói “Tôi hơi lạnh” để tăng nhiệt độ cài đặt thêm 2°C, hoặc nhập “Đặt nhiệt độ 25 độ”. ViVi kiểm tra giới hạn 16–30°C trước khi cập nhật xe mô phỏng.</p><div class="detail-row"><span>Nguồn của nội dung này</span><strong>Quy tắc prototype ViVi</strong></div><p class="dialog-note">Chưa tích hợp RAG hoặc manual VinFast. Nội dung này chỉ mô tả cách vận hành bản demo.</p><button class="dialog-action" id="try-climate">Thử “Tôi hơi lạnh” ↗</button>',
-    settings: `<h2>Nhịp điệu của ViVi</h2><p>Điều chỉnh không gian theo sự thoải mái của bạn.</p><label class="setting-label"><input id="reduce-motion" type="checkbox" ${state.reduced ? 'checked' : ''}> Giảm chuyển động</label><p class="dialog-note">Giữ nguyên hình khối và ánh sáng, dừng chuyển động lơ lửng, xoay quỹ đạo và hiệu ứng âm thanh dạng sóng. Chế độ lái xe tự động làm dịu chuyển động.</p><div class="detail-row"><span>Tương tác giọng nói</span><strong>${state.sttAvailable ? 'PhoWhisper local' : 'Chưa cài AI runtime'}</strong></div><p class="dialog-note">Nhấn mic một lần để bắt đầu. ViVi tự dừng khi bạn im lặng hoặc khi bạn nhấn mic lần nữa. Audio và transcript được lưu cục bộ trong thư mục data cho đến khi bạn tự xóa.</p>`
+    settings: `<h2>Cấu hình ViVi</h2><p>Chọn cách ViVi suy nghĩ và chuyển động trong không gian của bạn.</p><section class="config-section"><div class="config-heading"><span>MÔ HÌNH HỘI THOẠI</span><strong id="active-model">${escapeHtml(modelLabels[state.llmProvider] || state.llmProvider || 'Chưa kết nối')} · ${escapeHtml(currentModel?.model || '')}</strong></div><div class="model-options">${modelOptionsMarkup()}</div><p class="dialog-note">Lựa chọn được áp dụng từ lượt hội thoại tiếp theo. Model ID và API key vẫn được quản lý an toàn trong .env.</p></section><section class="config-section"><div class="config-heading"><span>TRẢI NGHIỆM</span><strong>Không gian & giọng nói</strong></div><label class="motion-setting"><span><strong>Giảm chuyển động</strong><small>Dừng lơ lửng, quỹ đạo và hiệu ứng sóng</small></span><input id="reduce-motion" type="checkbox" ${state.reduced ? 'checked' : ''}><i></i></label><div class="config-runtime"><div><span>NHẬN DIỆN GIỌNG NÓI</span><strong>${state.sttAvailable ? 'PhoWhisper · local' : 'Chưa sẵn sàng'}</strong></div><div><span>GIỌNG PHẢN HỒI</span><strong>${state.ttsAvailable ? 'VIVI · Mai Chi' : 'Chưa sẵn sàng'}</strong></div></div><p class="dialog-note">Audio và transcript được lưu cục bộ trong thư mục data cho đến khi bạn tự xóa.</p></section>`
   };
   $('#dialog-content').innerHTML = contents[view];
+  dialog.classList.toggle('config-dialog', view === 'settings');
   if (!dialog.open) dialog.showModal();
   $('#try-climate')?.addEventListener('click', () => { dialog.close(); runCommand('Tôi hơi lạnh'); });
   $('#reduce-motion')?.addEventListener('change', event => { state.reduced = event.target.checked; document.body.classList.toggle('reduced-motion', state.reduced); });
+  document.querySelectorAll('[data-llm-provider]').forEach(button => button.addEventListener('click', () => selectLlmProvider(button.dataset.llmProvider)));
 }
 document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', () => openPanel(button.dataset.view)));
 $('.settings-button').addEventListener('click', () => openPanel('settings'));
 $('#close-dialog').addEventListener('click', () => dialog.close());
 dialog.addEventListener('click', event => { if (event.target === dialog) { const rect = dialog.getBoundingClientRect(); if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) dialog.close(); } });
-dialog.addEventListener('close', () => { document.querySelectorAll('.rail-main .rail-button').forEach(button => button.classList.toggle('active', button.dataset.view === 'home')); });
+dialog.addEventListener('close', () => { document.querySelectorAll('.rail-main .rail-button').forEach(button => button.classList.toggle('active', button.dataset.view === 'home')); $('.settings-button').classList.remove('active'); dialog.classList.remove('config-dialog'); });
 motionPreference.addEventListener('change', event => { state.reduced = event.matches; document.body.classList.toggle('reduced-motion', state.reduced); });
 document.body.classList.toggle('reduced-motion', state.reduced);
 function updateClock() { $('#clock').textContent = new Intl.DateTimeFormat('vi-VN', { hour: '2-digit', minute: '2-digit' }).format(new Date()); }

@@ -33,7 +33,7 @@ Backend hiện yêu cầu cài `requirements-ai.txt` và có voice pack VIVI đ�
 
 ## Provider LLM
 
-Chọn một provider trong `.env`:
+Đặt provider mặc định trong `.env`, sau đó có thể đổi model hội thoại ngay trên giao diện mà không cần khởi động lại backend. Danh sách UI chỉ cho chọn các provider đã cấu hình; model ID và khóa API vẫn được quản lý trên backend.
 
 - `LLM_PROVIDER=rules`: mặc định, chạy offline ngay và hữu ích cho test.
 - `LLM_PROVIDER=local`: API local tương thích OpenAI Chat Completions; cấu hình `LOCAL_LLM_BASE_URL` và `LOCAL_LLM_MODEL`.
@@ -42,7 +42,7 @@ Chọn một provider trong `.env`:
 
 OpenAI/Google cần mạng. Chỉ `rules` và `local` đáp ứng runtime offline. Nếu provider được chọn nhưng cấu hình thiếu, server khởi động an toàn bằng `rules` và báo chi tiết ở `/api/v1/health`.
 
-Để ViVi trả lời câu hỏi tự nhiên (ví dụ “Bạn là ai?”), chọn `openai`, `google` hoặc `local` và khởi động lại backend. `rules` chỉ xử lý kịch bản cố định. `/api/v1/health` cho biết provider thực tế đang chạy; nếu giao diện báo backend offline thì nó sẽ dùng kịch bản demo tại trình duyệt. Lệnh điều khiển xe vẫn phải qua safety gateway và vehicle simulator; phản hồi hội thoại không thực hiện thao tác xe.
+Để ViVi trả lời câu hỏi tự nhiên (ví dụ “Bạn là ai?”), chọn `openai`, `google` hoặc `local` trên UI. `rules` chỉ xử lý kịch bản cố định. Sau khi thay đổi các model ID hoặc khóa trong `.env`, cần khởi động lại backend. `/api/v1/health` cho biết provider mặc định và các lựa chọn khả dụng; `POST /api/v1/turn` nhận `llm_provider` tùy chọn cho từng lượt. Nếu giao diện báo backend offline thì nó sẽ dùng kịch bản demo tại trình duyệt. Lệnh điều khiển xe vẫn phải qua safety gateway và vehicle simulator; phản hồi hội thoại không thực hiện thao tác xe.
 
 ## API local
 
