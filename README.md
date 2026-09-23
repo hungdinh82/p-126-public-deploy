@@ -13,6 +13,8 @@ cp .env.example .env
 
 Mở http://127.0.0.1:8787. Backend chỉ bind `127.0.0.1`. Lần đầu dùng STT/TTS sẽ tải model; các lần sau có thể chạy offline từ cache. Font Google Fonts có fallback font hệ thống khi offline.
 
+Voice ZeroTTS của ViVi nằm trong `voices/VIVI.zip` với ID `VIVI` (`ZEROTTS_VOICE=VIVI`). Pack này chứa giọng community “Mai Chi”; backend nạp trực tiếp từ ZIP, không cần cài voice vào thư mục người dùng.
+
 Nếu chỉ phát triển backend/UI mà chưa cần model nặng:
 
 ```sh

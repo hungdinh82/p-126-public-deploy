@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+import json
+import zipfile
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -66,6 +68,14 @@ class RulesTests(unittest.IsolatedAsyncioTestCase):
 
 
 class TTSTests(unittest.TestCase):
+    def test_vivi_pack_uses_vivi_id(self):
+        pack = Path(__file__).resolve().parent.parent / "voices" / "VIVI.zip"
+        with zipfile.ZipFile(pack) as archive:
+            meta = json.loads(archive.read("VIVI/meta.json"))
+            self.assertIn("VIVI/voice.npz", archive.namelist())
+        self.assertEqual(meta["name"], "VIVI")
+        self.assertEqual(meta["display_name"], "Mai Chi")
+
     def test_mai_chi_display_name_resolves_to_voice_key(self):
         self.assertEqual(ZeroTTSAdapter._normalize_voice_name("Mai Chi"), "maichi")
 

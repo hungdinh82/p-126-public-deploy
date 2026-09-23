@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import asyncio
 import io
+import json
 import re
 import unicodedata
 import wave
+import zipfile
+from pathlib import Path
 
 from server.config import Settings
 
@@ -29,9 +32,26 @@ class ZeroTTSAdapter:
     def _load(self):
         if self._model is None:
             from zerotts import ZeroTTS
-            self._model = ZeroTTS.from_pretrained(self.config.zerotts_model)
+            model = ZeroTTS.from_pretrained(self.config.zerotts_model)
+            if self.config.zerotts_voice == "VIVI":
+                import numpy as np
+                from zerotts.voices import Voice
+
+                pack = Path(__file__).resolve().parents[2] / "voices" / "VIVI.zip"
+                with zipfile.ZipFile(pack) as archive:
+                    meta = json.loads(archive.read("VIVI/meta.json"))
+                    if meta.get("name") != "VIVI":
+                        raise RuntimeError("Voice pack VIVI có ID không hợp lệ")
+                    with np.load(io.BytesIO(archive.read("VIVI/voice.npz"))) as data:
+                        voice = data["voice_emb"]
+                        queries = int(data["n_voice_queries"])
+                if voice.shape != (1, model.n_voice_queries, model.d_model) or queries != model.n_voice_queries:
+                    raise RuntimeError("Voice pack VIVI không tương thích với model ZeroTTS")
+                self._voice = Voice(name="VIVI", emb=voice.astype(np.float32), meta=meta)
+                self._model = model
+                return self._model
             requested = self._normalize_voice_name(self.config.zerotts_voice)
-            voices = self._model.list_voices()
+            voices = model.list_voices()
             matches = {self._normalize_voice_name(voice): voice for voice in voices}
             if requested not in matches:
                 available = ", ".join(voices) or "không có"
@@ -40,6 +60,7 @@ class ZeroTTSAdapter:
                     f"Các giọng hiện có: {available}"
                 )
             self._voice = matches[requested]
+            self._model = model
         return self._model
 
     @staticmethod

@@ -53,7 +53,7 @@ Tài liệu này ghi lại “vì sao” của các lựa chọn quan trọng. M
 - **Trạng thái:** Accepted
 - **Ngày:** 2026-09-22
 - **Bối cảnh:** Người dùng chọn model `zeroweight-ai/ZeroTTS` và đổi bản sắc giọng nói sang giọng community “Mai Chi”. Model hỗ trợ local CPU inference và streaming.
-- **Quyết định:** Tích hợp package `zerotts` local, model `zeroweight-ai/ZeroTTS`, voice ID `maichi`; dùng streaming audio mono float32 48 kHz. Khi TTS lỗi, giữ phản hồi chữ và không tự chuyển sang giọng khác.
+- **Quyết định:** Tích hợp package `zerotts` local, model `zeroweight-ai/ZeroTTS`, pack community `voices/VIVI.zip` với voice ID `VIVI` (tên hiển thị “Mai Chi”); xuất audio mono 48 kHz. Khi TTS lỗi, giữ phản hồi chữ và không tự chuyển sang giọng khác.
 - **Chưa quyết định:** Quyền sử dụng giọng Mai Chi trong sản phẩm ngoài demo/evaluation.
 - **Hệ quả:** Không cần TTS cloud hay API key. Model/dependency phải được tải trước để runtime offline; cần kiểm tra quyền sử dụng voice trước production.
 - **Tham chiếu:** [Model card ZeroTTS](https://huggingface.co/zeroweight-ai/ZeroTTS).

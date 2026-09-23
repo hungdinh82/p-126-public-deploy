@@ -22,7 +22,7 @@ ViVi hiện là một prototype giao diện web độc lập. Giao diện thể 
 | STT / PhoWhisper medium | Đã tải model và nhận diện thật thành công | `server/adapters/stt.py` |
 | LLM API | Adapter OpenAI, Google, local và rules đã có; model chưa khóa | `server/adapters/llm.py` |
 | TTS / ZeroTTS local | Đã tích hợp và synthesis thật thành công | `server/adapters/tts.py` |
-| Giọng Mai Chi (`maichi`) | WAV mono 48 kHz đã xác minh | `server/adapters/tts.py` |
+| Giọng community Mai Chi (`VIVI`) | Pack `voices/VIVI.zip`, WAV mono 48 kHz | `server/adapters/tts.py` |
 | TTS trình duyệt | Có `SpeechSynthesis` tùy chọn, phụ thuộc thiết bị | `app.js` |
 | Backend/API | FastAPI local hoạt động tại `127.0.0.1:8787` | `server/`, `run.py` |
 | Môi trường backend | Đã chốt local/offline, chỉ `localhost` trong MVP đầu | — |

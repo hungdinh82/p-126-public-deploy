@@ -159,7 +159,7 @@ Nhánh lỗi có thể đi từ mọi trạng thái về `recoverable_error` ho�
 
 - Khóa PhoWhisper medium; chuẩn bị hai profile runtime: macOS Apple Silicon M1 và Windows với NVIDIA GTX 1650 4 GB VRAM.
 - Đóng gói model/dependency cục bộ và kiểm tra khởi động khi máy không có mạng.
-- Dùng package `zerotts`, model `zeroweight-ai/ZeroTTS` và voice ID `maichi`; xác minh license/phạm vi dùng giọng trước khi vượt khỏi demo.
+- Dùng package `zerotts`, model `zeroweight-ai/ZeroTTS` và pack community `voices/VIVI.zip` (voice ID `VIVI`, tên hiển thị “Mai Chi”); xác minh license/phạm vi dùng giọng trước khi vượt khỏi demo.
 - Định nghĩa interface LLM độc lập với nhà cung cấp.
 - Lập bộ 30–50 câu lệnh tiếng Việt có giọng vùng miền, từ đệm, phủ định và câu mơ hồ.
 - Ghi baseline độ trễ cho từng chặng.
@@ -201,7 +201,7 @@ Nhánh lỗi có thể đi từ mọi trạng thái về `recoverable_error` ho�
 ### Giai đoạn 4 — ZeroTTS, giọng Mai Chi
 
 - Tích hợp local package `zerotts` với model `zeroweight-ai/ZeroTTS`.
-- Khóa voice mặc định là `maichi` (tên hiển thị “Mai Chi”).
+- Khóa voice mặc định là `VIVI`, nạp từ `voices/VIVI.zip` (tên hiển thị “Mai Chi”).
 - Dùng streaming synthesis; adapter nhận các chunk mono `float32` 48 kHz rồi truyền/phát theo contract nội bộ.
 - Chuẩn hóa văn bản nói: số, đơn vị, ký hiệu và câu quá dài.
 - Hỗ trợ hủy request/playback khi người dùng tạo lượt mới.
@@ -258,7 +258,7 @@ LLM_MODEL=<chua-chot>
 TTS_PROVIDER=zerotts
 ZEROTTS_MODEL=zeroweight-ai/ZeroTTS
 ZEROTTS_DEVICE=cpu
-ZEROTTS_VOICE=maichi
+ZEROTTS_VOICE=VIVI
 
 STORE_AUDIO=true
 STORE_TRANSCRIPTS=true
