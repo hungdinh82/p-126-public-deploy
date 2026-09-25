@@ -1,5 +1,21 @@
 # Trạng thái dự án ViVi
 
+> Cập nhật 2026-09-25: Đã hợp nhất voice pipeline và handbook/action LangGraph. UI gọi
+> `/api/v1/turn/stream`; transcript từ PhoWhisper đi qua LangGraph, sau đó rẽ sang RAG có
+> citation hoặc safety → simulator → verify. Text chỉ được đưa sang ZeroTTS sau hàng rào
+> grounding/safety. Panel Cẩm nang hiển thị câu trả lời và URL nguồn. Google/rules dùng
+> graph chính; OpenAI/local còn dùng compatibility orchestrator.
+
+> Cập nhật 2026-09-23: Luồng hội thoại `conversation.respond` đã được thêm. `.env` local hiện chọn OpenAI; thử thật `POST /api/v1/turn` với “Bạn là ai?” trả `provider=openai`, `intent=conversation.respond`, HTTP 200 và lời giới thiệu tự nhiên. Lệnh mở cửa sổ khi đang lái vẫn bị safety gateway chặn. Cần chạy lại backend để áp dụng `.env` mới. Các bảng snapshot bên dưới ghi lại trạng thái lịch sử 2026-09-22.
+
+> Cập nhật TTS 2026-09-23: ZeroTTS và voice pack VIVI được nạp sẵn trong FastAPI startup, giữ trong bộ nhớ suốt vòng đời backend. Thử startup thật cho `tts.detail=loaded`; `/api/v1/tts` trả WAV 48 kHz với `X-ViVi-Voice: VIVI`. Lỗi nạp model làm startup thất bại rõ ràng.
+
+> Cập nhật streaming 2026-09-23: `/api/v1/tts/stream` truyền PCM theo chunk từ `synthesize_stream()`; frontend phát từng chunk bằng Web Audio và hủy fetch/playback khi tắt giọng. Endpoint WAV cũ vẫn giữ. Thử HTTP thật với giọng VIVI: chunk đầu sau khoảng 162 ms, tổng 7 chunk cho một câu thử nghiệm; đây là số đo trên máy hiện tại, không phải cam kết độ trễ.
+>
+> Cập nhật latency 2026-09-23: PhoWhisper dùng FP16 trên MPS/CUDA, cố định tiếng Việt, greedy decode và preload/warm lúc khởi động. Benchmark cục bộ trên M1 với một file WebM đã lưu giảm từ 22,02 giây (FP32 + dò ngôn ngữ) xuống 2,84 giây ở lượt inference đầu và 1,32 giây ở lượt warm; endpoint HTTP sau warm đo được 1,42 giây. `/api/v1/turn/stream` đồng thời chuyển từng mệnh đề hội thoại từ LLM sang hàng đợi ZeroTTS; lệnh xe vẫn chờ safety/ack. 23 test core/API đang đạt.
+
+> Cập nhật độ mượt 2026-09-23: Đo chunk VIVI thật cho thấy chunk đầu dài 80 ms, các chunk sau có khoảng cách lớn hơn thời lượng phát tích lũy. Frontend nay đệm khoảng 1 giây audio trước khi bắt đầu, sau đó lên lịch liên tục trên Web Audio timeline; đổi lại thời gian nghe tiếng đầu tăng để tránh ngắt quãng.
+
 > Snapshot: 2026-09-22  
 > Mục đích: Ghi lại sự thật hiện tại của repo. Cập nhật file này sau mỗi mốc tích hợp.
 

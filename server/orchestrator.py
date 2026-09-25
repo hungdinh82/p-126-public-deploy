@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+import json
+import re
 import time
 from uuid import uuid4
 
@@ -14,13 +17,15 @@ from .vehicle import VehicleSimulator
 
 
 class Orchestrator:
+    """Legacy provider orchestrator retained as a degraded/test fallback."""
+
     def __init__(
         self,
         llm: LLMAdapter,
         vehicle: VehicleSimulator,
         store: DataStore,
         confirmations: ConfirmationStore | None = None,
-    ):
+    ) -> None:
         self.llm = llm
         self.vehicle = vehicle
         self.store = store
@@ -45,6 +50,7 @@ class Orchestrator:
         status: str,
         message: str,
         *,
+        provider: str,
         safety: SafetyResult | None = None,
         confirmation=None,
         error: str | None = None,
@@ -57,7 +63,7 @@ class Orchestrator:
             turn_id=request.turn_id,
             trace_id=state["trace_id"],
             transcript=request.transcript,
-            provider=self.llm.name,
+            provider=provider,
             route=state["route"] or "unsupported",
             status=status,
             action=state["action"],
@@ -80,6 +86,7 @@ class Orchestrator:
         started: float,
         action: ActionProposal,
         safety: SafetyResult,
+        provider: str,
     ) -> TurnResponse:
         tool_started = time.perf_counter()
         try:
@@ -87,29 +94,135 @@ class Orchestrator:
         except Exception as exc:
             self._trace(state, "tool", "error", tool_started, error=type(exc).__name__)
             state["errors"].append(str(exc))
-            return self._finish(state, request, started, "unverified", "Chưa thể xác minh thao tác trên xe mô phỏng.", safety=safety, error=str(exc))
+            return self._finish(
+                state,
+                request,
+                started,
+                "unverified",
+                "Chưa thể xác minh thao tác trên xe mô phỏng.",
+                provider=provider,
+                safety=safety,
+                error=str(exc),
+            )
         state["vehicle_state"] = vehicle
         self._trace(state, "tool", "verified", tool_started, intent=action.intent)
-        return self._finish(state, request, started, "verified", message, safety=safety)
+        return self._finish(
+            state, request, started, "verified", message, provider=provider, safety=safety
+        )
 
-    async def run(self, request: TurnRequest) -> TurnResponse:
+    async def _process_action(
+        self,
+        state: AgentState,
+        request: TurnRequest,
+        started: float,
+        action: ActionProposal,
+        provider: str,
+    ) -> TurnResponse:
+        state["action"] = action
+        state["intent"] = action.intent
+        route_started = time.perf_counter()
+        state["route"] = route_action(action)
+        self._trace(state, "route", state["route"], route_started, intent=action.intent)
+        policy_started = time.perf_counter()
+        safety = validate(action, state["vehicle_state"])
+        state["risk_class"] = safety.risk_class
+        self._trace(state, "policy", safety.status, policy_started, risk_class=safety.risk_class)
+
+        if state["route"] == "clarify":
+            return self._finish(
+                state, request, started, "clarify", safety.message, provider=provider, safety=safety
+            )
+        if state["route"] == "conversation":
+            return self._finish(
+                state,
+                request,
+                started,
+                "verified",
+                action.spoken_response,
+                provider=provider,
+                safety=safety,
+            )
+        if state["route"] == "handbook":
+            return self._finish(
+                state,
+                request,
+                started,
+                "unsupported",
+                "Chưa có bằng chứng cẩm nang phù hợp để trả lời câu hỏi này.",
+                provider=provider,
+                safety=safety,
+            )
+        if state["route"] == "unsupported":
+            status = "blocked" if action.intent == "vehicle.prohibited" else "unsupported"
+            return self._finish(
+                state,
+                request,
+                started,
+                status,
+                safety.message or action.spoken_response,
+                provider=provider,
+                safety=safety,
+            )
+        if safety.requires_confirmation:
+            confirmation = self.confirmations.create(
+                request.session_id, action, safety.preview or safety.message
+            )
+            state["confirmation_id"] = confirmation.confirmation_id
+            return self._finish(
+                state,
+                request,
+                started,
+                "confirmation_required",
+                confirmation.preview,
+                provider=provider,
+                safety=safety,
+                confirmation=confirmation,
+            )
+        if not safety.allowed:
+            return self._finish(
+                state,
+                request,
+                started,
+                safety.status,
+                safety.message,
+                provider=provider,
+                safety=safety,
+            )
+        return await self._execute(state, request, started, action, safety, provider)
+
+    async def run(self, request: TurnRequest, llm: LLMAdapter | None = None) -> TurnResponse:
+        selected = llm or self.llm
         started = time.perf_counter()
         vehicle = self.vehicle.state_for(request.session_id, request.vehicle_state)
-        state = initial_state(request.session_id, request.turn_id, str(uuid4()), request.transcript, vehicle)
+        state = initial_state(
+            request.session_id, request.turn_id, str(uuid4()), request.transcript, vehicle
+        )
 
         if request.confirmation_id or request.confirmation_decision:
             policy_started = time.perf_counter()
             if not request.confirmation_id or not request.confirmation_decision:
                 self._trace(state, "policy", "denied", policy_started, reason="incomplete_confirmation")
-                return self._finish(state, request, started, "denied", "Thiếu mã hoặc quyết định xác nhận.")
+                return self._finish(
+                    state,
+                    request,
+                    started,
+                    "denied",
+                    "Thiếu mã hoặc quyết định xác nhận.",
+                    provider=selected.name,
+                )
             resolution = self.confirmations.resolve(
-                request.confirmation_id,
-                request.session_id,
-                request.confirmation_decision,
+                request.confirmation_id, request.session_id, request.confirmation_decision
             )
             if resolution.action is None:
                 self._trace(state, "policy", resolution.status, policy_started)
-                return self._finish(state, request, started, resolution.status, resolution.message)
+                return self._finish(
+                    state,
+                    request,
+                    started,
+                    resolution.status,
+                    resolution.message,
+                    provider=selected.name,
+                )
             action = resolution.action
             state["action"] = action
             state["intent"] = action.intent
@@ -118,47 +231,121 @@ class Orchestrator:
             state["risk_class"] = safety.risk_class
             self._trace(state, "policy", safety.status, policy_started, risk_class=safety.risk_class)
             if not safety.allowed:
-                return self._finish(state, request, started, safety.status, safety.message, safety=safety)
-            return await self._execute(state, request, started, action, safety)
+                return self._finish(
+                    state,
+                    request,
+                    started,
+                    safety.status,
+                    safety.message,
+                    provider=selected.name,
+                    safety=safety,
+                )
+            return await self._execute(state, request, started, action, safety, selected.name)
 
         model_started = time.perf_counter()
-        action = await self.llm.propose(request.transcript, vehicle)
-        state["action"] = action
-        state["intent"] = action.intent
-        self._trace(state, "model", "proposed", model_started, provider=self.llm.name, intent=action.intent)
+        action = await selected.propose(request.transcript, vehicle)
+        self._trace(
+            state, "model", "proposed", model_started, provider=selected.name, intent=action.intent
+        )
+        return await self._process_action(state, request, started, action, selected.name)
 
-        route_started = time.perf_counter()
-        state["route"] = route_action(action)
-        self._trace(state, "route", state["route"], route_started, intent=action.intent)
+    async def run_stream(
+        self, request: TurnRequest, llm: LLMAdapter | None = None
+    ) -> AsyncIterator[dict]:
+        selected = llm or self.llm
+        if request.confirmation_id or request.confirmation_decision:
+            response = await self.run(request, llm=selected)
+            yield {
+                "type": "final",
+                "streamed_speech": False,
+                "response": response.model_dump(mode="json"),
+            }
+            return
 
-        policy_started = time.perf_counter()
-        safety = validate(action, vehicle)
-        state["risk_class"] = safety.risk_class
-        self._trace(state, "policy", safety.status, policy_started, risk_class=safety.risk_class)
+        started = time.perf_counter()
+        vehicle = self.vehicle.state_for(request.session_id, request.vehicle_state)
+        state = initial_state(
+            request.session_id, request.turn_id, str(uuid4()), request.transcript, vehicle
+        )
+        document = ""
+        spoken_seen = ""
+        pending_speech = ""
+        streamed_speech = False
+        model_started = time.perf_counter()
+        async for delta in selected.stream_json(request.transcript, vehicle):
+            document += delta
+            if self._partial_intent(document) != "conversation.respond":
+                continue
+            spoken = self._partial_json_string(document, "spoken_response")
+            if len(spoken) <= len(spoken_seen):
+                continue
+            pending_speech += spoken[len(spoken_seen) :]
+            spoken_seen = spoken
+            segments, pending_speech = self._take_speech_segments(pending_speech)
+            for segment in segments:
+                streamed_speech = True
+                yield {"type": "speech", "text": segment}
 
-        if state["route"] == "clarify":
-            return self._finish(state, request, started, "clarify", safety.message, safety=safety)
-        if state["route"] == "conversation":
-            return self._finish(state, request, started, "verified", action.spoken_response, safety=safety)
-        if state["route"] == "handbook":
-            message = "Chưa có bằng chứng cẩm nang phù hợp để trả lời câu hỏi này."
-            return self._finish(state, request, started, "unsupported", message, safety=safety)
-        if state["route"] == "unsupported":
-            status = "blocked" if action.intent == "vehicle.prohibited" else "unsupported"
-            return self._finish(state, request, started, status, safety.message or action.spoken_response, safety=safety)
-        if safety.requires_confirmation:
-            confirmation = self.confirmations.create(request.session_id, action, safety.preview or safety.message)
-            state["confirmation_id"] = confirmation.confirmation_id
-            return self._finish(
-                state,
-                request,
-                started,
-                "confirmation_required",
-                confirmation.preview,
-                safety=safety,
-                confirmation=confirmation,
-            )
-        if not safety.allowed:
-            return self._finish(state, request, started, safety.status, safety.message, safety=safety)
-        return await self._execute(state, request, started, action, safety)
+        action = ActionProposal.model_validate_json(document)
+        self._trace(
+            state, "model", "proposed", model_started, provider=selected.name, intent=action.intent
+        )
+        response = await self._process_action(state, request, started, action, selected.name)
+        if action.intent == "conversation.respond" and pending_speech.strip():
+            streamed_speech = True
+            yield {"type": "speech", "text": pending_speech.strip()}
+        yield {
+            "type": "final",
+            "streamed_speech": streamed_speech,
+            "response": response.model_dump(mode="json"),
+        }
 
+    @staticmethod
+    def _partial_intent(document: str) -> str | None:
+        match = re.search(r'"intent"\s*:\s*"([^"\\]+)"', document)
+        return match.group(1) if match else None
+
+    @staticmethod
+    def _partial_json_string(document: str, key: str) -> str:
+        match = re.search(rf'"{re.escape(key)}"\s*:\s*"', document)
+        if not match:
+            return ""
+        start = match.end()
+        escaped = False
+        end = len(document)
+        for index in range(start, len(document)):
+            char = document[index]
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == '"':
+                end = index
+                break
+        raw = document[start:end]
+        while raw:
+            try:
+                return json.loads(f'"{raw}"')
+            except json.JSONDecodeError:
+                raw = raw[:-1]
+        return ""
+
+    @staticmethod
+    def _take_speech_segments(text: str) -> tuple[list[str], str]:
+        segments: list[str] = []
+        while True:
+            sentence = re.search(r"^(.+?[.!?…])(?:\s+|$)", text, re.S)
+            clause = re.search(r"^(.{45,}?[,:;])(?:\s+|$)", text, re.S)
+            match = sentence or clause
+            if match:
+                segments.append(match.group(1).strip())
+                text = text[match.end() :]
+                continue
+            if len(text) >= 100:
+                split = text.rfind(" ", 0, 90)
+                if split > 40:
+                    segments.append(text[:split].strip())
+                    text = text[split + 1 :]
+                    continue
+            break
+        return segments, text

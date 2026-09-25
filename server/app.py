@@ -1,17 +1,21 @@
 from __future__ import annotations
 
+import json
 import time
+from contextlib import asynccontextmanager
+from dataclasses import replace
 from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import FileResponse, Response, StreamingResponse
 
 from .adapters.llm import create_llm
 from .adapters.stt import PhoWhisperAdapter
 from .adapters.tts import ZeroTTSAdapter
 from .config import settings
 from .data_store import DataStore
+from .langgraph_orchestrator import create_langgraph_orchestrator
 from .orchestrator import Orchestrator
 from .schemas import STTResponse, TTSRequest, TurnRequest, TurnResponse
 from .vehicle import VehicleSimulator
@@ -19,18 +23,37 @@ from .vehicle import VehicleSimulator
 
 ROOT = Path(__file__).resolve().parent.parent
 store = DataStore(settings)
-try:
-    llm = create_llm(settings)
-    llm_error = None
-except Exception as exc:
-    from .adapters.llm import RulesAdapter
-    llm, llm_error = RulesAdapter(), str(exc)
+LLM_MODELS = {
+    "rules": "Kịch bản + LangGraph",
+    "openai": settings.openai_model,
+    "google": settings.rag_generation_model,
+    "local": settings.local_llm_model,
+}
+llm_adapters = {}
+llm_errors = {}
+for provider in LLM_MODELS:
+    try:
+        llm_adapters[provider] = create_llm(replace(settings, llm_provider=provider))
+    except Exception as exc:
+        llm_errors[provider] = str(exc)
+llm = llm_adapters.get(settings.llm_provider, llm_adapters["rules"])
+llm_error = llm_errors.get(settings.llm_provider) or (f"LLM_PROVIDER không hợp lệ: {settings.llm_provider}" if settings.llm_provider not in LLM_MODELS else None)
 vehicle = VehicleSimulator()
-orchestrator = Orchestrator(llm, vehicle, store)
+legacy_orchestrator = Orchestrator(llm, vehicle, store)
+orchestrator = create_langgraph_orchestrator(legacy_orchestrator, vehicle, store)
 stt = PhoWhisperAdapter(settings)
 tts = ZeroTTSAdapter(settings)
 
-app = FastAPI(title="ViVi Local API", version="0.1.0")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await tts.preload()
+    if settings.phowhisper_preload:
+        await stt.preload()
+    yield
+
+
+app = FastAPI(title="ViVi Local API", version="0.1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://127.0.0.1:5173", "http://localhost:5173", "http://127.0.0.1:8787", "http://localhost:8787"],
@@ -46,8 +69,25 @@ async def health():
     return {
         "status": "ok",
         "runtime": "local",
-        "llm": {"provider": llm.name, "configured": llm_error is None, "detail": llm_error},
-        "stt": {"provider": stt.name, "available": stt_ok, "detail": stt_detail},
+        "orchestration": {
+            "engine": "langgraph",
+            "graph_providers": sorted(orchestrator.graph_providers),
+            "retrieval": "lexical",
+        },
+        "llm": {
+            "provider": llm.name, "configured": llm_error is None, "detail": llm_error,
+            "options": [
+                {"provider": provider, "model": model, "available": provider in llm_adapters, "detail": llm_errors.get(provider)}
+                for provider, model in LLM_MODELS.items()
+            ],
+        },
+        "stt": {
+            "provider": stt.name,
+            "available": stt_ok,
+            "detail": stt_detail,
+            "device": stt.device,
+            "dtype": stt.dtype,
+        },
         "tts": {"provider": tts.name, "voice": settings.zerotts_voice, "available": tts_ok, "detail": tts_detail},
         "storage": {"audio": settings.store_audio, "transcripts": settings.store_transcripts, "path": str(settings.data_dir)},
     }
@@ -55,10 +95,31 @@ async def health():
 
 @app.post("/api/v1/turn", response_model=TurnResponse)
 async def turn(request: TurnRequest):
+    selected = request.llm_provider or llm.name
+    adapter = llm_adapters.get(selected)
+    if adapter is None:
+        raise HTTPException(status_code=400, detail=llm_errors.get(selected, "LLM provider không khả dụng"))
     try:
-        return await orchestrator.run(request)
+        return await orchestrator.run(request, llm=adapter)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Không xử lý được lượt hội thoại: {exc}") from exc
+
+
+@app.post("/api/v1/turn/stream")
+async def turn_stream(request: TurnRequest):
+    selected = request.llm_provider or llm.name
+    adapter = llm_adapters.get(selected)
+    if adapter is None:
+        raise HTTPException(status_code=400, detail=llm_errors.get(selected, "LLM provider không khả dụng"))
+
+    async def events():
+        try:
+            async for event in orchestrator.run_stream(request, llm=adapter):
+                yield json.dumps(event, ensure_ascii=False) + "\n"
+        except Exception as exc:
+            yield json.dumps({"type": "error", "detail": f"Không xử lý được lượt hội thoại: {exc}"}, ensure_ascii=False) + "\n"
+
+    return StreamingResponse(events(), media_type="application/x-ndjson", headers={"Cache-Control": "no-store"})
 
 
 @app.post("/api/v1/stt", response_model=STTResponse)
@@ -96,6 +157,23 @@ async def synthesize(request: TTSRequest):
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"ZeroTTS chưa sẵn sàng: {exc}") from exc
     return Response(audio, media_type="audio/wav", headers={"X-ViVi-Voice": settings.zerotts_voice})
+
+
+@app.post("/api/v1/tts/stream")
+async def synthesize_stream(request: TTSRequest):
+    available, reason = tts.availability()
+    if not available:
+        raise HTTPException(status_code=503, detail=f"ZeroTTS chưa sẵn sàng: {reason}")
+    return StreamingResponse(
+        tts.stream(request.text),
+        media_type="application/octet-stream",
+        headers={
+            "X-ViVi-Voice": settings.zerotts_voice,
+            "X-ViVi-Audio-Format": "pcm_s16le",
+            "X-ViVi-Sample-Rate": str(tts._model.sample_rate),
+            "Cache-Control": "no-store",
+        },
+    )
 
 
 @app.get("/")

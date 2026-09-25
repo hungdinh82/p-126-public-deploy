@@ -41,6 +41,10 @@ def validate(proposal: ActionProposal, vehicle: VehicleState, *, confirmed: bool
     if proposal.needs_clarification or proposal.intent == "conversation.clarify":
         message = proposal.clarification_question or proposal.spoken_response or "Bạn nói rõ thêm giúp mình nhé."
         return SafetyResult(False, "clarify", message, "R0")
+    if proposal.intent == "conversation.respond":
+        if not proposal.spoken_response.strip():
+            return SafetyResult(False, "clarify", "Bạn nói rõ hơn giúp mình nhé.", "R0")
+        return SafetyResult(True, "verified", "", "R0")
     if proposal.intent in {"unsupported.request", "vehicle.prohibited"}:
         return SafetyResult(False, "blocked", "Yêu cầu này không nằm trong nhóm thao tác được ViVi cho phép.", risk)
     if proposal.intent == "climate.set_temperature":

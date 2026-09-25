@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 Intent = Literal[
@@ -31,8 +31,59 @@ class ActionProposal(BaseModel):
     spoken_response: str = ""
     confidence: float | None = Field(default=None, ge=0, le=1)
 
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_intent_aliases(cls, value: Any) -> Any:
+        """Repair common non-schema intents produced by non-strict local LLMs.
 
-ACTION_JSON_SCHEMA = ActionProposal.model_json_schema()
+        Relative climate wording still has to include a safe absolute
+        ``value_celsius``. If it does not, the safety layer asks the user for
+        clarification instead of rejecting the whole turn at JSON validation.
+        """
+        if not isinstance(value, dict):
+            return value
+        aliases = {
+            "climate.increase_temperature": "climate.set_temperature",
+            "climate.decrease_temperature": "climate.set_temperature",
+            "climate.raise_temperature": "climate.set_temperature",
+            "climate.lower_temperature": "climate.set_temperature",
+        }
+        intent = value.get("intent")
+        if intent in aliases:
+            value = dict(value)
+            value["intent"] = aliases[intent]
+        return value
+
+
+ACTION_JSON_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "intent": {"type": "string", "enum": list(Intent.__args__)},
+        # Keep spoken_response immediately after intent. Structured-output
+        # providers preserve schema order, allowing safe conversational speech
+        # to start while the remaining metadata is still arriving.
+        "spoken_response": {"type": "string"},
+        "arguments": {
+            "type": "object",
+            "properties": {
+                "value_celsius": {"type": ["number", "null"]},
+                "position_percent": {"type": ["number", "null"]},
+                "query": {"type": ["string", "null"]},
+                "open": {"type": ["boolean", "null"]},
+                "zone": {"type": ["string", "null"]},
+                "media_query": {"type": ["string", "null"]},
+            },
+            "required": [
+                "value_celsius", "position_percent", "query", "open", "zone", "media_query"
+            ],
+            "additionalProperties": False,
+        },
+        "needs_clarification": {"type": "boolean"},
+        "clarification_question": {"type": ["string", "null"]},
+    },
+    "required": ["intent", "arguments", "needs_clarification", "clarification_question", "spoken_response"],
+    "additionalProperties": False,
+}
 
 
 class VehicleState(BaseModel):
@@ -49,6 +100,7 @@ class Evidence(BaseModel):
     source_id: str
     page: int | None = None
     section: str | None = None
+    source_url: str | None = None
     excerpt: str = ""
 
 
@@ -74,6 +126,7 @@ class TurnRequest(BaseModel):
     vehicle_state: VehicleState | None = None
     confirmation_id: str | None = Field(default=None, max_length=100)
     confirmation_decision: Literal["approve", "deny"] | None = None
+    llm_provider: Literal["rules", "openai", "google", "local"] | None = None
 
 
 class TurnResponse(BaseModel):
@@ -88,6 +141,7 @@ class TurnResponse(BaseModel):
     risk_class: RiskClass | None = None
     confirmation: ConfirmationPreview | None = None
     evidence: list[Evidence] = Field(default_factory=list)
+    grounding_status: str = "not_applicable"
     vehicle_state: VehicleState
     message: str
     error: str | None = None
@@ -108,4 +162,3 @@ class TTSRequest(BaseModel):
     text: str = Field(min_length=1, max_length=1000)
     session_id: str
     turn_id: str
-

@@ -1,12 +1,14 @@
 # Optional local AI runtime. Python 3.11 or 3.12 is recommended because
 # PyTorch/ONNX wheels may not yet exist for the newest Python releases.
 -r requirements.txt
-accelerate>=1.2
+accelerate>=1.2,<2
 numpy>=2.0
 openai>=2.0
 google-genai>=1.0
 soundfile>=0.13
-torch>=2.4
-transformers>=4.46
+# Keep the local speech stack on the CUDA 12 generation supported by the
+# current NVIDIA driver. Newer unconstrained PyTorch releases pull CUDA 13
+# and Triton wheels, which are both needlessly large and less portable here.
+torch>=2.4,<2.7
+transformers>=4.46,<5
 zerotts
-

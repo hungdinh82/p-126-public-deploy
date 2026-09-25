@@ -135,6 +135,7 @@ Các intent MVP ban đầu:
 - `vehicle.get_status`
 - `manual.search`
 - `conversation.clarify`
+- `conversation.respond` — câu trả lời hội thoại, không thực thi thao tác xe
 
 ## 5. State machine hội thoại
 
@@ -192,6 +193,7 @@ Nhánh lỗi có thể đi từ mọi trạng thái về `recoverable_error` ho�
 
 - Cài adapter LLM với base URL, model name và API key qua biến môi trường.
 - Yêu cầu structured output theo JSON Schema; từ chối output không hợp lệ.
+- Stream structured output; với `conversation.respond`, chuyển từng mệnh đề hoàn chỉnh sang TTS ngay khi sinh ra. Không phát trước đối với intent điều khiển xe.
 - Giới hạn context, timeout, retry có kiểm soát và circuit breaker.
 - Tách system prompt thành file có version; thêm test prompt regression.
 - Chỉ đưa action đã qua safety gateway vào vehicle simulator.
@@ -203,6 +205,7 @@ Nhánh lỗi có thể đi từ mọi trạng thái về `recoverable_error` ho�
 - Tích hợp local package `zerotts` với model `zeroweight-ai/ZeroTTS`.
 - Khóa voice mặc định là `VIVI`, nạp từ `voices/VIVI.zip` (tên hiển thị “Mai Chi”).
 - Dùng streaming synthesis; adapter nhận các chunk mono `float32` 48 kHz rồi truyền/phát theo contract nội bộ.
+- Dùng chung một Web Audio timeline cho các mệnh đề liên tiếp để tổng hợp đoạn sau trong khi đoạn trước đang phát.
 - Chuẩn hóa văn bản nói: số, đơn vị, ký hiệu và câu quá dài.
 - Hỗ trợ hủy request/playback khi người dùng tạo lượt mới.
 - Cache các câu hệ thống ngắn, không chứa dữ liệu riêng tư, để giảm độ trễ.
@@ -296,8 +299,13 @@ Tài liệu model tham chiếu:
 - Chống thực thi lặp theo `session_id`/`turn_id` và từ chối tái sử dụng lượt cho action khác.
 - Chỉ tạo phản hồi xác nhận hoàn tất sau khi trạng thái simulator khớp với yêu cầu.
 
-Việc chủ động để lại cho bước tích hợp thiết bị và giao diện:
+Đã nối pipeline voice/UI:
 
-- Nối endpoint/event streaming với STT và TTS thật; hiện `POST /api/v1/assist` trả JSON và CLI trả text.
+- `POST /api/v1/turn` và `/turn/stream` là facade thống nhất cho STT text → LangGraph → TTS.
+- UI hiển thị câu trả lời handbook cùng citation và xử lý confirmation action R2.
+- TTS chỉ nhận text sau grounding hoặc verify; không đọc sớm action acknowledgement.
+
+Việc chủ động để lại cho bước tích hợp thiết bị:
+
 - Thay simulator bằng vehicle adapter thật có acknowledgement/read-back.
 - Thay Gemini bằng local model qua adapter mà không đổi input/output contract của graph.
