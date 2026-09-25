@@ -276,3 +276,28 @@ Tài liệu model tham chiếu:
 ## 9. Thông tin được hoãn đến giai đoạn LLM
 
 Đã chốt ba adapter LLM: OpenAI Responses API, Google Gemini API và local OpenAI-compatible API. Model cụ thể vẫn được cấu hình qua biến môi trường; mặc định dùng `rules` để chạy và test offline khi chưa chọn model. Không còn câu hỏi chặn Giai đoạn 1.
+
+## 10. Trạng thái LangGraph và handbook RAG trong `src/`
+
+Đã hoàn tất milestone terminal/API preview cho VF8 2026:
+
+- LangGraph nhận trực tiếp `input_text` là transcript cuối từ STT và tự phân loại intent.
+- Nhánh handbook chạy scope guard → retrieve → evidence gate → generate → validate citation.
+- Nhánh action kiểm tra schema, range và confidence rồi chỉ trả `action_proposal`; chưa thực thi xe.
+- Output thống nhất gồm text cho UI/TTS, action proposal, citation, grounding, lỗi và timing.
+- Lịch sử hội thoại được lưu SQLite theo `session_id`/`turn_id`.
+- Gemini là adapter hiện tại; classifier/generator dùng structured output và retry lỗi tạm thời.
+- BM25 local dùng được ngay; Chroma hybrid dùng khi embedding index có manifest hoàn chỉnh.
+
+Đã hoàn tất thêm vòng thực thi action trên simulator:
+
+- Đưa `action_proposal` qua safety gateway → vehicle simulator → verify.
+- Action R2 tạo confirmation có hạn; approve/deny được xử lý theo phiên.
+- Chống thực thi lặp theo `session_id`/`turn_id` và từ chối tái sử dụng lượt cho action khác.
+- Chỉ tạo phản hồi xác nhận hoàn tất sau khi trạng thái simulator khớp với yêu cầu.
+
+Việc chủ động để lại cho bước tích hợp thiết bị và giao diện:
+
+- Nối endpoint/event streaming với STT và TTS thật; hiện `POST /api/v1/assist` trả JSON và CLI trả text.
+- Thay simulator bằng vehicle adapter thật có acknowledgement/read-back.
+- Thay Gemini bằng local model qua adapter mà không đổi input/output contract của graph.

@@ -55,12 +55,16 @@ def validate(proposal: ActionProposal, vehicle: VehicleState, *, confirmed: bool
             return SafetyResult(False, "clarify", "Bạn muốn mở cửa sổ ở mức bao nhiêu phần trăm?", risk)
         if vehicle.driving and float(value) > vehicle.window_driver_percent:
             return SafetyResult(False, "blocked", "Mình giữ nguyên cửa sổ vì xe đang ở chế độ lái.", risk)
+        if float(value) <= vehicle.window_driver_percent:
+            risk = "R1"
     if proposal.intent == "door.set_open":
         opening = proposal.arguments.get("open")
         if not isinstance(opening, bool):
             return SafetyResult(False, "clarify", "Bạn muốn mở hay đóng cửa bên tài?", risk)
         if vehicle.driving and opening:
             return SafetyResult(False, "blocked", "Không thể mở cửa khi xe đang ở chế độ lái.", risk)
+        if not opening:
+            risk = "R1"
     if risk == "R2" and not confirmed:
         preview = _r2_preview(proposal)
         return SafetyResult(False, "confirmation_required", preview, risk, True, preview)

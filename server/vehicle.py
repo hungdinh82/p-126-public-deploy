@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import asyncio
+import threading
 
 from .schemas import ActionProposal, VehicleState
 
@@ -17,19 +17,29 @@ class VehicleSimulator:
 
     def __init__(self):
         self._states: dict[str, VehicleState] = {}
-        self._executed: dict[str, tuple[VehicleState, str]] = {}
-        self._lock = asyncio.Lock()
+        self._executed: dict[str, tuple[ActionProposal, VehicleState, str]] = {}
+        self._lock = threading.Lock()
 
     def state_for(self, session_id: str, supplied: VehicleState | None = None) -> VehicleState:
         if supplied is not None:
             self._states[session_id] = supplied.model_copy(deep=True)
         return self._states.setdefault(session_id, VehicleState()).model_copy(deep=True)
 
-    async def execute(self, session_id: str, turn_id: str, action: ActionProposal) -> tuple[VehicleState, str]:
-        async with self._lock:
+    def execute_sync(
+        self,
+        session_id: str,
+        turn_id: str,
+        action: ActionProposal,
+    ) -> tuple[VehicleState, str]:
+        """Execute once per session/turn; safe for sync LangGraph nodes."""
+        with self._lock:
             execution_key = f"{session_id}:{turn_id}"
             if execution_key in self._executed:
-                state, message = self._executed[execution_key]
+                original, state, message = self._executed[execution_key]
+                if original.model_dump(exclude={"spoken_response", "confidence"}) != action.model_dump(
+                    exclude={"spoken_response", "confidence"}
+                ):
+                    raise ValueError("turn_id was already used for a different action")
                 return state.model_copy(deep=True), message
             if action.intent not in self.ALLOWED_INTENTS:
                 raise ValueError(f"Action is not executable: {action.intent}")
@@ -54,6 +64,13 @@ class VehicleSimulator:
             else:
                 raise ValueError(f"Action is not executable: {action.intent}")
             verified = state.model_copy(deep=True)
-            self._executed[execution_key] = (verified, message)
+            self._executed[execution_key] = (action.model_copy(deep=True), verified, message)
             return verified, message
 
+    async def execute(
+        self,
+        session_id: str,
+        turn_id: str,
+        action: ActionProposal,
+    ) -> tuple[VehicleState, str]:
+        return self.execute_sync(session_id, turn_id, action)

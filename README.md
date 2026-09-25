@@ -71,3 +71,64 @@ node --check app.js
 - `tests/`: test contract, safety, idempotency và API.
 
 Pipeline hiện tại: thu âm → PhoWhisper → LLM/rules → safety gateway → vehicle simulator → verify → ZeroTTS. Khi nối xe thật, chỉ báo thành công sau acknowledgement từ vehicle adapter thật.
+
+## Handbook RAG preview (`src/`)
+
+Nhánh handbook RAG nằm trong `src/`; nhánh action dùng bridge để tái sử dụng safety policy,
+confirmation store và vehicle simulator trong `server/`. Phạm vi cẩm nang hiện tại là VF8
+đời 2026, output có thể xem dạng text trong terminal hoặc JSON qua API.
+
+```sh
+.venv/bin/pip install -r requirements-rag.txt
+
+# Tải đủ cây 56 chương/tab từ public Owner's Manual API.
+.venv/bin/python -m src.cli.crawl_manual
+
+# Parse, chunk, gọi Google embedding và lưu Chroma local.
+.venv/bin/python -m src.cli.build_index
+
+# Transcript thô (giống output cuối của STT) → LangGraph → RAG → Gemini → citation.
+.venv/bin/python -m src.cli.ask \
+  --text "Sạc pin VF8 thế nào?" \
+  --session demo-text
+
+# Lệnh điều khiển đi qua safety gateway, simulator và verify.
+.venv/bin/python -m src.cli.ask \
+  --text "Đặt nhiệt độ 25 độ" \
+  --session demo-action
+
+# Hội thoại nhiều lượt, có SQLite history.
+.venv/bin/python -m src.cli.ask --interactive --session demo-interactive
+```
+
+Google free-tier giới hạn số embedding theo phút/ngày. `build_index` lưu từng batch,
+tái sử dụng vector theo checksum và có thể chạy lại để resume. Khi quota embedding chưa
+reset, dùng retrieval BM25 local trên toàn bộ corpus; Gemini vẫn sinh và kiểm tra câu trả lời:
+
+```sh
+.venv/bin/python -m src.cli.ask \
+  --retrieval lexical \
+  --text "Cách bật chế độ cắm trại?"
+```
+
+Mọi câu trả lời phải ánh xạ claim tới `source_id` đã retrieve. Citation không tồn tại,
+thiếu bằng chứng, câu hỏi thương mại hoặc yêu cầu can thiệp hệ thống nguy hiểm đều dẫn
+đến abstain. Snapshot, Chroma index và SQLite history nằm trong `data/` và không được commit.
+
+### Contract LangGraph hiện tại
+
+Input chính là transcript cuối từ STT trong trường `input_text`; JSON đã phân loại qua
+`--input` chỉ còn được giữ để tương thích fixture cũ. Graph tự phân loại và trả một envelope:
+
+- `response_text` và `tts_text`: text để hiển thị/phát giọng nói.
+- `action_proposal`: intent cùng arguments đã kiểm tra kiểu/range.
+- `execution`: kết quả allow/execute/verify; chỉ `verified=true` mới được xác nhận hoàn tất.
+- `confirmation`: mã xác nhận cho action R2 như mở cửa sổ/cửa xe.
+- `vehicle_state`: trạng thái simulator đọc lại sau action.
+- `citations` và `grounding_status`: nguồn và trạng thái grounding cho nhánh handbook.
+- `status`, `errors`, `timings`: kết quả và quan sát từng lượt.
+
+Với action R0/R1, graph chạy safety gateway → vehicle simulator → verify ngay. Action R2
+trả `confirmation_required`; client gửi lượt mới cùng `confirmation_id` và
+`confirmation_decision=approve|deny`. `tts_text` chỉ xác nhận hoàn tất sau verify. Endpoint
+chính cho pipeline mới là `POST /api/v1/assist`; `/api/v1/chat` chỉ được giữ để tương thích.

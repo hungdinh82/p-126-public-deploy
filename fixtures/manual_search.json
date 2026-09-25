@@ -1,0 +1,13 @@
+{
+  "intent": "manual.search",
+  "arguments": {
+    "query": "Làm thế nào để sạc pin VF8 an toàn?",
+    "vehicle_model": "VF8",
+    "model_year": 2026,
+    "locale": "vi_vn"
+  },
+  "needs_clarification": false,
+  "clarification_question": null,
+  "spoken_response": "",
+  "confidence": 0.95
+}
