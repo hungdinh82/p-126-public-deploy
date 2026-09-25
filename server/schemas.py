@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 Intent = Literal[
@@ -23,6 +23,29 @@ class ActionProposal(BaseModel):
     needs_clarification: bool = False
     clarification_question: str | None = None
     spoken_response: str = ""
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_intent_aliases(cls, value: Any) -> Any:
+        """Repair common non-schema intents produced by non-strict local LLMs.
+
+        Relative climate wording still has to include a safe absolute
+        ``value_celsius``. If it does not, the safety layer asks the user for
+        clarification instead of rejecting the whole turn at JSON validation.
+        """
+        if not isinstance(value, dict):
+            return value
+        aliases = {
+            "climate.increase_temperature": "climate.set_temperature",
+            "climate.decrease_temperature": "climate.set_temperature",
+            "climate.raise_temperature": "climate.set_temperature",
+            "climate.lower_temperature": "climate.set_temperature",
+        }
+        intent = value.get("intent")
+        if intent in aliases:
+            value = dict(value)
+            value["intent"] = aliases[intent]
+        return value
 
 
 ACTION_JSON_SCHEMA = {

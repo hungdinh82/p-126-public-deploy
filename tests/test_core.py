@@ -23,6 +23,24 @@ from server.vehicle import VehicleSimulator
 
 
 class SafetyTests(unittest.TestCase):
+    def test_relative_climate_alias_is_normalized_before_validation(self):
+        proposal = ActionProposal.model_validate({
+            "intent": "climate.increase_temperature",
+            "arguments": {"value_celsius": 25},
+        })
+        self.assertEqual(proposal.intent, "climate.set_temperature")
+        self.assertTrue(validate(proposal, VehicleState()).allowed)
+
+    def test_relative_climate_alias_without_target_clarifies(self):
+        proposal = ActionProposal.model_validate({
+            "intent": "climate.decrease_temperature",
+            "arguments": {},
+        })
+        result = validate(proposal, VehicleState())
+        self.assertEqual(proposal.intent, "climate.set_temperature")
+        self.assertFalse(result.allowed)
+        self.assertEqual(result.status, "clarify")
+
     def test_conversation_does_not_change_vehicle(self):
         proposal = ActionProposal(intent="conversation.respond", spoken_response="Mình là ViVi.")
         self.assertTrue(validate(proposal, VehicleState(driving=True)).allowed)
