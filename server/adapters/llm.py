@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import re
 import unicodedata
 from abc import ABC, abstractmethod
@@ -10,11 +9,12 @@ import httpx
 from server.config import Settings
 from server.schemas import ACTION_JSON_SCHEMA, ActionProposal, VehicleState
 
-
 SYSTEM_PROMPT = """Bạn là bộ phân loại lệnh cho trợ lý ô tô ViVi.
 Chỉ chọn một intent trong schema. Không khẳng định thao tác đã hoàn tất.
 Nếu câu nói mơ hồ, phủ định khó hiểu hoặc thiếu tham số quan trọng, chọn conversation.clarify.
 Nhiệt độ hợp lệ 16-30°C. window.set_position dùng position_percent 0-100.
+door.set_lock dùng locked boolean; door.set_open dùng open boolean.
+seat.set_heat_level dùng level nguyên từ 0 đến 3.
 Trả lời spoken_response ngắn gọn bằng tiếng Việt."""
 
 
@@ -36,7 +36,7 @@ class RulesAdapter(LLMAdapter):
 
     async def propose(self, transcript: str, vehicle: VehicleState) -> ActionProposal:
         text = _normalize(transcript)
-        if re.search(r"\b(dung|khong)\s+(mo|dong|tang|giam|bat|tat|phat|ha)\b", text):
+        if re.search(r"\b(dung|khong)\s+(mo|dong|khoa|tang|giam|bat|tat|phat|ha)\b", text):
             return ActionProposal(intent="conversation.clarify", needs_clarification=True, clarification_question="Bạn muốn mình thực hiện thao tác nào?", spoken_response="Mình chưa chắc ý bạn. Bạn nói rõ thao tác giúp mình nhé.")
         if re.search(r"huong dan|manual|cam nang|canh bao|ap suat", text):
             return ActionProposal(intent="manual.search", arguments={"query": transcript}, spoken_response="Mình sẽ mở phần hướng dẫn phù hợp.")
@@ -48,6 +48,26 @@ class RulesAdapter(LLMAdapter):
             if not opening and not closing:
                 return ActionProposal(intent="conversation.clarify", needs_clarification=True, clarification_question="Bạn muốn mở hay đóng cửa sổ bên tài?", spoken_response="Bạn muốn mở hay đóng cửa sổ bên tài?")
             return ActionProposal(intent="window.set_position", arguments={"position_percent": 100 if opening else 0}, spoken_response="Mình sẽ điều chỉnh cửa sổ bên tài.")
+        if re.search(r"\b(?:mo|dong|khoa)\s+(?:khoa\s+)?cua\b", text):
+            if re.search(r"mo khoa|khoa cua", text):
+                locked = not bool(re.search(r"mo khoa", text))
+                return ActionProposal(intent="door.set_lock", arguments={"locked": locked}, spoken_response="Mình sẽ điều chỉnh khóa cửa bên tài.")
+            opening = bool(re.search(r"\bmo\b", text))
+            closing = bool(re.search(r"\bdong\b", text))
+            if opening == closing:
+                return ActionProposal(intent="conversation.clarify", needs_clarification=True, clarification_question="Bạn muốn mở hay đóng cửa xe bên tài?")
+            return ActionProposal(intent="door.set_open", arguments={"open": opening}, spoken_response="Mình sẽ điều chỉnh cửa xe bên tài.")
+        if re.search(r"suoi ghe|ghe suoi|lam am ghe", text):
+            level_match = re.search(r"(?:muc|cap)\s*(\d+)", text)
+            if re.search(r"\b(tat|dung)\b", text):
+                level = 0
+            elif level_match:
+                level = int(level_match.group(1))
+            elif re.search(r"\bbat\b", text):
+                level = 1
+            else:
+                return ActionProposal(intent="conversation.clarify", needs_clarification=True, clarification_question="Bạn muốn sưởi ghế mức mấy (0 đến 3)?")
+            return ActionProposal(intent="seat.set_heat_level", arguments={"level": level}, spoken_response=f"Mình sẽ đặt sưởi ghế mức {level}.")
         if re.search(r"nhac|bai hat|am thanh|play|pause", text):
             playing = not bool(re.search(r"dung|tat|pause", text))
             return ActionProposal(intent="media.play" if playing else "media.pause", spoken_response="Mình sẽ cập nhật trạng thái âm nhạc.")
@@ -60,7 +80,7 @@ class RulesAdapter(LLMAdapter):
             relative = bool(re.search(r"\b(?:tang|giam|ha|them|bot)\b", text))
             value = amount if number and not relative else vehicle.temperature_celsius + (-amount if lower else amount)
             return ActionProposal(intent="climate.set_temperature", arguments={"value_celsius": value}, spoken_response=f"Mình sẽ đặt nhiệt độ ở {value:g} độ.")
-        return ActionProposal(intent="conversation.clarify", needs_clarification=True, clarification_question="Bạn muốn mình điều chỉnh nhiệt độ, cửa sổ, âm nhạc hay xem trạng thái xe?", spoken_response="Mình có thể chỉnh nhiệt độ, cửa sổ, âm nhạc hoặc xem trạng thái xe.")
+        return ActionProposal(intent="conversation.clarify", needs_clarification=True, clarification_question="Bạn muốn chỉnh nhiệt độ, cửa kính, cửa xe, sưởi ghế, âm nhạc hay xem trạng thái xe?")
 
 
 def _prompt(transcript: str, vehicle: VehicleState) -> str:
