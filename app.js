@@ -5,8 +5,8 @@ const motionPreference = matchMedia('(prefers-reduced-motion: reduce)');
 const API_BASE = location.port === '8787' ? '' : 'http://127.0.0.1:8787';
 const sessionId = localStorage.getItem('vivi-session-id') || crypto.randomUUID();
 localStorage.setItem('vivi-session-id', sessionId);
-const state = { phase: 'idle', temp: 23, window: false, music: false, driving: false, reduced: motionPreference.matches, sound: false, busy: false, backendAvailable: false, vehicleService: false, sttAvailable: false, ttsAvailable: false, lastCommand: '', progress: 0 };
-const phaseLabels = { idle: 'ViVi đang ở đây', listening: 'Mình đang nghe bạn', transcribing: 'Mình đang nhận diện lời nói', thinking: 'Để mình xem nhé', validating: 'Đang kiểm tra an toàn', acting: 'Đang chăm sóc không gian của bạn', synthesizing: 'Đang chuẩn bị giọng Mai Chi', speaking: 'Một chút dễ chịu, dành cho bạn', clarify: 'Mình chờ bạn nói thêm', blocked: 'Mình giữ nguyên trạng thái xe', unverified: 'Chưa xác minh được trạng thái xe' };
+const state = { phase: 'idle', temp: 23, window: false, music: false, driving: false, battery: 82, range: 328, doorLocked: false, doorOpen: false, seatHeat: 0, pendingConfirmationId: null, reduced: motionPreference.matches, sound: false, busy: false, backendAvailable: false, vehicleService: false, sttAvailable: false, ttsAvailable: false, lastCommand: '', progress: 0 };
+const phaseLabels = { idle: 'ViVi đang ở đây', listening: 'Mình đang nghe bạn', transcribing: 'Mình đang nhận diện lời nói', thinking: 'Để mình xem nhé', validating: 'Đang kiểm tra an toàn', acting: 'Đang chăm sóc không gian của bạn', synthesizing: 'Đang chuẩn bị giọng Mai Chi', speaking: 'Một chút dễ chịu, dành cho bạn', confirm: 'Mình chờ bạn xác nhận', clarify: 'Mình chờ bạn nói thêm', blocked: 'Mình giữ nguyên trạng thái xe', unverified: 'Chưa xác minh được trạng thái xe' };
 const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 let width = 1, height = 1, tick = 0, previous = 0;
 let pointer = { x: 0, y: 0 };
@@ -135,7 +135,7 @@ function setPhase(phase, text) {
   state.phase = phase;
   $('#orb-state').textContent = phaseLabels[phase];
   if (text) $('#response-text').textContent = text;
-  document.body.classList.toggle('busy', !['idle', 'clarify', 'blocked'].includes(phase));
+  document.body.classList.toggle('busy', !['idle', 'confirm', 'clarify', 'blocked', 'unverified'].includes(phase));
 }
 function updateVehicle() {
   $('#temperature').innerHTML = `${state.temp}<span>°</span>`;
@@ -244,6 +244,11 @@ function applyBackendState(vehicle) {
   state.window = vehicle.window_driver_percent > 0;
   state.music = vehicle.media_playing;
   state.driving = vehicle.driving;
+  state.battery = vehicle.battery_percent;
+  state.range = vehicle.range_km;
+  state.doorLocked = vehicle.door_driver_locked;
+  state.doorOpen = vehicle.door_driver_open;
+  state.seatHeat = vehicle.seat_driver_heat_level;
   $('#drive-toggle').setAttribute('aria-pressed', String(state.driving));
   $('#drive-toggle span').textContent = state.driving ? 'Đang lái xe · Demo' : 'Đang đỗ xe';
   document.body.classList.toggle('driving', state.driving);
@@ -257,10 +262,12 @@ async function runBackendCommand(command, turnId = crypto.randomUUID()) {
     setPhase('thinking', `“${command}”`);
     const response = await fetch(`${API_BASE}/api/v1/turn`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ transcript: command, session_id: sessionId, turn_id: turnId, ...(state.vehicleService ? {} : { vehicle_state: { temperature_celsius: state.temp, window_driver_percent: state.window ? 100 : 0, media_playing: state.music, driving: state.driving, battery_percent: 82, range_km: 328 } }) })
+      body: JSON.stringify({ transcript: command, session_id: sessionId, turn_id: turnId, ...(state.pendingConfirmationId ? { confirmation_id: state.pendingConfirmationId } : {}), ...(state.vehicleService ? {} : { vehicle_state: { temperature_celsius: state.temp, window_driver_percent: state.window ? 100 : 0, media_playing: state.music, driving: state.driving, battery_percent: state.battery, range_km: state.range, door_driver_locked: state.doorLocked, door_driver_open: state.doorOpen, seat_driver_heat_level: state.seatHeat } }) })
     });
     const payload = await response.json();
     if (!response.ok) throw new Error(payload.detail || 'Backend không phản hồi');
+    state.pendingConfirmationId = payload.confirmation_id || null;
+    $('#command-input').placeholder = state.pendingConfirmationId ? 'Nhập Xác nhận hoặc Hủy…' : 'Nói với ViVi điều bạn cần…';
     setPhase('validating', 'Safety gateway đã kiểm tra yêu cầu.');
     await wait(180);
     applyBackendState(payload.vehicle_state);
@@ -274,6 +281,7 @@ async function runBackendCommand(command, turnId = crypto.randomUUID()) {
     await speak(payload.message, turnId);
     await wait(500);
     if (payload.status === 'verified') setPhase('idle');
+    else setPhase(phase, payload.message);
   } catch (error) {
     setPhase('blocked', `Không kết nối được pipeline local: ${error.message}`);
   } finally {
@@ -282,7 +290,9 @@ async function runBackendCommand(command, turnId = crypto.randomUUID()) {
 }
 
 function runCommand(command, voiceDemo = false) {
-  return state.backendAvailable ? runBackendCommand(command) : runLocalCommand(command, voiceDemo);
+  if (state.backendAvailable) return runBackendCommand(command);
+  setPhase('unverified', 'ViVi local chưa kết nối. Xe mô phỏng không nhận lệnh nào.');
+  return Promise.resolve();
 }
 
 let recorder = null, recorderStream = null, recorderChunks = [], audioContext = null, silenceFrame = null;
@@ -385,7 +395,7 @@ function openPanel(view) {
   if (view === 'home') { if (dialog.open) dialog.close(); document.querySelectorAll('.rail-main .rail-button').forEach(button => button.classList.toggle('active', button.dataset.view === 'home')); return; }
   document.querySelectorAll('.rail-main .rail-button').forEach(button => button.classList.toggle('active', button.dataset.view === view));
   const contents = {
-    vehicle: `<h2>Không gian của bạn</h2><p>Digital Twin · trạng thái được mô phỏng trong phiên trải nghiệm này.</p><div class="detail-row"><span>Pin còn lại</span><strong>82% / 328 km</strong></div><div class="detail-row"><span>Nhiệt độ cài đặt</span><strong>${state.temp}°C</strong></div><div class="detail-row"><span>Cửa sổ bên tài</span><strong>${state.window ? 'Đang mở' : 'Đang đóng'}</strong></div><div class="detail-row"><span>Multimedia</span><strong>${state.music ? 'Đang phát (mô phỏng)' : 'Đang dừng'}</strong></div><div class="detail-row"><span>Chế độ</span><strong>${state.driving ? 'Đang lái xe (demo)' : 'Đang đỗ xe'}</strong></div><p class="dialog-note">Chưa kết nối xe thật, cảm biến hoặc dịch vụ VinFast.</p>`,
+    vehicle: `<h2>Không gian của bạn</h2><p>Digital Twin · trạng thái được mô phỏng trong phiên trải nghiệm này.</p><div class="detail-row"><span>Pin còn lại</span><strong>${state.battery}% / ${state.range} km</strong></div><div class="detail-row"><span>Nhiệt độ cài đặt</span><strong>${state.temp}°C</strong></div><div class="detail-row"><span>Cửa sổ bên tài</span><strong>${state.window ? 'Đang mở' : 'Đang đóng'}</strong></div><div class="detail-row"><span>Cửa xe bên tài</span><strong>${state.doorOpen ? 'Đang mở' : state.doorLocked ? 'Đang khóa' : 'Đã đóng, không khóa'}</strong></div><div class="detail-row"><span>Sưởi ghế bên tài</span><strong>Mức ${state.seatHeat}</strong></div><div class="detail-row"><span>Multimedia</span><strong>${state.music ? 'Đang phát (mô phỏng)' : 'Đang dừng'}</strong></div><div class="detail-row"><span>Chế độ</span><strong>${state.driving ? 'Đang lái xe (demo)' : 'Đang đỗ xe'}</strong></div><p class="dialog-note">Chưa kết nối xe thật, cảm biến hoặc dịch vụ VinFast.</p>`,
     journey: '<h2>Mỗi hành trình, một khám phá.</h2><p>Không gian dành cho địa điểm yêu thích, trạm sạc và chỉ đường trong phiên bản tiếp theo.</p><div class="detail-row"><span>Điểm đến</span><strong>Chưa thiết lập</strong></div><div class="detail-row"><span>Dịch vụ bản đồ</span><strong>Chưa kết nối</strong></div><p class="dialog-note">Prototype hiện tập trung vào trải nghiệm trợ lý và các thao tác cabin.</p>',
     manual: '<h2>Hiểu chiếc xe của bạn</h2><p>Đây là bản xem trước cách ViVi trình bày một câu trả lời có nguồn tham khảo.</p><div class="detail-row"><span>Ví dụ câu hỏi</span><strong>Điều chỉnh nhiệt độ thế nào?</strong></div><p>Trong demo, bạn có thể nói “Tôi hơi lạnh” để tăng nhiệt độ cài đặt thêm 2°C, hoặc nhập “Đặt nhiệt độ 25 độ”. ViVi kiểm tra giới hạn 16–30°C trước khi cập nhật xe mô phỏng.</p><div class="detail-row"><span>Nguồn của nội dung này</span><strong>Quy tắc prototype ViVi</strong></div><p class="dialog-note">Chưa tích hợp RAG hoặc manual VinFast. Nội dung này chỉ mô tả cách vận hành bản demo.</p><button class="dialog-action" id="try-climate">Thử “Tôi hơi lạnh” ↗</button>',
     settings: `<h2>Nhịp điệu của ViVi</h2><p>Điều chỉnh không gian theo sự thoải mái của bạn.</p><label class="setting-label"><input id="reduce-motion" type="checkbox" ${state.reduced ? 'checked' : ''}> Giảm chuyển động</label><p class="dialog-note">Giữ nguyên hình khối và ánh sáng, dừng chuyển động lơ lửng, xoay quỹ đạo và hiệu ứng âm thanh dạng sóng. Chế độ lái xe tự động làm dịu chuyển động.</p><div class="detail-row"><span>Tương tác giọng nói</span><strong>${state.sttAvailable ? 'PhoWhisper local' : 'Chưa cài AI runtime'}</strong></div><p class="dialog-note">Nhấn mic một lần để bắt đầu. ViVi tự dừng khi bạn im lặng hoặc khi bạn nhấn mic lần nữa. Audio và transcript được lưu cục bộ trong thư mục data cho đến khi bạn tự xóa.</p>`

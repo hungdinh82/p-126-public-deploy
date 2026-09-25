@@ -10,6 +10,7 @@ import time
 import unittest
 from datetime import timedelta
 from pathlib import Path
+from unittest.mock import patch
 from uuid import uuid4
 
 from server.adapters.llm import RulesAdapter
@@ -17,7 +18,7 @@ from server.orchestrator import Orchestrator
 from server.schemas import ActionProposal, TurnRequest, VehicleState
 from server.vehicle_mqtt import MqttVehicleAdapter, VehicleUnavailableError
 from vehicle_simulator.engine import VehicleSimulator
-from vehicle_simulator.models import FaultScenario, VehicleCommand, utc_now
+from vehicle_simulator.models import FaultScenario, VehicleCommand, VehicleFixture, utc_now
 from vehicle_simulator.mqtt import MqttVehicleService
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -94,13 +95,23 @@ class MqttVehicleTests(unittest.TestCase):
     def test_command_ack_state_and_idempotency(self) -> None:
         initial = asyncio.run(self.adapter.get_state("session"))
         action = ActionProposal(intent="climate.set_temperature", arguments={"value_celsius": 25})
-        first = asyncio.run(self.adapter.execute("session", "turn-1", action, initial))
+        with patch.object(self.adapter, "_get_state", wraps=self.adapter._get_state) as read_after_ack:
+            first = asyncio.run(self.adapter.execute("session", "turn-1", action, initial))
+        self.assertEqual(read_after_ack.call_count, 1)
         self.assertEqual(first.status, "verified")
         self.assertEqual(first.state.temperature_celsius, 25)
         self.assertEqual(first.state.state_version, initial.state_version + 1)
         repeated = asyncio.run(self.adapter.execute("session", "turn-1", action, first.state))
         self.assertEqual(repeated.status, "verified")
         self.assertEqual(repeated.state.state_version, first.state.state_version)
+
+    def test_unreadable_state_after_ack_is_unverified(self) -> None:
+        initial = asyncio.run(self.adapter.get_state("session"))
+        action = ActionProposal(intent="media.play")
+        with patch.object(self.adapter, "_get_state", side_effect=VehicleUnavailableError("read failed")):
+            result = asyncio.run(self.adapter.execute("session", "turn-read-failure", action, initial))
+        self.assertEqual(result.status, "unverified")
+        self.assertTrue(self.engine.get_state("demo-car-1").media_playing)
 
     def test_door_and_seat_catalog_over_mqtt(self) -> None:
         for action, arguments, field, value in (
@@ -156,12 +167,25 @@ class MqttVehicleTests(unittest.TestCase):
         self.assertEqual(timeout.status, "unverified")
         self.assertFalse(self.engine.get_state("demo-car-1").media_playing)
 
+    def test_delay_over_broker_keeps_verified_result(self) -> None:
+        initial = asyncio.run(self.adapter.get_state("session"))
+        self.engine.set_fault("demo-car-1", FaultScenario(mode="delay", delay_ms=25))
+        result = asyncio.run(
+            self.adapter.execute("session", "turn-delay", ActionProposal(intent="media.play"), initial)
+        )
+        self.assertEqual(result.status, "verified")
+        self.assertTrue(result.state.media_playing)
+
     def test_no_simulator_does_not_supply_cached_state(self) -> None:
         self.service.stop()
+        deadline = time.monotonic() + 0.5
+        while self.adapter.is_connected() and time.monotonic() < deadline:
+            time.sleep(0.01)
+        self.assertFalse(self.adapter.is_connected())
         with self.assertRaises(VehicleUnavailableError):
             asyncio.run(self.adapter.get_state("session"))
 
-    def test_orchestrator_ignores_browser_state_and_blocks_window(self) -> None:
+    def test_orchestrator_ignores_browser_state_and_confirms_window(self) -> None:
         class Events:
             def append_event(self, _event):
                 pass
@@ -178,5 +202,71 @@ class MqttVehicleTests(unittest.TestCase):
         window = asyncio.run(
             orchestrator.run(TurnRequest(transcript="Mở cửa sổ bên tài", session_id="session", turn_id="turn-window"))
         )
-        self.assertEqual(window.status, "blocked")
+        self.assertEqual(window.status, "confirm")
         self.assertEqual(self.engine.get_state("demo-car-1").window_driver_percent, 0)
+        approved = asyncio.run(orchestrator.run(TurnRequest(
+            transcript="Xác nhận", session_id="session", turn_id="turn-window-confirm",
+            confirmation_id=window.confirmation_id,
+        )))
+        self.assertEqual(approved.status, "verified")
+        self.assertEqual(self.engine.get_state("demo-car-1").window_driver_percent, 100)
+        replay = asyncio.run(orchestrator.run(TurnRequest(
+            transcript="Xác nhận", session_id="session", turn_id="turn-window-replay",
+            confirmation_id=window.confirmation_id,
+        )))
+        self.assertEqual(replay.status, "blocked")
+        self.assertEqual(self.engine.get_state("demo-car-1").state_version, approved.vehicle_state.state_version)
+
+    def test_door_confirmation_and_seat_intent_over_mqtt(self) -> None:
+        class Events:
+            def append_event(self, _event):
+                pass
+
+        orchestrator = Orchestrator(RulesAdapter(), self.adapter, Events())
+
+        def turn(text: str, turn_id: str, confirmation_id: str | None = None):
+            return asyncio.run(orchestrator.run(TurnRequest(
+                transcript=text, session_id="door-session", turn_id=turn_id, confirmation_id=confirmation_id,
+            )))
+
+        opening = turn("Mở cửa xe bên tài", "open")
+        self.assertEqual(opening.status, "confirm")
+        self.assertFalse(self.engine.get_state("demo-car-1").door_driver_open)
+        denied = turn("Hủy", "deny", opening.confirmation_id)
+        self.assertEqual(denied.status, "blocked")
+        self.assertFalse(self.engine.get_state("demo-car-1").door_driver_open)
+
+        opening = turn("Mở cửa xe bên tài", "open-again")
+        applied = turn("Xác nhận", "approve-open", opening.confirmation_id)
+        self.assertEqual(applied.status, "verified")
+        self.assertTrue(applied.vehicle_state.door_driver_open)
+        self.assertEqual(turn("Khóa cửa xe", "lock-open").status, "blocked")
+
+        closing = turn("Đóng cửa xe bên tài", "close")
+        self.assertEqual(turn("Xác nhận", "approve-close", closing.confirmation_id).status, "verified")
+        locking = turn("Khóa cửa xe", "lock")
+        self.assertEqual(turn("Xác nhận", "approve-lock", locking.confirmation_id).status, "verified")
+        self.assertTrue(self.engine.get_state("demo-car-1").door_driver_locked)
+        self.assertEqual(turn("Mở cửa xe bên tài", "open-locked").status, "blocked")
+
+        seat = turn("Sưởi ghế mức 2", "seat")
+        self.assertEqual(seat.status, "verified")
+        self.assertEqual(seat.vehicle_state.seat_driver_heat_level, 2)
+
+    def test_confirmation_rejects_changed_vehicle_state_over_mqtt(self) -> None:
+        class Events:
+            def append_event(self, _event):
+                pass
+
+        orchestrator = Orchestrator(RulesAdapter(), self.adapter, Events())
+        quote = asyncio.run(orchestrator.run(TurnRequest(
+            transcript="Mở cửa xe bên tài", session_id="stale-session", turn_id="request-open",
+        )))
+        self.assertEqual(quote.status, "confirm")
+        self.engine.set_fixture("demo-car-1", VehicleFixture(driving=True))
+        confirmed = asyncio.run(orchestrator.run(TurnRequest(
+            transcript="Xác nhận", session_id="stale-session", turn_id="approve-open",
+            confirmation_id=quote.confirmation_id,
+        )))
+        self.assertEqual(confirmed.status, "blocked")
+        self.assertFalse(self.engine.get_state("demo-car-1").door_driver_open)

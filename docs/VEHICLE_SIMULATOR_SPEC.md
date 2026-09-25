@@ -1,12 +1,12 @@
 # Vehicle Simulator Service — đặc tả MVP
 
-**Trạng thái:** MQTT MVP đã triển khai; giao diện xác nhận cửa kính chưa triển khai
+**Trạng thái:** MQTT MVP và xác nhận hội thoại cho cửa/kính đã triển khai
 
 **Ngày:** 2026-09-23
 
 **Phạm vi đã chốt:** service MQTT độc lập; HVAC, media, cửa sổ, cửa xe, ghế và trạng thái xe; mô phỏng success, delay, timeout, reject, disconnected và state mismatch.
 
-**Tiến độ 2026-09-23:** đã có lõi simulator/HTTP local độc lập trong `vehicle_simulator/`, MQTT transport, cấu hình broker local có ACL và MQTT adapter tích hợp backend ViVi. Luồng xác nhận lệnh cửa kính trên UI chưa triển khai, nên backend chặn lệnh đó khi dùng MQTT.
+**Tiến độ 2026-09-23:** đã có lõi simulator/HTTP local độc lập trong `vehicle_simulator/`, MQTT transport, cấu hình broker local có ACL và MQTT adapter tích hợp backend ViVi. Backend yêu cầu xác nhận hội thoại một lần cho lệnh cửa kính/cửa xe; ViVi cũng hiểu intent cửa và sưởi ghế.
 
 ## 1. Mục tiêu
 
@@ -14,12 +14,12 @@ Tạo một service mô phỏng xe chạy độc lập với FastAPI ViVi. Servi
 
 Một lượt điều khiển chỉ được xem là **verified** khi backend nhận đúng acknowledgement của lệnh và đọc được trạng thái thực tế khớp giá trị yêu cầu. Việc publish MQTT thành công hoặc chỉ nhận acknowledgement `applied` chưa đủ để báo thành công.
 
-## 2. Hiện trạng và khoảng cách
+## 2. Hiện trạng trước triển khai và khoảng cách
 
 - `server/vehicle.py` đang giữ state theo `session_id` trong RAM và trả kết quả ngay trong cùng process. `turn_id` được dùng để chống lặp, nhưng không có broker, acknowledgement, expiry, lỗi mô phỏng hoặc phục hồi sau restart.
 - `server/orchestrator.py` gọi trực tiếp class trên. `server/schemas.py` chỉ có HVAC, cửa sổ bên tài, media và trạng thái cơ bản; chưa có cửa xe, ghế hoặc state version.
-- Frontend đang gửi `vehicle_state` trong mỗi `/api/v1/turn`. Khi tích hợp service, backend phải bỏ qua field này khi quyết định action và lấy state từ simulator; sau đó có thể loại field khỏi request trong một thay đổi tương thích riêng.
-- Frontend còn có nhánh fallback tự đổi nhiệt độ/kính/nhạc trong RAM khi backend offline. Nhánh này cần chuyển thành demo tách biệt hoặc vô hiệu hóa đối với action cabin khi MQTT service là nguồn sự thật; không được hiển thị kết quả đó như action đã được service xác minh.
+- Khi MQTT được bật, frontend không cung cấp `vehicle_state`; backend lấy state từ simulator trước khi quyết định action. Trường này vẫn tồn tại để tương thích với chế độ memory.
+- Khi backend offline, frontend không tự đổi state cabin hoặc báo thao tác đã thành công.
 - PRD yêu cầu command có correlation ID, expiry và idempotency key; kết quả phải được xác minh bằng acknowledgement phù hợp và state đọc lại.
 
 ## 3. Trách nhiệm và ranh giới
@@ -138,25 +138,23 @@ Fault được chọn theo command hoặc test scenario với seed/cấu hình c
 7. Cập nhật `/api/v1/turn`, frontend state và hướng dẫn chạy để bỏ việc dùng state do trình duyệt cung cấp làm nguồn sự thật.
 8. Viết unit, contract và integration test với broker thật; chạy toàn bộ luồng text → safety → MQTT → simulator → verify.
 
-Thứ tự bàn giao nên là: **contract + broker → simulator độc lập → test lỗi và khôi phục → backend adapter + safety/HITL → frontend và end to end**. Có thể demo simulator bằng một client MQTT test trước khi sửa giao diện.
-
-Khi tích hợp backend, bổ sung trạng thái API cho kết quả chưa xác minh (`unverified` hoặc tên tương đương); hiện `TurnResponse.status` chưa có giá trị này. Nút đổi chế độ lái trên frontend phải gọi fixture/test control của simulator trong demo, thay vì chỉ sửa biến `state.driving` trong browser.
+Thứ tự triển khai ban đầu: **contract + broker → simulator độc lập → test lỗi và khôi phục → backend adapter + safety/HITL → frontend và end to end**. Backend hiện đã có `unverified` và `confirm`; nút đổi chế độ lái trên frontend được vô hiệu hóa khi dùng MQTT. Fixture lái xe chỉ thay đổi qua test control local.
 
 ## 9. Tiêu chí nghiệm thu
 
-- [ ] Service khởi động độc lập; backend và simulator trao đổi được qua broker local khi không có WAN.
-- [ ] Mỗi action trong catalog cập nhật đúng field, phát ack có cùng `command_id`/`correlation_id` và phát state với version tăng đúng.
-- [ ] `vehicle.get_state` trả snapshot hiện hành; frontend reload không ghi đè state bằng mặc định của trình duyệt.
-- [ ] Nhánh frontend chạy khi backend offline không báo thao tác cabin là đã được simulator xác minh.
-- [ ] Hai lần giao cùng idempotency key và payload chỉ áp lệnh một lần; cùng key khác payload bị từ chối; kết quả này vẫn đúng sau restart.
-- [ ] Trạng thái và kết quả idempotency vẫn nhất quán khi service dừng ngay sau khi ghi state nhưng trước khi phát ack.
-- [ ] Command hết hạn, sai schema, sai vehicle, sai state version hoặc vi phạm giới hạn không đổi state.
-- [ ] Mở cửa và tăng độ mở kính khi đang lái bị chặn; mọi command R3 không có handler.
-- [ ] Cửa/kính chỉ được backend publish sau approval hợp lệ gắn với đúng action; deny, timeout, replay approval không phát command.
-- [ ] Backend chỉ trả `verified` khi ack `applied` khớp ID và state đọc lại khớp giá trị yêu cầu.
-- [ ] Với delay, timeout trước/sau apply, reject, disconnected và state mismatch, backend không báo sai thành công; mỗi case có test tái hiện được.
-- [ ] Service không có đường command trực tiếp từ frontend; ACL broker giới hạn publisher theo trách nhiệm đã nêu.
-- [ ] Log của một lệnh cho phép nối trace từ backend đến simulator bằng `correlation_id`.
+- [x] Service khởi động độc lập; backend và simulator trao đổi được qua broker local khi không có WAN.
+- [x] Mỗi action trong catalog cập nhật đúng field, phát ack có cùng `command_id`/`correlation_id` và phát state với version tăng đúng.
+- [x] `vehicle.get_state` trả snapshot hiện hành; frontend reload không ghi đè state bằng mặc định của trình duyệt.
+- [x] Nhánh frontend chạy khi backend offline không báo thao tác cabin là đã được simulator xác minh.
+- [x] Hai lần giao cùng idempotency key và payload chỉ áp lệnh một lần; cùng key khác payload bị từ chối; kết quả này vẫn đúng sau restart.
+- [x] Trạng thái và kết quả idempotency vẫn nhất quán khi service dừng ngay sau khi ghi state nhưng trước khi phát ack.
+- [x] Command hết hạn, sai schema, sai vehicle, sai state version hoặc vi phạm giới hạn không đổi state.
+- [x] Mở cửa và tăng độ mở kính khi đang lái bị chặn; mọi command R3 không có handler.
+- [x] Cửa/kính chỉ được backend publish sau approval hợp lệ gắn với đúng action; deny, timeout, replay approval không phát command.
+- [x] Backend chỉ trả `verified` khi ack `applied` khớp ID và state đọc lại khớp giá trị yêu cầu.
+- [x] Với delay, timeout trước/sau apply, reject, disconnected và state mismatch, backend không báo sai thành công; mỗi case có test tái hiện được.
+- [x] Service không có đường command trực tiếp từ frontend; ACL broker giới hạn publisher theo trách nhiệm đã nêu.
+- [x] Log của một lệnh cho phép nối trace từ backend đến simulator bằng `correlation_id`.
 
 ## 10. Ngoài phạm vi MVP
 

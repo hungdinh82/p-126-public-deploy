@@ -206,11 +206,24 @@ class MqttVehicleAdapter:
             ack, state = self._exchange(command)
         except VehicleUnavailableError:
             return VehicleOutcome(observed_state, "Chưa xác minh được thao tác với xe mô phỏng.", "unverified")
-        current = VehicleState.model_validate(state.model_dump())
         if not self._ack_matches(ack, command):
-            return VehicleOutcome(current, "Phản hồi từ xe không khớp lệnh đã gửi.", "unverified")
+            return VehicleOutcome(
+                VehicleState.model_validate(state.model_dump()), "Phản hồi từ xe không khớp lệnh đã gửi.", "unverified"
+            )
         if ack.status == "rejected" or (ack.status == "duplicate" and ack.original_status == "rejected"):
-            return VehicleOutcome(current, f"Xe mô phỏng từ chối lệnh: {ack.reason_code or 'unknown'}.", "blocked")
+            return VehicleOutcome(
+                VehicleState.model_validate(state.model_dump()),
+                f"Xe mô phỏng từ chối lệnh: {ack.reason_code or 'unknown'}.",
+                "blocked",
+            )
+        try:
+            current = self._get_state()
+        except VehicleUnavailableError:
+            return VehicleOutcome(
+                VehicleState.model_validate(state.model_dump()),
+                "Đã nhận ACK nhưng chưa đọc lại được trạng thái xe mô phỏng.",
+                "unverified",
+            )
         if not self._matches_action(action, current):
             return VehicleOutcome(current, "Xe chưa đạt trạng thái được yêu cầu.", "unverified")
         return VehicleOutcome(current, self._success_message(action, current), "verified")
@@ -234,6 +247,12 @@ class MqttVehicleAdapter:
             return state.media_playing
         if action.intent == "media.pause":
             return not state.media_playing
+        if action.intent == "door.set_lock":
+            return state.door_driver_locked is action.arguments["locked"]
+        if action.intent == "door.set_open":
+            return state.door_driver_open is action.arguments["open"]
+        if action.intent == "seat.set_heat_level":
+            return state.seat_driver_heat_level == action.arguments["level"]
         return False
 
     @staticmethod
@@ -242,4 +261,10 @@ class MqttVehicleAdapter:
             return f"Mình đã đặt nhiệt độ ở {state.temperature_celsius:g} độ."
         if action.intent == "window.set_position":
             return f"Mình đã đặt cửa sổ bên tài ở mức {state.window_driver_percent} phần trăm."
+        if action.intent == "door.set_lock":
+            return "Mình đã khóa cửa bên tài." if state.door_driver_locked else "Mình đã mở khóa cửa bên tài."
+        if action.intent == "door.set_open":
+            return "Mình đã mở cửa xe bên tài." if state.door_driver_open else "Mình đã đóng cửa xe bên tài."
+        if action.intent == "seat.set_heat_level":
+            return f"Mình đã đặt sưởi ghế bên tài ở mức {state.seat_driver_heat_level}."
         return "Mình đã cập nhật trạng thái nhạc trong xe mô phỏng."

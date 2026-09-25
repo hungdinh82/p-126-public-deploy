@@ -151,6 +151,12 @@ class VehicleSimulatorServiceTests(unittest.TestCase):
             self.assertEqual(response.status_code, 404)
 
     def test_invalid_commands_do_not_mutate_state(self):
+        missing_identity = self.client.post(f"{self.base}/commands", json={"vehicle_id": "demo-car-1"})
+        self.assertEqual(missing_identity.status_code, 422)
+        unexpected_field = self.command("media.play")
+        unexpected_field["untrusted"] = True
+        self.assertEqual(self.client.post(f"{self.base}/commands", json=unexpected_field).status_code, 422)
+
         missing_version = self.command("media.play")
         missing_version.pop("expected_state_version")
         self.assertEqual(self.post(missing_version)["ack"]["reason_code"], "invalid_arguments")

@@ -24,7 +24,9 @@ python3 -m venv .venv
 ## Các luồng có thể thử
 
 - Nhấn mic một lần để bắt đầu thu âm. ViVi tự dừng sau khoảng lặng hoặc khi nhấn mic lần nữa.
-- Nhập “Đặt nhiệt độ 25 độ”, “Giảm nhiệt độ 2 độ”, “Mở cửa sổ bên tài”, “Đóng cửa sổ bên tài”, “Phát nhạc thư giãn”, “Dừng nhạc”, “Trạng thái xe”.
+- Nhập “Đặt nhiệt độ 25 độ”, “Giảm nhiệt độ 2 độ”, “Phát nhạc thư giãn”, “Dừng nhạc”, “Trạng thái xe”.
+- Thử “Mở cửa sổ bên tài”, “Đóng cửa sổ bên tài”, “Mở cửa xe bên tài”, “Khóa cửa xe”, “Mở khóa cửa xe”. ViVi đọc lại đúng thao tác và chờ câu trả lời “Xác nhận” hoặc “Hủy” trong 30 giây; trước khi xác nhận, state không đổi.
+- Thử “Sưởi ghế mức 2” hoặc “Tắt sưởi ghế”; các thao tác ghế không cần xác nhận.
 - Chuyển sang “Đang lái xe” rồi thử mở cửa sổ để thấy policy minh họa chặn lệnh.
 - Nhập “Đặt nhiệt độ 35 độ” để thử kiểm tra giới hạn.
 - Mở cẩm nang để xem cách trình bày câu trả lời với nguồn của prototype.
@@ -55,7 +57,7 @@ Trên Homebrew macOS, có thể cần dùng `/opt/homebrew/opt/mosquitto/sbin/mo
 .venv/bin/python run.py
 ```
 
-Mở http://127.0.0.1:8787 và thử “Đặt nhiệt độ 25 độ”, “Phát nhạc” hoặc “Trạng thái xe”. Backend lấy state qua MQTT, kiểm tra ACK đúng command và state sau lệnh rồi mới báo thành công. Khi ACK mất hoặc service ngắt, kết quả là “chưa xác minh”, không báo đã làm. Giao diện không cho bật trạng thái lái khi dùng MQTT; muốn thử các fixture/fault, khởi động simulator thêm `--enable-test-control` và dùng HTTP test API.
+Mở http://127.0.0.1:8787 và thử “Đặt nhiệt độ 25 độ”, “Phát nhạc” hoặc “Trạng thái xe”. Backend lấy state qua MQTT trước khi ra quyết định, kiểm tra ACK đúng command rồi chủ động đọc state thêm lần nữa trước khi báo thành công. Khi ACK mất hoặc service ngắt, kết quả là “chưa xác minh”, không báo đã làm. Nếu backend offline, giao diện cũng không tự giả lập thao tác cabin. Giao diện không cho bật trạng thái lái khi dùng MQTT; muốn thử các fixture/fault, khởi động simulator thêm `--enable-test-control` và dùng HTTP test API.
 
 Nếu muốn chạy service HTTP độc lập mà chưa bật MQTT:
 
@@ -67,7 +69,7 @@ Mặc định service chỉ nghe tại `127.0.0.1:8788`. Mở `http://127.0.0.1:
 
 Để thử các tình huống lỗi và fixture trạng thái xe trong demo, khởi động với `--enable-test-control`; khi đó các API `/api/v1/test/vehicles/{vehicle_id}/...` xuất hiện trong trang `/docs`. Chỉ dùng chế độ này trên máy local. Chi tiết catalog, fault mode và tiêu chí nghiệm thu ở [đặc tả Vehicle Simulator](docs/VEHICLE_SIMULATOR_SPEC.md).
 
-Để quay lại simulator trong bộ nhớ, đổi `VIVI_VEHICLE_PROVIDER=memory` trong `data/mqtt/credentials.env` hoặc tạm đổi tên file này, rồi chạy lại backend. Không cần broker khi dùng chế độ memory. Lệnh cửa kính qua ViVi hiện bị chặn trong chế độ MQTT cho tới khi có giao diện xác nhận; MQTT simulator vẫn hỗ trợ command cửa kính trực tiếp để kiểm thử.
+Để quay lại simulator trong bộ nhớ, đổi `VIVI_VEHICLE_PROVIDER=memory` trong `data/mqtt/credentials.env` hoặc tạm đổi tên file này, rồi chạy lại backend. Không cần broker khi dùng chế độ memory. Với cửa kính và cửa xe, backend tạo một yêu cầu xác nhận gắn với đúng action, phiên và state version. Lời xác nhận chỉ dùng một lần; hủy, quá 30 giây hoặc state xe thay đổi đều không gửi lệnh. Khi dùng giao diện, có thể gõ hoặc nói “Xác nhận”/“Hủy”; API client cần gửi lại `confirmation_id` từ phản hồi `status=confirm` trong lượt kế tiếp. Yêu cầu đang chờ chỉ lưu trong RAM backend, nên sẽ hết hiệu lực khi backend khởi động lại.
 
 ## Phạm vi
 

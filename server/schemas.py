@@ -7,6 +7,9 @@ from pydantic import BaseModel, Field
 Intent = Literal[
     "climate.set_temperature",
     "window.set_position",
+    "door.set_lock",
+    "door.set_open",
+    "seat.set_heat_level",
     "media.play",
     "media.pause",
     "vehicle.get_status",
@@ -45,6 +48,7 @@ class TurnRequest(BaseModel):
     session_id: str = Field(min_length=1, max_length=100)
     turn_id: str = Field(min_length=1, max_length=100)
     vehicle_state: VehicleState | None = None
+    confirmation_id: str | None = Field(default=None, min_length=1, max_length=100)
 
 
 class TurnResponse(BaseModel):
@@ -52,10 +56,11 @@ class TurnResponse(BaseModel):
     turn_id: str
     transcript: str
     provider: str
-    status: Literal["verified", "clarify", "blocked", "unverified", "error"]
+    status: Literal["verified", "confirm", "clarify", "blocked", "unverified", "error"]
     action: ActionProposal
     vehicle_state: VehicleState | None
     message: str
+    confirmation_id: str | None = None
     latency_ms: dict[str, float] = Field(default_factory=dict)
 
 

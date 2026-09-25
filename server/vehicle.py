@@ -53,6 +53,15 @@ class VehicleSimulator:
             elif action.intent == "media.pause":
                 state.media_playing = False
                 message = "Mình đã dừng nhạc trong xe mô phỏng."
+            elif action.intent == "door.set_lock":
+                state.door_driver_locked = bool(action.arguments["locked"])
+                message = "Mình đã khóa cửa bên tài." if state.door_driver_locked else "Mình đã mở khóa cửa bên tài."
+            elif action.intent == "door.set_open":
+                state.door_driver_open = bool(action.arguments["open"])
+                message = "Mình đã mở cửa xe bên tài." if state.door_driver_open else "Mình đã đóng cửa xe bên tài."
+            elif action.intent == "seat.set_heat_level":
+                state.seat_driver_heat_level = int(action.arguments["level"])
+                message = f"Mình đã đặt sưởi ghế bên tài ở mức {state.seat_driver_heat_level}."
             elif action.intent == "vehicle.get_status":
                 message = f"Xe còn {state.battery_percent} phần trăm pin, nhiệt độ {state.temperature_celsius:g} độ."
             elif action.intent == "manual.search":
