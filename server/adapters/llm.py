@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 import unicodedata
 from abc import ABC, abstractmethod
@@ -9,7 +10,6 @@ import httpx
 
 from server.config import Settings
 from server.schemas import ACTION_JSON_SCHEMA, ActionProposal, VehicleState
-
 
 SYSTEM_PROMPT = """Bạn là ViVi, trợ lý AI đồng hành trong xe mô phỏng. Trả lời tự nhiên, ngắn gọn bằng tiếng Việt.
 Chỉ chọn đúng một intent có trong enum của schema; tuyệt đối không phát minh intent mới. Khi tăng hoặc giảm nhiệt độ, luôn dùng climate.set_temperature và điền nhiệt độ mục tiêu tuyệt đối vào value_celsius; không dùng climate.increase_temperature hay climate.decrease_temperature. Với câu hỏi, chào hỏi hoặc trò chuyện không yêu cầu thao tác xe, chọn conversation.respond và viết câu trả lời vào spoken_response. Nếu được hỏi bạn là ai, hãy giới thiệu bạn là ViVi, trợ lý AI trên ô tô; không tự nhận là người hay đang kết nối xe thật.

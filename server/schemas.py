@@ -4,11 +4,12 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
-
 Intent = Literal[
     "climate.set_temperature",
     "window.set_position",
+    "door.set_lock",
     "door.set_open",
+    "seat.set_heat_level",
     "media.play",
     "media.pause",
     "vehicle.get_status",
@@ -70,11 +71,14 @@ ACTION_JSON_SCHEMA = {
                 "position_percent": {"type": ["number", "null"]},
                 "query": {"type": ["string", "null"]},
                 "open": {"type": ["boolean", "null"]},
+                "locked": {"type": ["boolean", "null"]},
+                "level": {"type": ["integer", "null"]},
                 "zone": {"type": ["string", "null"]},
                 "media_query": {"type": ["string", "null"]},
             },
             "required": [
-                "value_celsius", "position_percent", "query", "open", "zone", "media_query"
+                "value_celsius", "position_percent", "query", "open", "locked", "level",
+                "zone", "media_query"
             ],
             "additionalProperties": False,
         },
@@ -91,7 +95,9 @@ class VehicleState(BaseModel):
     state_version: int = 0
     temperature_celsius: float = 23
     window_driver_percent: int = 0
-    driver_door_open: bool = False
+    door_driver_locked: bool = False
+    door_driver_open: bool = False
+    seat_driver_heat_level: int = Field(default=0, ge=0, le=3)
     media_playing: bool = False
     driving: bool = False
     battery_percent: int = 82
@@ -125,7 +131,11 @@ class TurnRequest(BaseModel):
     transcript: str = Field(min_length=1, max_length=500)
     session_id: str = Field(min_length=1, max_length=100)
     turn_id: str = Field(min_length=1, max_length=100)
-    vehicle_state: VehicleState | None = None
+    vehicle_state: VehicleState | None = Field(
+        default=None,
+        deprecated=True,
+        description="Compatibility context only; ignored at the policy boundary.",
+    )
     confirmation_id: str | None = Field(default=None, max_length=100)
     confirmation_decision: Literal["approve", "deny"] | None = None
     llm_provider: Literal["rules", "openai", "google", "local"] | None = None
@@ -164,3 +174,10 @@ class TTSRequest(BaseModel):
     text: str = Field(min_length=1, max_length=1000)
     session_id: str
     turn_id: str
+
+
+class ConfirmationDecisionRequest(BaseModel):
+    session_id: str = Field(min_length=1, max_length=100)
+    turn_id: str = Field(min_length=1, max_length=100)
+    decision: Literal["approve", "deny"]
+    llm_provider: Literal["rules", "openai", "google", "local"] | None = None

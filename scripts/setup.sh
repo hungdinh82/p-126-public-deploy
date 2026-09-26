@@ -13,8 +13,10 @@ echo "Python version OK"
 python3 -m venv .venv
 source .venv/bin/activate
 
-# Install dependencies
-pip install -r requirements.txt
+# Install the core runtime and development/test tooling. AI model dependencies are
+# intentionally opt-in; see docs/setup_pc.md.
+python -m pip install --upgrade pip
+python -m pip install -r requirements-dev.txt
 
 # Create .env if not exists
 if [ ! -f .env ]; then
@@ -23,6 +25,7 @@ if [ ! -f .env ]; then
 fi
 
 # Create data directories
-mkdir -p data/chroma
+mkdir -p data/handbooks
 
-echo "Setup complete! Run: uvicorn src.main:app --reload"
+echo "Setup complete! Run: python run.py"
+echo "For STT/TTS/model setup, continue with docs/setup_pc.md"

@@ -4,7 +4,7 @@ import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
-from src.main import app
+from src.vivi.api.app import app
 
 
 @pytest_asyncio.fixture

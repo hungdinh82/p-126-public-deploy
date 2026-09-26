@@ -3,16 +3,15 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
 from urllib.parse import urlencode
 
 from bs4 import BeautifulSoup, Tag
 
 from src.ingestion.crawler import CrawlTarget
 from src.rag.schemas import HandbookChunk
-
 
 _SPACE_RE = re.compile(r"\s+")
 _HEADING_CLASSES = {

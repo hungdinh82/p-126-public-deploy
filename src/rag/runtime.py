@@ -1,35 +1,47 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import json
+from dataclasses import dataclass
+from typing import Protocol
 
-from src.config import Settings, get_settings
-from src.agents.classifier import GoogleIntentClassifier, IntentClassifier
 from src.actions.gateway import VehicleActionGateway
+from src.agents.classifier import GoogleIntentClassifier, IntentClassifier
+from src.config import Settings, get_settings
 from src.history.sqlite import SQLiteConversationHistory
-from src.rag.embeddings.google import GoogleEmbeddingProvider
-from src.rag.generator import GoogleHandbookGenerator
-from src.rag.rerankers.hybrid import HybridReranker
-from src.rag.retrieval import HandbookRetriever
+from src.rag.generator import ExtractiveHandbookGenerator, GoogleHandbookGenerator
 from src.rag.retrieval_lexical import LexicalHandbookRetriever
-from src.rag.vectorstores.chroma import ChromaHandbookStore
+from src.rag.schemas import RetrievedChunk
+from src.rag.sqlite_store import SQLiteHandbookRetriever
+
+
+class RetrieverPort(Protocol):
+    def retrieve(
+        self, query: str, vehicle_model: str, model_year: int, locale: str
+    ) -> list[RetrievedChunk]: ...
 
 
 @dataclass
 class HandbookServices:
-    retriever: HandbookRetriever
-    generator: GoogleHandbookGenerator
+    retriever: RetrieverPort
+    generator: GoogleHandbookGenerator | ExtractiveHandbookGenerator
     history: SQLiteConversationHistory
     history_turns: int = 6
     classifier: IntentClassifier | None = None
     action_gateway: VehicleActionGateway | None = None
 
 
-def create_services(settings: Settings | None = None, *, retrieval_mode: str = "hybrid") -> HandbookServices:
+def create_services(settings: Settings | None = None, *, retrieval_mode: str = "sqlite") -> HandbookServices:
     config = settings or get_settings()
-    if retrieval_mode == "lexical":
+    if retrieval_mode == "sqlite":
+        retriever = SQLiteHandbookRetriever(config.rag_handbook_db, final_k=config.rag_final_k)
+    elif retrieval_mode == "lexical":
         retriever = LexicalHandbookRetriever(config.rag_data_dir, final_k=config.rag_final_k)
     elif retrieval_mode == "hybrid":
+        from src.rag.embeddings.google import GoogleEmbeddingProvider
+        from src.rag.rerankers.hybrid import HybridReranker
+        from src.rag.retrieval import HandbookRetriever
+        from src.rag.vectorstores.chroma import ChromaHandbookStore
+
         manifest_path = (
             config.rag_data_dir
             / "index"
@@ -59,8 +71,12 @@ def create_services(settings: Settings | None = None, *, retrieval_mode: str = "
         )
     else:
         raise ValueError(f"unsupported retrieval mode: {retrieval_mode}")
-    generator = GoogleHandbookGenerator(config.google_api_key, config.rag_generation_model)
-    classifier = GoogleIntentClassifier(config.google_api_key, config.rag_generation_model)
+    if config.google_api_key:
+        generator = GoogleHandbookGenerator(config.google_api_key, config.rag_generation_model)
+        classifier = GoogleIntentClassifier(config.google_api_key, config.rag_generation_model)
+    else:
+        generator = ExtractiveHandbookGenerator()
+        classifier = None
     action_gateway = VehicleActionGateway()
     history = SQLiteConversationHistory(config.rag_history_db)
     return HandbookServices(

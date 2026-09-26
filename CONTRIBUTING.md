@@ -1,4 +1,16 @@
-# Đóng góp cho AI20K Agent Template
+# Đóng góp cho VIVI Cabin Copilot
+
+## Ownership cho nhóm bốn người
+
+| Workstream | Phạm vi chính |
+|---|---|
+| Platform/integration | `src/vivi/`, `server/app.py`, config, CI, `deploy/`, Docker |
+| Voice/UI | `server/adapters/stt.py`, `tts.py`, `whisper_cpp.py`, `app.js`, HTML/CSS |
+| Agent/RAG | `src/agents/`, `src/rag/`, `src/ingestion/`, evaluation |
+| Vehicle/safety | `server/safety.py`, confirmation, MQTT adapter, `vehicle_simulator/` |
+
+`server/schemas.py`, `src/vivi/contracts.py`, MQTT models và `docs/contracts.md` là vùng
+chia sẻ: PR thay contract cần ít nhất review từ platform và owner miền bị ảnh hưởng.
 
 Cảm ơn bạn đã quan tâm. Repo này gồm hai phần với quy trình review khác nhau:
 
@@ -22,13 +34,13 @@ Khi sửa nội dung sách, mô tả rõ trong PR: **chương nào**, **sửa g�
 
 ## Quy trình
 
-1. Fork repo, tạo nhánh từ `main`: `git checkout -b docs/sua-chuong-04`
+1. Tạo nhánh ngắn từ nhánh tích hợp hiện hành; không giữ feature branch qua nhiều sprint.
 2. Commit theo [Conventional Commits](https://www.conventionalcommits.org/):
    `feat:`, `fix:`, `docs:`, `chore:`, `test:`, `refactor:`
 3. Chạy kiểm tra trước khi push:
    ```bash
-   ruff check .
-   pytest
+   python -m ruff check server src vehicle_simulator tests
+   python -m pytest -q
    ```
 4. Mở PR vào `main`. CI (`.github/workflows/ci.yml`) phải xanh.
 

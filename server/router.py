@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from .schemas import ActionProposal, Route
 
-
 _VEHICLE_INTENTS = {
     "climate.set_temperature",
     "window.set_position",
+    "door.set_lock",
     "door.set_open",
+    "seat.set_heat_level",
     "media.play",
     "media.pause",
     "vehicle.get_status",

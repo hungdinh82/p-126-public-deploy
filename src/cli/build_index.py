@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import asdict
 import json
+from dataclasses import asdict
 
 from src.config import get_settings
 from src.ingestion.crawler import CrawlTarget

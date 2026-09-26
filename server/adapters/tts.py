@@ -67,7 +67,11 @@ class ZeroTTSAdapter:
             import zerotts  # noqa: F401
         except ImportError:
             return False, "Cài requirements-ai.txt để dùng ZeroTTS"
-        return False, "not-loaded"
+        return True, "ready-to-load"
+
+    async def ensure_loaded(self) -> None:
+        if self._model is None or self._voice is None:
+            await self.preload()
 
     async def preload(self) -> None:
         async with self._lock:
@@ -155,7 +159,8 @@ class ZeroTTSAdapter:
         if not available:
             raise RuntimeError(reason)
         async with self._lock:
-            chunks = self._model.synthesize_stream(text, voice=self._voice)
+            model = await asyncio.to_thread(self._load)
+            chunks = model.synthesize_stream(text, voice=self._voice)
 
             def next_chunk():
                 try:

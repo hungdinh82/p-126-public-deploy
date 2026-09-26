@@ -4,11 +4,11 @@ import json
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from src.ingestion.crawler import CrawlTarget
 from src.rag.embeddings.base import EmbeddingProvider
 from src.rag.schemas import HandbookChunk
-from src.rag.vectorstores.chroma import ChromaHandbookStore
 
 
 @dataclass(frozen=True)
@@ -24,7 +24,7 @@ class HandbookIndexer:
     def __init__(
         self,
         data_dir: Path,
-        store: ChromaHandbookStore,
+        store: Any,
         embeddings: EmbeddingProvider,
         *,
         batch_size: int = 32,

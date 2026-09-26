@@ -1,0 +1,24 @@
+FROM python:3.11-slim-bookworm
+
+WORKDIR /app
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    VIVI_RUNTIME_PROFILE=nano \
+    PHOWHISPER_PRELOAD=false \
+    ZEROTTS_PRELOAD=false
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ffmpeg libgomp1 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements-core.txt requirements-nano.txt ./
+RUN pip install --no-cache-dir -r requirements-nano.txt
+
+COPY . .
+RUN useradd --create-home vivi \
+    && mkdir -p /app/data \
+    && chown -R vivi:vivi /app
+
+USER vivi
+EXPOSE 8787
+CMD ["uvicorn", "src.vivi.api.app:app", "--host", "0.0.0.0", "--port", "8787"]

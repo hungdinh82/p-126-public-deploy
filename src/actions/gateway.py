@@ -1,15 +1,14 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import threading
+from dataclasses import dataclass
 from typing import Any
 
 from server.confirmations import ConfirmationResolution, ConfirmationStore, action_fingerprint
+from server.safety import validate
 from server.schemas import ActionProposal as ServerActionProposal
 from server.schemas import VehicleState
-from server.safety import validate
 from server.vehicle import VehicleSimulator
-
 from src.agents.contracts import ActionProposal
 
 
@@ -80,12 +79,19 @@ class VehicleActionGateway:
                         risk_class="R3",
                     )
                 return cached_decision
-        supplied = VehicleState.model_validate(supplied_vehicle_state) if supplied_vehicle_state else None
-        vehicle_state = self.vehicle.state_for(session_id, supplied)
+        # Browser/model-provided state is context only. The adapter remains the
+        # source of truth at the policy boundary.
+        del supplied_vehicle_state
+        vehicle_state = self.vehicle.state_for(session_id)
         result = validate(action, vehicle_state, confirmed=confirmed)
         confirmation = None
         if result.requires_confirmation:
-            preview = self.confirmations.create(session_id, action, result.preview or result.message)
+            preview = self.confirmations.create(
+                session_id,
+                action,
+                result.preview or result.message,
+                vehicle_state,
+            )
             confirmation = preview.model_dump(mode="json")
         decision = GatewayDecision(
             allowed=result.allowed,
@@ -110,7 +116,12 @@ class VehicleActionGateway:
         with self._cache_lock:
             cached = self._confirmation_cache.get(cache_key)
             if cached is None:
-                resolution = self.confirmations.resolve(confirmation_id, session_id, decision)
+                resolution = self.confirmations.resolve(
+                    confirmation_id,
+                    session_id,
+                    decision,
+                    self.vehicle.state_for(session_id),
+                )
                 self._confirmation_cache[cache_key] = (confirmation_id, decision, resolution)
             else:
                 original_id, original_decision, resolution = cached
@@ -171,7 +182,11 @@ class VehicleActionGateway:
         if proposal.intent == "window.set_position":
             return state.window_driver_percent == int(arguments["position_percent"])
         if proposal.intent == "door.set_open":
-            return state.driver_door_open is arguments["open"]
+            return state.door_driver_open is arguments["open"]
+        if proposal.intent == "door.set_lock":
+            return state.door_driver_locked is arguments["locked"]
+        if proposal.intent == "seat.set_heat_level":
+            return state.seat_driver_heat_level == arguments["level"]
         if proposal.intent == "media.play":
             return state.media_playing is True
         if proposal.intent == "media.pause":

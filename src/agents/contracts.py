@@ -4,12 +4,13 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-
 Intent = Literal[
     "manual.search",
     "climate.set_temperature",
     "window.set_position",
+    "door.set_lock",
     "door.set_open",
+    "seat.set_heat_level",
     "media.play",
     "media.pause",
     "vehicle.get_status",
@@ -30,6 +31,8 @@ class DecisionArguments(BaseModel):
     value_celsius: float | None = None
     position_percent: float | None = None
     open: bool | None = None
+    locked: bool | None = None
+    level: int | None = None
     zone: str | None = None
     media_query: str | None = None
 
@@ -46,7 +49,7 @@ class IntentDecision(BaseModel):
     confidence: float = Field(default=1.0, ge=0, le=1)
 
     @model_validator(mode="after")
-    def validate_route_intent_pair(self) -> "IntentDecision":
+    def validate_route_intent_pair(self) -> IntentDecision:
         expected_routes: dict[str, str] = {
             "manual.search": "handbook",
             "conversation.respond": "conversation",
@@ -66,7 +69,9 @@ class ActionProposal(BaseModel):
     intent: Literal[
         "climate.set_temperature",
         "window.set_position",
+        "door.set_lock",
         "door.set_open",
+        "seat.set_heat_level",
         "media.play",
         "media.pause",
         "vehicle.get_status",

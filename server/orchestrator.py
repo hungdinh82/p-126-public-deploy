@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
 import json
 import re
 import time
+import unicodedata
+from collections.abc import AsyncIterator
+from dataclasses import dataclass
 from uuid import uuid4
 
 from .adapters.llm import LLMAdapter
@@ -14,7 +16,6 @@ from .router import route_action
 from .safety import SafetyResult, validate
 from .schemas import ActionProposal, TraceSpan, TurnRequest, TurnResponse
 from .vehicle import VehicleSimulator
-from .vehicle_mqtt import MqttVehicleAdapter
 
 CONFIRMATION_TTL_SECONDS = 30
 SENSITIVE_INTENTS = {"window.set_position", "door.set_lock", "door.set_open"}
@@ -124,7 +125,12 @@ class Orchestrator:
     ) -> TurnResponse:
         tool_started = time.perf_counter()
         try:
-            vehicle, message = await self.vehicle.execute(request.session_id, request.turn_id, action)
+            outcome = await self.vehicle.execute(
+                request.session_id,
+                request.turn_id,
+                action,
+                state["vehicle_state"],
+            )
         except Exception as exc:
             self._trace(state, "tool", "error", tool_started, error=type(exc).__name__)
             state["errors"].append(str(exc))
@@ -138,10 +144,16 @@ class Orchestrator:
                 safety=safety,
                 error=str(exc),
             )
-        state["vehicle_state"] = vehicle
-        self._trace(state, "tool", "verified", tool_started, intent=action.intent)
+        state["vehicle_state"] = outcome.state
+        self._trace(state, "tool", outcome.status, tool_started, intent=action.intent)
         return self._finish(
-            state, request, started, "verified", message, provider=provider, safety=safety
+            state,
+            request,
+            started,
+            outcome.status,
+            outcome.message,
+            provider=provider,
+            safety=safety,
         )
 
     async def _process_action(
@@ -199,7 +211,10 @@ class Orchestrator:
             )
         if safety.requires_confirmation:
             confirmation = self.confirmations.create(
-                request.session_id, action, safety.preview or safety.message
+                request.session_id,
+                action,
+                safety.preview or safety.message,
+                state["vehicle_state"],
             )
             state["confirmation_id"] = confirmation.confirmation_id
             return self._finish(
@@ -227,7 +242,7 @@ class Orchestrator:
     async def run(self, request: TurnRequest, llm: LLMAdapter | None = None) -> TurnResponse:
         selected = llm or self.llm
         started = time.perf_counter()
-        vehicle = self.vehicle.state_for(request.session_id, request.vehicle_state)
+        vehicle = await self.vehicle.get_state(request.session_id)
         state = initial_state(
             request.session_id, request.turn_id, str(uuid4()), request.transcript, vehicle
         )
@@ -245,7 +260,10 @@ class Orchestrator:
                     provider=selected.name,
                 )
             resolution = self.confirmations.resolve(
-                request.confirmation_id, request.session_id, request.confirmation_decision
+                request.confirmation_id,
+                request.session_id,
+                request.confirmation_decision,
+                state["vehicle_state"],
             )
             if resolution.action is None:
                 self._trace(state, "policy", resolution.status, policy_started)
@@ -297,7 +315,7 @@ class Orchestrator:
             return
 
         started = time.perf_counter()
-        vehicle = self.vehicle.state_for(request.session_id, request.vehicle_state)
+        vehicle = await self.vehicle.get_state(request.session_id)
         state = initial_state(
             request.session_id, request.turn_id, str(uuid4()), request.transcript, vehicle
         )

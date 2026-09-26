@@ -10,9 +10,7 @@ from src.agents.classifier import RulesIntentClassifier
 from src.agents.contracts import AssistantOutput
 from src.agents.graph import build_graph
 from src.config import get_settings
-from src.history.sqlite import SQLiteConversationHistory
-from src.rag.retrieval_lexical import LexicalHandbookRetriever
-from src.rag.runtime import HandbookServices, create_services
+from src.rag.runtime import create_services
 
 from .adapters.llm import LLMAdapter
 from .data_store import DataStore
@@ -27,11 +25,6 @@ from .schemas import (
     VehicleState,
 )
 from .vehicle import VehicleSimulator
-
-
-class _UnavailableHandbookGenerator:
-    def generate(self, *args, **kwargs):
-        raise RuntimeError("GOOGLE_API_KEY chưa được cấu hình cho handbook RAG")
 
 
 class LangGraphOrchestrator:
@@ -67,9 +60,8 @@ class LangGraphOrchestrator:
                 "vehicle_model": "VF8",
                 "model_year": 2026,
                 "locale": "vi_vn",
-                "vehicle_state": request.vehicle_state.model_dump(mode="json")
-                if request.vehicle_state
-                else None,
+                # Client state is never trusted at the policy boundary.
+                "vehicle_state": None,
                 "confirmation_id": request.confirmation_id,
                 "confirmation_decision": request.confirmation_decision,
             }
@@ -213,22 +205,11 @@ def create_langgraph_orchestrator(
 ) -> LangGraphOrchestrator:
     config = get_settings()
     gateway = VehicleActionGateway(vehicle=vehicle)
-    try:
-        google_services = create_services(config, retrieval_mode="lexical")
-        google_services.action_gateway = gateway
-        rule_services = replace(google_services, classifier=RulesIntentClassifier())
-        graphs = {
-            "google": build_graph(google_services),
-            "rules": build_graph(rule_services),
-        }
-    except RuntimeError:
-        degraded = HandbookServices(
-            retriever=LexicalHandbookRetriever(config.rag_data_dir, final_k=config.rag_final_k),
-            generator=_UnavailableHandbookGenerator(),  # type: ignore[arg-type]
-            history=SQLiteConversationHistory(config.rag_history_db),
-            history_turns=config.rag_history_turns,
-            classifier=RulesIntentClassifier(),
-            action_gateway=gateway,
-        )
-        graphs = {"rules": build_graph(degraded)}
+    google_services = create_services(config, retrieval_mode="sqlite")
+    google_services.action_gateway = gateway
+    rule_services = replace(google_services, classifier=RulesIntentClassifier())
+    graphs = {
+        "google": build_graph(google_services),
+        "rules": build_graph(rule_services),
+    }
     return LangGraphOrchestrator(graphs, gateway, store, fallback)

@@ -7,7 +7,6 @@ from rank_bm25 import BM25Okapi
 
 from src.rag.schemas import RetrievedChunk
 
-
 _WORD_RE = re.compile(r"[a-z0-9]+")
 
 

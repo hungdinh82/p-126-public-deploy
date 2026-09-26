@@ -10,7 +10,6 @@ from typing import Any
 
 import httpx
 
-
 API_URL = "https://omapi.vinfastauto.com/fe/v1/menu"
 DETAIL_URL = "https://om.vinfastauto.com/{locale}/detail"
 

@@ -1,20 +1,21 @@
 from __future__ import annotations
 
-import tempfile
 import json
+import tempfile
 from pathlib import Path
 
-from src.agents.graph import build_graph
+from server.schemas import VehicleState as ServerVehicleState
+from server.vehicle import VehicleSimulator
+from src.actions.gateway import GatewayExecution, VehicleActionGateway
 from src.agents.classifier import IntentClassifier
 from src.agents.contracts import IntentDecision
-from src.actions.gateway import GatewayExecution, VehicleActionGateway
+from src.agents.graph import build_graph
 from src.history.sqlite import SQLiteConversationHistory
 from src.ingestion.crawler import CrawlTarget
 from src.ingestion.indexer import HandbookIndexer
 from src.rag.runtime import HandbookServices
-from src.rag.schemas import Claim, Citation, GroundedAnswer, HandbookChunk, RetrievedChunk
+from src.rag.schemas import Citation, Claim, GroundedAnswer, HandbookChunk, RetrievedChunk
 from src.rag.scope import scope_rejection_reason
-from server.vehicle import VehicleSimulator
 
 
 def _chunk() -> RetrievedChunk:
@@ -328,6 +329,7 @@ def test_safety_denial_never_calls_vehicle_adapter():
 
     with tempfile.TemporaryDirectory() as directory:
         vehicle = CountingVehicle()
+        vehicle.state_for("blocked", ServerVehicleState(driving=True))
         services = HandbookServices(
             FakeRetriever(),
             FakeGenerator(),

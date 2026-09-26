@@ -3,7 +3,6 @@ from __future__ import annotations
 import re
 import unicodedata
 
-
 _NON_TECHNICAL = re.compile(
     r"\b(gia ban|khuyen mai|dat coc|tra gop|co phieu|doanh thu|tin tuc|"
     r"so sanh.*(?:tesla|toyota|hyundai|kia)|mua xe o dau)\b"

@@ -164,6 +164,10 @@ class MqttVehicleAdapter:
     async def get_state(self, _session_id: str, _supplied: VehicleState | None = None) -> VehicleState:
         return await asyncio.to_thread(self._get_state)
 
+    def state_for(self, _session_id: str, _supplied: VehicleState | None = None) -> VehicleState:
+        """Synchronous port used by LangGraph worker nodes."""
+        return self._get_state()
+
     def _get_state(self) -> VehicleState:
         now = utc_now()
         identifier = str(uuid4())
@@ -185,6 +189,18 @@ class MqttVehicleAdapter:
         self, session_id: str, turn_id: str, action: ActionProposal, observed_state: VehicleState
     ) -> VehicleOutcome:
         return await asyncio.to_thread(self._execute, session_id, turn_id, action, observed_state)
+
+    def execute_sync(
+        self,
+        session_id: str,
+        turn_id: str,
+        action: ActionProposal,
+    ) -> tuple[VehicleState, str]:
+        observed = self._get_state()
+        outcome = self._execute(session_id, turn_id, action, observed)
+        if outcome.status != "verified":
+            raise VehicleUnavailableError(outcome.message)
+        return outcome.state, outcome.message
 
     def _execute(
         self, session_id: str, turn_id: str, action: ActionProposal, observed_state: VehicleState

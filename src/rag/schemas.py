@@ -23,7 +23,7 @@ class ModelDecision(BaseModel):
     confidence: float | None = Field(default=None, ge=0, le=1)
 
     @model_validator(mode="after")
-    def reject_clarification(self) -> "ModelDecision":
+    def reject_clarification(self) -> ModelDecision:
         if self.needs_clarification:
             raise ValueError("manual.search input must already contain a complete query")
         return self
@@ -86,7 +86,7 @@ class GroundedAnswer(BaseModel):
     abstain_reason: str | None = None
 
     @model_validator(mode="after")
-    def require_reason_or_answer(self) -> "GroundedAnswer":
+    def require_reason_or_answer(self) -> GroundedAnswer:
         if self.insufficient_evidence and not self.abstain_reason:
             raise ValueError("abstain_reason is required when evidence is insufficient")
         if not self.insufficient_evidence and not self.answer.strip():

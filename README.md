@@ -1,5 +1,10 @@
 # ViVi Space Concept
 
+> Runtime chuẩn sau khi hợp nhất là `src.vivi.api.app:app`. `src.main` chỉ còn shim tương
+> thích; không còn backend `/assist` thứ hai. Xem [contract runtime](docs/contracts.md),
+> [setup PC](docs/setup_pc.md), [setup Jetson Nano 4 GB](docs/setup_jetson_nano.md) và
+> [handbook SQLite](docs/handbook_sqlite.md).
+
 Prototype giao diện trợ lý ô tô: bầu trời đêm, lõi sáng, hai dải LED được chiếu từ hình học 3D lên Canvas, chuyển động theo trạng thái tương tác.
 
 ## Chạy ViVi local
@@ -21,7 +26,11 @@ NVIDIA, bỏ bước cài Torch CPU và cài thẳng `requirements-ai.txt`; whee
 dùng CUDA 12.4. Luôn đặt `TMPDIR` trên ổ đĩa chính nếu `/tmp` là tmpfs nhỏ, nếu không
 pip có thể báo `No space left on device` dù ổ đĩa vẫn còn trống.
 
-Mở http://127.0.0.1:8787 (hoặc cổng `VIVI_PORT` trong `.env`). Backend chỉ bind `127.0.0.1`. ZeroTTS, voice VIVI và PhoWhisper được nạp/warm trong lúc backend khởi động; server chỉ sẵn sàng khi hoàn tất. Lần đầu khởi động có thể tải model; các lần sau dùng cache local. Có thể đặt `PHOWHISPER_PRELOAD=false` nếu ưu tiên khởi động nhanh hơn độ trễ của lượt nói đầu tiên. Font Google Fonts có fallback font hệ thống khi offline.
+Mở http://127.0.0.1:8787 (hoặc cổng `VIVI_PORT` trong `.env`). Backend chỉ bind
+`127.0.0.1` ở profile PC. ZeroTTS và PhoWhisper chỉ được nạp/warm lúc khởi động khi các
+biến `ZEROTTS_PRELOAD` và `PHOWHISPER_PRELOAD` được bật; nếu tắt, model được nạp ở lượt
+dùng đầu tiên. Lần đầu có thể tải model, các lần sau dùng cache local. Font Google Fonts có
+fallback font hệ thống khi offline.
 
 Model tải từ Hugging Face nằm trong `~/.cache/huggingface/hub/`. Ví dụ PhoWhisper
 medium nằm tại `models--vinai--PhoWhisper-medium`, còn ZeroTTS nằm tại
@@ -29,7 +38,9 @@ medium nằm tại `models--vinai--PhoWhisper-medium`, còn ZeroTTS nằm tại
 
 Voice ZeroTTS của ViVi nằm trong `voices/VIVI.zip` với ID `VIVI` (`ZEROTTS_VOICE=VIVI`). Pack này chứa giọng community “Mai Chi”; backend nạp trực tiếp từ ZIP, không cần cài voice vào thư mục người dùng.
 
-Backend hiện yêu cầu cài `requirements-ai.txt` và có voice pack VIVI để khởi động. Nếu thiếu model/dependency/voice pack, quá trình startup sẽ báo lỗi thay vì chạy với TTS chưa sẵn sàng. `/api/v1/health` trả `tts.detail=loaded` khi model đã ở trong bộ nhớ.
+PC có thể preload speech bằng `requirements-pc-ai.txt`. Profile Nano không preload model;
+API vẫn khởi động và health báo rõ adapter nào chưa sẵn sàng. `/api/v1/health` trả
+`tts.detail=loaded` khi model đã ở trong bộ nhớ.
 
 ## Các luồng có thể thử
 
@@ -79,11 +90,20 @@ Mặc định service chỉ nghe tại `127.0.0.1:8788`. Mở `http://127.0.0.1:
 
 Để thử các tình huống lỗi và fixture trạng thái xe trong demo, khởi động với `--enable-test-control`; khi đó các API `/api/v1/test/vehicles/{vehicle_id}/...` xuất hiện trong trang `/docs`. Chỉ dùng chế độ này trên máy local. Chi tiết catalog, fault mode và tiêu chí nghiệm thu ở [đặc tả Vehicle Simulator](docs/VEHICLE_SIMULATOR_SPEC.md).
 
-Để quay lại simulator trong bộ nhớ, đổi `VIVI_VEHICLE_PROVIDER=memory` trong `data/mqtt/credentials.env` hoặc tạm đổi tên file này, rồi chạy lại backend. Không cần broker khi dùng chế độ memory. Với cửa kính và cửa xe, backend tạo một yêu cầu xác nhận gắn với đúng action, phiên và state version. Lời xác nhận chỉ dùng một lần; hủy, quá 30 giây hoặc state xe thay đổi đều không gửi lệnh. Khi dùng giao diện, có thể gõ hoặc nói “Xác nhận”/“Hủy”; API client cần gửi lại `confirmation_id` từ phản hồi `status=confirm` trong lượt kế tiếp. Yêu cầu đang chờ chỉ lưu trong RAM backend, nên sẽ hết hiệu lực khi backend khởi động lại.
+Để quay lại simulator trong bộ nhớ, đổi `VIVI_VEHICLE_PROVIDER=memory` trong
+`data/mqtt/credentials.env` hoặc tạm đổi tên file này, rồi chạy lại backend. Không cần broker
+khi dùng chế độ memory. Với cửa kính và cửa xe, backend tạo yêu cầu xác nhận gắn với đúng
+action, phiên và state version. Lời xác nhận chỉ dùng một lần; hủy, quá 30 giây hoặc state xe
+thay đổi đều không gửi lệnh. API client gửi `confirmation_id` tới endpoint riêng
+`POST /api/v1/confirmations/{confirmation_id}`; không gửi xác nhận lẫn trong một `/turn` mới.
+Yêu cầu đang chờ chỉ lưu trong RAM backend, nên hết hiệu lực khi backend khởi động lại.
 
 ## Phạm vi
 
-Đây là concept độc lập, chưa phải sản phẩm VinFast chính thức. Xe vẫn là simulator; policy chặn mở cửa khi lái chỉ là quy tắc demo. Audio, transcript và metadata được lưu trong `data/` cho đến khi người vận hành tự xóa. Thư mục này không được commit.
+Đây là concept độc lập, chưa phải sản phẩm VinFast chính thức. Xe vẫn là simulator; policy
+chặn mở cửa khi lái chỉ là quy tắc demo. Audio và transcript mặc định không được lưu
+(`VIVI_STORE_AUDIO=false`, `VIVI_STORE_TRANSCRIPTS=false`). Khi chủ động bật retention,
+dữ liệu nằm trong `data/` cho đến khi người vận hành xóa; thư mục này không được commit.
 
 ## Provider LLM
 
@@ -107,6 +127,7 @@ lại backend. Nếu giao diện báo backend offline thì nó dùng kịch bả
 - `GET /api/v1/health`
 - `POST /api/v1/stt` — multipart audio, `session_id`, `turn_id`
 - `POST /api/v1/turn` — transcript → LangGraph/RAG hoặc action → response thống nhất
+- `POST /api/v1/confirmations/{confirmation_id}` — approve/deny đúng một action R2 đang chờ
 - `POST /api/v1/tts` — text sang WAV Mai Chi
 - `POST /api/v1/turn/stream` — NDJSON gồm các mệnh đề hội thoại có thể đọc sớm và một sự kiện `final` chứa kết quả chính thức. Lệnh điều khiển xe không phát trước khi qua safety/acknowledgement.
 - `POST /api/v1/tts/stream` — PCM mono 16-bit little-endian theo luồng; sample rate ở header `X-ViVi-Sample-Rate`, giọng ở `X-ViVi-Voice`. Frontend nhận các chunk để đệm và phát liên tục.
@@ -116,7 +137,8 @@ Frontend giữ khoảng 1 giây audio trong bộ đệm trước khi phát để
 ## Kiểm thử
 
 ```sh
-.venv/bin/python -m unittest tests.test_core -v
+.venv/bin/python -m pytest -q
+.venv/bin/python -m ruff check server src vehicle_simulator tests
 node --check app.js
 ```
 
@@ -140,11 +162,14 @@ thành công sau khi simulator xác minh trạng thái.
 # Tạo chunks cho BM25 local; đây là bước đủ để server/UI dùng handbook.
 .venv-ai/bin/python -m src.cli.parse_manual
 
+# Tạo artifact SQLite FTS5 dùng chung cho PC và Jetson.
+.venv-ai/bin/python -m src.cli.import_handbook_sqlite
+
 # Tùy chọn: tạo Chroma hybrid khi quota Google embedding sẵn sàng.
 .venv-ai/bin/python -m src.cli.build_index
 ```
 
-Server/UI mặc định dùng BM25 local trên corpus đã crawl để không phụ thuộc quota embedding.
+Server/UI mặc định dùng SQLite FTS5 trên corpus đã import để không phụ thuộc quota embedding.
 Snapshot handbook, Chroma và SQLite history đều nằm trong `data/` và không được commit.
 
 Output handbook được ánh xạ vào `TurnResponse.evidence`; UI hiển thị câu trả lời cùng link

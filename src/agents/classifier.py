@@ -8,7 +8,6 @@ from abc import ABC, abstractmethod
 
 from src.agents.contracts import IntentDecision
 
-
 CLASSIFIER_INSTRUCTION = """Bạn là bộ định tuyến cho trợ lý ô tô ViVi.
 Nhận transcript tiếng Việt và trả JSON đúng schema. Chọn handbook/manual.search cho câu hỏi
 về cách dùng, cảnh báo, thông số, sạc, bảo dưỡng hoặc tính năng VF8. Chọn action cho lệnh
@@ -18,6 +17,7 @@ Không bao giờ nói một action đã hoàn tất; response_text chỉ đượ
 xác nhận”. Nhiệt độ hợp lệ 16-30°C, vị trí cửa sổ 0-100.
 Tên argument bắt buộc theo intent: climate.set_temperature dùng value_celsius;
 window.set_position dùng position_percent (0 là đóng, 100 là mở); door.set_open dùng open;
+door.set_lock dùng locked; seat.set_heat_level dùng level từ 0 đến 3;
 manual.search dùng query; media.play có thể dùng media_query. Không tạo tên field khác.
 """
 
@@ -122,6 +122,38 @@ class RulesIntentClassifier(IntentClassifier):
                 intent="window.set_position",
                 arguments={"position_percent": 100 if opening else 0},
                 response_text="Mình đã tạo đề xuất điều chỉnh cửa sổ và đang chờ safety gateway.",
+            )
+        if re.search(r"\b(?:mo|dong|khoa)\s+(?:khoa\s+)?cua\b", text):
+            if re.search(r"mo khoa|khoa cua", text):
+                return IntentDecision(
+                    route="action",
+                    intent="door.set_lock",
+                    arguments={"locked": not bool(re.search(r"mo khoa", text))},
+                    response_text="Mình sẽ đề xuất điều chỉnh khóa cửa bên tài.",
+                )
+            opening = bool(re.search(r"\bmo\b", text))
+            closing = bool(re.search(r"\bdong\b", text))
+            if opening == closing:
+                return IntentDecision(
+                    route="clarify",
+                    intent="conversation.clarify",
+                    needs_clarification=True,
+                    clarification_question="Bạn muốn mở hay đóng cửa xe bên tài?",
+                )
+            return IntentDecision(
+                route="action",
+                intent="door.set_open",
+                arguments={"open": opening},
+                response_text="Mình sẽ đề xuất điều chỉnh cửa xe bên tài.",
+            )
+        if re.search(r"suoi ghe|ghe suoi|lam am ghe", text):
+            match = re.search(r"(?:muc|cap)\s*(\d+)", text)
+            level = 0 if re.search(r"\b(tat|dung)\b", text) else int(match.group(1)) if match else 1
+            return IntentDecision(
+                route="action",
+                intent="seat.set_heat_level",
+                arguments={"level": level},
+                response_text=f"Mình sẽ đề xuất đặt sưởi ghế mức {level}.",
             )
         if re.search(r"trang thai xe|pin con bao nhieu|quang duong con lai", text):
             return IntentDecision(

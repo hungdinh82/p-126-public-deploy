@@ -24,7 +24,9 @@ RISK_BY_INTENT = {
     "media.play": "R1",
     "media.pause": "R1",
     "window.set_position": "R2",
+    "door.set_lock": "R2",
     "door.set_open": "R2",
+    "seat.set_heat_level": "R1",
     "unsupported.request": "R3",
     "vehicle.prohibited": "R3",
 }
@@ -33,6 +35,8 @@ RISK_BY_INTENT = {
 def _r2_preview(proposal: ActionProposal) -> str:
     if proposal.intent == "window.set_position":
         return f"Xác nhận đặt cửa sổ bên tài ở mức {int(proposal.arguments['position_percent'])} phần trăm?"
+    if proposal.intent == "door.set_lock":
+        return "Xác nhận khóa cửa bên tài?" if proposal.arguments.get("locked") else "Xác nhận mở khóa cửa bên tài?"
     return "Xác nhận mở cửa bên tài?" if proposal.arguments.get("open") else "Xác nhận đóng cửa bên tài?"
 
 
@@ -67,8 +71,18 @@ def validate(proposal: ActionProposal, vehicle: VehicleState, *, confirmed: bool
             return SafetyResult(False, "clarify", "Bạn muốn mở hay đóng cửa bên tài?", risk)
         if vehicle.driving and opening:
             return SafetyResult(False, "blocked", "Không thể mở cửa khi xe đang ở chế độ lái.", risk)
-        if not opening:
-            risk = "R1"
+        if vehicle.door_driver_locked and opening:
+            return SafetyResult(False, "blocked", "Hãy mở khóa cửa trước khi mở cửa bên tài.", risk)
+    if proposal.intent == "door.set_lock":
+        locked = proposal.arguments.get("locked")
+        if not isinstance(locked, bool):
+            return SafetyResult(False, "clarify", "Bạn muốn khóa hay mở khóa cửa bên tài?", risk)
+        if locked and vehicle.door_driver_open:
+            return SafetyResult(False, "blocked", "Không thể khóa khi cửa bên tài đang mở.", risk)
+    if proposal.intent == "seat.set_heat_level":
+        level = proposal.arguments.get("level")
+        if not isinstance(level, int) or isinstance(level, bool) or not 0 <= level <= 3:
+            return SafetyResult(False, "blocked", "Mức sưởi ghế hợp lệ nằm trong khoảng 0 đến 3.", risk)
     if risk == "R2" and not confirmed:
         preview = _r2_preview(proposal)
         return SafetyResult(False, "confirmation_required", preview, risk, True, preview)

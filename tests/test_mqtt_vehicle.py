@@ -202,19 +202,20 @@ class MqttVehicleTests(unittest.TestCase):
         window = asyncio.run(
             orchestrator.run(TurnRequest(transcript="Mở cửa sổ bên tài", session_id="session", turn_id="turn-window"))
         )
-        self.assertEqual(window.status, "confirm")
+        self.assertEqual(window.status, "confirmation_required")
+        confirmation_id = window.confirmation.confirmation_id
         self.assertEqual(self.engine.get_state("demo-car-1").window_driver_percent, 0)
         approved = asyncio.run(orchestrator.run(TurnRequest(
             transcript="Xác nhận", session_id="session", turn_id="turn-window-confirm",
-            confirmation_id=window.confirmation_id,
+            confirmation_id=confirmation_id, confirmation_decision="approve",
         )))
         self.assertEqual(approved.status, "verified")
         self.assertEqual(self.engine.get_state("demo-car-1").window_driver_percent, 100)
         replay = asyncio.run(orchestrator.run(TurnRequest(
             transcript="Xác nhận", session_id="session", turn_id="turn-window-replay",
-            confirmation_id=window.confirmation_id,
+            confirmation_id=confirmation_id, confirmation_decision="approve",
         )))
-        self.assertEqual(replay.status, "blocked")
+        self.assertEqual(replay.status, "denied")
         self.assertEqual(self.engine.get_state("demo-car-1").state_version, approved.vehicle_state.state_version)
 
     def test_door_confirmation_and_seat_intent_over_mqtt(self) -> None:
@@ -224,28 +225,34 @@ class MqttVehicleTests(unittest.TestCase):
 
         orchestrator = Orchestrator(RulesAdapter(), self.adapter, Events())
 
-        def turn(text: str, turn_id: str, confirmation_id: str | None = None):
+        def turn(
+            text: str,
+            turn_id: str,
+            confirmation_id: str | None = None,
+            confirmation_decision: str | None = None,
+        ):
             return asyncio.run(orchestrator.run(TurnRequest(
                 transcript=text, session_id="door-session", turn_id=turn_id, confirmation_id=confirmation_id,
+                confirmation_decision=confirmation_decision,
             )))
 
         opening = turn("Mở cửa xe bên tài", "open")
-        self.assertEqual(opening.status, "confirm")
+        self.assertEqual(opening.status, "confirmation_required")
         self.assertFalse(self.engine.get_state("demo-car-1").door_driver_open)
-        denied = turn("Hủy", "deny", opening.confirmation_id)
-        self.assertEqual(denied.status, "blocked")
+        denied = turn("Hủy", "deny", opening.confirmation.confirmation_id, "deny")
+        self.assertEqual(denied.status, "denied")
         self.assertFalse(self.engine.get_state("demo-car-1").door_driver_open)
 
         opening = turn("Mở cửa xe bên tài", "open-again")
-        applied = turn("Xác nhận", "approve-open", opening.confirmation_id)
+        applied = turn("Xác nhận", "approve-open", opening.confirmation.confirmation_id, "approve")
         self.assertEqual(applied.status, "verified")
         self.assertTrue(applied.vehicle_state.door_driver_open)
         self.assertEqual(turn("Khóa cửa xe", "lock-open").status, "blocked")
 
         closing = turn("Đóng cửa xe bên tài", "close")
-        self.assertEqual(turn("Xác nhận", "approve-close", closing.confirmation_id).status, "verified")
+        self.assertEqual(turn("Xác nhận", "approve-close", closing.confirmation.confirmation_id, "approve").status, "verified")
         locking = turn("Khóa cửa xe", "lock")
-        self.assertEqual(turn("Xác nhận", "approve-lock", locking.confirmation_id).status, "verified")
+        self.assertEqual(turn("Xác nhận", "approve-lock", locking.confirmation.confirmation_id, "approve").status, "verified")
         self.assertTrue(self.engine.get_state("demo-car-1").door_driver_locked)
         self.assertEqual(turn("Mở cửa xe bên tài", "open-locked").status, "blocked")
 
@@ -262,11 +269,12 @@ class MqttVehicleTests(unittest.TestCase):
         quote = asyncio.run(orchestrator.run(TurnRequest(
             transcript="Mở cửa xe bên tài", session_id="stale-session", turn_id="request-open",
         )))
-        self.assertEqual(quote.status, "confirm")
+        self.assertEqual(quote.status, "confirmation_required")
         self.engine.set_fixture("demo-car-1", VehicleFixture(driving=True))
         confirmed = asyncio.run(orchestrator.run(TurnRequest(
             transcript="Xác nhận", session_id="stale-session", turn_id="approve-open",
-            confirmation_id=quote.confirmation_id,
+            confirmation_id=quote.confirmation.confirmation_id,
+            confirmation_decision="approve",
         )))
-        self.assertEqual(confirmed.status, "blocked")
+        self.assertEqual(confirmed.status, "denied")
         self.assertFalse(self.engine.get_state("demo-car-1").door_driver_open)

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import tempfile
-import unittest
 import json
 import struct
+import tempfile
+import unittest
 import zipfile
 from pathlib import Path
 from types import SimpleNamespace
@@ -14,7 +14,7 @@ from fastapi.testclient import TestClient
 from server.adapters.llm import RulesAdapter
 from server.adapters.tts import ZeroTTSAdapter
 from server.app import app
-from server.config import Settings
+from server.config import Settings, settings
 from server.data_store import DataStore
 from server.langgraph_orchestrator import LangGraphOrchestrator
 from server.orchestrator import Orchestrator
@@ -138,14 +138,17 @@ class RulesTests(unittest.IsolatedAsyncioTestCase):
 
 class TTSTests(unittest.TestCase):
     def test_tts_preload_failure_stops_app_startup(self):
-        with patch("server.app.tts.preload", new_callable=AsyncMock, side_effect=RuntimeError("voice pack invalid")), \
+        with patch.object(settings, "zerotts_preload", True), \
+             patch("server.app.tts.preload", new_callable=AsyncMock, side_effect=RuntimeError("voice pack invalid")), \
              patch("server.app.stt.preload", new_callable=AsyncMock):
             with self.assertRaisesRegex(RuntimeError, "voice pack invalid"):
                 with TestClient(app):
                     pass
 
     def test_preload_runs_at_app_startup(self):
-        with patch("server.app.tts.preload", new_callable=AsyncMock) as preload, \
+        with patch.object(settings, "zerotts_preload", True), \
+             patch.object(settings, "phowhisper_preload", True), \
+             patch("server.app.tts.preload", new_callable=AsyncMock) as preload, \
              patch("server.app.stt.preload", new_callable=AsyncMock) as stt_preload:
             with TestClient(app) as client:
                 response = client.get("/api/v1/health")

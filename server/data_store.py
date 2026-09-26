@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import threading
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -15,7 +15,7 @@ class DataStore:
         self._lock = threading.Lock()
 
     def _day_dir(self) -> Path:
-        path = self.config.data_dir / datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        path = self.config.data_dir / datetime.now(UTC).strftime("%Y-%m-%d")
         path.mkdir(parents=True, exist_ok=True)
         return path
 
@@ -35,7 +35,7 @@ class DataStore:
     def append_event(self, event: dict[str, Any]) -> None:
         if not self.config.store_transcripts:
             return
-        payload = {"timestamp": datetime.now(timezone.utc).isoformat(), **event}
+        payload = {"timestamp": datetime.now(UTC).isoformat(), **event}
         path = self._day_dir() / "turns.jsonl"
         with self._lock, path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(payload, ensure_ascii=False, default=str) + "\n")

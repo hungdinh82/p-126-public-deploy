@@ -23,10 +23,15 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Lint with ruff
-        run: ruff check src/ tests/
+        run: ruff check server/ src/ vehicle_simulator/ tests/
+
+      - name: Check frontend syntax
+        run: node --check app.js
 
       - name: Run tests
         run: pytest tests/ -v --tb=short
         env:
           APP_ENV: test
-          OPENAI_API_KEY: test-key
+          LLM_PROVIDER: rules
+          PHOWHISPER_PRELOAD: "false"
+          ZEROTTS_PRELOAD: "false"

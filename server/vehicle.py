@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import threading
+from dataclasses import dataclass
 
 from .schemas import ActionProposal, VehicleState
 
@@ -13,10 +14,14 @@ class VehicleOutcome:
 
 
 class VehicleSimulator:
+    name = "memory"
+
     ALLOWED_INTENTS = {
         "climate.set_temperature",
         "window.set_position",
         "door.set_open",
+        "door.set_lock",
+        "seat.set_heat_level",
         "media.play",
         "media.pause",
         "vehicle.get_status",
@@ -63,9 +68,6 @@ class VehicleSimulator:
             elif action.intent == "window.set_position":
                 state.window_driver_percent = int(action.arguments["position_percent"])
                 message = f"Mình đã đặt cửa sổ bên tài ở mức {state.window_driver_percent} phần trăm."
-            elif action.intent == "door.set_open":
-                state.driver_door_open = action.arguments["open"]
-                message = "Mình đã mở cửa bên tài." if state.driver_door_open else "Mình đã đóng cửa bên tài."
             elif action.intent == "media.play":
                 state.media_playing = True
                 message = "Mình đã phát nhạc trong xe mô phỏng."
@@ -85,6 +87,8 @@ class VehicleSimulator:
                 message = f"Xe còn {state.battery_percent} phần trăm pin, nhiệt độ {state.temperature_celsius:g} độ."
             else:
                 raise ValueError(f"Action is not executable: {action.intent}")
+            if action.intent != "vehicle.get_status":
+                state.state_version += 1
             verified = state.model_copy(deep=True)
             self._executed[execution_key] = (action.model_copy(deep=True), verified, message)
             return verified, message
@@ -94,5 +98,15 @@ class VehicleSimulator:
         session_id: str,
         turn_id: str,
         action: ActionProposal,
-    ) -> tuple[VehicleState, str]:
-        return self.execute_sync(session_id, turn_id, action)
+        observed_state: VehicleState | None = None,
+    ) -> VehicleOutcome:
+        if observed_state is not None:
+            current = self.state_for(session_id)
+            if current.state_version != observed_state.state_version:
+                return VehicleOutcome(
+                    current,
+                    "Trạng thái xe đã thay đổi. Hãy gửi lại yêu cầu.",
+                    "blocked",
+                )
+        state, message = self.execute_sync(session_id, turn_id, action)
+        return VehicleOutcome(state, message)

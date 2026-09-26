@@ -16,7 +16,6 @@ from src.rag.runtime import HandbookServices, create_services
 from src.rag.schemas import ModelDecision
 from src.rag.scope import scope_rejection_reason
 
-
 ABSTAIN_MESSAGE = "Mình chưa tìm thấy đủ bằng chứng trong cẩm nang VF8 2026 để trả lời câu hỏi này."
 _FOLLOW_UP_RE = re.compile(r"\b(vậy|thế|nó|cái đó|việc đó|còn|như vậy)\b", re.IGNORECASE)
 
@@ -70,6 +69,13 @@ def _validate_action(decision: IntentDecision) -> tuple[ActionProposal | None, s
     elif decision.intent == "door.set_open":
         if not isinstance(arguments.get("open"), bool):
             return None, "Bạn muốn mở hay đóng cửa?"
+    elif decision.intent == "door.set_lock":
+        if not isinstance(arguments.get("locked"), bool):
+            return None, "Bạn muốn khóa hay mở khóa cửa?"
+    elif decision.intent == "seat.set_heat_level":
+        level = arguments.get("level")
+        if not isinstance(level, int) or isinstance(level, bool) or not 0 <= level <= 3:
+            return None, "Mức sưởi ghế hợp lệ nằm trong khoảng 0 đến 3."
     return ActionProposal(
         intent=decision.intent,
         arguments=arguments,
@@ -87,6 +93,10 @@ def _action_preview_text(proposal: ActionProposal) -> str:
         request = f"điều chỉnh cửa sổ đến {position:g}%"
     elif proposal.intent == "door.set_open":
         request = "mở cửa" if arguments["open"] else "đóng cửa"
+    elif proposal.intent == "door.set_lock":
+        request = "khóa cửa" if arguments["locked"] else "mở khóa cửa"
+    elif proposal.intent == "seat.set_heat_level":
+        request = f"đặt sưởi ghế mức {arguments['level']}"
     elif proposal.intent == "media.play":
         request = "phát nội dung âm thanh"
     elif proposal.intent == "media.pause":

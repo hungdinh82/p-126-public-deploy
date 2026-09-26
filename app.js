@@ -360,7 +360,7 @@ async function runBackendCommand(command, turnId = crypto.randomUUID()) {
     setPhase('thinking', `“${command}”`);
     let response = await fetch(`${API_BASE}/api/v1/turn/stream`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ transcript: command, session_id: sessionId, turn_id: turnId, llm_provider: state.llmProvider, vehicle_state: { temperature_celsius: state.temp, window_driver_percent: state.window ? 100 : 0, media_playing: state.music, driving: state.driving, battery_percent: 82, range_km: 328 } })
+      body: JSON.stringify({ transcript: command, session_id: sessionId, turn_id: turnId, llm_provider: state.llmProvider })
     });
     if (!response.ok) {
       const payload = await response.json();
@@ -414,12 +414,11 @@ async function runBackendCommand(command, turnId = crypto.randomUUID()) {
       }
       const approved = window.confirm(payload.confirmation.preview);
       turnId = crypto.randomUUID();
-      response = await fetch(`${API_BASE}/api/v1/turn`, {
+      response = await fetch(`${API_BASE}/api/v1/confirmations/${payload.confirmation.confirmation_id}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          transcript: command, session_id: sessionId, turn_id: turnId,
-          confirmation_id: payload.confirmation.confirmation_id,
-          confirmation_decision: approved ? 'approve' : 'deny'
+          session_id: sessionId, turn_id: turnId,
+          decision: approved ? 'approve' : 'deny', llm_provider: state.llmProvider
         })
       });
       payload = await response.json();
