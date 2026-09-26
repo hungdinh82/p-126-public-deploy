@@ -19,7 +19,7 @@ from .langgraph_orchestrator import create_langgraph_orchestrator
 from .orchestrator import Orchestrator
 from .schemas import STTResponse, TTSRequest, TurnRequest, TurnResponse
 from .vehicle import VehicleSimulator
-
+from .vehicle_mqtt import MqttVehicleAdapter
 
 ROOT = Path(__file__).resolve().parent.parent
 store = DataStore(settings)
@@ -62,6 +62,12 @@ app.add_middleware(
 )
 
 
+@app.on_event("shutdown")
+def close_vehicle_adapter():
+    if isinstance(vehicle, MqttVehicleAdapter):
+        vehicle.close()
+
+
 @app.get("/api/v1/health")
 async def health():
     stt_ok, stt_detail = stt.availability()
@@ -98,7 +104,16 @@ async def health():
             "execution_providers": tts.execution_providers,
         },
         "storage": {"audio": settings.store_audio, "transcripts": settings.store_transcripts, "path": str(settings.data_dir)},
+        "vehicle": {"provider": vehicle.name, "connected": vehicle.is_connected(), "vehicle_id": settings.vehicle_id},
     }
+
+
+@app.get("/api/v1/vehicle/state")
+async def vehicle_state():
+    try:
+        return await vehicle.get_state("api-read")
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="Xe mô phỏng chưa sẵn sàng") from exc
 
 
 @app.post("/api/v1/turn", response_model=TurnResponse)

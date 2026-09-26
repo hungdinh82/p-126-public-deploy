@@ -14,6 +14,40 @@ from .router import route_action
 from .safety import SafetyResult, validate
 from .schemas import ActionProposal, TraceSpan, TurnRequest, TurnResponse
 from .vehicle import VehicleSimulator
+from .vehicle_mqtt import MqttVehicleAdapter
+
+CONFIRMATION_TTL_SECONDS = 30
+SENSITIVE_INTENTS = {"window.set_position", "door.set_lock", "door.set_open"}
+
+
+@dataclass(frozen=True)
+class PendingConfirmation:
+    confirmation_id: str
+    action: ActionProposal
+    source_turn_id: str
+    vehicle_id: str
+    state_version: int
+    expires_at: float
+
+
+def confirmation_decision(transcript: str) -> str | None:
+    normalized = unicodedata.normalize("NFD", transcript.lower())
+    normalized = "".join(char for char in normalized if unicodedata.category(char) != "Mn").replace("đ", "d")
+    normalized = re.sub(r"[^a-z\s]", " ", normalized)
+    normalized = " ".join(normalized.split())
+    if normalized in {"huy", "khong", "khong dong y", "khong xac nhan", "no"}:
+        return "deny"
+    if normalized in {"xac nhan", "dong y", "co", "yes", "ok"}:
+        return "approve"
+    return None
+
+
+def confirmation_summary(action: ActionProposal) -> str:
+    if action.intent == "window.set_position":
+        return f"đặt cửa kính bên tài ở mức {action.arguments['position_percent']}%"
+    if action.intent == "door.set_lock":
+        return "khóa cửa bên tài" if action.arguments["locked"] else "mở khóa cửa bên tài"
+    return "mở cửa xe bên tài" if action.arguments["open"] else "đóng cửa xe bên tài"
 
 
 class Orchestrator:

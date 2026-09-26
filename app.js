@@ -137,7 +137,7 @@ function setPhase(phase, text) {
   state.phase = phase;
   $('#orb-state').textContent = phaseLabels[phase];
   if (text) $('#response-text').textContent = text;
-  document.body.classList.toggle('busy', !['idle', 'clarify', 'blocked'].includes(phase));
+  document.body.classList.toggle('busy', !['idle', 'confirm', 'clarify', 'blocked', 'unverified'].includes(phase));
 }
 function updateVehicle() {
   $('#temperature').innerHTML = `${state.temp}<span>°</span>`;
@@ -304,6 +304,7 @@ function resolveCommand(command) {
 }
 function lockControls(locked) {
   document.querySelectorAll('.suggestions button, .stepper button, #window-toggle, #music-toggle, #drive-toggle, #demo-mic, .send-button').forEach(button => { button.disabled = locked; });
+  if (state.vehicleService) $('#drive-toggle').disabled = true;
   $('#command-form').setAttribute('aria-busy', String(locked));
 }
 async function runLocalCommand(command, voiceDemo = false) {
@@ -336,10 +337,19 @@ async function runLocalCommand(command, voiceDemo = false) {
 }
 
 function applyBackendState(vehicle) {
+  if (!vehicle) return;
   state.temp = vehicle.temperature_celsius;
   state.window = vehicle.window_driver_percent > 0;
   state.music = vehicle.media_playing;
   state.driving = vehicle.driving;
+  state.battery = vehicle.battery_percent;
+  state.range = vehicle.range_km;
+  state.doorLocked = vehicle.door_driver_locked;
+  state.doorOpen = vehicle.door_driver_open;
+  state.seatHeat = vehicle.seat_driver_heat_level;
+  $('#drive-toggle').setAttribute('aria-pressed', String(state.driving));
+  $('#drive-toggle span').textContent = state.driving ? 'Đang lái xe · Demo' : 'Đang đỗ xe';
+  document.body.classList.toggle('driving', state.driving);
   updateVehicle();
 }
 
@@ -435,7 +445,8 @@ async function runBackendCommand(command, turnId = crypto.randomUUID()) {
       await finishTtsPlayback(speechPlayback);
     } else if (!streamedSpeech || state.sound) await speak(payload.message, turnId);
     await wait(500);
-    setPhase('idle');
+    if (payload.status === 'verified') setPhase('idle');
+    else setPhase(phase, payload.message);
   } catch (error) {
     setPhase('blocked', `Không kết nối được pipeline local: ${error.message}`);
   } finally {
@@ -444,7 +455,9 @@ async function runBackendCommand(command, turnId = crypto.randomUUID()) {
 }
 
 function runCommand(command, voiceDemo = false) {
-  return state.backendAvailable ? runBackendCommand(command) : runLocalCommand(command, voiceDemo);
+  if (state.backendAvailable) return runBackendCommand(command);
+  setPhase('unverified', 'ViVi local chưa kết nối. Xe mô phỏng không nhận lệnh nào.');
+  return Promise.resolve();
 }
 
 let recorder = null, recorderStream = null, recorderChunks = [], audioContext = null, silenceFrame = null;
@@ -584,7 +597,7 @@ function openPanel(view) {
     : '<p class="dialog-note">Hãy hỏi một câu về kỹ thuật VF8 để xem nguồn từ cẩm nang.</p>';
   const manualContent = `<h2>Hiểu chiếc xe của bạn</h2><p>${escapeHtml(state.manualAnswer || 'ViVi sẽ hiển thị câu trả lời đã được grounding từ cẩm nang VF8 2026 tại đây.')}</p>${sourceMarkup}`;
   const contents = {
-    vehicle: `<h2>Không gian của bạn</h2><p>Digital Twin · trạng thái được mô phỏng trong phiên trải nghiệm này.</p><div class="detail-row"><span>Pin còn lại</span><strong>82% / 328 km</strong></div><div class="detail-row"><span>Nhiệt độ cài đặt</span><strong>${state.temp}°C</strong></div><div class="detail-row"><span>Cửa sổ bên tài</span><strong>${state.window ? 'Đang mở' : 'Đang đóng'}</strong></div><div class="detail-row"><span>Multimedia</span><strong>${state.music ? 'Đang phát (mô phỏng)' : 'Đang dừng'}</strong></div><div class="detail-row"><span>Chế độ</span><strong>${state.driving ? 'Đang lái xe (demo)' : 'Đang đỗ xe'}</strong></div><p class="dialog-note">Chưa kết nối xe thật, cảm biến hoặc dịch vụ VinFast.</p>`,
+    vehicle: `<h2>Không gian của bạn</h2><p>Digital Twin · trạng thái được mô phỏng trong phiên trải nghiệm này.</p><div class="detail-row"><span>Pin còn lại</span><strong>${state.battery}% / ${state.range} km</strong></div><div class="detail-row"><span>Nhiệt độ cài đặt</span><strong>${state.temp}°C</strong></div><div class="detail-row"><span>Cửa sổ bên tài</span><strong>${state.window ? 'Đang mở' : 'Đang đóng'}</strong></div><div class="detail-row"><span>Cửa xe bên tài</span><strong>${state.doorOpen ? 'Đang mở' : state.doorLocked ? 'Đang khóa' : 'Đã đóng, không khóa'}</strong></div><div class="detail-row"><span>Sưởi ghế bên tài</span><strong>Mức ${state.seatHeat}</strong></div><div class="detail-row"><span>Multimedia</span><strong>${state.music ? 'Đang phát (mô phỏng)' : 'Đang dừng'}</strong></div><div class="detail-row"><span>Chế độ</span><strong>${state.driving ? 'Đang lái xe (demo)' : 'Đang đỗ xe'}</strong></div><p class="dialog-note">Chưa kết nối xe thật, cảm biến hoặc dịch vụ VinFast.</p>`,
     journey: '<h2>Mỗi hành trình, một khám phá.</h2><p>Không gian dành cho địa điểm yêu thích, trạm sạc và chỉ đường trong phiên bản tiếp theo.</p><div class="detail-row"><span>Điểm đến</span><strong>Chưa thiết lập</strong></div><div class="detail-row"><span>Dịch vụ bản đồ</span><strong>Chưa kết nối</strong></div><p class="dialog-note">Prototype hiện tập trung vào trải nghiệm trợ lý và các thao tác cabin.</p>',
     manual: manualContent,
     settings: `<h2>Cấu hình ViVi</h2><p>Chọn cách ViVi suy nghĩ và chuyển động trong không gian của bạn.</p><section class="config-section"><div class="config-heading"><span>MÔ HÌNH HỘI THOẠI</span><strong id="active-model">${escapeHtml(modelLabels[state.llmProvider] || state.llmProvider || 'Chưa kết nối')} · ${escapeHtml(currentModel?.model || '')}</strong></div><div class="model-options">${modelOptionsMarkup()}</div><p class="dialog-note">Lựa chọn được áp dụng từ lượt hội thoại tiếp theo. Model ID và API key vẫn được quản lý an toàn trong .env.</p></section><section class="config-section"><div class="config-heading"><span>TRẢI NGHIỆM</span><strong>Không gian & giọng nói</strong></div><label class="motion-setting"><span><strong>Giảm chuyển động</strong><small>Dừng lơ lửng, quỹ đạo và hiệu ứng sóng</small></span><input id="reduce-motion" type="checkbox" ${state.reduced ? 'checked' : ''}><i></i></label><div class="config-runtime"><div><span>NHẬN DIỆN GIỌNG NÓI</span><strong>${state.sttAvailable ? 'PhoWhisper · local' : 'Chưa sẵn sàng'}</strong></div><div><span>GIỌNG PHẢN HỒI</span><strong>${state.ttsAvailable ? 'VIVI · Mai Chi' : 'Chưa sẵn sàng'}</strong></div></div><p class="dialog-note">Audio và transcript được lưu cục bộ trong thư mục data cho đến khi bạn tự xóa.</p></section>`

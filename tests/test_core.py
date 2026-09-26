@@ -18,8 +18,8 @@ from server.config import Settings
 from server.data_store import DataStore
 from server.langgraph_orchestrator import LangGraphOrchestrator
 from server.orchestrator import Orchestrator
-from server.schemas import ActionProposal, TurnRequest, VehicleState
 from server.safety import validate
+from server.schemas import ActionProposal, TurnRequest, VehicleState
 from server.vehicle import VehicleSimulator
 from src.actions.gateway import VehicleActionGateway
 
@@ -64,6 +64,15 @@ class SafetyTests(unittest.TestCase):
         result = validate(proposal, VehicleState(driving=True, window_driver_percent=100))
         self.assertTrue(result.allowed)
 
+    def test_door_and_seat_safety(self):
+        opening = ActionProposal(intent="door.set_open", arguments={"open": True})
+        self.assertEqual(validate(opening, VehicleState(driving=True)).status, "blocked")
+        self.assertEqual(validate(opening, VehicleState(door_driver_locked=True)).status, "blocked")
+        locking = ActionProposal(intent="door.set_lock", arguments={"locked": True})
+        self.assertEqual(validate(locking, VehicleState(door_driver_open=True)).status, "blocked")
+        too_hot = ActionProposal(intent="seat.set_heat_level", arguments={"level": 4})
+        self.assertEqual(validate(too_hot, VehicleState()).status, "blocked")
+
 
 class RulesTests(unittest.IsolatedAsyncioTestCase):
     async def test_open_ended_reply_bypasses_vehicle_simulator(self):
@@ -97,6 +106,24 @@ class RulesTests(unittest.IsolatedAsyncioTestCase):
     async def test_negation_clarifies(self):
         result = await RulesAdapter().propose("Đừng mở cửa sổ", VehicleState())
         self.assertEqual(result.intent, "conversation.clarify")
+
+    async def test_door_and_seat_intents(self):
+        rules = RulesAdapter()
+        state = VehicleState()
+        cases = (
+            ("Mở cửa xe bên tài", "door.set_open", {"open": True}),
+            ("Đóng cửa xe bên tài", "door.set_open", {"open": False}),
+            ("Khóa cửa xe", "door.set_lock", {"locked": True}),
+            ("Mở khóa cửa xe", "door.set_lock", {"locked": False}),
+            ("Sưởi ghế mức 2", "seat.set_heat_level", {"level": 2}),
+            ("Tắt sưởi ghế", "seat.set_heat_level", {"level": 0}),
+        )
+        for text, intent, arguments in cases:
+            with self.subTest(text=text):
+                proposal = await rules.propose(text, state)
+                self.assertEqual((proposal.intent, proposal.arguments), (intent, arguments))
+        unrelated = await rules.propose("Nhiệt độ của xe 25 độ", state)
+        self.assertEqual(unrelated.intent, "climate.set_temperature")
 
     async def test_idempotent_turn(self):
         with tempfile.TemporaryDirectory() as directory:

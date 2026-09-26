@@ -87,6 +87,8 @@ ACTION_JSON_SCHEMA = {
 
 
 class VehicleState(BaseModel):
+    vehicle_id: str = "demo-car-1"
+    state_version: int = 0
     temperature_celsius: float = 23
     window_driver_percent: int = 0
     driver_door_open: bool = False
