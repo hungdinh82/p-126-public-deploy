@@ -140,6 +140,22 @@ class TTSTests(unittest.TestCase):
     def test_voice_key_normalization_ignores_common_separators(self):
         self.assertEqual(ZeroTTSAdapter._normalize_voice_name("MAI-CHI"), "maichi")
 
+    def test_cuda_provider_is_preferred_with_cpu_fallback(self):
+        providers = ZeroTTSAdapter._select_execution_providers(
+            "cuda", ["CPUExecutionProvider", "CUDAExecutionProvider"]
+        )
+        self.assertEqual(providers, ["CUDAExecutionProvider", "CPUExecutionProvider"])
+
+    def test_explicit_cuda_fails_when_provider_is_unavailable(self):
+        with self.assertRaisesRegex(RuntimeError, "CUDAExecutionProvider"):
+            ZeroTTSAdapter._select_execution_providers("cuda", ["CPUExecutionProvider"])
+
+    def test_auto_falls_back_to_cpu(self):
+        providers = ZeroTTSAdapter._select_execution_providers(
+            "auto", ["CPUExecutionProvider"]
+        )
+        self.assertEqual(providers, ["CPUExecutionProvider"])
+
     def test_stream_route_returns_pcm_chunks_and_format(self):
         class FakeTTS:
             _model = SimpleNamespace(sample_rate=48000)

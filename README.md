@@ -14,13 +14,18 @@ cp .env.example .env
 .venv-ai/bin/python run.py
 ```
 
-Cấu hình trên dùng PyTorch CPU để cài nhanh và tránh tải nhiều GB thư viện CUDA; ZeroTTS
-không cần PyTorch GPU. Muốn chạy PhoWhisper bằng NVIDIA, bỏ bước cài Torch CPU và cài
-thẳng `requirements-ai.txt`; wheel PyTorch 2.6 sẽ dùng CUDA 12.4. Luôn đặt `TMPDIR` trên
-ổ đĩa chính nếu `/tmp` là tmpfs nhỏ, nếu không pip có thể báo `No space left on device`
-dù ổ đĩa vẫn còn trống.
+Cấu hình trên dùng PyTorch CPU để tránh tải bộ CUDA lớn của Torch. ZeroTTS dùng
+`onnxruntime-gpu` độc lập và tự chọn CUDA khi `ZEROTTS_DEVICE=auto`; đặt `cuda` để yêu
+cầu CUDA và báo lỗi ngay nếu provider không hoạt động. Muốn chạy cả PhoWhisper bằng
+NVIDIA, bỏ bước cài Torch CPU và cài thẳng `requirements-ai.txt`; wheel PyTorch 2.6 sẽ
+dùng CUDA 12.4. Luôn đặt `TMPDIR` trên ổ đĩa chính nếu `/tmp` là tmpfs nhỏ, nếu không
+pip có thể báo `No space left on device` dù ổ đĩa vẫn còn trống.
 
 Mở http://127.0.0.1:8787 (hoặc cổng `VIVI_PORT` trong `.env`). Backend chỉ bind `127.0.0.1`. ZeroTTS, voice VIVI và PhoWhisper được nạp/warm trong lúc backend khởi động; server chỉ sẵn sàng khi hoàn tất. Lần đầu khởi động có thể tải model; các lần sau dùng cache local. Có thể đặt `PHOWHISPER_PRELOAD=false` nếu ưu tiên khởi động nhanh hơn độ trễ của lượt nói đầu tiên. Font Google Fonts có fallback font hệ thống khi offline.
+
+Model tải từ Hugging Face nằm trong `~/.cache/huggingface/hub/`. Ví dụ PhoWhisper
+medium nằm tại `models--vinai--PhoWhisper-medium`, còn ZeroTTS nằm tại
+`models--zeroweight-ai--ZeroTTS`. Có thể đổi gốc cache bằng biến `HF_HOME`.
 
 Voice ZeroTTS của ViVi nằm trong `voices/VIVI.zip` với ID `VIVI` (`ZEROTTS_VOICE=VIVI`). Pack này chứa giọng community “Mai Chi”; backend nạp trực tiếp từ ZIP, không cần cài voice vào thư mục người dùng.
 

@@ -19,7 +19,45 @@ class ZeroTTSAdapter:
         self.config = config
         self._model = None
         self._voice = None
+        self._execution_providers: tuple[str, ...] = ()
         self._lock = asyncio.Lock()
+
+    @property
+    def device(self) -> str:
+        if "CUDAExecutionProvider" in self._execution_providers:
+            return "cuda"
+        if "CPUExecutionProvider" in self._execution_providers:
+            return "cpu"
+        return "not-loaded"
+
+    @property
+    def execution_providers(self) -> list[str]:
+        return list(self._execution_providers)
+
+    @staticmethod
+    def _select_execution_providers(device: str, available: list[str]) -> list[str]:
+        requested = device.strip().lower()
+        if requested not in {"auto", "cpu", "cuda"}:
+            raise RuntimeError("ZEROTTS_DEVICE phải là auto, cpu hoặc cuda")
+        if requested == "cpu":
+            return ["CPUExecutionProvider"]
+        if "CUDAExecutionProvider" in available:
+            return ["CUDAExecutionProvider", "CPUExecutionProvider"]
+        if requested == "cuda":
+            raise RuntimeError(
+                "ZEROTTS_DEVICE=cuda nhưng ONNX Runtime không có CUDAExecutionProvider"
+            )
+        return ["CPUExecutionProvider"]
+
+    def _providers(self) -> list[str]:
+        import onnxruntime as ort
+
+        requested = self.config.zerotts_device.strip().lower()
+        if requested in {"auto", "cuda"}:
+            # Load the pinned CUDA/cuDNN wheels from NVIDIA site-packages. An
+            # empty directory skips an incompatible CPU-only PyTorch install.
+            ort.preload_dlls(directory="")
+        return self._select_execution_providers(requested, ort.get_available_providers())
 
     def availability(self) -> tuple[bool, str]:
         if self._model is not None and self._voice is not None:
@@ -40,7 +78,16 @@ class ZeroTTSAdapter:
     def _load(self):
         if self._model is None:
             from zerotts import ZeroTTS
-            model = ZeroTTS.from_pretrained(self.config.zerotts_model)
+            providers = self._providers()
+            model = ZeroTTS.from_pretrained(self.config.zerotts_model, providers=providers)
+            actual = tuple(model.prefix_step_sess.get_providers())
+            if providers[0] == "CUDAExecutionProvider" and (
+                not actual or actual[0] != "CUDAExecutionProvider"
+            ):
+                raise RuntimeError(
+                    "ZeroTTS không tạo được CUDA session; kiểm tra CUDA/cuDNN runtime"
+                )
+            self._execution_providers = actual
             if self.config.zerotts_voice == "VIVI":
                 import numpy as np
                 from zerotts.voices import Voice

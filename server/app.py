@@ -88,7 +88,15 @@ async def health():
             "device": stt.device,
             "dtype": stt.dtype,
         },
-        "tts": {"provider": tts.name, "voice": settings.zerotts_voice, "available": tts_ok, "detail": tts_detail},
+        "tts": {
+            "provider": tts.name,
+            "voice": settings.zerotts_voice,
+            "available": tts_ok,
+            "detail": tts_detail,
+            "requested_device": settings.zerotts_device,
+            "device": tts.device,
+            "execution_providers": tts.execution_providers,
+        },
         "storage": {"audio": settings.store_audio, "transcripts": settings.store_transcripts, "path": str(settings.data_dir)},
     }
 

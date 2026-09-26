@@ -44,7 +44,7 @@ class Settings:
     tts_provider: str = os.getenv("TTS_PROVIDER", "zerotts")
     zerotts_model: str = os.getenv("ZEROTTS_MODEL", "zeroweight-ai/ZeroTTS")
     zerotts_voice: str = os.getenv("ZEROTTS_VOICE", "VIVI")
-    zerotts_device: str = os.getenv("ZEROTTS_DEVICE", "cpu")
+    zerotts_device: str = os.getenv("ZEROTTS_DEVICE", "auto")
 
 
 settings = Settings()
