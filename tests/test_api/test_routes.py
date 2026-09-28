@@ -5,6 +5,8 @@ from unittest.mock import patch
 
 import pytest
 
+from src.vivi.api.runtime import runtime
+
 
 @pytest.mark.asyncio
 async def test_health_uses_canonical_edge_app(client):
@@ -107,8 +109,8 @@ async def test_stt_deletes_temporary_audio_when_retention_is_disabled(client):
         assert path.exists()
         return "Xin chào ViVi"
 
-    with patch("server.app.store.save_audio", return_value=None), patch(
-        "server.app.stt.transcribe", side_effect=fake_transcribe
+    with patch.object(runtime.store, "save_audio", return_value=None), patch.object(
+        runtime.stt, "transcribe", side_effect=fake_transcribe
     ):
         response = await client.post(
             "/api/v1/stt",

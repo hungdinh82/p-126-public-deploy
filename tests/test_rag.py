@@ -6,18 +6,18 @@ from pathlib import Path
 
 import pytest
 
-from server.schemas import VehicleState as ServerVehicleState
-from server.vehicle import VehicleSimulator
-from src.actions.gateway import GatewayExecution, VehicleActionGateway
-from src.agents.classifier import IntentClassifier
-from src.agents.contracts import IntentDecision
-from src.agents.graph import build_graph
-from src.history.sqlite import SQLiteConversationHistory
-from src.ingestion.crawler import CrawlTarget
-from src.ingestion.indexer import HandbookIndexer
-from src.rag.runtime import HandbookServices
-from src.rag.schemas import Citation, Claim, GroundedAnswer, HandbookChunk, RetrievedChunk
-from src.rag.scope import scope_rejection_reason
+from src.vivi.agents.classifier import IntentClassifier
+from src.vivi.agents.contracts import IntentDecision
+from src.vivi.agents.graph import build_graph
+from src.vivi.domain.models import VehicleState as ServerVehicleState
+from src.vivi.history.sqlite import SQLiteConversationHistory
+from src.vivi.ingestion.crawler import CrawlTarget
+from src.vivi.ingestion.indexer import HandbookIndexer
+from src.vivi.rag.runtime import HandbookServices
+from src.vivi.rag.schemas import Citation, Claim, GroundedAnswer, HandbookChunk, RetrievedChunk
+from src.vivi.rag.scope import scope_rejection_reason
+from src.vivi.vehicle.gateway import GatewayExecution, VehicleActionGateway
+from src.vivi.vehicle.memory import VehicleSimulator
 
 
 def _chunk() -> RetrievedChunk:

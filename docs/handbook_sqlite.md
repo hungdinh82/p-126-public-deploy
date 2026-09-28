@@ -8,11 +8,11 @@ runtime chỉ đọc `handbook.sqlite3`.
 Chỉ crawl tài liệu mà nhóm có quyền sử dụng:
 
 ```bash
-.venv/bin/python -m src.cli.crawl_manual \
+.venv/bin/python -m src.vivi.cli.crawl_manual \
   --model VF8 --year 2026 --locale vi_vn
-.venv/bin/python -m src.cli.parse_manual \
+.venv/bin/python -m src.vivi.cli.parse_manual \
   --model VF8 --year 2026 --locale vi_vn
-.venv/bin/python -m src.cli.import_handbook_sqlite \
+.venv/bin/python -m src.vivi.cli.import_handbook_sqlite \
   --model VF8 --year 2026 --locale vi_vn
 ```
 
@@ -38,7 +38,7 @@ Chuẩn hóa tài liệu PDF/HTML thành JSON Lines, mỗi dòng theo contract:
 Sau đó:
 
 ```bash
-.venv/bin/python -m src.cli.import_handbook_sqlite \
+.venv/bin/python -m src.vivi.cli.import_handbook_sqlite \
   --chunks /path/to/chunks.jsonl \
   --database data/handbooks/handbook.sqlite3
 ```
@@ -57,7 +57,7 @@ sqlite3 data/handbooks/handbook.sqlite3 'pragma integrity_check;'
 Test truy xuất:
 
 ```bash
-.venv/bin/python -c "from src.rag.sqlite_store import SQLiteHandbookStore; s=SQLiteHandbookStore('data/handbooks/handbook.sqlite3'); print(s.search('áp suất lốp', vehicle_model='VF8', model_year=2026, locale='vi_vn'))"
+.venv/bin/python -c "from src.vivi.rag.sqlite_store import SQLiteHandbookStore; s=SQLiteHandbookStore('data/handbooks/handbook.sqlite3'); print(s.search('áp suất lốp', vehicle_model='VF8', model_year=2026, locale='vi_vn'))"
 ```
 
 Chép file `.sqlite3` đã đóng kết nối sang Jetson và mount read-only nếu không cần lưu history.

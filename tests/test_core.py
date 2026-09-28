@@ -11,20 +11,21 @@ from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
 
-from server.adapters.stt import DisabledSTTAdapter, PhoWhisperAdapter, create_stt
-from server.adapters.tts import DisabledTTSAdapter, ZeroTTSAdapter, create_tts
-from server.app import app
-from server.data_store import DataStore
-from server.langgraph_orchestrator import (
+from src.vivi.agents.classifier import RulesIntentClassifier
+from src.vivi.api.app import app
+from src.vivi.api.runtime import runtime
+from src.vivi.config import Settings, settings
+from src.vivi.domain.models import ActionProposal, TurnRequest, VehicleState
+from src.vivi.domain.safety import validate
+from src.vivi.orchestration import (
     LangGraphOrchestrator,
     create_langgraph_orchestrator,
 )
-from server.safety import validate
-from server.schemas import ActionProposal, TurnRequest, VehicleState
-from server.vehicle import VehicleSimulator
-from src.actions.gateway import VehicleActionGateway
-from src.agents.classifier import RulesIntentClassifier
-from src.vivi.config import Settings, settings
+from src.vivi.persistence.event_store import EventStore
+from src.vivi.speech.stt import DisabledSTTAdapter, PhoWhisperAdapter, create_stt
+from src.vivi.speech.tts import DisabledTTSAdapter, ZeroTTSAdapter, create_tts
+from src.vivi.vehicle.gateway import VehicleActionGateway
+from src.vivi.vehicle.memory import VehicleSimulator
 
 
 class SafetyTests(unittest.TestCase):
@@ -134,7 +135,7 @@ class RulesTests(unittest.IsolatedAsyncioTestCase):
         with tempfile.TemporaryDirectory() as directory:
             config = Settings(data_dir=Path(directory))
             orchestrator = create_langgraph_orchestrator(
-                VehicleSimulator(), DataStore(config), config
+                VehicleSimulator(), EventStore(config), config
             )
             request = TurnRequest(transcript="Tăng nhiệt độ 1 độ", session_id="s1", turn_id="t1")
             first = await orchestrator.run(request)
@@ -147,8 +148,8 @@ class TTSTests(unittest.TestCase):
     def test_tts_preload_failure_stops_app_startup(self):
         with patch.object(settings, "tts_provider", "zerotts"), \
              patch.object(settings, "zerotts_preload", True), \
-             patch("server.app.tts.preload", new_callable=AsyncMock, side_effect=RuntimeError("voice pack invalid")), \
-             patch("server.app.stt.preload", new_callable=AsyncMock):
+             patch.object(runtime.tts, "preload", new_callable=AsyncMock, side_effect=RuntimeError("voice pack invalid")), \
+             patch.object(runtime.stt, "preload", new_callable=AsyncMock):
             with self.assertRaisesRegex(RuntimeError, "voice pack invalid"):
                 with TestClient(app):
                     pass
@@ -158,8 +159,8 @@ class TTSTests(unittest.TestCase):
              patch.object(settings, "stt_provider", "phowhisper"), \
              patch.object(settings, "zerotts_preload", True), \
              patch.object(settings, "phowhisper_preload", True), \
-             patch("server.app.tts.preload", new_callable=AsyncMock) as preload, \
-             patch("server.app.stt.preload", new_callable=AsyncMock) as stt_preload:
+             patch.object(runtime.tts, "preload", new_callable=AsyncMock) as preload, \
+             patch.object(runtime.stt, "preload", new_callable=AsyncMock) as stt_preload:
             with TestClient(app) as client:
                 response = client.get("/api/v1/health")
         preload.assert_awaited_once()
@@ -207,7 +208,7 @@ class TTSTests(unittest.TestCase):
                 yield b"\x00\x00"
                 yield b"\xff\x7f"
 
-        with patch("server.app.tts", FakeTTS()):
+        with patch.object(runtime, "tts", FakeTTS()):
             response = TestClient(app).post("/api/v1/tts/stream", json={
                 "text": "Xin chào", "session_id": "stream-test", "turn_id": "stream-1",
             })
@@ -226,7 +227,7 @@ class STTTests(unittest.TestCase):
 
     def test_phowhisper_reports_missing_ffmpeg_before_first_request(self):
         adapter = PhoWhisperAdapter(Settings(ffmpeg_binary="missing-test-ffmpeg"))
-        with patch("server.adapters.stt.shutil.which", return_value=None), \
+        with patch("src.vivi.speech.stt.shutil.which", return_value=None), \
              patch.dict("sys.modules", {"torch": SimpleNamespace(), "transformers": SimpleNamespace()}):
             available, detail = adapter.availability()
         self.assertFalse(available)
@@ -286,10 +287,10 @@ class APITests(unittest.TestCase):
             test_orchestrator = LangGraphOrchestrator(
                 {"local": LocalGraph()},
                 VehicleActionGateway(vehicle=vehicle),
-                DataStore(config),
+                EventStore(config),
                 default_provider="rules",
             )
-            with patch("server.app.orchestrator", test_orchestrator):
+            with patch.object(runtime, "orchestrator", test_orchestrator):
                 response = TestClient(app).post("/api/v1/turn", json={
                     "transcript": "Bạn là ai", "session_id": "model-session", "turn_id": "model-1", "llm_provider": "local",
                 })
@@ -299,7 +300,7 @@ class APITests(unittest.TestCase):
         self.assertEqual(test_orchestrator.default_provider, "rules")
 
     def test_unavailable_provider_is_rejected(self):
-        with patch.dict("server.app.orchestrator.graphs", {}, clear=True):
+        with patch.dict(runtime.orchestrator.graphs, {}, clear=True):
             response = TestClient(app).post("/api/v1/turn", json={
                 "transcript": "Bạn là ai", "session_id": "model-session", "turn_id": "model-2", "llm_provider": "local",
             })
@@ -309,9 +310,9 @@ class APITests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             config = Settings(data_dir=Path(directory))
             test_orchestrator = create_langgraph_orchestrator(
-                VehicleSimulator(), DataStore(config), config
+                VehicleSimulator(), EventStore(config), config
             )
-            with patch("server.app.orchestrator", test_orchestrator):
+            with patch.object(runtime, "orchestrator", test_orchestrator):
                 response = TestClient(app).post("/api/v1/turn", json={
                     "transcript": "Đặt nhiệt độ 25 độ",
                     "session_id": "api-session",
@@ -342,9 +343,9 @@ class APITests(unittest.TestCase):
             test_orchestrator = LangGraphOrchestrator(
                 {"local": LocalGraph()},
                 VehicleActionGateway(vehicle=vehicle),
-                DataStore(config),
+                EventStore(config),
             )
-            with patch("server.app.orchestrator", test_orchestrator):
+            with patch.object(runtime, "orchestrator", test_orchestrator):
                 response = TestClient(app).post("/api/v1/turn/stream", json={
                     "transcript": "Bạn là ai", "session_id": "stream-api", "turn_id": "stream-api-1", "llm_provider": "local",
                 })
@@ -376,7 +377,7 @@ class TurnStreamingTests(unittest.IsolatedAsyncioTestCase):
             orchestrator = LangGraphOrchestrator(
                 {"rules": ChatGraph()},
                 VehicleActionGateway(vehicle=vehicle),
-                DataStore(config),
+                EventStore(config),
             )
             request = TurnRequest(transcript="Bạn là ai", session_id="stream", turn_id="stream-chat")
             events = [event async for event in orchestrator.run_stream(request)]
@@ -390,7 +391,7 @@ class TurnStreamingTests(unittest.IsolatedAsyncioTestCase):
         with tempfile.TemporaryDirectory() as directory:
             config = Settings(data_dir=Path(directory))
             orchestrator = create_langgraph_orchestrator(
-                VehicleSimulator(), DataStore(config), config
+                VehicleSimulator(), EventStore(config), config
             )
             request = TurnRequest(transcript="Mở cửa sổ", session_id="stream", turn_id="stream-action")
             events = [event async for event in orchestrator.run_stream(request)]
@@ -428,7 +429,7 @@ class IntegratedLangGraphVoiceTests(unittest.IsolatedAsyncioTestCase):
         with tempfile.TemporaryDirectory() as directory:
             config = Settings(data_dir=Path(directory))
             vehicle = VehicleSimulator()
-            store = DataStore(config)
+            store = EventStore(config)
             pipeline = LangGraphOrchestrator(
                 {"rules": FakeGraph()}, VehicleActionGateway(vehicle=vehicle), store
             )

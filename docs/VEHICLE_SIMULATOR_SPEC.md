@@ -16,9 +16,10 @@ Một lượt điều khiển chỉ được xem là **verified** khi backend nh
 
 ## 2. Hiện trạng sau triển khai
 
-- `server/vehicle.py` là adapter in-memory dành cho development/test; `server/vehicle_mqtt.py`
+- `src/vivi/vehicle/memory.py` là adapter in-memory dành cho development/test;
+  `src/vivi/vehicle/mqtt.py`
   kết nối simulator độc lập qua broker, acknowledgement và state snapshot.
-- `server/langgraph_orchestrator.py` là facade runtime duy nhất. Action luôn đi qua
+- `src/vivi/orchestration.py` là facade runtime duy nhất. Action luôn đi qua
   `VehicleActionGateway`, safety policy, confirmation và bước verify; không còn
   orchestrator riêng cho vehicle memory.
 - Khi MQTT được bật, frontend không cung cấp `vehicle_state`; backend lấy state từ simulator trước khi quyết định action. Trường này vẫn tồn tại để tương thích với chế độ memory.

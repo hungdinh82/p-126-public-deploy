@@ -3,9 +3,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from src.rag.generator import ExtractiveHandbookGenerator, validate_grounding
-from src.rag.schemas import HandbookChunk
-from src.rag.sqlite_store import SQLiteHandbookRetriever, SQLiteHandbookStore
+from src.vivi.rag.generator import ExtractiveHandbookGenerator, validate_grounding
+from src.vivi.rag.schemas import HandbookChunk
+from src.vivi.rag.sqlite_store import SQLiteHandbookRetriever, SQLiteHandbookStore
 
 
 def _chunk(source_id: str, content: str, index: int = 0) -> HandbookChunk:

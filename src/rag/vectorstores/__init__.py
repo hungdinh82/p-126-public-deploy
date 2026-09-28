@@ -1,2 +1,0 @@
-"""Local vector-store adapters."""
-

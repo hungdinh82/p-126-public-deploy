@@ -9,10 +9,10 @@ test:
 	$(PYTHON) -m pytest tests/ -v
 
 lint:
-	$(PYTHON) -m ruff check server/ src/ vehicle_simulator/ tests/
+	$(PYTHON) -m ruff check src/ vehicle_simulator/ tests/
 
 format:
-	$(PYTHON) -m ruff format server/ src/ vehicle_simulator/ tests/
+	$(PYTHON) -m ruff format src/ vehicle_simulator/ tests/
 
 typecheck:
 	$(PYTHON) -m mypy src/

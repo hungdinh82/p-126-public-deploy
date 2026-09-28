@@ -3,7 +3,8 @@
 > Runtime chuẩn sau khi hợp nhất là `src.vivi.api.app:app`; không còn backend `/assist`
 > hay entrypoint thứ hai. Xem [contract runtime](docs/contracts.md),
 > [setup PC](docs/setup_pc.md), [setup Jetson Nano 4 GB](docs/setup_jetson_nano.md) và
-> [handbook SQLite](docs/handbook_sqlite.md).
+> [handbook SQLite](docs/handbook_sqlite.md). Xem thêm [cấu trúc repo và hướng dẫn phát
+> triển](docs/REPOSITORY_STRUCTURE.md).
 
 Prototype giao diện trợ lý ô tô: bầu trời đêm, lõi sáng, hai dải LED được chiếu từ hình học 3D lên Canvas, chuyển động theo trạng thái tương tác.
 
@@ -63,7 +64,8 @@ medium nằm tại `models--vinai--PhoWhisper-medium`, còn ZeroTTS nằm tại
 
 Voice ZeroTTS của ViVi nằm trong `voices/VIVI.zip` với ID `VIVI` (`ZEROTTS_VOICE=VIVI`). Pack này chứa giọng community “Mai Chi”; backend nạp trực tiếp từ ZIP, không cần cài voice vào thư mục người dùng.
 
-PC có thể preload speech bằng `requirements-pc-ai.txt`. Profile Nano không preload model;
+PC có thể preload speech bằng `requirements-ai.txt`. Profile Nano chỉ cài
+`requirements.txt` và không preload model;
 API vẫn khởi động và health báo rõ adapter nào chưa sẵn sàng. `/api/v1/health` trả
 `tts.detail=loaded` khi model đã ở trong bộ nhớ.
 
@@ -167,7 +169,7 @@ Frontend giữ khoảng 1 giây audio trong bộ đệm trước khi phát để
 
 ```sh
 .venv/bin/python -m pytest -q
-.venv/bin/python -m ruff check server src vehicle_simulator tests
+.venv/bin/python -m ruff check src vehicle_simulator tests
 node --check app.js
 ```
 
@@ -176,7 +178,9 @@ node --check app.js
 - `index.html`: bố cục, điều khiển và thông tin trạng thái.
 - `style.css`: ngôn ngữ thị giác, layout responsive, reduced motion.
 - `app.js`: render không gian, trạng thái hội thoại, Digital Twin trong bộ nhớ, policy demo.
-- `server/`: orchestration API, provider adapters, safety gateway, storage và vehicle simulator.
+- `src/vivi/`: application package duy nhất, gồm API, LangGraph, domain policy, speech,
+  vehicle adapters, RAG và persistence.
+- `vehicle_simulator/`: service mô phỏng xe độc lập, giao tiếp với ViVi qua MQTT.
 - `tests/`: test contract, safety, idempotency và API.
 
 Pipeline đầy đủ: thu âm → STT → LangGraph → handbook RAG hoặc safety/action →
@@ -187,16 +191,16 @@ thành công sau khi simulator xác minh trạng thái.
 ## Chuẩn bị handbook VF8 2026
 
 ```sh
-.venv-ai/bin/python -m src.cli.crawl_manual
+.venv-ai/bin/python -m src.vivi.cli.crawl_manual
 
-# Tạo chunks cho BM25 local; đây là bước đủ để server/UI dùng handbook.
-.venv-ai/bin/python -m src.cli.parse_manual
+# Tạo chunks cho BM25 local; đây là bước đủ để backend/UI dùng handbook.
+.venv-ai/bin/python -m src.vivi.cli.parse_manual
 
 # Tạo artifact SQLite FTS5 dùng chung cho PC và Jetson.
-.venv-ai/bin/python -m src.cli.import_handbook_sqlite
+.venv-ai/bin/python -m src.vivi.cli.import_handbook_sqlite
 
 # Tùy chọn: tạo Chroma hybrid khi quota Google embedding sẵn sàng.
-.venv-ai/bin/python -m src.cli.build_index
+.venv-ai/bin/python -m src.vivi.cli.build_index
 ```
 
 Server/UI mặc định dùng SQLite FTS5 trên corpus đã import để không phụ thuộc quota embedding.

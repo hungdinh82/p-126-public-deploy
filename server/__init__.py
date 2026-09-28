@@ -1,2 +1,0 @@
-"""ViVi local orchestration backend."""
-

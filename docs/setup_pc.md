@@ -1,7 +1,7 @@
 # Setup trên PC
 
 PC là môi trường development, ingestion và benchmark đầy đủ. Runtime công khai duy nhất là
-`src.vivi.api.app:app`; không chạy module implementation `server.app` trực tiếp.
+`src.vivi.api.app:app`; toàn bộ application code nằm trong package `src/vivi/`.
 
 ## 1. Nhận code và chạy baseline
 
@@ -70,8 +70,18 @@ cp .env.example .env
 Cài thêm PhoWhisper và ZeroTTS trên PC:
 
 ```bash
-.venv/bin/python -m pip install -r requirements-pc-ai.txt
-cp .env.pc.example .env
+.venv/bin/python -m pip install -r requirements-ai.txt
+```
+
+Sau đó bật các component cần dùng trong `.env`:
+
+```dotenv
+VIVI_RUNTIME_PROFILE=pc
+STT_PROVIDER=phowhisper
+PHOWHISPER_PRELOAD=true
+LLM_PROVIDER=rules
+TTS_PROVIDER=zerotts
+ZEROTTS_PRELOAD=true
 ```
 
 Có thể chỉ bật STT mà không bật TTS:

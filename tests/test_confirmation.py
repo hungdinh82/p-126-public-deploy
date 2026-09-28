@@ -4,12 +4,12 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from server.confirmations import ConfirmationStore
-from server.data_store import DataStore
-from server.langgraph_orchestrator import create_langgraph_orchestrator
-from server.schemas import TurnRequest, VehicleState
-from server.vehicle import VehicleSimulator
 from src.vivi.config import Settings
+from src.vivi.domain.confirmations import ConfirmationStore
+from src.vivi.domain.models import TurnRequest, VehicleState
+from src.vivi.orchestration import create_langgraph_orchestrator
+from src.vivi.persistence.event_store import EventStore
+from src.vivi.vehicle.memory import VehicleSimulator
 
 
 class ConfirmationTests(unittest.IsolatedAsyncioTestCase):
@@ -26,7 +26,7 @@ class ConfirmationTests(unittest.IsolatedAsyncioTestCase):
             store_transcripts=False,
         )
         self.orchestrator = create_langgraph_orchestrator(
-            self.vehicle, DataStore(config), config
+            self.vehicle, EventStore(config), config
         )
         self.turn_number = 0
 

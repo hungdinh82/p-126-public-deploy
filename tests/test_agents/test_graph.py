@@ -1,6 +1,6 @@
 import pytest
 
-from src.agents.graph import agent
+from src.vivi.agents.graph import agent
 
 
 @pytest.mark.asyncio

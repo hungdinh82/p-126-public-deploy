@@ -1,2 +1,0 @@
-# Backward-compatible alias for handbook ingestion and optional hybrid retrieval.
--r requirements-ingest.txt

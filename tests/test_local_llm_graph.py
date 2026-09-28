@@ -4,17 +4,17 @@ import json
 
 import httpx
 
-from server.data_store import DataStore
-from server.langgraph_orchestrator import create_langgraph_orchestrator
-from server.vehicle import VehicleSimulator
-from src.agents.classifier import StructuredAPIIntentClassifier
-from src.agents.graph import build_graph
-from src.history.sqlite import SQLiteConversationHistory
-from src.rag.generator import StructuredAPIHandbookGenerator
-from src.rag.runtime import HandbookServices
-from src.rag.schemas import RetrievedChunk
+from src.vivi.agents.classifier import StructuredAPIIntentClassifier
+from src.vivi.agents.graph import build_graph
 from src.vivi.config import Settings
+from src.vivi.history.sqlite import SQLiteConversationHistory
+from src.vivi.orchestration import create_langgraph_orchestrator
+from src.vivi.persistence.event_store import EventStore
+from src.vivi.rag.generator import StructuredAPIHandbookGenerator
+from src.vivi.rag.runtime import HandbookServices
+from src.vivi.rag.schemas import RetrievedChunk
 from src.vivi.structured_llm import StructuredChatClient
+from src.vivi.vehicle.memory import VehicleSimulator
 
 
 def _retrieved_chunk() -> RetrievedChunk:
@@ -119,7 +119,7 @@ def test_configured_local_provider_is_registered_in_canonical_graph(tmp_path):
         rag_history_db=tmp_path / "history.sqlite3",
     )
     vehicle = VehicleSimulator()
-    store = DataStore(config)
+    store = EventStore(config)
     orchestrator = create_langgraph_orchestrator(vehicle, store, config)
 
     assert orchestrator.graph_providers == {"rules", "local"}

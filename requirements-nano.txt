@@ -1,2 +1,0 @@
-# API/orchestration only. AI engines run as native sidecars on JetPack 4.x.
--r requirements-core.txt

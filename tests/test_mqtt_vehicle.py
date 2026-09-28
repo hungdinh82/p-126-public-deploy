@@ -13,11 +13,11 @@ from pathlib import Path
 from unittest.mock import patch
 from uuid import uuid4
 
-from server.data_store import DataStore
-from server.langgraph_orchestrator import create_langgraph_orchestrator
-from server.schemas import ActionProposal, TurnRequest, VehicleState
-from server.vehicle_mqtt import MqttVehicleAdapter, VehicleUnavailableError
 from src.vivi.config import Settings
+from src.vivi.domain.models import ActionProposal, TurnRequest, VehicleState
+from src.vivi.orchestration import create_langgraph_orchestrator
+from src.vivi.persistence.event_store import EventStore
+from src.vivi.vehicle.mqtt import MqttVehicleAdapter, VehicleUnavailableError
 from vehicle_simulator.engine import VehicleSimulator
 from vehicle_simulator.models import FaultScenario, VehicleCommand, VehicleFixture, utc_now
 from vehicle_simulator.mqtt import MqttVehicleService
@@ -95,7 +95,7 @@ class MqttVehicleTests(unittest.TestCase):
             store_transcripts=False,
         )
         return create_langgraph_orchestrator(
-            self.adapter, DataStore(config), config
+            self.adapter, EventStore(config), config
         )
 
     def _stop_broker(self) -> None:

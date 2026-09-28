@@ -11,8 +11,8 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends ffmpeg libgomp1 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements-core.txt requirements-nano.txt ./
-RUN pip install --no-cache-dir -r requirements-nano.txt
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 RUN useradd --create-home vivi \

@@ -2,7 +2,7 @@
 
 Profile này dành cho Jetson Nano đời cũ với JetPack 4.6.6. JetPack 4 dùng Ubuntu 18.04,
 CUDA 10.2 và đã EOL; vì vậy API Python 3.11 chạy trong container, còn llama.cpp và
-whisper.cpp chạy native như sidecar. Không dùng `requirements-pc-ai.txt` trên Nano.
+whisper.cpp chạy native như sidecar. Không dùng `requirements-ai.txt` trên Nano.
 
 Tham chiếu: [JetPack 4.6](https://developer.nvidia.com/embedded/jetpack-sdk-46),
 [Jetson FAQ](https://developer.nvidia.com/embedded/faq) và
@@ -28,13 +28,31 @@ crash tức thời và sẽ làm latency tăng mạnh.
 ## 2. Build API nhẹ
 
 ```bash
-cp .env.nano.example .env
+cp .env.example .env
 docker build -f Dockerfile.nano -t vivi-edge:nano .
 docker build -f Dockerfile.nano-builder -t vivi-edge:nano-builder .
 ```
 
+Đặt profile Nano trong `.env`:
+
+```dotenv
+VIVI_RUNTIME_PROFILE=nano
+VIVI_HOST=0.0.0.0
+VIVI_VEHICLE_PROVIDER=mqtt
+STT_PROVIDER=whisper_cpp
+LLM_PROVIDER=local
+LOCAL_LLM_BASE_URL=http://127.0.0.1:8080/v1
+LOCAL_LLM_MODEL=qwen2.5-1.5b-instruct-q4_k_m.gguf
+LOCAL_LLM_MAX_TOKENS=512
+TTS_PROVIDER=off
+RAG_RETRIEVAL_MODE=sqlite
+RAG_FINAL_K=3
+RAG_HISTORY_TURNS=3
+RAG_PROMPT_MAX_CHARACTERS=4000
+```
+
 Nano không preload PhoWhisper hoặc ZeroTTS. API, LangGraph, SQLite FTS5 và MQTT dùng
-`requirements-nano.txt`, không kéo PyTorch/Chroma/CUDA 12.
+`requirements.txt`, không kéo PyTorch/Chroma/CUDA 12.
 
 ## 3. Cài whisper.cpp
 
