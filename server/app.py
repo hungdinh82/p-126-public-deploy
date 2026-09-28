@@ -6,19 +6,27 @@ import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import httpx
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response, StreamingResponse
 
 from .adapters.llm import create_llm
-from .adapters.stt import PhoWhisperAdapter
-from .adapters.tts import ZeroTTSAdapter
-from .adapters.whisper_cpp import WhisperCppAdapter
+from .adapters.stt import create_stt
+from .adapters.tts import create_tts
 from .config import settings
 from .data_store import DataStore
 from .langgraph_orchestrator import create_langgraph_orchestrator
 from .orchestrator import Orchestrator
-from .schemas import ConfirmationDecisionRequest, STTResponse, TTSRequest, TurnRequest, TurnResponse
+from .schemas import (
+    ConfirmationDecisionRequest,
+    DemoDrivingRequest,
+    STTResponse,
+    TTSRequest,
+    TurnRequest,
+    TurnResponse,
+    VehicleState,
+)
 from .vehicle import VehicleSimulator
 from .vehicle_mqtt import MqttVehicleAdapter
 
@@ -27,7 +35,7 @@ store = DataStore(settings)
 LLM_MODELS = {
     "rules": "Kịch bản + LangGraph",
     "openai": settings.openai_model,
-    "google": settings.rag_generation_model,
+    "google": settings.google_model,
     "local": settings.local_llm_model,
 }
 llm_adapters = {}
@@ -51,16 +59,16 @@ if settings.vehicle_provider == "mqtt":
 else:
     vehicle = VehicleSimulator()
 legacy_orchestrator = Orchestrator(llm, vehicle, store)
-orchestrator = create_langgraph_orchestrator(legacy_orchestrator, vehicle, store)
-stt = WhisperCppAdapter(settings) if settings.stt_provider == "whisper_cpp" else PhoWhisperAdapter(settings)
-tts = ZeroTTSAdapter(settings)
+orchestrator = create_langgraph_orchestrator(legacy_orchestrator, vehicle, store, settings)
+stt = create_stt(settings)
+tts = create_tts(settings)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    if settings.zerotts_preload:
+    if settings.tts_provider != "off" and settings.zerotts_preload:
         await tts.preload()
-    if settings.phowhisper_preload:
+    if settings.stt_provider != "off" and settings.phowhisper_preload:
         await stt.preload()
     yield
     if isinstance(vehicle, MqttVehicleAdapter):
@@ -80,20 +88,62 @@ app.add_middleware(
 async def health():
     stt_ok, stt_detail = stt.availability()
     tts_ok, tts_detail = tts.availability()
+    llm_options = []
+    for provider, model in LLM_MODELS.items():
+        available = provider in llm_adapters
+        detail = llm_errors.get(provider)
+        if provider == "local" and available:
+            headers = (
+                {"Authorization": f"Bearer {settings.local_llm_api_key}"}
+                if settings.local_llm_api_key
+                else {}
+            )
+            try:
+                async with httpx.AsyncClient(timeout=0.75) as client:
+                    response = await client.get(
+                        settings.local_llm_base_url.rstrip("/") + "/models",
+                        headers=headers,
+                    )
+                    response.raise_for_status()
+            except Exception as exc:
+                available = False
+                detail = f"Local LLM endpoint chưa sẵn sàng: {exc}"
+        llm_options.append(
+            {
+                "provider": provider,
+                "model": model,
+                "available": available,
+                "detail": detail,
+            }
+        )
+    active_provider = next(
+        (
+            item["provider"]
+            for item in llm_options
+            if item["provider"] == llm.name and item["available"]
+        ),
+        "rules",
+    )
     return {
         "status": "ok",
         "runtime": "local",
         "orchestration": {
             "engine": "langgraph",
             "graph_providers": sorted(orchestrator.graph_providers),
-            "retrieval": "sqlite_fts5",
+            "retrieval": {
+                "sqlite": "sqlite_fts5",
+                "lexical": "lexical_bm25",
+                "hybrid": "chroma_hybrid",
+            }[settings.rag_retrieval_mode],
+            "retrieval_mode": settings.rag_retrieval_mode,
+            "handbook_available": settings.rag_handbook_db.is_file(),
+            "handbook_path": str(settings.rag_handbook_db),
         },
         "llm": {
-            "provider": llm.name, "configured": llm_error is None, "detail": llm_error,
-            "options": [
-                {"provider": provider, "model": model, "available": provider in llm_adapters, "detail": llm_errors.get(provider)}
-                for provider, model in LLM_MODELS.items()
-            ],
+            "provider": active_provider,
+            "configured": llm_error is None,
+            "detail": llm_error,
+            "options": llm_options,
         },
         "stt": {
             "provider": stt.name,
@@ -127,6 +177,19 @@ async def vehicle_state():
         return await vehicle.get_state("api-read")
     except Exception as exc:
         raise HTTPException(status_code=503, detail="Xe mô phỏng chưa sẵn sàng") from exc
+
+
+@app.put("/api/v1/demo/vehicle/driving", response_model=VehicleState)
+async def set_demo_driving(request: DemoDrivingRequest):
+    if not isinstance(vehicle, VehicleSimulator):
+        raise HTTPException(
+            status_code=409,
+            detail="Chế độ lái demo chỉ khả dụng với VIVI_VEHICLE_PROVIDER=memory.",
+        )
+    try:
+        return vehicle.set_driving(request.session_id, request.driving)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @app.post("/api/v1/turn", response_model=TurnResponse)
@@ -228,7 +291,7 @@ async def synthesize(request: TTSRequest):
     try:
         audio = await tts.synthesize(request.text)
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=f"ZeroTTS chưa sẵn sàng: {exc}") from exc
+        raise HTTPException(status_code=503, detail=f"TTS chưa sẵn sàng: {exc}") from exc
     return Response(audio, media_type="audio/wav", headers={"X-ViVi-Voice": settings.zerotts_voice})
 
 
@@ -236,13 +299,13 @@ async def synthesize(request: TTSRequest):
 async def synthesize_stream(request: TTSRequest):
     available, reason = tts.availability()
     if not available:
-        raise HTTPException(status_code=503, detail=f"ZeroTTS chưa sẵn sàng: {reason}")
+        raise HTTPException(status_code=503, detail=f"TTS chưa sẵn sàng: {reason}")
     try:
         ensure_loaded = getattr(tts, "ensure_loaded", None)
         if ensure_loaded is not None:
             await ensure_loaded()
     except Exception as exc:
-        raise HTTPException(status_code=503, detail=f"ZeroTTS chưa sẵn sàng: {exc}") from exc
+        raise HTTPException(status_code=503, detail=f"TTS chưa sẵn sàng: {exc}") from exc
     return StreamingResponse(
         tts.stream(request.text),
         media_type="application/octet-stream",
@@ -257,11 +320,11 @@ async def synthesize_stream(request: TTSRequest):
 
 @app.get("/")
 async def index():
-    return FileResponse(ROOT / "index.html")
+    return FileResponse(ROOT / "index.html", headers={"Cache-Control": "no-store"})
 
 
 @app.get("/{asset_name}")
 async def asset(asset_name: str):
     if asset_name not in {"app.js", "style.css"}:
         raise HTTPException(status_code=404)
-    return FileResponse(ROOT / asset_name)
+    return FileResponse(ROOT / asset_name, headers={"Cache-Control": "no-store"})

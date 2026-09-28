@@ -1,12 +1,10 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
-from dataclasses import replace
 from typing import Any
 from uuid import uuid4
 
 from src.actions.gateway import VehicleActionGateway
-from src.agents.classifier import RulesIntentClassifier
 from src.agents.contracts import AssistantOutput
 from src.agents.graph import build_graph
 from src.config import get_settings
@@ -202,14 +200,24 @@ def create_langgraph_orchestrator(
     fallback: Orchestrator,
     vehicle: VehicleSimulator,
     store: DataStore,
+    config=None,
 ) -> LangGraphOrchestrator:
-    config = get_settings()
+    config = config or get_settings()
     gateway = VehicleActionGateway(vehicle=vehicle)
-    google_services = create_services(config, retrieval_mode="sqlite")
-    google_services.action_gateway = gateway
-    rule_services = replace(google_services, classifier=RulesIntentClassifier())
-    graphs = {
-        "google": build_graph(google_services),
-        "rules": build_graph(rule_services),
-    }
+    providers = ["rules"]
+    if config.google_api_key:
+        providers.append("google")
+    if config.openai_api_key:
+        providers.append("openai")
+    if config.local_llm_model:
+        providers.append("local")
+    graphs = {}
+    for provider in providers:
+        services = create_services(
+            config,
+            retrieval_mode=config.rag_retrieval_mode,
+            provider=provider,
+        )
+        services.action_gateway = gateway
+        graphs[provider] = build_graph(services)
     return LangGraphOrchestrator(graphs, gateway, store, fallback)

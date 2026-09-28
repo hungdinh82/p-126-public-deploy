@@ -5,10 +5,22 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from src.actions.gateway import VehicleActionGateway
-from src.agents.classifier import GoogleIntentClassifier, IntentClassifier
+from src.agents.classifier import (
+    GoogleIntentClassifier,
+    IntentClassifier,
+    LocalIntentClassifier,
+    OpenAIIntentClassifier,
+    RulesIntentClassifier,
+)
 from src.config import Settings, get_settings
 from src.history.sqlite import SQLiteConversationHistory
-from src.rag.generator import ExtractiveHandbookGenerator, GoogleHandbookGenerator
+from src.rag.generator import (
+    ExtractiveHandbookGenerator,
+    GoogleHandbookGenerator,
+    HandbookGenerator,
+    LocalHandbookGenerator,
+    OpenAIHandbookGenerator,
+)
 from src.rag.retrieval_lexical import LexicalHandbookRetriever
 from src.rag.schemas import RetrievedChunk
 from src.rag.sqlite_store import SQLiteHandbookRetriever
@@ -23,14 +35,19 @@ class RetrieverPort(Protocol):
 @dataclass
 class HandbookServices:
     retriever: RetrieverPort
-    generator: GoogleHandbookGenerator | ExtractiveHandbookGenerator
+    generator: HandbookGenerator
     history: SQLiteConversationHistory
     history_turns: int = 6
     classifier: IntentClassifier | None = None
     action_gateway: VehicleActionGateway | None = None
 
 
-def create_services(settings: Settings | None = None, *, retrieval_mode: str = "sqlite") -> HandbookServices:
+def create_services(
+    settings: Settings | None = None,
+    *,
+    retrieval_mode: str = "sqlite",
+    provider: str = "auto",
+) -> HandbookServices:
     config = settings or get_settings()
     if retrieval_mode == "sqlite":
         retriever = SQLiteHandbookRetriever(config.rag_handbook_db, final_k=config.rag_final_k)
@@ -71,12 +88,27 @@ def create_services(settings: Settings | None = None, *, retrieval_mode: str = "
         )
     else:
         raise ValueError(f"unsupported retrieval mode: {retrieval_mode}")
-    if config.google_api_key:
+    selected = provider
+    if selected == "auto":
+        selected = "google" if config.google_api_key else "rules"
+    if selected == "google":
+        if not config.google_api_key:
+            raise RuntimeError("GOOGLE_API_KEY is required for the google handbook graph")
         generator = GoogleHandbookGenerator(config.google_api_key, config.rag_generation_model)
-        classifier = GoogleIntentClassifier(config.google_api_key, config.rag_generation_model)
-    else:
+        classifier = GoogleIntentClassifier(config.google_api_key, config.google_model)
+    elif selected == "local":
+        generator = LocalHandbookGenerator(config)
+        classifier = LocalIntentClassifier(config)
+    elif selected == "openai":
+        if not config.openai_api_key:
+            raise RuntimeError("OPENAI_API_KEY is required for the openai handbook graph")
+        generator = OpenAIHandbookGenerator(config)
+        classifier = OpenAIIntentClassifier(config)
+    elif selected == "rules":
         generator = ExtractiveHandbookGenerator()
-        classifier = None
+        classifier = RulesIntentClassifier()
+    else:
+        raise ValueError(f"unsupported generation provider: {selected}")
     action_gateway = VehicleActionGateway()
     history = SQLiteConversationHistory(config.rag_history_db)
     return HandbookServices(

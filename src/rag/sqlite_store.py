@@ -22,16 +22,26 @@ class SQLiteImportReport:
 class SQLiteHandbookStore:
     """Compact FTS5 handbook artifact used by the PC and Jetson profiles."""
 
-    def __init__(self, path: Path | str) -> None:
+    def __init__(self, path: Path | str, *, read_only: bool = False) -> None:
         self.path = Path(path)
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self._initialize()
+        self.read_only = read_only
+        if read_only:
+            if not self.path.is_file():
+                raise FileNotFoundError(f"handbook database not found: {self.path}")
+        else:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            self._initialize()
 
     def _connect(self) -> sqlite3.Connection:
-        connection = sqlite3.connect(self.path)
+        if self.read_only:
+            uri = f"{self.path.resolve().as_uri()}?mode=ro&immutable=1"
+            connection = sqlite3.connect(uri, uri=True)
+            connection.execute("PRAGMA query_only = ON")
+        else:
+            connection = sqlite3.connect(self.path)
+            connection.execute("PRAGMA foreign_keys = ON")
+            connection.execute("PRAGMA journal_mode = WAL")
         connection.row_factory = sqlite3.Row
-        connection.execute("PRAGMA foreign_keys = ON")
-        connection.execute("PRAGMA journal_mode = WAL")
         return connection
 
     def _initialize(self) -> None:
@@ -96,6 +106,8 @@ class SQLiteHandbookStore:
             )
 
     def import_jsonl(self, chunks_path: Path | str, *, source_checksum: str = "") -> SQLiteImportReport:
+        if self.read_only:
+            raise RuntimeError("cannot import chunks through a read-only handbook store")
         path = Path(chunks_path)
         chunks = [
             HandbookChunk.model_validate_json(line)
@@ -186,6 +198,8 @@ class SQLiteHandbookStore:
                     datetime.now(UTC).isoformat(),
                 ),
             )
+        with self._connect() as connection:
+            connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
         return SQLiteImportReport(len(chunks), len(stale), str(self.path.resolve()))
 
     def search(
@@ -242,8 +256,13 @@ class SQLiteHandbookStore:
 
 class SQLiteHandbookRetriever:
     def __init__(self, path: Path | str, *, final_k: int = 5) -> None:
-        self.store = SQLiteHandbookStore(path)
+        self.path = Path(path)
+        self.store = SQLiteHandbookStore(path, read_only=True) if self.path.is_file() else None
         self.final_k = final_k
+
+    @property
+    def available(self) -> bool:
+        return self.store is not None
 
     def retrieve(
         self,
@@ -252,6 +271,8 @@ class SQLiteHandbookRetriever:
         model_year: int,
         locale: str,
     ) -> list[RetrievedChunk]:
+        if self.store is None:
+            return []
         return self.store.search(
             query,
             vehicle_model=vehicle_model,

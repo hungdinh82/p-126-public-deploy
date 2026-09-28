@@ -78,9 +78,9 @@ def main() -> None:
     parser.add_argument("--interactive", action="store_true")
     parser.add_argument(
         "--retrieval",
-        choices=("hybrid", "lexical"),
-        default="hybrid",
-        help="Use Google embeddings + Chroma, or the local BM25 fallback",
+        choices=("sqlite", "hybrid", "lexical"),
+        default="sqlite",
+        help="Use SQLite FTS5 by default, or optional Chroma/lexical development modes",
     )
     args = parser.parse_args()
     if not args.text and not args.input and not args.interactive:

@@ -7,7 +7,7 @@ const motionPreference = matchMedia('(prefers-reduced-motion: reduce)');
 const API_BASE = '';
 const sessionId = localStorage.getItem('vivi-session-id') || crypto.randomUUID();
 localStorage.setItem('vivi-session-id', sessionId);
-const state = { phase: 'idle', temp: 23, window: false, music: false, driving: false, reduced: motionPreference.matches, sound: false, busy: false, backendAvailable: false, sttAvailable: false, ttsAvailable: false, llmProvider: '', llmOptions: [], lastCommand: '', manualAnswer: '', manualEvidence: [], progress: 0 };
+const state = { phase: 'idle', temp: 23, window: false, music: false, driving: false, battery: 82, range: 328, doorLocked: false, doorOpen: false, seatHeat: 0, reduced: motionPreference.matches, sound: false, busy: false, backendAvailable: false, vehicleProvider: '', sttAvailable: false, sttProvider: '', ttsAvailable: false, ttsProvider: '', storeAudio: false, storeTranscripts: false, llmProvider: '', llmOptions: [], lastCommand: '', manualAnswer: '', manualEvidence: [], progress: 0 };
 const phaseLabels = { idle: 'ViVi đang ở đây', listening: 'Mình đang nghe bạn', transcribing: 'Mình đang nhận diện lời nói', thinking: 'Để mình xem nhé', validating: 'Đang kiểm tra an toàn', acting: 'Đang chăm sóc không gian của bạn', synthesizing: 'Đang chuẩn bị giọng Mai Chi', speaking: 'Một chút dễ chịu, dành cho bạn', clarify: 'Mình chờ bạn nói thêm', blocked: 'Mình giữ nguyên trạng thái xe' };
 const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 let width = 1, height = 1, tick = 0, previous = 0;
@@ -304,7 +304,7 @@ function resolveCommand(command) {
 }
 function lockControls(locked) {
   document.querySelectorAll('.suggestions button, .stepper button, #window-toggle, #music-toggle, #drive-toggle, #demo-mic, .send-button').forEach(button => { button.disabled = locked; });
-  if (state.vehicleService) $('#drive-toggle').disabled = true;
+  if (state.backendAvailable && state.vehicleProvider !== 'memory') $('#drive-toggle').disabled = true;
   $('#command-form').setAttribute('aria-busy', String(locked));
 }
 async function runLocalCommand(command, voiceDemo = false) {
@@ -374,15 +374,16 @@ async function runBackendCommand(command, turnId = crypto.randomUUID()) {
     let payload = null;
     let streamedSpeech = false;
     let voiceStreamed = false;
-    let spokenText = '';
     let speechQueue = Promise.resolve();
     let speechPlayback = null;
     const handleEvent = (event) => {
       if (event.type === 'error') throw new Error(event.detail || 'Pipeline streaming bị lỗi');
       if (event.type === 'speech' && event.text) {
         streamedSpeech = true;
-        spokenText = `${spokenText} ${event.text}`.trim();
-        setPhase('speaking', spokenText);
+        // Speech events may contain one event per sentence. Keep them for
+        // low-latency audio, but render only the authoritative final response
+        // so a two-sentence answer does not look like two assistant outputs.
+        setPhase('speaking');
         if (state.sound && state.ttsAvailable) {
           speechPlayback ||= createTtsPlayback();
           voiceStreamed = true;
@@ -405,7 +406,6 @@ async function runBackendCommand(command, turnId = crypto.randomUUID()) {
     }
     if (buffer.trim()) handleEvent(JSON.parse(buffer));
     if (!payload) throw new Error('Backend kết thúc luồng trước khi trả kết quả');
-    setPhase('validating', 'Safety gateway đã kiểm tra yêu cầu.');
     if (payload.status === 'confirmation_required' && payload.confirmation) {
       if (voiceStreamed) {
         await speechQueue;
@@ -464,7 +464,7 @@ function stopRecording() {
   if (recorder?.state === 'recording') recorder.stop();
 }
 async function submitRecording(blob, turnId) {
-  lockControls(true); setPhase('transcribing', 'PhoWhisper đang chuyển giọng nói thành văn bản…');
+  lockControls(true); setPhase('transcribing', `${state.sttProvider || 'STT local'} đang chuyển giọng nói thành văn bản…`);
   try {
     const form = new FormData();
     form.append('audio', blob, `vivi-${turnId}.webm`); form.append('session_id', sessionId); form.append('turn_id', turnId);
@@ -480,7 +480,7 @@ async function submitRecording(blob, turnId) {
 }
 async function startRecording() {
   if (!state.backendAvailable) { setPhase('blocked', 'Hãy chạy backend local trước khi dùng microphone.'); return; }
-  if (!state.sttAvailable) { setPhase('blocked', 'PhoWhisper chưa được cài. Xem requirements-ai.txt.'); return; }
+  if (!state.sttAvailable) { setPhase('blocked', 'STT local chưa sẵn sàng. Kiểm tra trang health và hướng dẫn setup runtime.'); return; }
   if (recorder?.state === 'recording') { stopRecording(); return; }
   if (state.busy) return;
   try {
@@ -517,15 +517,22 @@ async function startRecording() {
 async function checkBackend() {
   try {
     const response = await fetch(`${API_BASE}/api/v1/health`); if (!response.ok) throw new Error();
-    const health = await response.json(); state.backendAvailable = true; state.sttAvailable = health.stt.available; state.ttsAvailable = health.tts.available;
+    const health = await response.json(); state.backendAvailable = true; state.vehicleProvider = health.vehicle.provider; state.sttAvailable = health.stt.available; state.sttProvider = health.stt.provider; state.ttsAvailable = health.tts.available; state.ttsProvider = health.tts.provider; state.storeAudio = health.storage.audio; state.storeTranscripts = health.storage.transcripts;
     state.llmOptions = health.llm.options || [];
     const saved = localStorage.getItem('vivi-llm-provider');
-    state.llmProvider = state.llmOptions.some(item => item.provider === saved && item.available) ? saved : health.llm.provider;
+    const defaultProvider = state.llmOptions.find(item => item.provider === health.llm.provider && item.available)?.provider
+      || state.llmOptions.find(item => item.available)?.provider || 'rules';
+    state.llmProvider = state.llmOptions.some(item => item.provider === saved && item.available) ? saved : defaultProvider;
     updateModelStatus();
     $('#backend-status').classList.remove('offline'); $('#backend-status').innerHTML = '<i></i> Local · <span id="backend-model"></span>';
     $('#backend-model').textContent = state.llmProvider;
     $('#runtime-note').innerHTML = `<span class="mini-dot"></span> STT ${health.stt.available ? 'sẵn sàng' : 'chưa cài'} · TTS ${health.tts.available ? 'Mai Chi' : 'chưa cài'} · LLM <span id="runtime-model"></span>`;
     $('#runtime-model').textContent = state.llmProvider;
+    $('#drive-toggle').disabled = state.vehicleProvider !== 'memory';
+    try {
+      const vehicleResponse = await fetch(`${API_BASE}/api/v1/vehicle/state`);
+      if (vehicleResponse.ok) applyBackendState(await vehicleResponse.json());
+    } catch { /* An external simulator may be temporarily offline. */ }
   } catch {
     state.backendAvailable = false; $('#backend-status').classList.add('offline'); $('#backend-status').innerHTML = '<i></i> Local backend offline';
     $('#runtime-note').innerHTML = '<span class="mini-dot"></span> Chế độ prototype · hãy chạy python run.py';
@@ -543,18 +550,43 @@ $('#demo-mic').addEventListener('click', startRecording);
 document.querySelectorAll('[data-temp]').forEach(button => button.addEventListener('click', () => runCommand(`Đặt nhiệt độ ${state.temp + Number(button.dataset.temp)} độ`)));
 $('#window-toggle').addEventListener('click', () => runCommand(state.window ? 'Đóng cửa sổ bên tài' : 'Mở cửa sổ bên tài'));
 $('#music-toggle').addEventListener('click', () => runCommand(state.music ? 'Dừng nhạc' : 'Phát nhạc thư giãn'));
-$('#drive-toggle').addEventListener('click', () => {
-  state.driving = !state.driving;
-  $('#drive-toggle').setAttribute('aria-pressed', String(state.driving));
-  $('#drive-toggle span').textContent = state.driving ? 'Đang lái xe · Demo' : 'Đang đỗ xe';
-  document.body.classList.toggle('driving', state.driving);
+$('#drive-toggle').addEventListener('click', async () => {
+  if (state.busy) return;
+  const driving = !state.driving;
+  if (state.backendAvailable) {
+    if (state.vehicleProvider !== 'memory') {
+      setPhase('blocked', 'Chế độ lái chỉ được đổi bằng fixture của memory simulator.');
+      return;
+    }
+    lockControls(true);
+    try {
+      const response = await fetch(`${API_BASE}/api/v1/demo/vehicle/driving`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: sessionId, driving })
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.detail || 'Không đổi được trạng thái lái');
+      applyBackendState(payload);
+    } catch (error) {
+      setPhase('blocked', error.message);
+      return;
+    } finally {
+      lockControls(false);
+    }
+  } else {
+    state.driving = driving;
+    $('#drive-toggle').setAttribute('aria-pressed', String(state.driving));
+    $('#drive-toggle span').textContent = state.driving ? 'Đang lái xe · Demo' : 'Đang đỗ xe';
+    document.body.classList.toggle('driving', state.driving);
+  }
   setPhase('idle', state.driving ? 'Chuyển động đã dịu lại. Mình đồng hành cùng bạn.' : 'Đã về chế độ đỗ xe. Không gian ViVi được mở rộng.');
 });
 $('#sound-toggle').addEventListener('click', () => {
   state.sound = !state.sound;
   $('#sound-toggle').setAttribute('aria-pressed', String(state.sound));
   $('#sound-toggle span').textContent = `Mai Chi: ${state.sound ? 'bật' : 'tắt'}`;
-  if (state.sound) speak('Mình là ViVi, sẵn sàng đồng hành cùng bạn.'); else { stopPlayback(); if ('speechSynthesis' in window) speechSynthesis.cancel(); }
+  // Enabling sound must not inject a synthetic greeting into the conversation.
+  if (!state.sound) { stopPlayback(); if ('speechSynthesis' in window) speechSynthesis.cancel(); }
 });
 
 const dialog = $('#info-dialog');
@@ -569,7 +601,8 @@ function modelOptionsMarkup() {
     const selected = item.provider === state.llmProvider;
     const label = modelLabels[item.provider] || item.provider;
     const model = item.model || 'Chưa cấu hình';
-    return `<button type="button" class="model-option${selected ? ' selected' : ''}" data-llm-provider="${escapeHtml(item.provider)}" aria-pressed="${selected}" ${item.available ? '' : 'disabled'}><span class="model-option-head"><strong>${escapeHtml(label)}</strong><i></i></span><span class="model-id">${escapeHtml(model)}</span><small>${item.available ? escapeHtml(modelModes[item.provider] || '') : 'Chưa cấu hình trong .env'}</small></button>`;
+    const status = item.available ? (modelModes[item.provider] || '') : (item.detail || 'Chưa cấu hình trong .env');
+    return `<button type="button" class="model-option${selected ? ' selected' : ''}" data-llm-provider="${escapeHtml(item.provider)}" aria-pressed="${selected}" ${item.available ? '' : 'disabled'}><span class="model-option-head"><strong>${escapeHtml(label)}</strong><i></i></span><span class="model-id">${escapeHtml(model)}</span><small>${escapeHtml(status)}</small></button>`;
   }).join('');
 }
 function selectLlmProvider(provider) {
@@ -599,7 +632,7 @@ function openPanel(view) {
     vehicle: `<h2>Không gian của bạn</h2><p>Digital Twin · trạng thái được mô phỏng trong phiên trải nghiệm này.</p><div class="detail-row"><span>Pin còn lại</span><strong>${state.battery}% / ${state.range} km</strong></div><div class="detail-row"><span>Nhiệt độ cài đặt</span><strong>${state.temp}°C</strong></div><div class="detail-row"><span>Cửa sổ bên tài</span><strong>${state.window ? 'Đang mở' : 'Đang đóng'}</strong></div><div class="detail-row"><span>Cửa xe bên tài</span><strong>${state.doorOpen ? 'Đang mở' : state.doorLocked ? 'Đang khóa' : 'Đã đóng, không khóa'}</strong></div><div class="detail-row"><span>Sưởi ghế bên tài</span><strong>Mức ${state.seatHeat}</strong></div><div class="detail-row"><span>Multimedia</span><strong>${state.music ? 'Đang phát (mô phỏng)' : 'Đang dừng'}</strong></div><div class="detail-row"><span>Chế độ</span><strong>${state.driving ? 'Đang lái xe (demo)' : 'Đang đỗ xe'}</strong></div><p class="dialog-note">Chưa kết nối xe thật, cảm biến hoặc dịch vụ VinFast.</p>`,
     journey: '<h2>Mỗi hành trình, một khám phá.</h2><p>Không gian dành cho địa điểm yêu thích, trạm sạc và chỉ đường trong phiên bản tiếp theo.</p><div class="detail-row"><span>Điểm đến</span><strong>Chưa thiết lập</strong></div><div class="detail-row"><span>Dịch vụ bản đồ</span><strong>Chưa kết nối</strong></div><p class="dialog-note">Prototype hiện tập trung vào trải nghiệm trợ lý và các thao tác cabin.</p>',
     manual: manualContent,
-    settings: `<h2>Cấu hình ViVi</h2><p>Chọn cách ViVi suy nghĩ và chuyển động trong không gian của bạn.</p><section class="config-section"><div class="config-heading"><span>MÔ HÌNH HỘI THOẠI</span><strong id="active-model">${escapeHtml(modelLabels[state.llmProvider] || state.llmProvider || 'Chưa kết nối')} · ${escapeHtml(currentModel?.model || '')}</strong></div><div class="model-options">${modelOptionsMarkup()}</div><p class="dialog-note">Lựa chọn được áp dụng từ lượt hội thoại tiếp theo. Model ID và API key vẫn được quản lý an toàn trong .env.</p></section><section class="config-section"><div class="config-heading"><span>TRẢI NGHIỆM</span><strong>Không gian & giọng nói</strong></div><label class="motion-setting"><span><strong>Giảm chuyển động</strong><small>Dừng lơ lửng, quỹ đạo và hiệu ứng sóng</small></span><input id="reduce-motion" type="checkbox" ${state.reduced ? 'checked' : ''}><i></i></label><div class="config-runtime"><div><span>NHẬN DIỆN GIỌNG NÓI</span><strong>${state.sttAvailable ? 'PhoWhisper · local' : 'Chưa sẵn sàng'}</strong></div><div><span>GIỌNG PHẢN HỒI</span><strong>${state.ttsAvailable ? 'VIVI · Mai Chi' : 'Chưa sẵn sàng'}</strong></div></div><p class="dialog-note">Audio và transcript được lưu cục bộ trong thư mục data cho đến khi bạn tự xóa.</p></section>`
+    settings: `<h2>Cấu hình ViVi</h2><p>Chọn cách ViVi suy nghĩ và chuyển động trong không gian của bạn.</p><section class="config-section"><div class="config-heading"><span>MÔ HÌNH HỘI THOẠI</span><strong id="active-model">${escapeHtml(modelLabels[state.llmProvider] || state.llmProvider || 'Chưa kết nối')} · ${escapeHtml(currentModel?.model || '')}</strong></div><div class="model-options">${modelOptionsMarkup()}</div><p class="dialog-note">Lựa chọn được áp dụng từ lượt hội thoại tiếp theo. Model ID và API key vẫn được quản lý an toàn trong .env.</p></section><section class="config-section"><div class="config-heading"><span>TRẢI NGHIỆM</span><strong>Không gian & giọng nói</strong></div><label class="motion-setting"><span><strong>Giảm chuyển động</strong><small>Dừng lơ lửng, quỹ đạo và hiệu ứng sóng</small></span><input id="reduce-motion" type="checkbox" ${state.reduced ? 'checked' : ''}><i></i></label><div class="config-runtime"><div><span>NHẬN DIỆN GIỌNG NÓI</span><strong>${state.sttAvailable ? `${escapeHtml(state.sttProvider)} · local` : 'Chưa sẵn sàng'}</strong></div><div><span>GIỌNG PHẢN HỒI</span><strong>${state.ttsAvailable ? `${escapeHtml(state.ttsProvider)} · local` : 'Trình duyệt/text fallback'}</strong></div></div><p class="dialog-note">Audio: ${state.storeAudio ? 'đang lưu' : 'không lưu'} · transcript: ${state.storeTranscripts ? 'đang lưu' : 'không lưu'}.</p></section>`
   };
   $('#dialog-content').innerHTML = contents[view];
   dialog.classList.toggle('config-dialog', view === 'settings');

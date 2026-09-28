@@ -9,7 +9,7 @@
       "file": "qwen2.5-1.5b-instruct-q4_k_m.gguf",
       "quantization": "Q4_K_M",
       "sha256": "REPLACE_AFTER_DOWNLOAD",
-      "context_tokens": 1024
+      "context_tokens": 2048
     },
     "stt": {
       "runtime": "whisper.cpp",

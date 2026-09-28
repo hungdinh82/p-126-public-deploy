@@ -10,7 +10,9 @@ services:
     env_file:
       - .env
     environment:
+      STT_PROVIDER: "off"
       PHOWHISPER_PRELOAD: "false"
+      TTS_PROVIDER: "off"
       ZEROTTS_PRELOAD: "false"
     volumes:
       - ./data:/app/data

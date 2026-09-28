@@ -12,6 +12,29 @@ from pathlib import Path
 from server.config import Settings
 
 
+class DisabledTTSAdapter:
+    name = "off"
+    device = "disabled"
+    execution_providers: list[str] = []
+
+    @staticmethod
+    def availability() -> tuple[bool, str]:
+        return False, "TTS đã tắt bằng TTS_PROVIDER=off; response text vẫn hoạt động"
+
+    async def preload(self) -> None:
+        return None
+
+    async def synthesize(self, text: str) -> bytes:
+        del text
+        raise RuntimeError("TTS đang tắt; hãy đổi TTS_PROVIDER")
+
+    async def stream(self, text: str):
+        del text
+        if False:
+            yield b""
+        raise RuntimeError("TTS đang tắt; hãy đổi TTS_PROVIDER")
+
+
 class ZeroTTSAdapter:
     name = "zerotts"
 
@@ -186,3 +209,11 @@ class ZeroTTSAdapter:
                 close = getattr(chunks, "close", None)
                 if close is not None:
                     close()
+
+
+def create_tts(config: Settings):
+    if config.tts_provider == "off":
+        return DisabledTTSAdapter()
+    if config.tts_provider == "zerotts":
+        return ZeroTTSAdapter(config)
+    raise ValueError(f"TTS_PROVIDER không hợp lệ: {config.tts_provider}")

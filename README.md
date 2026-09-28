@@ -9,28 +9,53 @@ Prototype giao diện trợ lý ô tô: bầu trời đêm, lõi sáng, hai dả
 
 ## Chạy ViVi local
 
-```sh
-python3.12 -m venv .venv-ai
-mkdir -p /var/tmp/vivi-pip
-TMPDIR=/var/tmp/vivi-pip .venv-ai/bin/python -m pip install 'torch==2.6.0' \
-  --index-url https://download.pytorch.org/whl/cpu
-TMPDIR=/var/tmp/vivi-pip .venv-ai/bin/python -m pip install -r requirements-ai.txt
-cp .env.example .env
-.venv-ai/bin/python run.py
+Baseline chạy ngay không cần tải model, GPU hay API key:
+
+```bash
+bash scripts/setup.sh
+.venv/bin/python run.py
 ```
 
-Cấu hình trên dùng PyTorch CPU để tránh tải bộ CUDA lớn của Torch. ZeroTTS dùng
-`onnxruntime-gpu` độc lập và tự chọn CUDA khi `ZEROTTS_DEVICE=auto`; đặt `cuda` để yêu
-cầu CUDA và báo lỗi ngay nếu provider không hoạt động. Muốn chạy cả PhoWhisper bằng
-NVIDIA, bỏ bước cài Torch CPU và cài thẳng `requirements-ai.txt`; wheel PyTorch 2.6 sẽ
-dùng CUDA 12.4. Luôn đặt `TMPDIR` trên ổ đĩa chính nếu `/tmp` là tmpfs nhỏ, nếu không
-pip có thể báo `No space left on device` dù ổ đĩa vẫn còn trống.
+Mở http://127.0.0.1:8787, sau đó chạy smoke test ở terminal khác:
 
-Mở http://127.0.0.1:8787 (hoặc cổng `VIVI_PORT` trong `.env`). Backend chỉ bind
+```bash
+.venv/bin/python scripts/smoke_runtime.py --provider rules
+```
+
+Xem [setup PC](docs/setup_pc.md) để cài PhoWhisper, ZeroTTS, LLM local hoặc MQTT. Jetson
+Nano dùng hướng dẫn riêng trong [setup Jetson Nano 4 GB](docs/setup_jetson_nano.md), không
+cài wheel CUDA dành cho PC.
+
+Backend chỉ bind
 `127.0.0.1` ở profile PC. ZeroTTS và PhoWhisper chỉ được nạp/warm lúc khởi động khi các
 biến `ZEROTTS_PRELOAD` và `PHOWHISPER_PRELOAD` được bật; nếu tắt, model được nạp ở lượt
 dùng đầu tiên. Lần đầu có thể tải model, các lần sau dùng cache local. Font Google Fonts có
 fallback font hệ thống khi offline.
+
+Mỗi component có thể bật/tắt độc lập trong `.env`; thay đổi env cần restart backend:
+
+| Component | Biến | Lựa chọn |
+| --- | --- | --- |
+| Text input | luôn bật | gửi thẳng transcript tới `/api/v1/turn` |
+| STT | `STT_PROVIDER` | `off`, `phowhisper`, `whisper_cpp` |
+| LLM/router | `LLM_PROVIDER` | `rules`, `local`, `openai`, `google` |
+| TTS | `TTS_PROVIDER` | `off`, `zerotts` |
+| Handbook retrieval | `RAG_RETRIEVAL_MODE` | `sqlite`, `lexical`, `hybrid` |
+| Vehicle | `VIVI_VEHICLE_PROVIDER` | `memory`, `mqtt` |
+
+Profile text-only nhẹ nhất cho dev/test:
+
+```dotenv
+STT_PROVIDER=off
+LLM_PROVIDER=rules
+TTS_PROVIDER=off
+RAG_RETRIEVAL_MODE=sqlite
+VIVI_VEHICLE_PROVIDER=memory
+```
+
+`PHOWHISPER_PRELOAD=false` hoặc `ZEROTTS_PRELOAD=false` không tắt component; chúng
+chỉ chuyển model sang lazy-load ở request đầu tiên. Dùng `*_PROVIDER=off` khi muốn
+chắc chắn model không được nạp trong phiên dev/test.
 
 Model tải từ Hugging Face nằm trong `~/.cache/huggingface/hub/`. Ví dụ PhoWhisper
 medium nằm tại `models--vinai--PhoWhisper-medium`, còn ZeroTTS nằm tại
@@ -114,13 +139,17 @@ dữ liệu nằm trong `data/` cho đến khi người vận hành xóa; thư m
 - `LLM_PROVIDER=openai`: OpenAI Responses API; cấu hình `OPENAI_API_KEY` và `OPENAI_MODEL`.
 - `LLM_PROVIDER=google`: Gemini API; cấu hình `GOOGLE_API_KEY` và `GOOGLE_MODEL`.
 
+Với Google, `GOOGLE_MODEL` phân loại intent/hội thoại; `RAG_GENERATION_MODEL` sinh câu
+trả lời handbook sau retrieval. Structured routing cố định ở temperature 0 để kết quả
+JSON và action ổn định, không dùng temperature như một tham số runtime chung.
+
 OpenAI/Google cần mạng. Chỉ `rules` và `local` đáp ứng runtime offline. Nếu provider được chọn nhưng cấu hình thiếu, server khởi động an toàn bằng `rules` và báo chi tiết ở `/api/v1/health`.
 
-`google` và `rules` đi qua LangGraph thống nhất; `google` dùng Gemini cho phân loại và trả
-lời handbook, còn `rules` dùng bộ định tuyến deterministic nhưng vẫn giữ cùng safety graph.
-`openai` và `local` hiện được giữ qua orchestrator tương thích cho hội thoại/action, chưa
-tham gia nhánh handbook RAG. Sau khi thay đổi model hoặc khóa trong `.env`, cần khởi động
-lại backend. Nếu giao diện báo backend offline thì nó dùng kịch bản demo trong trình duyệt.
+`rules`, `google`, `openai` và `local` đều đi qua LangGraph thống nhất. `rules` dùng bộ định
+tuyến deterministic và câu trả lời handbook extractive; ba provider model dùng structured
+classification, SQLite retrieval và grounded generation với cùng safety graph. Sau khi thay
+đổi model hoặc khóa trong `.env`, cần khởi động lại backend. Nếu giao diện báo backend
+offline thì nó không gửi lệnh vehicle và chỉ hiển thị fallback an toàn.
 
 ## API local
 
@@ -150,8 +179,9 @@ node --check app.js
 - `server/`: orchestration API, provider adapters, safety gateway, storage và vehicle simulator.
 - `tests/`: test contract, safety, idempotency và API.
 
-Pipeline hiện tại: thu âm → PhoWhisper → LangGraph → handbook RAG hoặc safety/action →
-verify → ZeroTTS. Handbook chỉ được đọc sau khi citation hợp lệ; action chỉ được đọc là
+Pipeline đầy đủ: thu âm → STT → LangGraph → handbook RAG hoặc safety/action →
+verify → TTS. Khi STT/TTS tắt, pipeline rút gọn thành text → LangGraph → text.
+Handbook chỉ được đọc sau khi citation hợp lệ; action chỉ được đọc là
 thành công sau khi simulator xác minh trạng thái.
 
 ## Chuẩn bị handbook VF8 2026

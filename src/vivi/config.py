@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     mqtt_api_password: str = ""
     mqtt_timeout_seconds: float = 3.0
 
-    stt_provider: str = "phowhisper"
+    stt_provider: Literal["off", "phowhisper", "whisper_cpp"] = "off"
     phowhisper_model: str = "vinai/PhoWhisper-medium"
     phowhisper_device: str = "auto"
     phowhisper_dtype: str = "auto"
@@ -55,16 +55,16 @@ class Settings(BaseSettings):
     llm_provider: Literal["rules", "openai", "google", "local"] = "rules"
     llm_timeout_seconds: float = 30
     openai_api_key: str = ""
+    openai_base_url: str = "https://api.openai.com/v1"
     openai_model: str = "gpt-4o-mini"
-    model_name: str = "gpt-4o-mini"
-    llm_temperature: float = Field(default=0.0, ge=0.0, le=2.0)
     google_api_key: str = ""
     google_model: str = "gemini-2.5-flash"
     local_llm_base_url: str = "http://127.0.0.1:1234/v1"
     local_llm_api_key: str = "local"
     local_llm_model: str = ""
+    local_llm_max_tokens: int = Field(default=512, ge=64, le=4096)
 
-    tts_provider: str = "zerotts"
+    tts_provider: Literal["off", "zerotts"] = "off"
     zerotts_model: str = "zeroweight-ai/ZeroTTS"
     zerotts_voice: str = "VIVI"
     zerotts_device: str = "auto"
@@ -79,11 +79,13 @@ class Settings(BaseSettings):
     rag_history_db: Path = Path("./data/vivi_rag.sqlite3")
     rag_handbook_db: Path = Path("./data/handbooks/handbook.sqlite3")
     rag_collection_name: str = "vivi_handbook"
+    rag_retrieval_mode: Literal["sqlite", "lexical", "hybrid"] = "sqlite"
     rag_default_vehicle_model: str = "VF8"
     rag_default_model_year: int = 2026
     rag_default_locale: str = "vi_vn"
     rag_retrieval_k: int = Field(default=12, ge=1, le=50)
     rag_final_k: int = Field(default=5, ge=1, le=12)
+    rag_prompt_max_characters: int = Field(default=6000, ge=1000, le=30000)
     rag_max_cosine_distance: float = Field(default=0.62, ge=0, le=2)
     rag_history_turns: int = Field(default=6, ge=0, le=20)
 

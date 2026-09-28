@@ -43,6 +43,17 @@ class VehicleSimulator:
             self._states[session_id] = supplied.model_copy(deep=True)
         return self._states.setdefault(session_id, VehicleState()).model_copy(deep=True)
 
+    def set_driving(self, session_id: str, driving: bool) -> VehicleState:
+        """Set the local demo fixture without trusting browser state in a turn."""
+        with self._lock:
+            state = self._states.setdefault(session_id, VehicleState())
+            if driving and state.door_driver_open:
+                raise ValueError("Không thể chuyển sang chế độ lái khi cửa xe đang mở.")
+            if state.driving != driving:
+                state.driving = driving
+                state.state_version += 1
+            return state.model_copy(deep=True)
+
     def execute_sync(
         self,
         session_id: str,

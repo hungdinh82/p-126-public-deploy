@@ -4,6 +4,8 @@ import json
 import tempfile
 from pathlib import Path
 
+import pytest
+
 from server.schemas import VehicleState as ServerVehicleState
 from server.vehicle import VehicleSimulator
 from src.actions.gateway import GatewayExecution, VehicleActionGateway
@@ -294,6 +296,78 @@ def test_action_runs_through_safety_simulator_and_verification():
         assert output["execution"]["verified"] is True
         assert output["vehicle_state"]["temperature_celsius"] == 25
         assert "đã đặt" in output["tts_text"].lower()
+
+
+@pytest.mark.asyncio
+async def test_relative_temperature_uses_authoritative_state_across_async_turns():
+    with tempfile.TemporaryDirectory() as directory:
+        services = HandbookServices(
+            FakeRetriever(),
+            FakeGenerator(),
+            SQLiteConversationHistory(Path(directory) / "history.sqlite3"),
+            action_gateway=VehicleActionGateway(),
+        )
+        graph = build_graph(services)
+
+        cold = await graph.ainvoke(
+            {"session_id": "climate", "turn_id": "t1", "input_text": "Tôi hơi lạnh"}
+        )
+        warmer = await graph.ainvoke(
+            {
+                "session_id": "climate",
+                "turn_id": "t2",
+                "input_text": "Tăng điều hòa thêm 2 độ",
+            }
+        )
+        absolute = await graph.ainvoke(
+            {
+                "session_id": "climate",
+                "turn_id": "t3",
+                "input_text": "Đặt nhiệt độ thành 26",
+            }
+        )
+
+        assert cold["output"]["vehicle_state"]["temperature_celsius"] == 25
+        assert warmer["output"]["vehicle_state"]["temperature_celsius"] == 27
+        assert absolute["output"]["vehicle_state"]["temperature_celsius"] == 26
+
+
+def test_rules_routes_common_vehicle_question_to_handbook():
+    with tempfile.TemporaryDirectory() as directory:
+        services = HandbookServices(
+            FakeRetriever(),
+            FakeGenerator(),
+            SQLiteConversationHistory(Path(directory) / "history.sqlite3"),
+        )
+        result = build_graph(services).invoke(
+            {"session_id": "qa", "turn_id": "t1", "input_text": "VF8 có ADAS không?"}
+        )
+
+        assert result["output"]["route"] == "handbook"
+        assert result["output"]["status"] == "answered"
+        assert result["output"]["tts_text"] == result["output"]["response_text"]
+
+
+def test_model_failure_falls_back_to_rules_instead_of_default_error():
+    class FailingClassifier(IntentClassifier):
+        def classify(self, input_text: str, history: list[dict]) -> IntentDecision:
+            raise ConnectionError("model endpoint unavailable")
+
+    with tempfile.TemporaryDirectory() as directory:
+        services = HandbookServices(
+            FakeRetriever(),
+            FakeGenerator(),
+            SQLiteConversationHistory(Path(directory) / "history.sqlite3"),
+            classifier=FailingClassifier(),
+            action_gateway=VehicleActionGateway(),
+        )
+        result = build_graph(services).invoke(
+            {"session_id": "fallback", "turn_id": "t1", "input_text": "Tôi hơi lạnh"}
+        )
+
+        assert result["output"]["status"] == "action_verified"
+        assert result["output"]["vehicle_state"]["temperature_celsius"] == 25
+        assert result["output"]["errors"][0]["stage"] == "classify_intent_fallback"
 
 
 def test_idempotent_retry_does_not_restore_stale_supplied_vehicle_state():

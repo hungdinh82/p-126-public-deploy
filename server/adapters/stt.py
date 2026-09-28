@@ -1,9 +1,27 @@
 from __future__ import annotations
 
 import asyncio
+import shutil
 from pathlib import Path
 
 from server.config import Settings
+
+
+class DisabledSTTAdapter:
+    name = "off"
+    device = "disabled"
+    dtype = "disabled"
+
+    @staticmethod
+    def availability() -> tuple[bool, str]:
+        return False, "STT đã tắt bằng STT_PROVIDER=off; text input vẫn hoạt động"
+
+    async def preload(self) -> None:
+        return None
+
+    async def transcribe(self, path: Path) -> str:
+        del path
+        raise RuntimeError("STT đang tắt; hãy dùng text input hoặc đổi STT_PROVIDER")
 
 
 class PhoWhisperAdapter:
@@ -20,9 +38,14 @@ class PhoWhisperAdapter:
         try:
             import torch  # noqa: F401
             import transformers  # noqa: F401
-            return True, "loaded" if self._pipeline is not None else "ready-to-load"
         except ImportError:
             return False, "Cài requirements-ai.txt để dùng PhoWhisper"
+        if shutil.which(self.config.ffmpeg_binary) is None:
+            return False, (
+                f"Không tìm thấy ffmpeg trong PATH (FFMPEG_BINARY={self.config.ffmpeg_binary!r}). "
+                "Ubuntu/Debian: sudo apt install ffmpeg; macOS: brew install ffmpeg"
+            )
+        return True, "loaded" if self._pipeline is not None else "ready-to-load"
 
     def _load(self):
         if self._pipeline is not None:
@@ -79,3 +102,15 @@ class PhoWhisperAdapter:
                 generate_kwargs={"language": self.config.phowhisper_language, "task": "transcribe", "num_beams": 1},
             )
         return str(result.get("text", "")).strip()
+
+
+def create_stt(config: Settings):
+    if config.stt_provider == "off":
+        return DisabledSTTAdapter()
+    if config.stt_provider == "phowhisper":
+        return PhoWhisperAdapter(config)
+    if config.stt_provider == "whisper_cpp":
+        from server.adapters.whisper_cpp import WhisperCppAdapter
+
+        return WhisperCppAdapter(config)
+    raise ValueError(f"STT_PROVIDER không hợp lệ: {config.stt_provider}")

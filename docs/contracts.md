@@ -65,6 +65,17 @@ R2 luôn tạo confirmation gắn `action hash + session + vehicle_id + state_ve
 Approval là single-use. Sai session, replay, expiry, action thay đổi hoặc `state_version`
 thay đổi đều không execute.
 
+## Local demo fixture
+
+`PUT /api/v1/demo/vehicle/driving` chỉ đổi cờ `driving` của memory simulator cho phiên UI:
+
+```json
+{"session_id": "trip-01", "driving": true}
+```
+
+Endpoint trả `409` khi runtime dùng MQTT. Đây không phải vehicle command và không được dùng
+để thay state xe thật; safety gateway vẫn đọc lại state từ adapter trước mỗi action.
+
 ## Streaming
 
 `POST /api/v1/turn/stream` trả NDJSON:

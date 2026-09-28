@@ -181,3 +181,8 @@ class ConfirmationDecisionRequest(BaseModel):
     turn_id: str = Field(min_length=1, max_length=100)
     decision: Literal["approve", "deny"]
     llm_provider: Literal["rules", "openai", "google", "local"] | None = None
+
+
+class DemoDrivingRequest(BaseModel):
+    session_id: str = Field(min_length=1, max_length=100)
+    driving: bool

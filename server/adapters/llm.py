@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import json
-import re
-import unicodedata
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator
 
@@ -10,6 +8,7 @@ import httpx
 
 from server.config import Settings
 from server.schemas import ACTION_JSON_SCHEMA, ActionProposal, VehicleState
+from src.agents.classifier import RulesIntentClassifier
 
 SYSTEM_PROMPT = """Bạn là ViVi, trợ lý AI đồng hành trong xe mô phỏng. Trả lời tự nhiên, ngắn gọn bằng tiếng Việt.
 Chỉ chọn đúng một intent có trong enum của schema; tuyệt đối không phát minh intent mới. Khi tăng hoặc giảm nhiệt độ, luôn dùng climate.set_temperature và điền nhiệt độ mục tiêu tuyệt đối vào value_celsius; không dùng climate.increase_temperature hay climate.decrease_temperature. Với câu hỏi, chào hỏi hoặc trò chuyện không yêu cầu thao tác xe, chọn conversation.respond và viết câu trả lời vào spoken_response. Nếu được hỏi bạn là ai, hãy giới thiệu bạn là ViVi, trợ lý AI trên ô tô; không tự nhận là người hay đang kết nối xe thật.
@@ -17,11 +16,6 @@ Với lệnh xe, chọn intent tương ứng. Không khẳng định thao tác �
 Nếu lệnh xe mơ hồ, phủ định khó hiểu hoặc thiếu tham số quan trọng, chọn conversation.clarify.
 Nhiệt độ hợp lệ 16-30°C. window.set_position dùng position_percent 0-100.
 Điền đủ các trường JSON. arguments luôn gồm value_celsius, position_percent và query; đặt null cho trường không dùng."""
-
-
-def _normalize(text: str) -> str:
-    value = unicodedata.normalize("NFD", text.lower())
-    return "".join(c for c in value if unicodedata.category(c) != "Mn").replace("đ", "d")
 
 
 class LLMAdapter(ABC):
@@ -45,52 +39,20 @@ class RulesAdapter(LLMAdapter):
     name = "rules"
 
     async def propose(self, transcript: str, vehicle: VehicleState) -> ActionProposal:
-        text = _normalize(transcript)
-        if re.search(r"\b(dung|khong)\s+(mo|dong|khoa|tang|giam|bat|tat|phat|ha)\b", text):
-            return ActionProposal(intent="conversation.clarify", needs_clarification=True, clarification_question="Bạn muốn mình thực hiện thao tác nào?", spoken_response="Mình chưa chắc ý bạn. Bạn nói rõ thao tác giúp mình nhé.")
-        if re.search(r"huong dan|manual|cam nang|canh bao|ap suat", text):
-            return ActionProposal(intent="manual.search", arguments={"query": transcript}, spoken_response="Mình sẽ mở phần hướng dẫn phù hợp.")
-        if re.search(r"trang thai|pin|nhien lieu|bao nhieu|may do", text):
-            return ActionProposal(intent="vehicle.get_status", spoken_response="Mình đang kiểm tra trạng thái xe.")
-        if re.search(r"cua so|cua kinh", text):
-            opening = bool(re.search(r"\b(mo|ha)\b", text))
-            closing = bool(re.search(r"\b(dong|len)\b", text))
-            if not opening and not closing:
-                return ActionProposal(intent="conversation.clarify", needs_clarification=True, clarification_question="Bạn muốn mở hay đóng cửa sổ bên tài?", spoken_response="Bạn muốn mở hay đóng cửa sổ bên tài?")
-            return ActionProposal(intent="window.set_position", arguments={"position_percent": 100 if opening else 0}, spoken_response="Mình sẽ điều chỉnh cửa sổ bên tài.")
-        if re.search(r"\b(?:mo|dong|khoa)\s+(?:khoa\s+)?cua\b", text):
-            if re.search(r"mo khoa|khoa cua", text):
-                locked = not bool(re.search(r"mo khoa", text))
-                return ActionProposal(intent="door.set_lock", arguments={"locked": locked}, spoken_response="Mình sẽ điều chỉnh khóa cửa bên tài.")
-            opening = bool(re.search(r"\bmo\b", text))
-            closing = bool(re.search(r"\bdong\b", text))
-            if opening == closing:
-                return ActionProposal(intent="conversation.clarify", needs_clarification=True, clarification_question="Bạn muốn mở hay đóng cửa xe bên tài?")
-            return ActionProposal(intent="door.set_open", arguments={"open": opening}, spoken_response="Mình sẽ điều chỉnh cửa xe bên tài.")
-        if re.search(r"suoi ghe|ghe suoi|lam am ghe", text):
-            level_match = re.search(r"(?:muc|cap)\s*(\d+)", text)
-            if re.search(r"\b(tat|dung)\b", text):
-                level = 0
-            elif level_match:
-                level = int(level_match.group(1))
-            elif re.search(r"\bbat\b", text):
-                level = 1
-            else:
-                return ActionProposal(intent="conversation.clarify", needs_clarification=True, clarification_question="Bạn muốn sưởi ghế mức mấy (0 đến 3)?")
-            return ActionProposal(intent="seat.set_heat_level", arguments={"level": level}, spoken_response=f"Mình sẽ đặt sưởi ghế mức {level}.")
-        if re.search(r"nhac|bai hat|am thanh|play|pause", text):
-            playing = not bool(re.search(r"dung|tat|pause", text))
-            return ActionProposal(intent="media.play" if playing else "media.pause", spoken_response="Mình sẽ cập nhật trạng thái âm nhạc.")
-        if re.search(r"lanh|am hon|nong|nhiet do|dieu hoa|mat hon", text):
-            if re.search(r"\b(bat|tat)\b", text):
-                return ActionProposal(intent="conversation.clarify", needs_clarification=True, clarification_question="Bạn muốn đặt nhiệt độ bao nhiêu?", spoken_response="Bạn muốn đặt nhiệt độ bao nhiêu?")
-            number = re.search(r"(\d+(?:[.,]\d+)?)\s*(?:do|°)", text)
-            amount = float(number.group(1).replace(",", ".")) if number else 2
-            lower = bool(re.search(r"\b(?:giam|ha)\b|\bnong\b|\bmat hon\b", text))
-            relative = bool(re.search(r"\b(?:tang|giam|ha|them|bot)\b", text))
-            value = amount if number and not relative else vehicle.temperature_celsius + (-amount if lower else amount)
-            return ActionProposal(intent="climate.set_temperature", arguments={"value_celsius": value}, spoken_response=f"Mình sẽ đặt nhiệt độ ở {value:g} độ.")
-        return ActionProposal(intent="conversation.clarify", needs_clarification=True, clarification_question="Bạn muốn chỉnh nhiệt độ, cửa kính, cửa xe, sưởi ghế, âm nhạc hay xem trạng thái xe?")
+        decision = RulesIntentClassifier().classify_with_context(
+            transcript,
+            [],
+            vehicle.model_dump(mode="json"),
+        )
+        response = decision.response_text or decision.clarification_question or ""
+        return ActionProposal(
+            intent=decision.intent,
+            arguments=decision.arguments.model_dump(exclude_none=True),
+            needs_clarification=decision.needs_clarification,
+            clarification_question=decision.clarification_question,
+            spoken_response=response,
+            confidence=decision.confidence,
+        )
 
 
 def _prompt(transcript: str, vehicle: VehicleState) -> str:

@@ -5,7 +5,7 @@ from pathlib import Path
 
 from src.rag.generator import ExtractiveHandbookGenerator, validate_grounding
 from src.rag.schemas import HandbookChunk
-from src.rag.sqlite_store import SQLiteHandbookStore
+from src.rag.sqlite_store import SQLiteHandbookRetriever, SQLiteHandbookStore
 
 
 def _chunk(source_id: str, content: str, index: int = 0) -> HandbookChunk:
@@ -80,3 +80,19 @@ def test_offline_extractive_answer_maps_every_claim_to_sqlite_source(tmp_path):
     answer = ExtractiveHandbookGenerator().generate("Kiểm tra lốp thế nào?", chunks, [])
     assert validate_grounding(answer, chunks) == (True, None)
     assert json.loads(answer.model_dump_json())["claims"][0]["source_ids"] == ["source-tire"]
+
+
+def test_runtime_retriever_is_read_only_and_missing_artifact_is_non_destructive(tmp_path):
+    missing = tmp_path / "missing.sqlite3"
+    unavailable = SQLiteHandbookRetriever(missing)
+    assert unavailable.available is False
+    assert not missing.exists()
+    assert unavailable.retrieve("sạc", "VF8", 2026, "vi_vn") == []
+
+    chunks_path = tmp_path / "chunks.jsonl"
+    database = tmp_path / "handbook.sqlite3"
+    _write_chunks(chunks_path, [_chunk("source-tire", "Kiểm tra áp suất lốp khi nguội.")])
+    SQLiteHandbookStore(database).import_jsonl(chunks_path)
+    reader = SQLiteHandbookRetriever(database)
+    assert reader.available is True
+    assert reader.retrieve("áp suất lốp", "VF8", 2026, "vi_vn")[0].source_id == "source-tire"

@@ -75,6 +75,29 @@ async def test_confirmation_has_one_dedicated_endpoint(client):
 
 
 @pytest.mark.asyncio
+async def test_demo_driving_state_reaches_safety_gateway(client):
+    fixture = await client.put(
+        "/api/v1/demo/vehicle/driving",
+        json={"session_id": "api-driving", "driving": True},
+    )
+    assert fixture.status_code == 200
+    assert fixture.json()["driving"] is True
+
+    response = await client.post(
+        "/api/v1/turn",
+        json={
+            "transcript": "Mở cửa sổ bên tài",
+            "session_id": "api-driving",
+            "turn_id": "window-while-driving",
+            "llm_provider": "rules",
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["status"] == "blocked"
+    assert response.json()["vehicle_state"]["window_driver_percent"] == 0
+
+
+@pytest.mark.asyncio
 async def test_stt_deletes_temporary_audio_when_retention_is_disabled(client):
     observed_path: Path | None = None
 

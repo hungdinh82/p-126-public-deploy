@@ -242,6 +242,7 @@ trúc, không được client phụ thuộc cho đến khi có contract test.
 | current | `POST /api/v1/turn/stream` | NDJSON response and safe speech events; WebSocket is deferred until Nano baseline passes. |
 | current | `POST /api/v1/confirmations/{id}` | Approve or deny one pending R2 action. |
 | current | `GET /api/v1/vehicle/state` | Read current simulated state. |
+| current | `PUT /api/v1/demo/vehicle/driving` | Set the per-session driving fixture for the in-memory UI demo only. |
 | planned | `GET /api/v1/handbook/sources/{id}` | Resolve a citation to a local passage. |
 | planned | `GET /api/v1/metrics/summary` | Engineer-only quality and latency summary. |
 | planned | `POST /api/v1/ota/deployments` | Engineer-only simulated OTA rollout. |

@@ -109,11 +109,12 @@ docker run --rm --network host \
   -v "$PWD/models:/workspace/models:ro" vivi-edge:nano-builder \
   models/llama.cpp/build/bin/llama-server \
   --model /workspace/models/qwen/qwen2.5-1.5b-instruct-q4_k_m.gguf \
-  --host 127.0.0.1 --port 8080 --ctx-size 1024 --threads 3
+  --host 127.0.0.1 --port 8080 --ctx-size 2048 --threads 3
 ```
 
-Nếu latency không đạt, dùng `LLM_PROVIDER=rules` cho vehicle commands; LLM local chỉ dùng
-conversation. Không chạy model 3B cùng PhoWhisper/ZeroTTS resident trên Nano 4 GB.
+Nếu latency không đạt, chuyển toàn profile sang `LLM_PROVIDER=rules`; vehicle command vẫn
+qua safety/MQTT và handbook dùng câu trả lời extractive có citation mà không cần Qwen.
+Không chạy model 3B cùng PhoWhisper/ZeroTTS resident trên Nano 4 GB.
 
 ## 5. Handbook
 
@@ -163,6 +164,8 @@ Kiểm tra:
 
 ```bash
 curl http://127.0.0.1:8787/api/v1/health
+docker run --rm --network host vivi-edge:nano \
+  python scripts/smoke_runtime.py --provider local
 ```
 
 ## 7. TTS trên Nano

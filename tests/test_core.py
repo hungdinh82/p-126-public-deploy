@@ -12,7 +12,8 @@ from unittest.mock import AsyncMock, patch
 from fastapi.testclient import TestClient
 
 from server.adapters.llm import RulesAdapter
-from server.adapters.tts import ZeroTTSAdapter
+from server.adapters.stt import DisabledSTTAdapter, PhoWhisperAdapter, create_stt
+from server.adapters.tts import DisabledTTSAdapter, ZeroTTSAdapter, create_tts
 from server.app import app
 from server.config import Settings, settings
 from server.data_store import DataStore
@@ -138,7 +139,8 @@ class RulesTests(unittest.IsolatedAsyncioTestCase):
 
 class TTSTests(unittest.TestCase):
     def test_tts_preload_failure_stops_app_startup(self):
-        with patch.object(settings, "zerotts_preload", True), \
+        with patch.object(settings, "tts_provider", "zerotts"), \
+             patch.object(settings, "zerotts_preload", True), \
              patch("server.app.tts.preload", new_callable=AsyncMock, side_effect=RuntimeError("voice pack invalid")), \
              patch("server.app.stt.preload", new_callable=AsyncMock):
             with self.assertRaisesRegex(RuntimeError, "voice pack invalid"):
@@ -146,7 +148,9 @@ class TTSTests(unittest.TestCase):
                     pass
 
     def test_preload_runs_at_app_startup(self):
-        with patch.object(settings, "zerotts_preload", True), \
+        with patch.object(settings, "tts_provider", "zerotts"), \
+             patch.object(settings, "stt_provider", "phowhisper"), \
+             patch.object(settings, "zerotts_preload", True), \
              patch.object(settings, "phowhisper_preload", True), \
              patch("server.app.tts.preload", new_callable=AsyncMock) as preload, \
              patch("server.app.stt.preload", new_callable=AsyncMock) as stt_preload:
@@ -207,7 +211,31 @@ class TTSTests(unittest.TestCase):
         self.assertEqual(response.content, b"\x00\x00\xff\x7f")
 
 
+class STTTests(unittest.TestCase):
+    def test_stt_can_be_explicitly_disabled_without_affecting_text_flow(self):
+        adapter = create_stt(Settings(stt_provider="off"))
+        self.assertIsInstance(adapter, DisabledSTTAdapter)
+        self.assertEqual(adapter.name, "off")
+        self.assertEqual(adapter.availability()[0], False)
+
+    def test_phowhisper_reports_missing_ffmpeg_before_first_request(self):
+        adapter = PhoWhisperAdapter(Settings(ffmpeg_binary="missing-test-ffmpeg"))
+        with patch("server.adapters.stt.shutil.which", return_value=None), \
+             patch.dict("sys.modules", {"torch": SimpleNamespace(), "transformers": SimpleNamespace()}):
+            available, detail = adapter.availability()
+        self.assertFalse(available)
+        self.assertIn("sudo apt install ffmpeg", detail)
+
+
 class TTSStreamTests(unittest.IsolatedAsyncioTestCase):
+    async def test_tts_can_be_explicitly_disabled(self):
+        adapter = create_tts(Settings(tts_provider="off"))
+        self.assertIsInstance(adapter, DisabledTTSAdapter)
+        self.assertEqual(adapter.name, "off")
+        self.assertEqual(adapter.availability()[0], False)
+        with self.assertRaisesRegex(RuntimeError, "TTS đang tắt"):
+            await adapter.synthesize("Xin chào")
+
     async def test_adapter_streams_model_chunks_as_pcm(self):
         import numpy as np
 
