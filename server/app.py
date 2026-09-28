@@ -11,13 +11,12 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response, StreamingResponse
 
-from .adapters.llm import create_llm
+from src.vivi.config import settings
+
 from .adapters.stt import create_stt
 from .adapters.tts import create_tts
-from .config import settings
 from .data_store import DataStore
 from .langgraph_orchestrator import create_langgraph_orchestrator
-from .orchestrator import Orchestrator
 from .schemas import (
     ConfirmationDecisionRequest,
     DemoDrivingRequest,
@@ -38,15 +37,6 @@ LLM_MODELS = {
     "google": settings.google_model,
     "local": settings.local_llm_model,
 }
-llm_adapters = {}
-llm_errors = {}
-for provider in LLM_MODELS:
-    try:
-        llm_adapters[provider] = create_llm(settings.model_copy(update={"llm_provider": provider}))
-    except Exception as exc:
-        llm_errors[provider] = str(exc)
-llm = llm_adapters.get(settings.llm_provider, llm_adapters["rules"])
-llm_error = llm_errors.get(settings.llm_provider) or (f"LLM_PROVIDER không hợp lệ: {settings.llm_provider}" if settings.llm_provider not in LLM_MODELS else None)
 if settings.vehicle_provider == "mqtt":
     vehicle = MqttVehicleAdapter(
         settings.vehicle_id,
@@ -58,8 +48,7 @@ if settings.vehicle_provider == "mqtt":
     )
 else:
     vehicle = VehicleSimulator()
-legacy_orchestrator = Orchestrator(llm, vehicle, store)
-orchestrator = create_langgraph_orchestrator(legacy_orchestrator, vehicle, store, settings)
+orchestrator = create_langgraph_orchestrator(vehicle, store, settings)
 stt = create_stt(settings)
 tts = create_tts(settings)
 
@@ -90,8 +79,8 @@ async def health():
     tts_ok, tts_detail = tts.availability()
     llm_options = []
     for provider, model in LLM_MODELS.items():
-        available = provider in llm_adapters
-        detail = llm_errors.get(provider)
+        available = provider in orchestrator.graph_providers
+        detail = orchestrator.provider_errors.get(provider)
         if provider == "local" and available:
             headers = (
                 {"Authorization": f"Bearer {settings.local_llm_api_key}"}
@@ -120,7 +109,7 @@ async def health():
         (
             item["provider"]
             for item in llm_options
-            if item["provider"] == llm.name and item["available"]
+            if item["provider"] == orchestrator.default_provider and item["available"]
         ),
         "rules",
     )
@@ -141,8 +130,8 @@ async def health():
         },
         "llm": {
             "provider": active_provider,
-            "configured": llm_error is None,
-            "detail": llm_error,
+            "configured": settings.llm_provider in orchestrator.graph_providers,
+            "detail": orchestrator.provider_errors.get(settings.llm_provider),
             "options": llm_options,
         },
         "stt": {
@@ -199,12 +188,14 @@ async def turn(request: TurnRequest):
             status_code=409,
             detail="Dùng POST /api/v1/confirmations/{id} để xử lý xác nhận.",
         )
-    selected = request.llm_provider or llm.name
-    adapter = llm_adapters.get(selected)
-    if adapter is None:
-        raise HTTPException(status_code=400, detail=llm_errors.get(selected, "LLM provider không khả dụng"))
+    selected = request.llm_provider or orchestrator.default_provider
+    if selected not in orchestrator.graph_providers:
+        raise HTTPException(
+            status_code=400,
+            detail=orchestrator.provider_errors.get(selected, "LLM provider không khả dụng"),
+        )
     try:
-        return await orchestrator.run(request, llm=adapter)
+        return await orchestrator.run(request, provider=selected)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Không xử lý được lượt hội thoại: {exc}") from exc
 
@@ -216,14 +207,16 @@ async def turn_stream(request: TurnRequest):
             status_code=409,
             detail="Dùng POST /api/v1/confirmations/{id} để xử lý xác nhận.",
         )
-    selected = request.llm_provider or llm.name
-    adapter = llm_adapters.get(selected)
-    if adapter is None:
-        raise HTTPException(status_code=400, detail=llm_errors.get(selected, "LLM provider không khả dụng"))
+    selected = request.llm_provider or orchestrator.default_provider
+    if selected not in orchestrator.graph_providers:
+        raise HTTPException(
+            status_code=400,
+            detail=orchestrator.provider_errors.get(selected, "LLM provider không khả dụng"),
+        )
 
     async def events():
         try:
-            async for event in orchestrator.run_stream(request, llm=adapter):
+            async for event in orchestrator.run_stream(request, provider=selected):
                 yield json.dumps(event, ensure_ascii=False) + "\n"
         except Exception as exc:
             yield json.dumps({"type": "error", "detail": f"Không xử lý được lượt hội thoại: {exc}"}, ensure_ascii=False) + "\n"
@@ -233,10 +226,12 @@ async def turn_stream(request: TurnRequest):
 
 @app.post("/api/v1/confirmations/{confirmation_id}", response_model=TurnResponse)
 async def decide_confirmation(confirmation_id: str, request: ConfirmationDecisionRequest):
-    selected = request.llm_provider or llm.name
-    adapter = llm_adapters.get(selected)
-    if adapter is None:
-        raise HTTPException(status_code=400, detail=llm_errors.get(selected, "LLM provider không khả dụng"))
+    selected = request.llm_provider or orchestrator.default_provider
+    if selected not in orchestrator.graph_providers:
+        raise HTTPException(
+            status_code=400,
+            detail=orchestrator.provider_errors.get(selected, "LLM provider không khả dụng"),
+        )
     turn_request = TurnRequest(
         transcript="Xác nhận" if request.decision == "approve" else "Hủy",
         session_id=request.session_id,
@@ -246,7 +241,7 @@ async def decide_confirmation(confirmation_id: str, request: ConfirmationDecisio
         llm_provider=request.llm_provider,
     )
     try:
-        return await orchestrator.run(turn_request, llm=adapter)
+        return await orchestrator.run(turn_request, provider=selected)
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Không xử lý được xác nhận: {exc}") from exc
 

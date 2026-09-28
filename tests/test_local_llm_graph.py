@@ -4,18 +4,16 @@ import json
 
 import httpx
 
-from server.adapters.llm import RulesAdapter
 from server.data_store import DataStore
 from server.langgraph_orchestrator import create_langgraph_orchestrator
-from server.orchestrator import Orchestrator
 from server.vehicle import VehicleSimulator
 from src.agents.classifier import StructuredAPIIntentClassifier
 from src.agents.graph import build_graph
-from src.config import Settings
 from src.history.sqlite import SQLiteConversationHistory
 from src.rag.generator import StructuredAPIHandbookGenerator
 from src.rag.runtime import HandbookServices
 from src.rag.schemas import RetrievedChunk
+from src.vivi.config import Settings
 from src.vivi.structured_llm import StructuredChatClient
 
 
@@ -122,8 +120,6 @@ def test_configured_local_provider_is_registered_in_canonical_graph(tmp_path):
     )
     vehicle = VehicleSimulator()
     store = DataStore(config)
-    fallback = Orchestrator(RulesAdapter(), vehicle, store)
-
-    orchestrator = create_langgraph_orchestrator(fallback, vehicle, store, config)
+    orchestrator = create_langgraph_orchestrator(vehicle, store, config)
 
     assert orchestrator.graph_providers == {"rules", "local"}

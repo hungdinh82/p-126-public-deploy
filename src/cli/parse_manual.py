@@ -3,9 +3,9 @@ from __future__ import annotations
 import argparse
 import json
 
-from src.config import get_settings
 from src.ingestion.crawler import CrawlTarget
 from src.ingestion.parser import HandbookParser
+from src.vivi.config import get_settings
 
 
 def main() -> None:

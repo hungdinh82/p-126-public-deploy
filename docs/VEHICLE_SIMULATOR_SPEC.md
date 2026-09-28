@@ -14,10 +14,13 @@ Tạo một service mô phỏng xe chạy độc lập với FastAPI ViVi. Servi
 
 Một lượt điều khiển chỉ được xem là **verified** khi backend nhận đúng acknowledgement của lệnh và đọc được trạng thái thực tế khớp giá trị yêu cầu. Việc publish MQTT thành công hoặc chỉ nhận acknowledgement `applied` chưa đủ để báo thành công.
 
-## 2. Hiện trạng trước triển khai và khoảng cách
+## 2. Hiện trạng sau triển khai
 
-- `server/vehicle.py` đang giữ state theo `session_id` trong RAM và trả kết quả ngay trong cùng process. `turn_id` được dùng để chống lặp, nhưng không có broker, acknowledgement, expiry, lỗi mô phỏng hoặc phục hồi sau restart.
-- `server/orchestrator.py` gọi trực tiếp class trên. `server/schemas.py` chỉ có HVAC, cửa sổ bên tài, media và trạng thái cơ bản; chưa có cửa xe, ghế hoặc state version.
+- `server/vehicle.py` là adapter in-memory dành cho development/test; `server/vehicle_mqtt.py`
+  kết nối simulator độc lập qua broker, acknowledgement và state snapshot.
+- `server/langgraph_orchestrator.py` là facade runtime duy nhất. Action luôn đi qua
+  `VehicleActionGateway`, safety policy, confirmation và bước verify; không còn
+  orchestrator riêng cho vehicle memory.
 - Khi MQTT được bật, frontend không cung cấp `vehicle_state`; backend lấy state từ simulator trước khi quyết định action. Trường này vẫn tồn tại để tương thích với chế độ memory.
 - Khi backend offline, frontend không tự đổi state cabin hoặc báo thao tác đã thành công.
 - PRD yêu cầu command có correlation ID, expiry và idempotency key; kết quả phải được xác minh bằng acknowledgement phù hợp và state đọc lại.

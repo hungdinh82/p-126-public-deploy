@@ -1,7 +1,7 @@
 # Setup trên PC
 
 PC là môi trường development, ingestion và benchmark đầy đủ. Runtime công khai duy nhất là
-`src.vivi.api.app:app`; không chạy `src.main` hoặc `server.app` trực tiếp.
+`src.vivi.api.app:app`; không chạy module implementation `server.app` trực tiếp.
 
 ## 1. Nhận code và chạy baseline
 

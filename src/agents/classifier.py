@@ -9,7 +9,7 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 from src.agents.contracts import IntentDecision
-from src.config import Settings
+from src.vivi.config import Settings
 from src.vivi.structured_llm import StructuredChatClient, compact_history
 
 CLASSIFIER_INSTRUCTION = """Bạn là bộ định tuyến cho trợ lý ô tô ViVi.

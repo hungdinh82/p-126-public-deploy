@@ -4,7 +4,7 @@ import asyncio
 import shutil
 from pathlib import Path
 
-from server.config import Settings
+from src.vivi.config import Settings
 
 
 class DisabledSTTAdapter:

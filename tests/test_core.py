@@ -11,18 +11,20 @@ from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
 
-from server.adapters.llm import RulesAdapter
 from server.adapters.stt import DisabledSTTAdapter, PhoWhisperAdapter, create_stt
 from server.adapters.tts import DisabledTTSAdapter, ZeroTTSAdapter, create_tts
 from server.app import app
-from server.config import Settings, settings
 from server.data_store import DataStore
-from server.langgraph_orchestrator import LangGraphOrchestrator
-from server.orchestrator import Orchestrator
+from server.langgraph_orchestrator import (
+    LangGraphOrchestrator,
+    create_langgraph_orchestrator,
+)
 from server.safety import validate
 from server.schemas import ActionProposal, TurnRequest, VehicleState
 from server.vehicle import VehicleSimulator
 from src.actions.gateway import VehicleActionGateway
+from src.agents.classifier import RulesIntentClassifier
+from src.vivi.config import Settings, settings
 
 
 class SafetyTests(unittest.TestCase):
@@ -76,40 +78,39 @@ class SafetyTests(unittest.TestCase):
 
 
 class RulesTests(unittest.IsolatedAsyncioTestCase):
-    async def test_open_ended_reply_bypasses_vehicle_simulator(self):
-        class ChatAdapter(RulesAdapter):
-            async def propose(self, transcript, vehicle):
-                return ActionProposal(intent="conversation.respond", spoken_response="Mình là ViVi, trợ lý AI trên ô tô.")
+    def setUp(self):
+        self.rules = RulesIntentClassifier()
 
-        with tempfile.TemporaryDirectory() as directory:
-            config = Settings(data_dir=Path(directory))
-            vehicle = VehicleSimulator()
-            orchestrator = Orchestrator(ChatAdapter(), vehicle, DataStore(config))
-            response = await orchestrator.run(TurnRequest(transcript="Bạn là ai", session_id="chat", turn_id="chat-1"))
-            self.assertEqual(response.message, "Mình là ViVi, trợ lý AI trên ô tô.")
-            self.assertEqual(response.action.intent, "conversation.respond")
-            self.assertEqual(response.status, "verified")
-            self.assertEqual(vehicle._executed, {})
+    def classify(self, text: str, state: VehicleState | None = None):
+        return self.rules.classify_with_context(
+            text,
+            [],
+            (state or VehicleState()).model_dump(mode="json"),
+        )
+
+    async def test_open_ended_reply_is_conversation(self):
+        result = self.classify("Bạn là ai")
+        self.assertEqual(result.intent, "conversation.respond")
+        self.assertIn("ViVi", result.response_text)
 
     async def test_cold_increases_temperature(self):
-        result = await RulesAdapter().propose("Tôi hơi lạnh", VehicleState(temperature_celsius=23))
+        result = self.classify("Tôi hơi lạnh", VehicleState(temperature_celsius=23))
         self.assertEqual(result.intent, "climate.set_temperature")
-        self.assertEqual(result.arguments["value_celsius"], 25)
+        self.assertEqual(result.arguments.value_celsius, 25)
 
     async def test_word_hai_is_not_mistaken_for_lower_command(self):
-        result = await RulesAdapter().propose(
+        result = self.classify(
             "Tôi hơi lạnh, tăng nhiệt độ thêm hai độ",
             VehicleState(temperature_celsius=23),
         )
         self.assertEqual(result.intent, "climate.set_temperature")
-        self.assertEqual(result.arguments["value_celsius"], 25)
+        self.assertEqual(result.arguments.value_celsius, 25)
 
     async def test_negation_clarifies(self):
-        result = await RulesAdapter().propose("Đừng mở cửa sổ", VehicleState())
+        result = self.classify("Đừng mở cửa sổ", VehicleState())
         self.assertEqual(result.intent, "conversation.clarify")
 
     async def test_door_and_seat_intents(self):
-        rules = RulesAdapter()
         state = VehicleState()
         cases = (
             ("Mở cửa xe bên tài", "door.set_open", {"open": True}),
@@ -121,15 +122,20 @@ class RulesTests(unittest.IsolatedAsyncioTestCase):
         )
         for text, intent, arguments in cases:
             with self.subTest(text=text):
-                proposal = await rules.propose(text, state)
-                self.assertEqual((proposal.intent, proposal.arguments), (intent, arguments))
-        unrelated = await rules.propose("Nhiệt độ của xe 25 độ", state)
+                proposal = self.classify(text, state)
+                self.assertEqual(
+                    (proposal.intent, proposal.arguments.model_dump(exclude_none=True)),
+                    (intent, arguments),
+                )
+        unrelated = self.classify("Nhiệt độ của xe 25 độ", state)
         self.assertEqual(unrelated.intent, "climate.set_temperature")
 
     async def test_idempotent_turn(self):
         with tempfile.TemporaryDirectory() as directory:
             config = Settings(data_dir=Path(directory))
-            orchestrator = Orchestrator(RulesAdapter(), VehicleSimulator(), DataStore(config))
+            orchestrator = create_langgraph_orchestrator(
+                VehicleSimulator(), DataStore(config), config
+            )
             request = TurnRequest(transcript="Tăng nhiệt độ 1 độ", session_id="s1", turn_id="t1")
             first = await orchestrator.run(request)
             second = await orchestrator.run(request)
@@ -262,26 +268,38 @@ class APITests(unittest.TestCase):
         self.assertTrue(next(item for item in options if item["provider"] == "rules")["available"])
 
     def test_turn_uses_selected_provider_without_changing_default(self):
-        class SelectedAdapter(RulesAdapter):
-            name = "local"
-
-            async def propose(self, transcript, vehicle):
-                return ActionProposal(intent="conversation.respond", spoken_response="Mình là ViVi local.")
+        class LocalGraph:
+            async def ainvoke(self, state):
+                return {"output": {
+                    "session_id": state["session_id"],
+                    "turn_id": state["turn_id"],
+                    "route": "conversation",
+                    "intent": "conversation.respond",
+                    "status": "answered",
+                    "response_text": "Mình là ViVi local.",
+                    "tts_text": "Mình là ViVi local.",
+                }}
 
         with tempfile.TemporaryDirectory() as directory:
             config = Settings(data_dir=Path(directory))
-            test_orchestrator = Orchestrator(RulesAdapter(), VehicleSimulator(), DataStore(config))
-            with patch("server.app.orchestrator", test_orchestrator), patch.dict("server.app.llm_adapters", {"local": SelectedAdapter()}):
+            vehicle = VehicleSimulator()
+            test_orchestrator = LangGraphOrchestrator(
+                {"local": LocalGraph()},
+                VehicleActionGateway(vehicle=vehicle),
+                DataStore(config),
+                default_provider="rules",
+            )
+            with patch("server.app.orchestrator", test_orchestrator):
                 response = TestClient(app).post("/api/v1/turn", json={
                     "transcript": "Bạn là ai", "session_id": "model-session", "turn_id": "model-1", "llm_provider": "local",
                 })
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()["provider"], "local")
+        self.assertEqual(response.json()["provider"], "langgraph/local")
         self.assertEqual(response.json()["message"], "Mình là ViVi local.")
-        self.assertEqual(test_orchestrator.llm.name, "rules")
+        self.assertEqual(test_orchestrator.default_provider, "rules")
 
     def test_unavailable_provider_is_rejected(self):
-        with patch.dict("server.app.llm_adapters", clear=True):
+        with patch.dict("server.app.orchestrator.graphs", {}, clear=True):
             response = TestClient(app).post("/api/v1/turn", json={
                 "transcript": "Bạn là ai", "session_id": "model-session", "turn_id": "model-2", "llm_provider": "local",
             })
@@ -290,7 +308,9 @@ class APITests(unittest.TestCase):
     def test_rule_turn(self):
         with tempfile.TemporaryDirectory() as directory:
             config = Settings(data_dir=Path(directory))
-            test_orchestrator = Orchestrator(RulesAdapter(), VehicleSimulator(), DataStore(config))
+            test_orchestrator = create_langgraph_orchestrator(
+                VehicleSimulator(), DataStore(config), config
+            )
             with patch("server.app.orchestrator", test_orchestrator):
                 response = TestClient(app).post("/api/v1/turn", json={
                     "transcript": "Đặt nhiệt độ 25 độ",
@@ -304,17 +324,27 @@ class APITests(unittest.TestCase):
         self.assertEqual(payload["vehicle_state"]["temperature_celsius"], 25)
 
     def test_stream_route_returns_speech_then_final_ndjson(self):
-        class StreamingAdapter(RulesAdapter):
-            name = "local"
-
-            async def stream_json(self, transcript, vehicle):
-                yield '{"intent":"conversation.respond","spoken_response":"Xin chào. Mình là ViVi.",'
-                yield '"arguments":{},"needs_clarification":false,"clarification_question":null}'
+        class LocalGraph:
+            async def ainvoke(self, state):
+                return {"output": {
+                    "session_id": state["session_id"],
+                    "turn_id": state["turn_id"],
+                    "route": "conversation",
+                    "intent": "conversation.respond",
+                    "status": "answered",
+                    "response_text": "Xin chào. Mình là ViVi.",
+                    "tts_text": "Xin chào. Mình là ViVi.",
+                }}
 
         with tempfile.TemporaryDirectory() as directory:
             config = Settings(data_dir=Path(directory))
-            test_orchestrator = Orchestrator(RulesAdapter(), VehicleSimulator(), DataStore(config))
-            with patch("server.app.orchestrator", test_orchestrator), patch.dict("server.app.llm_adapters", {"local": StreamingAdapter()}):
+            vehicle = VehicleSimulator()
+            test_orchestrator = LangGraphOrchestrator(
+                {"local": LocalGraph()},
+                VehicleActionGateway(vehicle=vehicle),
+                DataStore(config),
+            )
+            with patch("server.app.orchestrator", test_orchestrator):
                 response = TestClient(app).post("/api/v1/turn/stream", json={
                     "transcript": "Bạn là ai", "session_id": "stream-api", "turn_id": "stream-api-1", "llm_provider": "local",
                 })
@@ -328,21 +358,26 @@ class APITests(unittest.TestCase):
 
 class TurnStreamingTests(unittest.IsolatedAsyncioTestCase):
     async def test_conversation_speech_arrives_before_final_response(self):
-        class StreamingChat(RulesAdapter):
-            name = "stream-test"
-
-            async def stream_json(self, transcript, vehicle):
-                chunks = [
-                    '{"intent":"conversation.respond","spoken_response":"Xin chào bạn. ',
-                    'Mình là ViVi.","arguments":{},"needs_clarification":false,',
-                    '"clarification_question":null}',
-                ]
-                for chunk in chunks:
-                    yield chunk
+        class ChatGraph:
+            async def ainvoke(self, state):
+                return {"output": {
+                    "session_id": state["session_id"],
+                    "turn_id": state["turn_id"],
+                    "route": "conversation",
+                    "intent": "conversation.respond",
+                    "status": "answered",
+                    "response_text": "Xin chào bạn. Mình là ViVi.",
+                    "tts_text": "Xin chào bạn. Mình là ViVi.",
+                }}
 
         with tempfile.TemporaryDirectory() as directory:
             config = Settings(data_dir=Path(directory))
-            orchestrator = Orchestrator(StreamingChat(), VehicleSimulator(), DataStore(config))
+            vehicle = VehicleSimulator()
+            orchestrator = LangGraphOrchestrator(
+                {"rules": ChatGraph()},
+                VehicleActionGateway(vehicle=vehicle),
+                DataStore(config),
+            )
             request = TurnRequest(transcript="Bạn là ai", session_id="stream", turn_id="stream-chat")
             events = [event async for event in orchestrator.run_stream(request)]
 
@@ -351,22 +386,19 @@ class TurnStreamingTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(events[-1]["type"], "final")
         self.assertTrue(events[-1]["streamed_speech"])
 
-    async def test_vehicle_action_is_not_spoken_before_verification(self):
-        class StreamingAction(RulesAdapter):
-            async def stream_json(self, transcript, vehicle):
-                yield '{"intent":"window.set_position","spoken_response":"Đang mở cửa sổ.",'
-                yield '"arguments":{"position_percent":100},"needs_clarification":false,"clarification_question":null}'
-
+    async def test_vehicle_action_stream_uses_safety_result(self):
         with tempfile.TemporaryDirectory() as directory:
             config = Settings(data_dir=Path(directory))
-            orchestrator = Orchestrator(StreamingAction(), VehicleSimulator(), DataStore(config))
+            orchestrator = create_langgraph_orchestrator(
+                VehicleSimulator(), DataStore(config), config
+            )
             request = TurnRequest(transcript="Mở cửa sổ", session_id="stream", turn_id="stream-action")
             events = [event async for event in orchestrator.run_stream(request)]
 
-        self.assertEqual([event["type"] for event in events], ["final"])
-        self.assertFalse(events[0]["streamed_speech"])
-        self.assertEqual(events[0]["response"]["status"], "confirmation_required")
-        self.assertEqual(events[0]["response"]["vehicle_state"]["window_driver_percent"], 0)
+        self.assertEqual(events[-1]["type"], "final")
+        self.assertTrue(events[-1]["streamed_speech"])
+        self.assertEqual(events[-1]["response"]["status"], "confirmation_required")
+        self.assertEqual(events[-1]["response"]["vehicle_state"]["window_driver_percent"], 0)
 
 
 class IntegratedLangGraphVoiceTests(unittest.IsolatedAsyncioTestCase):
@@ -397,14 +429,13 @@ class IntegratedLangGraphVoiceTests(unittest.IsolatedAsyncioTestCase):
             config = Settings(data_dir=Path(directory))
             vehicle = VehicleSimulator()
             store = DataStore(config)
-            fallback = Orchestrator(RulesAdapter(), vehicle, store)
             pipeline = LangGraphOrchestrator(
-                {"rules": FakeGraph()}, VehicleActionGateway(vehicle=vehicle), store, fallback
+                {"rules": FakeGraph()}, VehicleActionGateway(vehicle=vehicle), store
             )
             request = TurnRequest(
                 transcript="Sạc AC thế nào?", session_id="integrated", turn_id="t1"
             )
-            events = [event async for event in pipeline.run_stream(request, llm=RulesAdapter())]
+            events = [event async for event in pipeline.run_stream(request, provider="rules")]
 
         self.assertEqual([event["type"] for event in events], ["speech", "final"])
         response = events[-1]["response"]

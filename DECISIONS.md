@@ -18,7 +18,9 @@ Tài liệu này ghi lại “vì sao” của các lựa chọn quan trọng. M
 - **Trạng thái:** Accepted
 - **Ngày:** 2026-09-22
 - **Bối cảnh:** LLM chưa được chọn; PhoWhisper và zeroTTS có thể thay đổi cách triển khai.
-- **Quyết định:** Định nghĩa interface riêng cho STT, LLM và TTS. Orchestrator chỉ phụ thuộc interface, không phụ thuộc SDK cụ thể.
+- **Quyết định:** Định nghĩa interface riêng cho STT và TTS; các LLM provider nằm sau
+  interface intent classifier/handbook generator. LangGraph chỉ phụ thuộc các service
+  contract này, không phụ thuộc SDK cụ thể.
 - **Hệ quả:** Có thêm lớp abstraction và contract test, nhưng có thể benchmark/đổi model mà không sửa luồng nghiệp vụ.
 
 ## ADR-003 — Dùng PhoWhisper medium trên laptop local
@@ -109,19 +111,25 @@ Tài liệu này ghi lại “vì sao” của các lựa chọn quan trọng. M
 
 ## ADR-013 — Streaming LLM sang voice theo mệnh đề và giữ safety barrier
 
-- **Trạng thái:** Accepted
+- **Trạng thái:** Superseded bởi ADR-014
 - **Ngày:** 2026-09-23
 - **Bối cảnh:** Luồng cũ chỉ stream nội bộ ZeroTTS nhưng đợi LLM trả xong toàn bộ JSON, tạo thêm 1,5–4,5 giây trước khi bắt đầu tổng hợp giọng.
 - **Quyết định:** Provider phát structured JSON theo luồng. Khi intent đã xác định là `conversation.respond`, backend tách `spoken_response` tại ranh giới mệnh đề và chuyển ngay cho hàng đợi ZeroTTS. Mọi intent điều khiển xe tiếp tục chờ đủ JSON, safety validation và vehicle acknowledgement trước khi phát phản hồi.
-- **Hệ quả:** Hội thoại dài bắt đầu nói sớm hơn mà không đọc trước một tuyên bố điều khiển chưa được xác minh. Giọng được chia theo mệnh đề thay vì token để giữ ngữ điệu và tránh các lần gọi TTS quá nhỏ.
+- **Hệ quả:** Cách stream trực tiếp từ JSON provider đã bị bỏ khi hợp nhất mọi provider vào
+  LangGraph. Runtime hiện chỉ phát các đoạn TTS sau khi graph tạo `AssistantOutput` hợp lệ;
+  giọng vẫn được chia theo câu/mệnh đề để tránh các lần gọi TTS quá nhỏ.
 
 ## ADR-014 — LangGraph là orchestration path chính của voice pipeline
 
 - **Trạng thái:** Accepted
 - **Ngày:** 2026-09-25
 - **Bối cảnh:** Voice pipeline trong `server/` và handbook/action graph trong `src/` từng có hai bước phân loại và hai response contract riêng.
-- **Quyết định:** Giữ `/api/v1/turn` và `/turn/stream` làm contract của UI, nhưng Google/rules được xử lý bởi một LangGraph duy nhất. Facade backend ánh xạ `AssistantOutput` sang `TurnResponse`. Chỉ stream speech sau khi handbook đã qua citation validation hoặc action đã qua safety/verify.
-- **Hệ quả:** STT, RAG, action, confirmation và TTS dùng chung `session_id`/`turn_id`; OpenAI/local tạm dùng legacy provider orchestrator cho đến khi có adapter graph tương ứng.
+- **Quyết định:** Giữ `/api/v1/turn` và `/turn/stream` làm contract của UI; `rules`,
+  Google, OpenAI và local OpenAI-compatible đều chạy qua một LangGraph. Facade backend
+  ánh xạ `AssistantOutput` sang `TurnResponse`. Chỉ stream speech sau khi handbook đã qua
+  citation validation hoặc action đã qua safety/verify.
+- **Hệ quả:** STT, RAG, action, confirmation và TTS dùng chung `session_id`/`turn_id`.
+  Runtime không còn legacy provider orchestrator hay bộ rules thứ hai.
 
 ## Các quyết định còn chờ
 

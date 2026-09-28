@@ -1,21 +1,32 @@
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
+from tempfile import TemporaryDirectory
 
-from server.adapters.llm import RulesAdapter
-from server.config import Settings
 from server.confirmations import ConfirmationStore
 from server.data_store import DataStore
-from server.orchestrator import Orchestrator
+from server.langgraph_orchestrator import create_langgraph_orchestrator
 from server.schemas import TurnRequest, VehicleState
 from server.vehicle import VehicleSimulator
+from src.vivi.config import Settings
 
 
 class ConfirmationTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
+        self.temp = TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        root = Path(self.temp.name)
         self.vehicle = VehicleSimulator()
-        self.orchestrator = Orchestrator(
-            RulesAdapter(), self.vehicle, DataStore(Settings(store_transcripts=False))
+        config = Settings(
+            llm_provider="rules",
+            data_dir=root / "data",
+            rag_handbook_db=root / "handbook.sqlite3",
+            rag_history_db=root / "history.sqlite3",
+            store_transcripts=False,
+        )
+        self.orchestrator = create_langgraph_orchestrator(
+            self.vehicle, DataStore(config), config
         )
         self.turn_number = 0
 
@@ -57,7 +68,7 @@ class ConfirmationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(denied.status, "denied")
         self.assertFalse(self.vehicle.state_for("s1").door_driver_locked)
 
-        self.orchestrator.confirmations = ConfirmationStore(ttl_seconds=0)
+        self.orchestrator.gateway.confirmations = ConfirmationStore(ttl_seconds=0)
         expired_quote = await self.turn("Khóa cửa xe")
         expired = await self.turn(
             "Xác nhận", expired_quote.confirmation.confirmation_id, "approve"

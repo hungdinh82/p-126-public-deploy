@@ -5,8 +5,8 @@ import json
 import time
 from typing import Protocol
 
-from src.config import Settings
 from src.rag.schemas import GroundedAnswer, RetrievedChunk
+from src.vivi.config import Settings
 from src.vivi.structured_llm import StructuredChatClient, compact_history
 
 SYSTEM_INSTRUCTION = """Bạn là bộ trả lời cẩm nang kỹ thuật cho xe VinFast.

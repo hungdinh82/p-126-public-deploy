@@ -6,7 +6,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from server.config import Settings
+from src.vivi.config import Settings
 
 
 class WhisperCppAdapter:

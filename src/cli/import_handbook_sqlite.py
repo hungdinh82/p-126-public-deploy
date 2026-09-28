@@ -4,9 +4,9 @@ import argparse
 import json
 from pathlib import Path
 
-from src.config import get_settings
 from src.ingestion.crawler import CrawlTarget
 from src.rag.sqlite_store import SQLiteHandbookStore
+from src.vivi.config import get_settings
 
 
 def main() -> None:

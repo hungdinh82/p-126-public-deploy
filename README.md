@@ -1,7 +1,7 @@
 # ViVi Space Concept
 
-> Runtime chuẩn sau khi hợp nhất là `src.vivi.api.app:app`. `src.main` chỉ còn shim tương
-> thích; không còn backend `/assist` thứ hai. Xem [contract runtime](docs/contracts.md),
+> Runtime chuẩn sau khi hợp nhất là `src.vivi.api.app:app`; không còn backend `/assist`
+> hay entrypoint thứ hai. Xem [contract runtime](docs/contracts.md),
 > [setup PC](docs/setup_pc.md), [setup Jetson Nano 4 GB](docs/setup_jetson_nano.md) và
 > [handbook SQLite](docs/handbook_sqlite.md).
 

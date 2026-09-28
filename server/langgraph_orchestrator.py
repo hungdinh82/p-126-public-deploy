@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from collections.abc import AsyncIterator
 from typing import Any
 from uuid import uuid4
@@ -7,12 +8,10 @@ from uuid import uuid4
 from src.actions.gateway import VehicleActionGateway
 from src.agents.contracts import AssistantOutput
 from src.agents.graph import build_graph
-from src.config import get_settings
 from src.rag.runtime import create_services
+from src.vivi.config import get_settings
 
-from .adapters.llm import LLMAdapter
 from .data_store import DataStore
-from .orchestrator import Orchestrator
 from .schemas import (
     ActionProposal,
     ConfirmationPreview,
@@ -33,23 +32,25 @@ class LangGraphOrchestrator:
         graphs: dict[str, Any],
         gateway: VehicleActionGateway,
         store: DataStore,
-        fallback: Orchestrator,
+        default_provider: str = "rules",
+        provider_errors: dict[str, str] | None = None,
     ) -> None:
         self.graphs = graphs
         self.gateway = gateway
         self.store = store
-        self.fallback = fallback
-        self.llm = fallback.llm
+        self.default_provider = default_provider
+        self.provider_errors = provider_errors or {}
 
     @property
     def graph_providers(self) -> set[str]:
         return set(self.graphs)
 
-    async def run(self, request: TurnRequest, llm: LLMAdapter | None = None) -> TurnResponse:
-        provider = (llm or self.llm).name
+    async def run(self, request: TurnRequest, provider: str | None = None) -> TurnResponse:
+        provider = provider or self.default_provider
         graph = self.graphs.get(provider)
         if graph is None:
-            return await self.fallback.run(request, llm=llm)
+            detail = self.provider_errors.get(provider, "LLM provider không khả dụng")
+            raise ValueError(detail)
         result = await graph.ainvoke(
             {
                 "input_text": request.transcript,
@@ -68,15 +69,10 @@ class LangGraphOrchestrator:
         return self._to_turn_response(request, provider, output)
 
     async def run_stream(
-        self, request: TurnRequest, llm: LLMAdapter | None = None
+        self, request: TurnRequest, provider: str | None = None
     ) -> AsyncIterator[dict]:
-        provider = (llm or self.llm).name
-        if provider not in self.graphs:
-            async for event in self.fallback.run_stream(request, llm=llm):
-                yield event
-            return
-        response = await self.run(request, llm=llm)
-        speech_segments, remainder = Orchestrator._take_speech_segments(response.message)
+        response = await self.run(request, provider=provider)
+        speech_segments, remainder = self._take_speech_segments(response.message)
         if remainder.strip():
             speech_segments.append(remainder.strip())
         for segment in speech_segments:
@@ -195,9 +191,28 @@ class LangGraphOrchestrator:
             return "result"
         return "route"
 
+    @staticmethod
+    def _take_speech_segments(text: str) -> tuple[list[str], str]:
+        segments: list[str] = []
+        while True:
+            sentence = re.search(r"^(.+?[.!?…])(?:\s+|$)", text, re.S)
+            clause = re.search(r"^(.{45,}?[,:;])(?:\s+|$)", text, re.S)
+            match = sentence or clause
+            if match:
+                segments.append(match.group(1).strip())
+                text = text[match.end() :]
+                continue
+            if len(text) >= 100:
+                split = text.rfind(" ", 0, 90)
+                if split > 40:
+                    segments.append(text[:split].strip())
+                    text = text[split + 1 :]
+                    continue
+            break
+        return segments, text
+
 
 def create_langgraph_orchestrator(
-    fallback: Orchestrator,
     vehicle: VehicleSimulator,
     store: DataStore,
     config=None,
@@ -212,12 +227,25 @@ def create_langgraph_orchestrator(
     if config.local_llm_model:
         providers.append("local")
     graphs = {}
+    provider_errors = {}
     for provider in providers:
-        services = create_services(
-            config,
-            retrieval_mode=config.rag_retrieval_mode,
-            provider=provider,
-        )
-        services.action_gateway = gateway
-        graphs[provider] = build_graph(services)
-    return LangGraphOrchestrator(graphs, gateway, store, fallback)
+        try:
+            services = create_services(
+                config,
+                retrieval_mode=config.rag_retrieval_mode,
+                provider=provider,
+            )
+            services.action_gateway = gateway
+            graphs[provider] = build_graph(services)
+        except Exception as exc:
+            provider_errors[provider] = str(exc)
+    if "rules" not in graphs:
+        raise RuntimeError(f"Không khởi tạo được rules graph: {provider_errors['rules']}")
+    default_provider = config.llm_provider if config.llm_provider in graphs else "rules"
+    return LangGraphOrchestrator(
+        graphs,
+        gateway,
+        store,
+        default_provider=default_provider,
+        provider_errors=provider_errors,
+    )

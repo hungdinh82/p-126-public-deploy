@@ -4,12 +4,12 @@ import argparse
 import json
 from dataclasses import asdict
 
-from src.config import get_settings
 from src.ingestion.crawler import CrawlTarget
 from src.ingestion.indexer import HandbookIndexer
 from src.ingestion.parser import HandbookParser
 from src.rag.embeddings.google import GoogleEmbeddingProvider
 from src.rag.vectorstores.chroma import ChromaHandbookStore
+from src.vivi.config import get_settings
 
 
 def main() -> None:

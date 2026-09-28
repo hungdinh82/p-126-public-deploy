@@ -12,7 +12,6 @@ from src.agents.classifier import (
     OpenAIIntentClassifier,
     RulesIntentClassifier,
 )
-from src.config import Settings, get_settings
 from src.history.sqlite import SQLiteConversationHistory
 from src.rag.generator import (
     ExtractiveHandbookGenerator,
@@ -24,6 +23,7 @@ from src.rag.generator import (
 from src.rag.retrieval_lexical import LexicalHandbookRetriever
 from src.rag.schemas import RetrievedChunk
 from src.rag.sqlite_store import SQLiteHandbookRetriever
+from src.vivi.config import Settings, get_settings
 
 
 class RetrieverPort(Protocol):

@@ -9,7 +9,7 @@
 | Agent/RAG | `src/agents/`, `src/rag/`, `src/ingestion/`, evaluation |
 | Vehicle/safety | `server/safety.py`, confirmation, MQTT adapter, `vehicle_simulator/` |
 
-`server/schemas.py`, `src/vivi/contracts.py`, MQTT models và `docs/contracts.md` là vùng
+`server/schemas.py`, MQTT models và `docs/contracts.md` là vùng
 chia sẻ: PR thay contract cần ít nhất review từ platform và owner miền bị ảnh hưởng.
 
 Cảm ơn bạn đã quan tâm. Repo này gồm hai phần với quy trình review khác nhau:

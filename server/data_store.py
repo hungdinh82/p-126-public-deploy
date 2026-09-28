@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from .config import Settings
+from src.vivi.config import Settings
 
 
 class DataStore:
@@ -39,4 +39,3 @@ class DataStore:
         path = self._day_dir() / "turns.jsonl"
         with self._lock, path.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(payload, ensure_ascii=False, default=str) + "\n")
-

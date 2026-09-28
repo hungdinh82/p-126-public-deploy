@@ -13,10 +13,11 @@ from pathlib import Path
 from unittest.mock import patch
 from uuid import uuid4
 
-from server.adapters.llm import RulesAdapter
-from server.orchestrator import Orchestrator
+from server.data_store import DataStore
+from server.langgraph_orchestrator import create_langgraph_orchestrator
 from server.schemas import ActionProposal, TurnRequest, VehicleState
 from server.vehicle_mqtt import MqttVehicleAdapter, VehicleUnavailableError
+from src.vivi.config import Settings
 from vehicle_simulator.engine import VehicleSimulator
 from vehicle_simulator.models import FaultScenario, VehicleCommand, VehicleFixture, utc_now
 from vehicle_simulator.mqtt import MqttVehicleService
@@ -34,6 +35,7 @@ class MqttVehicleTests(unittest.TestCase):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         directory = Path(self.temp.name)
+        self.directory = directory
         with socket.socket() as probe:
             probe.bind(("127.0.0.1", 0))
             self.port = probe.getsockname()[1]
@@ -83,6 +85,18 @@ class MqttVehicleTests(unittest.TestCase):
             timeout=0.7,
         )
         self.addCleanup(self.adapter.close)
+
+    def _orchestrator(self):
+        config = Settings(
+            llm_provider="rules",
+            data_dir=self.directory / "data",
+            rag_handbook_db=self.directory / "handbook.sqlite3",
+            rag_history_db=self.directory / "history.sqlite3",
+            store_transcripts=False,
+        )
+        return create_langgraph_orchestrator(
+            self.adapter, DataStore(config), config
+        )
 
     def _stop_broker(self) -> None:
         self.broker.terminate()
@@ -186,11 +200,7 @@ class MqttVehicleTests(unittest.TestCase):
             asyncio.run(self.adapter.get_state("session"))
 
     def test_orchestrator_ignores_browser_state_and_confirms_window(self) -> None:
-        class Events:
-            def append_event(self, _event):
-                pass
-
-        orchestrator = Orchestrator(RulesAdapter(), self.adapter, Events())
+        orchestrator = self._orchestrator()
         spoofed = VehicleState(temperature_celsius=30, state_version=999)
         response = asyncio.run(
             orchestrator.run(
@@ -219,11 +229,7 @@ class MqttVehicleTests(unittest.TestCase):
         self.assertEqual(self.engine.get_state("demo-car-1").state_version, approved.vehicle_state.state_version)
 
     def test_door_confirmation_and_seat_intent_over_mqtt(self) -> None:
-        class Events:
-            def append_event(self, _event):
-                pass
-
-        orchestrator = Orchestrator(RulesAdapter(), self.adapter, Events())
+        orchestrator = self._orchestrator()
 
         def turn(
             text: str,
@@ -261,11 +267,7 @@ class MqttVehicleTests(unittest.TestCase):
         self.assertEqual(seat.vehicle_state.seat_driver_heat_level, 2)
 
     def test_confirmation_rejects_changed_vehicle_state_over_mqtt(self) -> None:
-        class Events:
-            def append_event(self, _event):
-                pass
-
-        orchestrator = Orchestrator(RulesAdapter(), self.adapter, Events())
+        orchestrator = self._orchestrator()
         quote = asyncio.run(orchestrator.run(TurnRequest(
             transcript="Mở cửa xe bên tài", session_id="stale-session", turn_id="request-open",
         )))

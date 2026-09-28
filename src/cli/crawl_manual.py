@@ -4,8 +4,8 @@ import argparse
 import asyncio
 import json
 
-from src.config import get_settings
 from src.ingestion.crawler import CrawlTarget, VinFastManualCrawler
+from src.vivi.config import get_settings
 
 
 def main() -> None:
