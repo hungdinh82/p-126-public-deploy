@@ -5,7 +5,7 @@
 ## 1. Repository chính thức
 
 - Repository: <https://github.com/AI20K-Build-Phase-Cohort-4/P-126>
-- CI: `.github/workflows/ci.yml`
+- Local quality gate: `scripts/check_local.sh`
 - Pull request template: `.github/PULL_REQUEST_TEMPLATE.md`
 - AI hook installers: `scripts/setup_hooks.sh`, `scripts/setup_hooks.ps1`
 - Log local mặc định: `.ai-log/session.jsonl` (đã được `.gitignore` bỏ qua)
@@ -95,13 +95,17 @@ Kết quả mong đợi:
 - `git status` không liệt kê nội dung `.ai-log/*.jsonl`.
 - Entry có `student`, `repo`, `branch`, `commit`, `tool`, `prompt` và timestamp.
 
-Pre-push hook được cài tại `.git/hooks/pre-push`. Có thể kiểm tra:
+Pre-push hook được quản lý tại `.githooks/pre-push` và bật bằng
+`core.hooksPath`. Có thể kiểm tra:
 
 ```bash
-test -x .git/hooks/pre-push
+test "$(git config core.hooksPath)" = ".githooks"
+bash scripts/check_local.sh
 ```
 
-Hook gọi `scripts/submit_log.py` khi push và được thiết kế không chặn push nếu grading server tạm thời không khả dụng. Thành viên vẫn phải kiểm tra dashboard Phoenix để chắc chắn log đã được nhận.
+Hook chặn push khi local quality gate thất bại. Sau khi gate xanh, hook gọi
+`scripts/submit_log.py`; grading server tạm thời không khả dụng không chặn push. Thành
+viên vẫn phải kiểm tra dashboard Phoenix để chắc chắn log đã được nhận.
 
 ## 5. Quy trình GitHub tối thiểu
 
@@ -113,7 +117,7 @@ flowchart LR
     Log[AI log]
     Test[Lint, test or document review]
     PR[Pull request]
-    CI[GitHub Actions]
+    Gate[Local quality gate]
     Review[Human review]
     Merge[Merge]
 
@@ -121,7 +125,7 @@ flowchart LR
     AI --> Log
     AI --> Test
     Log --> PR
-    Test --> PR --> CI --> Review --> Merge
+    Test --> Gate --> PR --> Review --> Merge
 ```
 
 Quy ước:
@@ -135,7 +139,7 @@ Quy ước:
 ## 6. Definition of Done cho setup G1
 
 - [x] Repository chính thức và remote `origin` đã tồn tại.
-- [x] CI lint/test đã có trong `.github/workflows/ci.yml`.
+- [x] Local lint/test gate đã có trong `scripts/check_local.sh`.
 - [x] Hook configs cho sáu công cụ AI đã có.
 - [x] Manual logger và pre-push submitter đã có.
 - [x] `.gitignore` không track raw AI session logs và secrets.

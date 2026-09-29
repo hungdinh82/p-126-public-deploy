@@ -1,13 +1,14 @@
 # Checklist phát hành ViVi
 
-Dùng checklist này trước khi tạo tag `vX.Y.Z`. CI kiểm tra core profile deterministic;
-các mục dưới đây kiểm tra phần cứng, provider online và audio mà GitHub-hosted runner
-không thể xác minh.
+Dùng checklist này trước khi chạy `bash scripts/release.sh vX.Y.Z`. Các script local
+kiểm tra core profile deterministic; các mục dưới đây kiểm tra phần cứng, provider
+online và audio.
 
 ## Release candidate
 
 - [ ] Commit dự kiến phát hành đã nằm trên `main` và working tree sạch.
-- [ ] CI của commit dự kiến phát hành đã xanh.
+- [ ] `bash scripts/check_local.sh` đã xanh.
+- [ ] `bash scripts/check_docker.sh` đã xanh.
 - [ ] Version tuân theo Semantic Versioning.
 - [ ] Release notes mô tả thay đổi cho người dùng, lỗi đã sửa và giới hạn đã biết.
 - [ ] Không stage `.env`, API key, MQTT credential, audio, transcript hoặc model cache.
@@ -33,7 +34,7 @@ không thể xác minh.
 
 ## Phát hành và rollback
 
-- [ ] Tạo annotated tag từ commit `main` đã nghiệm thu rồi push tag.
-- [ ] GitHub Release workflow hoàn tất và publish `SHA256SUMS`.
+- [ ] Chạy `bash scripts/release.sh vX.Y.Z` từ commit `main` đã nghiệm thu.
+- [ ] GitHub Release đã được tạo và có `SHA256SUMS`.
 - [ ] Giữ release tag trước đó làm điểm rollback.
 - [ ] Một thành viên khác checkout được tag và chạy theo hướng dẫn trong README.

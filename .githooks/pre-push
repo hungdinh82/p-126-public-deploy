@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+set -u
+
+ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+cd "$ROOT" || exit 1
+
+if [ "${VIVI_SKIP_LOCAL_CHECKS:-0}" = "1" ]; then
+  echo "[quality] Skipped because VIVI_SKIP_LOCAL_CHECKS=1."
+else
+  echo "[quality] Running the shared local gate before push."
+  bash scripts/check_local.sh || {
+    echo "[quality] Push blocked. Fix the checks and try again." >&2
+    exit 1
+  }
+fi
+
+# AI log delivery must never block a push when the grading server is unavailable.
+bash scripts/_pyrun.sh scripts/log_antigravity.py --auto || true
+bash scripts/_pyrun.sh scripts/submit_log.py || true

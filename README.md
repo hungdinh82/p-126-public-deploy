@@ -173,39 +173,54 @@ Frontend giữ khoảng 1 giây audio trong bộ đệm trước khi phát để
 node --check app.js
 ```
 
-## CI và phát hành
+## Kiểm tra local và phát hành
 
-GitHub Actions chạy bốn quality gate cho pull request và push vào `main` hoặc
-`integ/rag-and-vivi-voice`:
+Repo không dùng GitHub-hosted runner. Mỗi developer bật pre-push hook một lần sau khi
+clone hoặc pull thay đổi này:
 
-1. Ruff, JavaScript syntax và whitespace checks.
-2. Core tests với profile deterministic `rules + memory + SQLite`.
-3. MQTT integration tests với broker Mosquitto độc lập.
-4. Build container, kiểm tra non-root user và chạy smoke test qua API thật.
+```sh
+bash scripts/setup_hooks.sh
+```
 
-CI không dùng `.env`, API key hoặc model AI trên máy developer. PhoWhisper, ZeroTTS,
-OpenAI và microphone được kiểm tra thủ công trên máy demo trước khi phát hành.
+Trên Windows PowerShell:
 
-Sau khi checkpoint ổn định đã được merge vào `main`, tạo release theo Semantic
-Versioning bằng tag Git:
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\setup_hooks.ps1
+```
+
+Trước mỗi lần push, hook chạy quality gate dùng chung rồi mới gửi AI log. Gate gồm
+whitespace, Ruff, JavaScript syntax, core tests và MQTT integration tests. Có thể chạy
+trực tiếp để lấy evidence điền vào pull request:
+
+```sh
+bash scripts/check_local.sh
+```
+
+Script dùng profile deterministic `rules + memory + SQLite`, xóa API key khỏi môi
+trường test và yêu cầu Mosquitto được cài trên máy. Khi thay đổi Dockerfile, dependency
+runtime hoặc startup, chạy thêm:
+
+```sh
+bash scripts/check_docker.sh
+```
+
+Docker gate build image, kiểm tra process non-root, gọi health API, chạy luồng handbook,
+action và confirmation, đồng thời xác nhận credential/log local không lọt vào image.
+PhoWhisper, ZeroTTS, OpenAI và microphone vẫn được kiểm tra thủ công trên máy demo.
+
+Sau khi checkpoint ổn định đã được merge vào `main`, nhóm trưởng hoàn tất
+[release checklist](docs/RELEASE_CHECKLIST.md) rồi phát hành theo Semantic Versioning:
 
 ```sh
 git switch main
 git pull --ff-only
-git tag -a v0.1.0 -m "ViVi v0.1.0"
-git push origin v0.1.0
+bash scripts/release.sh v0.1.0
 ```
 
-Tag `vX.Y.Z` chỉ được publish khi toàn bộ CI chạy lại thành công. GitHub Release chứa
-release notes, commit SHA, runtime profile đã kiểm tra và checksum của dependency files,
-handbook SQLite cùng voice pack. Không đưa `.env`, model cache, MQTT credential, audio
-hoặc conversation log vào release.
-
-Trước khi tạo tag, nhóm trưởng kiểm tra thủ công trên máy demo: microphone/PhoWhisper,
-OpenAI, handbook citation, MQTT actions, confirmation deny/replay/approve và giọng
-ZeroTTS Mai Chi. Trong giai đoạn `0.x`, tăng minor cho tính năng mới (`v0.2.0`) và tăng
-patch cho bản sửa lỗi tương thích (`v0.1.1`). Dùng
-[release checklist](docs/RELEASE_CHECKLIST.md) làm gate thủ công trước khi tạo tag.
+Release script yêu cầu working tree sạch và `main` khớp `origin/main`, chạy lại cả hai
+quality gate, tạo annotated tag, checksum cùng manifest rồi publish GitHub Release bằng
+GitHub CLI. Không cần GitHub Actions. Trong giai đoạn `0.x`, tăng minor cho tính năng mới
+(`v0.2.0`) và tăng patch cho bản sửa lỗi tương thích (`v0.1.1`).
 
 ## Cấu trúc
 

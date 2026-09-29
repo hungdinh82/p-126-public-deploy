@@ -1,4 +1,4 @@
-.PHONY: run test lint format typecheck check clean
+.PHONY: run test lint format typecheck check check-docker clean
 
 PYTHON ?= .venv/bin/python
 
@@ -17,7 +17,11 @@ format:
 typecheck:
 	$(PYTHON) -m mypy src/
 
-check: lint test
+check:
+	bash scripts/check_local.sh
+
+check-docker:
+	bash scripts/check_docker.sh
 
 clean:
 	find . -type d -name __pycache__ -exec rm -rf {} +
