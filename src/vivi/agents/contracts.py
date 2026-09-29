@@ -29,7 +29,7 @@ class DecisionArguments(BaseModel):
 
     query: str | None = None
     value_celsius: float | None = None
-    position_percent: float | None = None
+    position_percent: int | None = None
     open: bool | None = None
     locked: bool | None = None
     level: int | None = None

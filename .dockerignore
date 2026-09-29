@@ -6,6 +6,13 @@ __pycache__
 *.pyc
 .pytest_cache
 .ruff_cache
+data/*
+!data/handbooks/
+data/handbooks/*
+!data/handbooks/handbook.sqlite3
+models/
+outputs/
+.ai-log/
 docs/
 presentation/
 eval/

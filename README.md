@@ -173,6 +173,40 @@ Frontend giữ khoảng 1 giây audio trong bộ đệm trước khi phát để
 node --check app.js
 ```
 
+## CI và phát hành
+
+GitHub Actions chạy bốn quality gate cho pull request và push vào `main` hoặc
+`integ/rag-and-vivi-voice`:
+
+1. Ruff, JavaScript syntax và whitespace checks.
+2. Core tests với profile deterministic `rules + memory + SQLite`.
+3. MQTT integration tests với broker Mosquitto độc lập.
+4. Build container, kiểm tra non-root user và chạy smoke test qua API thật.
+
+CI không dùng `.env`, API key hoặc model AI trên máy developer. PhoWhisper, ZeroTTS,
+OpenAI và microphone được kiểm tra thủ công trên máy demo trước khi phát hành.
+
+Sau khi checkpoint ổn định đã được merge vào `main`, tạo release theo Semantic
+Versioning bằng tag Git:
+
+```sh
+git switch main
+git pull --ff-only
+git tag -a v0.1.0 -m "ViVi v0.1.0"
+git push origin v0.1.0
+```
+
+Tag `vX.Y.Z` chỉ được publish khi toàn bộ CI chạy lại thành công. GitHub Release chứa
+release notes, commit SHA, runtime profile đã kiểm tra và checksum của dependency files,
+handbook SQLite cùng voice pack. Không đưa `.env`, model cache, MQTT credential, audio
+hoặc conversation log vào release.
+
+Trước khi tạo tag, nhóm trưởng kiểm tra thủ công trên máy demo: microphone/PhoWhisper,
+OpenAI, handbook citation, MQTT actions, confirmation deny/replay/approve và giọng
+ZeroTTS Mai Chi. Trong giai đoạn `0.x`, tăng minor cho tính năng mới (`v0.2.0`) và tăng
+patch cho bản sửa lỗi tương thích (`v0.1.1`). Dùng
+[release checklist](docs/RELEASE_CHECKLIST.md) làm gate thủ công trước khi tạo tag.
+
 ## Cấu trúc
 
 - `index.html`: bố cục, điều khiển và thông tin trạng thái.

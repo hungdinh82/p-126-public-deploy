@@ -2,41 +2,162 @@ name: CI
 
 on:
   push:
-    branches: [main, develop]
+    branches:
+      - main
+      - integ/rag-and-vivi-voice
   pull_request:
-    branches: [main]
+    branches:
+      - main
+      - integ/rag-and-vivi-voice
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.11"
+  APP_ENV: test
+  LLM_PROVIDER: rules
+  STT_PROVIDER: "off"
+  TTS_PROVIDER: "off"
+  VIVI_VEHICLE_PROVIDER: memory
+  RAG_RETRIEVAL_MODE: sqlite
+  PHOWHISPER_PRELOAD: "false"
+  ZEROTTS_PRELOAD: "false"
+  OPENAI_API_KEY: ""
+  GOOGLE_API_KEY: ""
+  LOCAL_LLM_MODEL: ""
 
 jobs:
-  lint-and-test:
+  static-checks:
+    name: Static checks
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
+          cache-dependency-path: requirements-dev.txt
 
-      - name: Install dependencies
-        run: pip install -r requirements-dev.txt
+      - name: Install development dependencies
+        run: python -m pip install -r requirements-dev.txt
 
-      - name: Install MQTT test broker
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y mosquitto mosquitto-clients
-
-      - name: Lint with ruff
-        run: ruff check src/ vehicle_simulator/ tests/
+      - name: Lint Python
+        run: python -m ruff check src vehicle_simulator tests
 
       - name: Check frontend syntax
         run: node --check app.js
 
-      - name: Run tests
-        run: pytest tests/ -v --tb=short
-        env:
-          APP_ENV: test
-          LLM_PROVIDER: rules
-          PHOWHISPER_PRELOAD: "false"
-          ZEROTTS_PRELOAD: "false"
+      - name: Check pull request whitespace errors
+        if: github.event_name == 'pull_request'
+        run: git diff --check "${{ github.event.pull_request.base.sha }}...${{ github.sha }}"
+
+      - name: Check pushed commit whitespace errors
+        if: github.event_name != 'pull_request'
+        run: git show --check --format= HEAD
+
+  core-tests:
+    name: Core tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Install development dependencies
+        run: python -m pip install -r requirements-dev.txt
+
+      - name: Run deterministic core suite
+        run: python -m pytest tests --ignore=tests/test_mqtt_vehicle.py -q --tb=short
+
+  mqtt-integration:
+    name: MQTT integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Install development dependencies
+        run: python -m pip install -r requirements-dev.txt
+
+      - name: Install Mosquitto
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes mosquitto mosquitto-clients
+
+      - name: Run MQTT integration suite
+        run: python -m pytest tests/test_mqtt_vehicle.py -q --tb=short
+
+  container-smoke:
+    name: Container smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs:
+      - static-checks
+      - core-tests
+      - mqtt-integration
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build core runtime image
+        run: docker build --tag vivi-core:ci .
+
+      - name: Verify container user
+        run: test "$(docker run --rm vivi-core:ci id -u)" != "0"
+
+      - name: Run container smoke test
+        run: |
+          docker run --detach --name vivi-ci --publish 8787:8787 \
+            --env APP_ENV=test \
+            --env LLM_PROVIDER=rules \
+            --env STT_PROVIDER=off \
+            --env TTS_PROVIDER=off \
+            --env VIVI_VEHICLE_PROVIDER=memory \
+            --env RAG_RETRIEVAL_MODE=sqlite \
+            vivi-core:ci
+          trap 'docker logs vivi-ci; docker rm --force vivi-ci' EXIT
+
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:8787/api/v1/health >/dev/null; then
+              break
+            fi
+            if [ "$attempt" -eq 30 ]; then
+              echo "ViVi container did not become healthy" >&2
+              exit 1
+            fi
+            sleep 2
+          done
+
+          docker exec vivi-ci python scripts/smoke_runtime.py --provider rules --timeout 30

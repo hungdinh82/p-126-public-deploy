@@ -5,16 +5,18 @@ WORKDIR /app
 
 ARG REQUIREMENTS_FILE=requirements.txt
 COPY requirements*.txt ./
-RUN pip install --no-cache-dir --user -r ${REQUIREMENTS_FILE}
+RUN python -m venv /opt/venv \
+    && /opt/venv/bin/pip install --no-cache-dir -r ${REQUIREMENTS_FILE}
 
 # ---- Stage 2: Production ----
 FROM python:3.11-slim
 
 WORKDIR /app
 
-# Copy installed packages from builder
-COPY --from=builder /root/.local /root/.local
-ENV PATH=/root/.local/bin:$PATH
+# Keep the runtime dependencies outside root's home so the non-root process can
+# execute their console scripts.
+COPY --from=builder /opt/venv /opt/venv
+ENV PATH=/opt/venv/bin:$PATH
 ENV PHOWHISPER_PRELOAD=false ZEROTTS_PRELOAD=false
 
 # Security: run as non-root user
