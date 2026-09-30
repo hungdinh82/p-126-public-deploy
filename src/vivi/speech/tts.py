@@ -119,7 +119,7 @@ class ZeroTTSAdapter:
                 import numpy as np
                 from zerotts.voices import Voice
 
-                pack = Path(__file__).resolve().parents[2] / "voices" / "VIVI.zip"
+                pack = Path(__file__).resolve().parents[3] / "voices" / "VIVI.zip"
                 with zipfile.ZipFile(pack) as archive:
                     meta = json.loads(archive.read("VIVI/meta.json"))
                     if meta.get("name") != "VIVI":
