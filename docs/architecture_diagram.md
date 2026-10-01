@@ -21,11 +21,11 @@ flowchart TB
     Engineer[System engineer dashboard]
     subgraph Edge[VIVI edge gateway - works offline]
         subgraph UX[Presentation]
-            ViviUI[VIVI UI - Next.js]
-            OpsUI[Engineering dashboard]
+            ViviUI[VIVI UI - static web bundle]
+            OpsUI[Engineering dashboard - static bundle]
         end
         subgraph API[FastAPI application]
-            Gateway[REST and WebSocket gateway]
+            Gateway[REST and NDJSON gateway]
             Auth[Authentication and RBAC]
             Session[Session and trip manager]
             Telemetry[Latency quality and audit]
@@ -33,7 +33,7 @@ flowchart TB
         subgraph Speech[Vietnamese speech]
             VAD[VAD and audio capture]
             STT[PhoWhisper or whisper.cpp]
-            TTS[VietTTS or Piper]
+            TTS[ZeroTTS on PC; replaceable adapter on Nano]
         end
         subgraph Agent[LangGraph orchestration]
             Router[Intent router and planner]
@@ -43,7 +43,7 @@ flowchart TB
             Memory[Bounded trip memory]
         end
         subgraph Models[Local models]
-            SLM[Qwen2.5-3B or Phi-3-mini GGUF q4 or q8]
+            SLM[Qwen2.5-3B PC; Qwen2.5-1.5B Q4 Nano]
             Runtime[llama.cpp or Ollama]
             Embed[Multilingual embeddings]
         end
@@ -53,7 +53,7 @@ flowchart TB
             Confirm[HITL confirmation]
             Grounding[Citation and grounding guard]
         end
-        Vector[(Chroma or FAISS)]
+        Vector[(SQLite FTS5; optional Chroma on PC)]
         SQLite[(SQLite users trips audit)]
         Metrics[(Local metrics)]
         Broker[MQTT broker]
@@ -195,8 +195,10 @@ flowchart LR
     Manuals[Versioned vehicle manuals] --> Parse[Parse text tables and page numbers]
     Parse --> Chunk[Section-aware chunking]
     Chunk --> Metadata[Attach model version section and page]
-    Metadata --> Embed[Multilingual embeddings]
-    Embed --> Index[(Local Chroma or FAISS index)]
+    Metadata --> FTS[SQLite FTS5 artifact]
+    Metadata -. optional PC profile .-> Embed[Multilingual embeddings]
+    Embed --> Index[(Chroma index)]
+    FTS --> Manifest[Checksum and index manifest]
     Index --> Manifest[Checksum and index manifest]
 ```
 
@@ -214,31 +216,36 @@ Evaluation includes answerable, unanswerable, ambiguous, and wrong-vehicle-manua
 
 | Component | Technology | Responsibility |
 |---|---|---|
-| VIVI simulator | Next.js / React | Voice/text input, streaming output, large targets, confirmation modal, offline indicator, citations. |
-| Engineering dashboard | Next.js / React | Health, latency, quality, model version, q4/q8 comparison, fleet and OTA status. |
-| API gateway | FastAPI, Pydantic, WebSocket | Validation, RBAC, sessions, streaming events, health endpoints. |
-| Speech services | PhoWhisper or whisper.cpp; VietTTS or Piper | Offline Vietnamese STT/TTS with confidence and timing events. |
+| VIVI simulator | Static web bundle; optional Next.js static export | Voice/text input, streaming output, large targets, confirmation modal, offline indicator, citations. |
+| Engineering dashboard | Static web bundle | Health, latency, quality, model version, q4/q8 comparison, fleet and OTA status. |
+| API gateway | FastAPI, Pydantic, NDJSON | Validation, turn contracts, streaming events, health endpoints. |
+| Speech services | PhoWhisper/whisper.cpp; ZeroTTS/replaceable adapter | Offline Vietnamese STT/TTS with confidence and timing events. |
 | Agent orchestrator | LangGraph | Intent routing, bounded planning, trip context, recovery, specialist coordination. |
-| Local inference | llama.cpp or Ollama | Qwen2.5-3B/Phi-3-mini GGUF q4 or q8 and model metadata. |
+| Local inference | llama.cpp or Ollama | Qwen2.5-3B on PC or Qwen2.5-1.5B Q4 on Nano, plus model metadata. |
 | Safety gateway | Deterministic Python policy | Allowlist, state/range/role checks, single-use confirmations, denials. |
 | Vehicle adapter | Typed tools plus MQTT | Convert authorized calls to commands and verify acknowledged state. |
 | Vehicle digital twin | MQTT publisher/subscriber | Simulate cabin functions, speed, faults, state, and acknowledgements. |
-| Handbook service | Chroma or FAISS | Offline retrieval, citations, grounding threshold, and abstention. |
+| Handbook service | SQLite FTS5 on edge; optional Chroma on PC | Offline retrieval, citations, grounding threshold, and abstention. |
 | Local persistence | SQLite and metrics store | Users, trip memory, audit, evaluation, and latency samples. |
 | OTA control plane | Optional mock service | Simulated multi-vehicle monitoring and signed staged rollout/rollback. |
 
 ## 7. Interfaces
 
-| Interface | Purpose |
-|---|---|
-| `POST /api/v1/auth/login` | Authenticate driver or engineer and issue a scoped token. |
-| `POST /api/v1/sessions` | Start a trip-scoped assistant session. |
-| `WS /api/v1/assist` | Stream audio/text, transcript, events, response, TTS, and latency. |
-| `POST /api/v1/confirmations/{id}` | Approve or deny one pending R2 action. |
-| `GET /api/v1/vehicle/state` | Read current simulated state. |
-| `GET /api/v1/handbook/sources/{id}` | Resolve a citation to a local passage. |
-| `GET /api/v1/metrics/summary` | Engineer-only quality and latency summary. |
-| `POST /api/v1/ota/deployments` | Engineer-only simulated OTA rollout. |
+Các interface đánh dấu **current** thuộc runtime hiện tại. Mục **planned** là backlog kiến
+trúc, không được client phụ thuộc cho đến khi có contract test.
+
+| Status | Interface | Purpose |
+|---|---|---|
+| planned | `POST /api/v1/auth/login` | Authenticate driver or engineer and issue a scoped token. |
+| planned | `POST /api/v1/sessions` | Start a trip-scoped assistant session. |
+| current | `POST /api/v1/turn` | Canonical text/STT transcript request and final response contract. |
+| current | `POST /api/v1/turn/stream` | NDJSON response and safe speech events; WebSocket is deferred until Nano baseline passes. |
+| current | `POST /api/v1/confirmations/{id}` | Approve or deny one pending R2 action. |
+| current | `GET /api/v1/vehicle/state` | Read current simulated state. |
+| current | `PUT /api/v1/demo/vehicle/driving` | Set the per-session driving fixture for the in-memory UI demo only. |
+| planned | `GET /api/v1/handbook/sources/{id}` | Resolve a citation to a local passage. |
+| planned | `GET /api/v1/metrics/summary` | Engineer-only quality and latency summary. |
+| planned | `POST /api/v1/ota/deployments` | Engineer-only simulated OTA rollout. |
 
 | MQTT topic | Direction and payload |
 |---|---|
@@ -255,11 +262,11 @@ Commands use schema validation, short expiration, idempotency keys, correlation 
 flowchart LR
     subgraph Host[Jetson Nano or Orin simulation host]
         subgraph Docker[Docker Compose]
-            Web[Next.js web]
+            Web[Static web assets served by FastAPI]
             API[FastAPI and LangGraph]
             Inference[llama.cpp or Ollama]
             Speech[STT and TTS]
-            Vector[Chroma or FAISS]
+            Vector[SQLite FTS5]
             MQTT[Mosquitto]
             Twin[Vehicle digital twin]
             Observe[Metrics and audit]
@@ -279,6 +286,15 @@ flowchart LR
 ```
 
 The same containers run on a development laptop with CPU profiles and smaller models. Jetson-class profiles use the available GPU runtime. Disconnecting WAN must not affect core test cases.
+
+### Classic Jetson Nano 4 GB profile
+
+The API, LangGraph, SQLite FTS5, policy, and MQTT adapter form one lightweight Python
+container. `llama.cpp` and `whisper.cpp` are native sidecars because JetPack 4.6.6 cannot
+use the PC CUDA 12/PyTorch dependency set. Handbook crawl, parsing, embeddings, and UI
+build happen on a PC; the Nano receives immutable artifacts. Models are not all preloaded:
+Qwen2.5-1.5B Q4 and whisper.cpp `base` are starting candidates subject to device benchmark.
+ZeroTTS remains optional until the measured peak memory leaves adequate headroom.
 
 ## 9. Observability and targets
 

@@ -7,8 +7,8 @@ const motionPreference = matchMedia('(prefers-reduced-motion: reduce)');
 const API_BASE = '';
 const sessionId = localStorage.getItem('vivi-session-id') || crypto.randomUUID();
 localStorage.setItem('vivi-session-id', sessionId);
-const state = { phase: 'idle', temp: 23, window: false, music: false, driving: false, battery: 82, range: 328, doorLocked: false, doorOpen: false, seatHeat: 0, pendingConfirmationId: null, reduced: motionPreference.matches, sound: false, busy: false, backendAvailable: false, vehicleService: false, sttAvailable: false, ttsAvailable: false, lastCommand: '', progress: 0 };
-const phaseLabels = { idle: 'ViVi đang ở đây', listening: 'Mình đang nghe bạn', transcribing: 'Mình đang nhận diện lời nói', thinking: 'Để mình xem nhé', validating: 'Đang kiểm tra an toàn', acting: 'Đang chăm sóc không gian của bạn', synthesizing: 'Đang chuẩn bị giọng Mai Chi', speaking: 'Một chút dễ chịu, dành cho bạn', confirm: 'Mình chờ bạn xác nhận', clarify: 'Mình chờ bạn nói thêm', blocked: 'Mình giữ nguyên trạng thái xe', unverified: 'Chưa xác minh được trạng thái xe' };
+const state = { phase: 'idle', temp: 23, window: false, music: false, driving: false, battery: 82, range: 328, doorLocked: false, doorOpen: false, seatHeat: 0, reduced: motionPreference.matches, sound: false, busy: false, backendAvailable: false, vehicleProvider: '', sttAvailable: false, sttProvider: '', ttsAvailable: false, ttsProvider: '', storeAudio: false, storeTranscripts: false, llmProvider: '', llmOptions: [], lastCommand: '', manualAnswer: '', manualEvidence: [], progress: 0 };
+const phaseLabels = { idle: 'ViVi đang ở đây', listening: 'Mình đang nghe bạn', transcribing: 'Mình đang nhận diện lời nói', thinking: 'Để mình xem nhé', validating: 'Đang kiểm tra an toàn', acting: 'Đang chăm sóc không gian của bạn', synthesizing: 'Đang chuẩn bị giọng Mai Chi', speaking: 'Một chút dễ chịu, dành cho bạn', clarify: 'Mình chờ bạn nói thêm', blocked: 'Mình giữ nguyên trạng thái xe' };
 const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 let width = 1, height = 1, tick = 0, previous = 0;
 let pointer = { x: 0, y: 0 };
@@ -160,20 +160,116 @@ function say(text) {
   if (voice) utterance.voice = voice;
   speechSynthesis.speak(utterance);
 }
-let currentAudio;
-async function speak(text, turnId = crypto.randomUUID()) {
+let ttsAudioContext = null;
+let currentPlayback = null;
+const TTS_START_BUFFER_SECONDS = 1;
+async function ensureTtsAudioContext() {
+  ttsAudioContext ||= new AudioContext();
+  if (ttsAudioContext.state === 'suspended') await ttsAudioContext.resume();
+  return ttsAudioContext;
+}
+function stopPlayback() {
+  if (!currentPlayback) return;
+  const playback = currentPlayback;
+  currentPlayback = null;
+  playback.cancelled = true;
+  playback.controller.abort();
+  for (const source of playback.sources) { try { source.stop(); } catch { /* already stopped */ } }
+  playback.sources.clear();
+  playback.finish();
+}
+function createTtsPlayback() {
+  const playback = { controller: new AbortController(), sources: new Set(), cancelled: false, streamDone: false, played: false, nextStart: 0 };
+  playback.done = new Promise(resolve => { playback.finish = resolve; });
+  return playback;
+}
+async function finishTtsPlayback(playback) {
+  if (!playback) return;
+  playback.streamDone = true;
+  if (!playback.sources.size) playback.finish();
+  await playback.done;
+  if (currentPlayback === playback) currentPlayback = null;
+}
+async function speak(text, turnId = crypto.randomUUID(), sequencePlayback = null) {
   if (!state.sound) return;
-  if (currentAudio) { currentAudio.pause(); currentAudio = null; }
+  if (!sequencePlayback) {
+    stopPlayback();
+    if ('speechSynthesis' in window) speechSynthesis.cancel();
+  }
   if (state.ttsAvailable) {
+    const playback = sequencePlayback || createTtsPlayback();
+    currentPlayback = playback;
     try {
       setPhase('synthesizing', text);
-      const response = await fetch(`${API_BASE}/api/v1/tts`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, session_id: sessionId, turn_id: turnId }) });
+      const context = await ensureTtsAudioContext();
+      const response = await fetch(`${API_BASE}/api/v1/tts/stream`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: playback.controller.signal,
+        body: JSON.stringify({ text, session_id: sessionId, turn_id: turnId })
+      });
       if (!response.ok) throw new Error((await response.json()).detail || 'TTS lỗi');
-      currentAudio = new Audio(URL.createObjectURL(await response.blob()));
-      await currentAudio.play();
+      if (!response.body || response.headers.get('X-ViVi-Audio-Format') !== 'pcm_s16le') throw new Error('Định dạng TTS streaming không hợp lệ');
+      const sampleRate = Number(response.headers.get('X-ViVi-Sample-Rate'));
+      if (!Number.isFinite(sampleRate) || sampleRate <= 0) throw new Error('Tần số mẫu TTS không hợp lệ');
+      const reader = response.body.getReader();
+      let leftover = new Uint8Array(0);
+      let startupChunks = [];
+      let startupSeconds = 0;
+      const schedule = (samples) => {
+        const buffer = context.createBuffer(1, samples.length, sampleRate);
+        buffer.copyToChannel(samples, 0);
+        const source = context.createBufferSource();
+        source.buffer = buffer; source.connect(context.destination);
+        source.onended = () => {
+          playback.sources.delete(source);
+          source.disconnect();
+          if (playback.streamDone && !playback.sources.size) playback.finish();
+        };
+        playback.sources.add(source);
+        if (!playback.played) {
+          playback.nextStart = context.currentTime + .06;
+          playback.played = true;
+          setPhase('speaking', text);
+        }
+        // Keep one continuous audio timeline; only recover to "now" after an actual underrun.
+        if (playback.nextStart < context.currentTime) playback.nextStart = context.currentTime + .01;
+        source.start(playback.nextStart);
+        playback.nextStart += buffer.duration;
+      };
+      const startBufferedPlayback = () => {
+        if (playback.cancelled || !startupChunks.length) return;
+        for (const samples of startupChunks) schedule(samples);
+        startupChunks = [];
+      };
+      try {
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done || playback.cancelled) break;
+          const bytes = new Uint8Array(leftover.length + value.length);
+          bytes.set(leftover); bytes.set(value, leftover.length);
+          const usable = bytes.length - bytes.length % 2;
+          leftover = bytes.slice(usable);
+          if (!usable) continue;
+          const samples = new Float32Array(usable / 2);
+          const pcm = new DataView(bytes.buffer, bytes.byteOffset, usable);
+          for (let i = 0; i < samples.length; i++) samples[i] = pcm.getInt16(i * 2, true) / 32768;
+          if (playback.played) schedule(samples);
+          else {
+            startupChunks.push(samples);
+            startupSeconds += samples.length / sampleRate;
+            if (startupSeconds >= TTS_START_BUFFER_SECONDS) startBufferedPlayback();
+          }
+        }
+      } finally { reader.releaseLock(); }
+      if (leftover.length && !playback.cancelled) throw new Error('Luồng PCM TTS bị thiếu byte cuối');
+      // Short replies may finish before reaching the startup buffer target.
+      startBufferedPlayback();
+      if (!sequencePlayback) await finishTtsPlayback(playback);
       return;
     } catch (error) {
-      console.warn('ZeroTTS fallback:', error);
+      if (playback.cancelled) return;
+      console.warn('ZeroTTS streaming:', error);
+      if (currentPlayback === playback) stopPlayback();
+      if (playback.played) return;
     }
   }
   say(text);
@@ -208,7 +304,7 @@ function resolveCommand(command) {
 }
 function lockControls(locked) {
   document.querySelectorAll('.suggestions button, .stepper button, #window-toggle, #music-toggle, #drive-toggle, #demo-mic, .send-button').forEach(button => { button.disabled = locked; });
-  if (state.vehicleService) $('#drive-toggle').disabled = true;
+  if (state.backendAvailable && state.vehicleProvider !== 'memory') $('#drive-toggle').disabled = true;
   $('#command-form').setAttribute('aria-busy', String(locked));
 }
 async function runLocalCommand(command, voiceDemo = false) {
@@ -262,25 +358,91 @@ async function runBackendCommand(command, turnId = crypto.randomUUID()) {
   state.busy = true; state.lastCommand = command; lockControls(true); $('#command-input').value = '';
   try {
     setPhase('thinking', `“${command}”`);
-    const response = await fetch(`${API_BASE}/api/v1/turn`, {
+    let response = await fetch(`${API_BASE}/api/v1/turn/stream`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ transcript: command, session_id: sessionId, turn_id: turnId, ...(state.pendingConfirmationId ? { confirmation_id: state.pendingConfirmationId } : {}), ...(state.vehicleService ? {} : { vehicle_state: { temperature_celsius: state.temp, window_driver_percent: state.window ? 100 : 0, media_playing: state.music, driving: state.driving, battery_percent: state.battery, range_km: state.range, door_driver_locked: state.doorLocked, door_driver_open: state.doorOpen, seat_driver_heat_level: state.seatHeat } }) })
+      body: JSON.stringify({ transcript: command, session_id: sessionId, turn_id: turnId, llm_provider: state.llmProvider })
     });
-    const payload = await response.json();
-    if (!response.ok) throw new Error(payload.detail || 'Backend không phản hồi');
-    state.pendingConfirmationId = payload.confirmation_id || null;
-    $('#command-input').placeholder = state.pendingConfirmationId ? 'Nhập Xác nhận hoặc Hủy…' : 'Nói với ViVi điều bạn cần…';
-    setPhase('validating', 'Safety gateway đã kiểm tra yêu cầu.');
+    if (!response.ok) {
+      const payload = await response.json();
+      throw new Error(payload.detail || 'Backend không phản hồi');
+    }
+    if (!response.body) throw new Error('Backend không hỗ trợ streaming');
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let payload = null;
+    let streamedSpeech = false;
+    let voiceStreamed = false;
+    let speechQueue = Promise.resolve();
+    let speechPlayback = null;
+    const handleEvent = (event) => {
+      if (event.type === 'error') throw new Error(event.detail || 'Pipeline streaming bị lỗi');
+      if (event.type === 'speech' && event.text) {
+        streamedSpeech = true;
+        // Speech events may contain one event per sentence. Keep them for
+        // low-latency audio, but render only the authoritative final response
+        // so a two-sentence answer does not look like two assistant outputs.
+        setPhase('speaking');
+        if (state.sound && state.ttsAvailable) {
+          speechPlayback ||= createTtsPlayback();
+          voiceStreamed = true;
+          // Fetch/synthesize the next clause as soon as the previous clause is
+          // buffered, while sharing one Web Audio timeline for gapless speech.
+          speechQueue = speechQueue.then(() => speak(event.text, turnId, speechPlayback));
+        }
+      } else if (event.type === 'final') {
+        payload = event.response;
+        streamedSpeech ||= Boolean(event.streamed_speech);
+      }
+    };
+    while (true) {
+      const { value, done } = await reader.read();
+      buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+      for (const line of lines) if (line.trim()) handleEvent(JSON.parse(line));
+      if (done) break;
+    }
+    if (buffer.trim()) handleEvent(JSON.parse(buffer));
+    if (!payload) throw new Error('Backend kết thúc luồng trước khi trả kết quả');
+    if (payload.status === 'confirmation_required' && payload.confirmation) {
+      if (voiceStreamed) {
+        await speechQueue;
+        await finishTtsPlayback(speechPlayback);
+        voiceStreamed = false;
+      }
+      const approved = window.confirm(payload.confirmation.preview);
+      turnId = crypto.randomUUID();
+      response = await fetch(`${API_BASE}/api/v1/confirmations/${payload.confirmation.confirmation_id}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          session_id: sessionId, turn_id: turnId,
+          decision: approved ? 'approve' : 'deny', llm_provider: state.llmProvider
+        })
+      });
+      payload = await response.json();
+      if (!response.ok) throw new Error(payload.detail || 'Backend không phản hồi');
+      streamedSpeech = false;
+    }
     await wait(180);
     applyBackendState(payload.vehicle_state);
-    if (payload.action.intent === 'manual.search' && payload.status === 'verified') openPanel('manual');
+    if (payload.route === 'handbook' && payload.status === 'verified') {
+      state.manualAnswer = payload.message;
+      state.manualEvidence = payload.evidence || [];
+      openPanel('manual');
+    }
     const phase = payload.status === 'verified' ? 'speaking' : payload.status;
     setPhase(phase, payload.message);
     if (payload.status === 'verified') {
-      const card = payload.action.intent.startsWith('climate.') ? '#climate-card' : payload.action.intent.startsWith('window.') ? '#window-card' : payload.action.intent.startsWith('media.') ? '#music-card' : null;
+      const intent = payload.action?.intent || '';
+      const card = intent.startsWith('climate.') ? '#climate-card' : intent.startsWith('window.') ? '#window-card' : intent.startsWith('media.') ? '#music-card' : null;
       if (card) highlight(card);
     }
-    await speak(payload.message, turnId);
+    if (voiceStreamed) {
+      await speechQueue;
+      await finishTtsPlayback(speechPlayback);
+    } else if (!streamedSpeech || state.sound) await speak(payload.message, turnId);
     await wait(500);
     if (payload.status === 'verified') setPhase('idle');
     else setPhase(phase, payload.message);
@@ -302,7 +464,7 @@ function stopRecording() {
   if (recorder?.state === 'recording') recorder.stop();
 }
 async function submitRecording(blob, turnId) {
-  lockControls(true); setPhase('transcribing', 'PhoWhisper đang chuyển giọng nói thành văn bản…');
+  lockControls(true); setPhase('transcribing', `${state.sttProvider || 'STT local'} đang chuyển giọng nói thành văn bản…`);
   try {
     const form = new FormData();
     form.append('audio', blob, `vivi-${turnId}.webm`); form.append('session_id', sessionId); form.append('turn_id', turnId);
@@ -318,7 +480,7 @@ async function submitRecording(blob, turnId) {
 }
 async function startRecording() {
   if (!state.backendAvailable) { setPhase('blocked', 'Hãy chạy backend local trước khi dùng microphone.'); return; }
-  if (!state.sttAvailable) { setPhase('blocked', 'PhoWhisper chưa được cài. Xem requirements-ai.txt.'); return; }
+  if (!state.sttAvailable) { setPhase('blocked', 'STT local chưa sẵn sàng. Kiểm tra trang health và hướng dẫn setup runtime.'); return; }
   if (recorder?.state === 'recording') { stopRecording(); return; }
   if (state.busy) return;
   try {
@@ -355,21 +517,31 @@ async function startRecording() {
 async function checkBackend() {
   try {
     const response = await fetch(`${API_BASE}/api/v1/health`); if (!response.ok) throw new Error();
-    const health = await response.json(); state.backendAvailable = true; state.sttAvailable = health.stt.available; state.ttsAvailable = health.tts.available; state.vehicleService = health.vehicle?.provider === 'mqtt';
-    $('#drive-toggle').disabled = state.vehicleService;
-    if (state.vehicleService) {
-      try {
-        const vehicleResponse = await fetch(`${API_BASE}/api/v1/vehicle/state`);
-        if (!vehicleResponse.ok) throw new Error();
-        applyBackendState(await vehicleResponse.json());
-      } catch { setPhase('blocked', 'Xe mô phỏng MQTT chưa kết nối. Mình chưa thể điều khiển cabin.'); }
-    }
-    $('#backend-status').classList.remove('offline'); $('#backend-status').innerHTML = `<i></i> Local · ${health.llm.provider}`;
-    $('#runtime-note').innerHTML = `<span class="mini-dot"></span> STT ${health.stt.available ? 'sẵn sàng' : 'chưa cài'} · TTS ${health.tts.available ? 'Mai Chi' : 'chưa cài'} · LLM ${health.llm.provider} · Xe ${state.vehicleService ? 'MQTT' : 'demo'}`;
+    const health = await response.json(); state.backendAvailable = true; state.vehicleProvider = health.vehicle.provider; state.sttAvailable = health.stt.available; state.sttProvider = health.stt.provider; state.ttsAvailable = health.tts.available; state.ttsProvider = health.tts.provider; state.storeAudio = health.storage.audio; state.storeTranscripts = health.storage.transcripts;
+    state.llmOptions = health.llm.options || [];
+    const saved = localStorage.getItem('vivi-llm-provider');
+    const defaultProvider = state.llmOptions.find(item => item.provider === health.llm.provider && item.available)?.provider
+      || state.llmOptions.find(item => item.available)?.provider || 'rules';
+    state.llmProvider = state.llmOptions.some(item => item.provider === saved && item.available) ? saved : defaultProvider;
+    updateModelStatus();
+    $('#backend-status').classList.remove('offline'); $('#backend-status').innerHTML = '<i></i> Local · <span id="backend-model"></span>';
+    $('#backend-model').textContent = state.llmProvider;
+    $('#runtime-note').innerHTML = `<span class="mini-dot"></span> STT ${health.stt.available ? 'sẵn sàng' : 'chưa cài'} · TTS ${health.tts.available ? 'Mai Chi' : 'chưa cài'} · LLM <span id="runtime-model"></span>`;
+    $('#runtime-model').textContent = state.llmProvider;
+    $('#drive-toggle').disabled = state.vehicleProvider !== 'memory';
+    try {
+      const vehicleResponse = await fetch(`${API_BASE}/api/v1/vehicle/state`);
+      if (vehicleResponse.ok) applyBackendState(await vehicleResponse.json());
+    } catch { /* An external simulator may be temporarily offline. */ }
   } catch {
     state.backendAvailable = false; $('#backend-status').classList.add('offline'); $('#backend-status').innerHTML = '<i></i> Local backend offline';
     $('#runtime-note').innerHTML = '<span class="mini-dot"></span> Chế độ prototype · hãy chạy python run.py';
   }
+}
+
+function updateModelStatus() {
+  if ($('#backend-model')) $('#backend-model').textContent = state.llmProvider;
+  if ($('#runtime-model')) $('#runtime-model').textContent = state.llmProvider;
 }
 
 $('#command-form').addEventListener('submit', event => { event.preventDefault(); runCommand($('#command-input').value); });
@@ -378,40 +550,102 @@ $('#demo-mic').addEventListener('click', startRecording);
 document.querySelectorAll('[data-temp]').forEach(button => button.addEventListener('click', () => runCommand(`Đặt nhiệt độ ${state.temp + Number(button.dataset.temp)} độ`)));
 $('#window-toggle').addEventListener('click', () => runCommand(state.window ? 'Đóng cửa sổ bên tài' : 'Mở cửa sổ bên tài'));
 $('#music-toggle').addEventListener('click', () => runCommand(state.music ? 'Dừng nhạc' : 'Phát nhạc thư giãn'));
-$('#drive-toggle').addEventListener('click', () => {
-  state.driving = !state.driving;
-  $('#drive-toggle').setAttribute('aria-pressed', String(state.driving));
-  $('#drive-toggle span').textContent = state.driving ? 'Đang lái xe · Demo' : 'Đang đỗ xe';
-  document.body.classList.toggle('driving', state.driving);
+$('#drive-toggle').addEventListener('click', async () => {
+  if (state.busy) return;
+  const driving = !state.driving;
+  if (state.backendAvailable) {
+    if (state.vehicleProvider !== 'memory') {
+      setPhase('blocked', 'Chế độ lái chỉ được đổi bằng fixture của memory simulator.');
+      return;
+    }
+    lockControls(true);
+    try {
+      const response = await fetch(`${API_BASE}/api/v1/demo/vehicle/driving`, {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: sessionId, driving })
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.detail || 'Không đổi được trạng thái lái');
+      applyBackendState(payload);
+    } catch (error) {
+      setPhase('blocked', error.message);
+      return;
+    } finally {
+      lockControls(false);
+    }
+  } else {
+    state.driving = driving;
+    $('#drive-toggle').setAttribute('aria-pressed', String(state.driving));
+    $('#drive-toggle span').textContent = state.driving ? 'Đang lái xe · Demo' : 'Đang đỗ xe';
+    document.body.classList.toggle('driving', state.driving);
+  }
   setPhase('idle', state.driving ? 'Chuyển động đã dịu lại. Mình đồng hành cùng bạn.' : 'Đã về chế độ đỗ xe. Không gian ViVi được mở rộng.');
 });
 $('#sound-toggle').addEventListener('click', () => {
   state.sound = !state.sound;
   $('#sound-toggle').setAttribute('aria-pressed', String(state.sound));
   $('#sound-toggle span').textContent = `Mai Chi: ${state.sound ? 'bật' : 'tắt'}`;
-  if (state.sound) speak('Mình là ViVi, sẵn sàng đồng hành cùng bạn.'); else { currentAudio?.pause(); if ('speechSynthesis' in window) speechSynthesis.cancel(); }
+  // Enabling sound must not inject a synthetic greeting into the conversation.
+  if (!state.sound) { stopPlayback(); if ('speechSynthesis' in window) speechSynthesis.cancel(); }
 });
 
 const dialog = $('#info-dialog');
+const modelLabels = { rules: 'Kịch bản', openai: 'OpenAI', google: 'Google', local: 'Local API' };
+const modelModes = { rules: 'Phản hồi định sẵn', openai: 'Cloud · cần Internet', google: 'Cloud · cần Internet', local: 'On-device · riêng tư' };
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>'"]/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character]);
+}
+function modelOptionsMarkup() {
+  if (!state.backendAvailable) return '<div class="config-empty"><i></i><span>Backend chưa kết nối</span><small>Chạy python run.py để tải danh sách model.</small></div>';
+  return state.llmOptions.map(item => {
+    const selected = item.provider === state.llmProvider;
+    const label = modelLabels[item.provider] || item.provider;
+    const model = item.model || 'Chưa cấu hình';
+    const status = item.available ? (modelModes[item.provider] || '') : (item.detail || 'Chưa cấu hình trong .env');
+    return `<button type="button" class="model-option${selected ? ' selected' : ''}" data-llm-provider="${escapeHtml(item.provider)}" aria-pressed="${selected}" ${item.available ? '' : 'disabled'}><span class="model-option-head"><strong>${escapeHtml(label)}</strong><i></i></span><span class="model-id">${escapeHtml(model)}</span><small>${escapeHtml(status)}</small></button>`;
+  }).join('');
+}
+function selectLlmProvider(provider) {
+  const selected = state.llmOptions.find(item => item.provider === provider && item.available);
+  if (!selected) return;
+  state.llmProvider = provider;
+  localStorage.setItem('vivi-llm-provider', provider);
+  document.querySelectorAll('[data-llm-provider]').forEach(button => {
+    const active = button.dataset.llmProvider === provider;
+    button.classList.toggle('selected', active);
+    button.setAttribute('aria-pressed', String(active));
+  });
+  const activeModel = $('#active-model');
+  if (activeModel) activeModel.textContent = `${modelLabels[provider] || provider} · ${selected.model || 'Chưa cấu hình'}`;
+  updateModelStatus();
+}
 function openPanel(view) {
-  if (view === 'home') { if (dialog.open) dialog.close(); document.querySelectorAll('.rail-main .rail-button').forEach(button => button.classList.toggle('active', button.dataset.view === 'home')); return; }
+  if (view === 'home') { if (dialog.open) dialog.close(); document.querySelectorAll('.rail-main .rail-button').forEach(button => button.classList.toggle('active', button.dataset.view === 'home')); $('.settings-button').classList.remove('active'); return; }
   document.querySelectorAll('.rail-main .rail-button').forEach(button => button.classList.toggle('active', button.dataset.view === view));
+  $('.settings-button').classList.toggle('active', view === 'settings');
+  const currentModel = state.llmOptions.find(item => item.provider === state.llmProvider);
+  const sourceMarkup = state.manualEvidence.length
+    ? state.manualEvidence.map((item, index) => `<div class="detail-row"><span>Nguồn ${index + 1}</span><strong>${item.source_url ? `<a href="${escapeHtml(item.source_url)}" target="_blank" rel="noreferrer">${escapeHtml(item.section || item.source_id)}</a>` : escapeHtml(item.section || item.source_id)}</strong></div>`).join('')
+    : '<p class="dialog-note">Hãy hỏi một câu về kỹ thuật VF8 để xem nguồn từ cẩm nang.</p>';
+  const manualContent = `<h2>Hiểu chiếc xe của bạn</h2><p>${escapeHtml(state.manualAnswer || 'ViVi sẽ hiển thị câu trả lời đã được grounding từ cẩm nang VF8 2026 tại đây.')}</p>${sourceMarkup}`;
   const contents = {
     vehicle: `<h2>Không gian của bạn</h2><p>Digital Twin · trạng thái được mô phỏng trong phiên trải nghiệm này.</p><div class="detail-row"><span>Pin còn lại</span><strong>${state.battery}% / ${state.range} km</strong></div><div class="detail-row"><span>Nhiệt độ cài đặt</span><strong>${state.temp}°C</strong></div><div class="detail-row"><span>Cửa sổ bên tài</span><strong>${state.window ? 'Đang mở' : 'Đang đóng'}</strong></div><div class="detail-row"><span>Cửa xe bên tài</span><strong>${state.doorOpen ? 'Đang mở' : state.doorLocked ? 'Đang khóa' : 'Đã đóng, không khóa'}</strong></div><div class="detail-row"><span>Sưởi ghế bên tài</span><strong>Mức ${state.seatHeat}</strong></div><div class="detail-row"><span>Multimedia</span><strong>${state.music ? 'Đang phát (mô phỏng)' : 'Đang dừng'}</strong></div><div class="detail-row"><span>Chế độ</span><strong>${state.driving ? 'Đang lái xe (demo)' : 'Đang đỗ xe'}</strong></div><p class="dialog-note">Chưa kết nối xe thật, cảm biến hoặc dịch vụ VinFast.</p>`,
     journey: '<h2>Mỗi hành trình, một khám phá.</h2><p>Không gian dành cho địa điểm yêu thích, trạm sạc và chỉ đường trong phiên bản tiếp theo.</p><div class="detail-row"><span>Điểm đến</span><strong>Chưa thiết lập</strong></div><div class="detail-row"><span>Dịch vụ bản đồ</span><strong>Chưa kết nối</strong></div><p class="dialog-note">Prototype hiện tập trung vào trải nghiệm trợ lý và các thao tác cabin.</p>',
-    manual: '<h2>Hiểu chiếc xe của bạn</h2><p>Đây là bản xem trước cách ViVi trình bày một câu trả lời có nguồn tham khảo.</p><div class="detail-row"><span>Ví dụ câu hỏi</span><strong>Điều chỉnh nhiệt độ thế nào?</strong></div><p>Trong demo, bạn có thể nói “Tôi hơi lạnh” để tăng nhiệt độ cài đặt thêm 2°C, hoặc nhập “Đặt nhiệt độ 25 độ”. ViVi kiểm tra giới hạn 16–30°C trước khi cập nhật xe mô phỏng.</p><div class="detail-row"><span>Nguồn của nội dung này</span><strong>Quy tắc prototype ViVi</strong></div><p class="dialog-note">Chưa tích hợp RAG hoặc manual VinFast. Nội dung này chỉ mô tả cách vận hành bản demo.</p><button class="dialog-action" id="try-climate">Thử “Tôi hơi lạnh” ↗</button>',
-    settings: `<h2>Nhịp điệu của ViVi</h2><p>Điều chỉnh không gian theo sự thoải mái của bạn.</p><label class="setting-label"><input id="reduce-motion" type="checkbox" ${state.reduced ? 'checked' : ''}> Giảm chuyển động</label><p class="dialog-note">Giữ nguyên hình khối và ánh sáng, dừng chuyển động lơ lửng, xoay quỹ đạo và hiệu ứng âm thanh dạng sóng. Chế độ lái xe tự động làm dịu chuyển động.</p><div class="detail-row"><span>Tương tác giọng nói</span><strong>${state.sttAvailable ? 'PhoWhisper local' : 'Chưa cài AI runtime'}</strong></div><p class="dialog-note">Nhấn mic một lần để bắt đầu. ViVi tự dừng khi bạn im lặng hoặc khi bạn nhấn mic lần nữa. Audio và transcript được lưu cục bộ trong thư mục data cho đến khi bạn tự xóa.</p>`
+    manual: manualContent,
+    settings: `<h2>Cấu hình ViVi</h2><p>Chọn cách ViVi suy nghĩ và chuyển động trong không gian của bạn.</p><section class="config-section"><div class="config-heading"><span>MÔ HÌNH HỘI THOẠI</span><strong id="active-model">${escapeHtml(modelLabels[state.llmProvider] || state.llmProvider || 'Chưa kết nối')} · ${escapeHtml(currentModel?.model || '')}</strong></div><div class="model-options">${modelOptionsMarkup()}</div><p class="dialog-note">Lựa chọn được áp dụng từ lượt hội thoại tiếp theo. Model ID và API key vẫn được quản lý an toàn trong .env.</p></section><section class="config-section"><div class="config-heading"><span>TRẢI NGHIỆM</span><strong>Không gian & giọng nói</strong></div><label class="motion-setting"><span><strong>Giảm chuyển động</strong><small>Dừng lơ lửng, quỹ đạo và hiệu ứng sóng</small></span><input id="reduce-motion" type="checkbox" ${state.reduced ? 'checked' : ''}><i></i></label><div class="config-runtime"><div><span>NHẬN DIỆN GIỌNG NÓI</span><strong>${state.sttAvailable ? `${escapeHtml(state.sttProvider)} · local` : 'Chưa sẵn sàng'}</strong></div><div><span>GIỌNG PHẢN HỒI</span><strong>${state.ttsAvailable ? `${escapeHtml(state.ttsProvider)} · local` : 'Trình duyệt/text fallback'}</strong></div></div><p class="dialog-note">Audio: ${state.storeAudio ? 'đang lưu' : 'không lưu'} · transcript: ${state.storeTranscripts ? 'đang lưu' : 'không lưu'}.</p></section>`
   };
   $('#dialog-content').innerHTML = contents[view];
+  dialog.classList.toggle('config-dialog', view === 'settings');
   if (!dialog.open) dialog.showModal();
   $('#try-climate')?.addEventListener('click', () => { dialog.close(); runCommand('Tôi hơi lạnh'); });
   $('#reduce-motion')?.addEventListener('change', event => { state.reduced = event.target.checked; document.body.classList.toggle('reduced-motion', state.reduced); });
+  document.querySelectorAll('[data-llm-provider]').forEach(button => button.addEventListener('click', () => selectLlmProvider(button.dataset.llmProvider)));
 }
 document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', () => openPanel(button.dataset.view)));
 $('.settings-button').addEventListener('click', () => openPanel('settings'));
 $('#close-dialog').addEventListener('click', () => dialog.close());
 dialog.addEventListener('click', event => { if (event.target === dialog) { const rect = dialog.getBoundingClientRect(); if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) dialog.close(); } });
-dialog.addEventListener('close', () => { document.querySelectorAll('.rail-main .rail-button').forEach(button => button.classList.toggle('active', button.dataset.view === 'home')); });
+dialog.addEventListener('close', () => { document.querySelectorAll('.rail-main .rail-button').forEach(button => button.classList.toggle('active', button.dataset.view === 'home')); $('.settings-button').classList.remove('active'); dialog.classList.remove('config-dialog'); });
 motionPreference.addEventListener('change', event => { state.reduced = event.matches; document.body.classList.toggle('reduced-motion', state.reduced); });
 document.body.classList.toggle('reduced-motion', state.reduced);
 function updateClock() { $('#clock').textContent = new Intl.DateTimeFormat('vi-VN', { hour: '2-digit', minute: '2-digit' }).format(new Date()); }

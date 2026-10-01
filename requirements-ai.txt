@@ -1,12 +1,19 @@
-# Optional local AI runtime. Python 3.11 or 3.12 is recommended because
-# PyTorch/ONNX wheels may not yet exist for the newest Python releases.
+# Optional PC profile for cloud/local LLM, PhoWhisper and ZeroTTS.
 -r requirements.txt
-accelerate>=1.2
+accelerate>=1.2,<2
+google-genai>=1.0,<2
 numpy>=2.0
 openai>=2.0
-google-genai>=1.0
 soundfile>=0.13
-torch>=2.4
-transformers>=4.46
-zerotts
-
+torch>=2.4,<2.7
+transformers>=4.46,<5
+zerotts==0.1.5
+onnxruntime-gpu==1.23.2; (platform_system == "Linux" and platform_machine == "x86_64") or platform_system == "Windows"
+onnxruntime==1.23.2; platform_system == "Darwin"
+nvidia-cuda-nvrtc-cu12==12.4.127; platform_system == "Linux" and platform_machine == "x86_64"
+nvidia-cuda-runtime-cu12==12.4.127; platform_system == "Linux" and platform_machine == "x86_64"
+nvidia-cublas-cu12==12.4.5.8; platform_system == "Linux" and platform_machine == "x86_64"
+nvidia-cudnn-cu12==9.1.0.70; platform_system == "Linux" and platform_machine == "x86_64"
+nvidia-cufft-cu12==11.2.1.3; platform_system == "Linux" and platform_machine == "x86_64"
+nvidia-curand-cu12==10.3.5.147; platform_system == "Linux" and platform_machine == "x86_64"
+nvidia-nvjitlink-cu12==12.4.127; platform_system == "Linux" and platform_machine == "x86_64"

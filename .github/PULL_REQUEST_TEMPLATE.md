@@ -11,10 +11,14 @@
 
 ## Checklist
 
-- [ ] `ruff check .` sạch
-- [ ] `pytest` xanh
+- [ ] `bash scripts/check_local.sh` xanh
+- [ ] Nếu thay đổi runtime/container: `bash scripts/check_docker.sh` xanh
 - [ ] **Không có API key / token / credential** trong diff (kể cả `.env.example`)
 - [ ] Nếu đụng `docs/guide/**`: đã kiểm tra nội dung hiển thị đúng và link không chết
+
+**Kết quả kiểm tra local:**
+
+<!-- Dán dòng tổng kết, ví dụ: 91 passed, 15 subtests passed. -->
 
 ## AI usage
 

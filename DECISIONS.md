@@ -18,7 +18,9 @@ Tài liệu này ghi lại “vì sao” của các lựa chọn quan trọng. M
 - **Trạng thái:** Accepted
 - **Ngày:** 2026-09-22
 - **Bối cảnh:** LLM chưa được chọn; PhoWhisper và zeroTTS có thể thay đổi cách triển khai.
-- **Quyết định:** Định nghĩa interface riêng cho STT, LLM và TTS. Orchestrator chỉ phụ thuộc interface, không phụ thuộc SDK cụ thể.
+- **Quyết định:** Định nghĩa interface riêng cho STT và TTS; các LLM provider nằm sau
+  interface intent classifier/handbook generator. LangGraph chỉ phụ thuộc các service
+  contract này, không phụ thuộc SDK cụ thể.
 - **Hệ quả:** Có thêm lớp abstraction và contract test, nhưng có thể benchmark/đổi model mà không sửa luồng nghiệp vụ.
 
 ## ADR-003 — Dùng PhoWhisper medium trên laptop local
@@ -90,6 +92,44 @@ Tài liệu này ghi lại “vì sao” của các lựa chọn quan trọng. M
 - **Bối cảnh:** API chấp nhận lệnh không có nghĩa xe đã đạt trạng thái mong muốn.
 - **Quyết định:** Sau thao tác, vehicle adapter đọc lại trạng thái hoặc nhận acknowledgement đáng tin cậy. Chỉ khi verify thành công ViVi mới nói “đã”.
 - **Hệ quả:** Tăng một bước và độ trễ nhưng tránh phản hồi sai. Timeout verify trả lời rằng chưa thể xác nhận, không giả định thành công.
+
+## ADR-011 — Tách hội thoại tự nhiên khỏi thao tác xe
+
+- **Trạng thái:** Accepted
+- **Ngày:** 2026-09-23
+- **Bối cảnh:** Schema chỉ có intent điều khiển và hỏi lại, khiến câu “Bạn là ai?” rơi vào kịch bản ngay cả khi có LLM.
+- **Quyết định:** Thêm `conversation.respond` cho câu hỏi thông thường. Nội dung từ LLM được chuyển đến UI/TTS nhưng không gọi vehicle adapter. Lệnh xe vẫn đi qua safety gateway rồi mới được thực thi và xác minh.
+- **Hệ quả:** Có thể trò chuyện tự nhiên khi chọn provider LLM thật; `rules` vẫn là fallback kịch bản. OpenAI/Google cần kết nối mạng.
+
+## ADR-012 — Phát TTS theo luồng PCM
+
+- **Trạng thái:** Accepted
+- **Ngày:** 2026-09-23
+- **Bối cảnh:** ZeroTTS hỗ trợ `synthesize_stream()` nhưng endpoint WAV cũ đợi tổng hợp xong toàn câu mới phát.
+- **Quyết định:** Giữ endpoint WAV để tương thích; thêm `/api/v1/tts/stream` xuất PCM mono signed 16-bit little-endian, sample rate trong header. Frontend dùng Web Audio để xếp các chunk liên tiếp và cho phép hủy luồng/phát.
+- **Hệ quả:** Frontend phải giải mã PCM và xử lý ngắt kết nối; mỗi adapter chỉ tổng hợp một lượt tại một thời điểm để bảo vệ model. Để tránh hụt tiếng ở các chunk đầu ngắn, frontend đệm khoảng 1 giây audio trước khi phát, đánh đổi một phần độ trễ lấy độ mượt.
+
+## ADR-013 — Streaming LLM sang voice theo mệnh đề và giữ safety barrier
+
+- **Trạng thái:** Superseded bởi ADR-014
+- **Ngày:** 2026-09-23
+- **Bối cảnh:** Luồng cũ chỉ stream nội bộ ZeroTTS nhưng đợi LLM trả xong toàn bộ JSON, tạo thêm 1,5–4,5 giây trước khi bắt đầu tổng hợp giọng.
+- **Quyết định:** Provider phát structured JSON theo luồng. Khi intent đã xác định là `conversation.respond`, backend tách `spoken_response` tại ranh giới mệnh đề và chuyển ngay cho hàng đợi ZeroTTS. Mọi intent điều khiển xe tiếp tục chờ đủ JSON, safety validation và vehicle acknowledgement trước khi phát phản hồi.
+- **Hệ quả:** Cách stream trực tiếp từ JSON provider đã bị bỏ khi hợp nhất mọi provider vào
+  LangGraph. Runtime hiện chỉ phát các đoạn TTS sau khi graph tạo `AssistantOutput` hợp lệ;
+  giọng vẫn được chia theo câu/mệnh đề để tránh các lần gọi TTS quá nhỏ.
+
+## ADR-014 — LangGraph là orchestration path chính của voice pipeline
+
+- **Trạng thái:** Accepted
+- **Ngày:** 2026-09-25
+- **Bối cảnh:** Voice pipeline trong `server/` và handbook/action graph trong `src/` từng có hai bước phân loại và hai response contract riêng.
+- **Quyết định:** Giữ `/api/v1/turn` và `/turn/stream` làm contract của UI; `rules`,
+  Google, OpenAI và local OpenAI-compatible đều chạy qua một LangGraph. Facade backend
+  ánh xạ `AssistantOutput` sang `TurnResponse`. Chỉ stream speech sau khi handbook đã qua
+  citation validation hoặc action đã qua safety/verify.
+- **Hệ quả:** STT, RAG, action, confirmation và TTS dùng chung `session_id`/`turn_id`.
+  Runtime không còn legacy provider orchestrator hay bộ rules thứ hai.
 
 ## Các quyết định còn chờ
 

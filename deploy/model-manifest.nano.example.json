@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "target": "jetson-nano-4gb-jetpack-4.6.6",
+  "models": {
+    "llm": {
+      "runtime": "llama.cpp",
+      "runtime_commit": "REPLACE_WITH_TESTED_COMMIT",
+      "repository": "Qwen/Qwen2.5-1.5B-Instruct-GGUF",
+      "file": "qwen2.5-1.5b-instruct-q4_k_m.gguf",
+      "quantization": "Q4_K_M",
+      "sha256": "REPLACE_AFTER_DOWNLOAD",
+      "context_tokens": 2048
+    },
+    "stt": {
+      "runtime": "whisper.cpp",
+      "runtime_commit": "REPLACE_WITH_TESTED_COMMIT",
+      "model": "ggml-base.bin",
+      "language": "vi",
+      "sha256": "REPLACE_AFTER_DOWNLOAD"
+    },
+    "tts": {
+      "runtime": "disabled-until-device-benchmark",
+      "model": null,
+      "sha256": null
+    }
+  }
+}

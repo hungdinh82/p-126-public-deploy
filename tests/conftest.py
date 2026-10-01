@@ -1,10 +1,27 @@
-from unittest.mock import AsyncMock
+import os
 
-import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
-from src.main import app
+# Tests must not inherit provider choices or credentials from a developer's
+# .env files. Provider-specific tests construct their own Settings instances.
+os.environ.update(
+    {
+        "APP_ENV": "test",
+        "LLM_PROVIDER": "rules",
+        "STT_PROVIDER": "off",
+        "TTS_PROVIDER": "off",
+        "VIVI_VEHICLE_PROVIDER": "memory",
+        "RAG_RETRIEVAL_MODE": "sqlite",
+        "PHOWHISPER_PRELOAD": "false",
+        "ZEROTTS_PRELOAD": "false",
+        "OPENAI_API_KEY": "",
+        "GOOGLE_API_KEY": "",
+        "LOCAL_LLM_MODEL": "",
+    }
+)
+
+from src.vivi.api.app import app
 
 
 @pytest_asyncio.fixture
@@ -13,17 +30,3 @@ async def client():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
-
-
-@pytest.fixture
-def mock_llm():
-    """Mock LLM to avoid calling OpenAI during tests.
-
-    Usage in test:
-        def test_something(mock_llm):
-            # LLM calls will return mock response instead of hitting OpenAI
-            ...
-    """
-    mock = AsyncMock()
-    mock.ainvoke.return_value = AsyncMock(content="Mocked LLM response")
-    return mock

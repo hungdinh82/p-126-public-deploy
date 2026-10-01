@@ -1,21 +1,27 @@
-.PHONY: run test lint format typecheck check clean
+.PHONY: run test lint format typecheck check check-docker clean
+
+PYTHON ?= .venv/bin/python
 
 run:
-	uvicorn src.main:app --reload --host 0.0.0.0 --port 8000
+	$(PYTHON) -m uvicorn src.vivi.api.app:app --reload --host 127.0.0.1 --port 8787
 
 test:
-	pytest tests/ -v
+	$(PYTHON) -m pytest tests/ -v
 
 lint:
-	ruff check src/ tests/
+	$(PYTHON) -m ruff check src/ vehicle_simulator/ tests/
 
 format:
-	ruff format src/ tests/
+	$(PYTHON) -m ruff format src/ vehicle_simulator/ tests/
 
 typecheck:
-	mypy src/
+	$(PYTHON) -m mypy src/
 
-check: lint format test
+check:
+	bash scripts/check_local.sh
+
+check-docker:
+	bash scripts/check_docker.sh
 
 clean:
 	find . -type d -name __pycache__ -exec rm -rf {} +
