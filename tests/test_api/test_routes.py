@@ -100,6 +100,30 @@ async def test_demo_driving_state_reaches_safety_gateway(client):
 
 
 @pytest.mark.asyncio
+async def test_alert_polling_keeps_stable_episode_id(client):
+    session_id = "api-alerts"
+    state = runtime.vehicle.state_for(session_id)
+    state.battery_percent = 10
+    state.tire_pressures_kpa.front_left = 205
+    state.tire_pressures_kpa.rear_right = 315
+    state.state_version += 1
+    runtime.vehicle._states[session_id] = state
+
+    first = await client.get(f"/api/v1/vehicle/alerts?session_id={session_id}")
+    second = await client.get(f"/api/v1/vehicle/alerts?session_id={session_id}")
+    assert first.status_code == 200
+    assert second.status_code == 200
+    first_payload = first.json()
+    second_payload = second.json()
+    assert first_payload["vehicle_state"]["battery_percent"] == 10
+    assert first_payload["vehicle_state"]["tire_pressures_kpa"]["front_left"] == 205
+    assert first_payload["vehicle_state"]["tire_pressures_kpa"]["rear_right"] == 315
+    assert first_payload["event_sequence"] == second_payload["event_sequence"]
+    assert first_payload["active_alerts"][0]["alert_id"] == second_payload["active_alerts"][0]["alert_id"]
+    assert first_payload["active_alerts"][0]["code"] == "LOW_BATTERY"
+
+
+@pytest.mark.asyncio
 async def test_stt_deletes_temporary_audio_when_retention_is_disabled(client):
     observed_path: Path | None = None
 

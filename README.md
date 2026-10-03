@@ -73,7 +73,7 @@ API vẫn khởi động và health báo rõ adapter nào chưa sẵn sàng. `/a
 
 - Nhấn mic một lần để bắt đầu thu âm. ViVi tự dừng sau khoảng lặng hoặc khi nhấn mic lần nữa.
 - Nhập “Đặt nhiệt độ 25 độ”, “Giảm nhiệt độ 2 độ”, “Phát nhạc thư giãn”, “Dừng nhạc”, “Trạng thái xe”.
-- Thử “Mở cửa sổ bên tài”, “Đóng cửa sổ bên tài”, “Mở cửa xe bên tài”, “Khóa cửa xe”, “Mở khóa cửa xe”. ViVi đọc lại đúng thao tác và chờ câu trả lời “Xác nhận” hoặc “Hủy” trong 30 giây; trước khi xác nhận, state không đổi.
+- Thử “Mở cửa sổ bên tài”, “Mở cửa bên phụ”, “Sưởi ghế sau trái mức 2”, “Khóa tất cả cửa”. ViVi hỗ trợ bốn vị trí cabin và `tất cả`; nếu chưa nói vị trí, ViVi hỏi lại trước khi tạo thao tác. Lệnh cửa/kính chờ “Xác nhận” hoặc “Hủy” trong 30 giây; trước khi xác nhận, state không đổi.
 - Thử “Sưởi ghế mức 2” hoặc “Tắt sưởi ghế”; các thao tác ghế không cần xác nhận.
 - Chuyển sang “Đang lái xe” rồi thử mở cửa sổ để thấy policy minh họa chặn lệnh.
 - Nhập “Đặt nhiệt độ 35 độ” để thử kiểm tra giới hạn.

@@ -9,6 +9,7 @@ from src.vivi.persistence.event_store import EventStore
 from src.vivi.providers import llm_models
 from src.vivi.speech.stt import create_stt
 from src.vivi.speech.tts import create_tts
+from src.vivi.vehicle.alerts import AlertEngine
 from src.vivi.vehicle.memory import VehicleSimulator
 from src.vivi.vehicle.mqtt import MqttVehicleAdapter
 
@@ -21,6 +22,7 @@ class Runtime:
     orchestrator: LangGraphOrchestrator
     stt: Any
     tts: Any
+    alerts: AlertEngine
     llm_models: dict[str, str]
 
     def close(self) -> None:
@@ -48,6 +50,7 @@ def build_runtime(config: Settings = settings) -> Runtime:
         orchestrator=create_langgraph_orchestrator(vehicle, store, config),
         stt=create_stt(config),
         tts=create_tts(config),
+        alerts=AlertEngine(),
         llm_models=llm_models(config),
     )
 

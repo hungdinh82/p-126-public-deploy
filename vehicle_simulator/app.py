@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -12,7 +13,11 @@ from .models import CommandResult, FaultScenario, VehicleCommand, VehicleFixture
 
 
 def create_app(
-    database_path: Path, *, enable_test_control: bool = False, simulator: VehicleSimulator | None = None
+    database_path: Path,
+    *,
+    enable_test_control: bool = False,
+    simulator: VehicleSimulator | None = None,
+    publish_state: Callable[[VehicleState], object] | None = None,
 ) -> FastAPI:
     owns_simulator = simulator is None
     simulator = simulator or VehicleSimulator(database_path)
@@ -58,12 +63,18 @@ def create_app(
         @app.put("/api/v1/test/vehicles/{vehicle_id}/fixture", response_model=VehicleState)
         def set_fixture(fixture: VehicleFixture, vehicle_id: str = ApiPath(min_length=1, max_length=100)):
             try:
-                return simulator.set_fixture(vehicle_id, fixture)
+                state = simulator.set_fixture(vehicle_id, fixture)
+                if publish_state:
+                    publish_state(state)
+                return state
             except ValueError as exc:
                 raise HTTPException(status_code=409, detail=str(exc)) from exc
 
         @app.post("/api/v1/test/vehicles/{vehicle_id}/reset", response_model=VehicleState)
         def reset(vehicle_id: str = ApiPath(min_length=1, max_length=100)):
-            return simulator.reset(vehicle_id)
+            state = simulator.reset(vehicle_id)
+            if publish_state:
+                publish_state(state)
+            return state
 
     return app

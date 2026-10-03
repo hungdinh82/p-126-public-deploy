@@ -114,12 +114,12 @@ class RulesTests(unittest.IsolatedAsyncioTestCase):
     async def test_door_and_seat_intents(self):
         state = VehicleState()
         cases = (
-            ("Mở cửa xe bên tài", "door.set_open", {"open": True}),
-            ("Đóng cửa xe bên tài", "door.set_open", {"open": False}),
-            ("Khóa cửa xe", "door.set_lock", {"locked": True}),
-            ("Mở khóa cửa xe", "door.set_lock", {"locked": False}),
-            ("Sưởi ghế mức 2", "seat.set_heat_level", {"level": 2}),
-            ("Tắt sưởi ghế", "seat.set_heat_level", {"level": 0}),
+            ("Mở cửa xe bên tài", "door.set_open", {"open": True, "zone": "driver"}),
+            ("Đóng cửa xe bên tài", "door.set_open", {"open": False, "zone": "driver"}),
+            ("Khóa tất cả cửa", "door.set_lock", {"locked": True, "zone": "all"}),
+            ("Mở khóa cửa bên phụ", "door.set_lock", {"locked": False, "zone": "front_passenger"}),
+            ("Sưởi ghế sau trái mức 2", "seat.set_heat_level", {"level": 2, "zone": "rear_left"}),
+            ("Tắt sưởi ghế bên tài", "seat.set_heat_level", {"level": 0, "zone": "driver"}),
         )
         for text, intent, arguments in cases:
             with self.subTest(text=text):
@@ -130,6 +130,48 @@ class RulesTests(unittest.IsolatedAsyncioTestCase):
                 )
         unrelated = self.classify("Nhiệt độ của xe 25 độ", state)
         self.assertEqual(unrelated.intent, "climate.set_temperature")
+
+    async def test_door_action_requires_location_and_accepts_driver_side_followup(self):
+        vague = self.classify("Mở cửa", VehicleState())
+        self.assertEqual(vague.intent, "conversation.clarify")
+        self.assertEqual(vague.clarification_question, "Bạn muốn mở cửa bên nào?")
+
+        followup = self.rules.classify_with_context(
+            "Bên tài",
+            [
+                {
+                    "query": "Mở cửa",
+                    "answer": "Bạn muốn mở cửa bên nào?",
+                    "route": "clarify",
+                    "intent": "conversation.clarify",
+                }
+            ],
+            VehicleState().model_dump(mode="json"),
+        )
+        self.assertEqual(followup.intent, "door.set_open")
+        self.assertEqual(followup.arguments.model_dump(exclude_none=True), {"open": True, "zone": "driver"})
+
+        changed_topic = self.rules.classify_with_context(
+            "Bên tài đang bị bẩn",
+            [
+                {
+                    "query": "Mở cửa",
+                    "answer": "Bạn muốn mở cửa bên nào?",
+                    "route": "clarify",
+                    "intent": "conversation.clarify",
+                }
+            ],
+            VehicleState().model_dump(mode="json"),
+        )
+        self.assertEqual(changed_topic.intent, "conversation.clarify")
+
+        passenger = self.classify("Mở cửa bên phụ", VehicleState())
+        self.assertEqual(passenger.intent, "door.set_open")
+        self.assertEqual(passenger.arguments.zone, "front_passenger")
+
+        all_windows = self.classify("Mở tất cả cửa sổ", VehicleState())
+        self.assertEqual(all_windows.intent, "window.set_position")
+        self.assertEqual(all_windows.arguments.zone, "all")
 
     async def test_idempotent_turn(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -393,7 +435,7 @@ class TurnStreamingTests(unittest.IsolatedAsyncioTestCase):
             orchestrator = create_langgraph_orchestrator(
                 VehicleSimulator(), EventStore(config), config
             )
-            request = TurnRequest(transcript="Mở cửa sổ", session_id="stream", turn_id="stream-action")
+            request = TurnRequest(transcript="Mở cửa sổ bên tài", session_id="stream", turn_id="stream-action")
             events = [event async for event in orchestrator.run_stream(request)]
 
         self.assertEqual(events[-1]["type"], "final")

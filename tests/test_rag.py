@@ -414,7 +414,7 @@ def test_safety_denial_never_calls_vehicle_adapter():
             {
                 "session_id": "blocked",
                 "turn_id": "t1",
-                "input_text": "Mở cửa sổ",
+                "input_text": "Mở cửa sổ bên tài",
                 "vehicle_state": {"driving": True},
             }
         )
@@ -443,10 +443,10 @@ def test_r2_action_requires_confirmation_then_executes_once():
         )
         graph = build_graph(services)
         proposed = graph.invoke(
-            {"session_id": "confirm", "turn_id": "t1", "input_text": "Mở cửa sổ"}
+            {"session_id": "confirm", "turn_id": "t1", "input_text": "Mở cửa sổ bên tài"}
         )
         proposed_retry = graph.invoke(
-            {"session_id": "confirm", "turn_id": "t1", "input_text": "Mở cửa sổ"}
+            {"session_id": "confirm", "turn_id": "t1", "input_text": "Mở cửa sổ bên tài"}
         )
         assert proposed["output"]["status"] == "confirmation_required"
         confirmation_id = proposed["output"]["confirmation"]["confirmation_id"]

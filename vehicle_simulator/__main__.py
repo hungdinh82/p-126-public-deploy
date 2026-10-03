@@ -41,7 +41,12 @@ def main() -> None:
             )
             mqtt_service.start()
         uvicorn.run(
-            create_app(args.db, enable_test_control=args.enable_test_control, simulator=simulator),
+            create_app(
+                args.db,
+                enable_test_control=args.enable_test_control,
+                simulator=simulator,
+                publish_state=mqtt_service.publish_state if mqtt_service else None,
+            ),
             host=args.host,
             port=args.port,
         )

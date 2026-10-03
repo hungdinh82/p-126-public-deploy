@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from datetime import UTC, datetime, timedelta
@@ -9,6 +10,7 @@ from uuid import uuid4
 from fastapi.testclient import TestClient
 
 from vehicle_simulator.app import create_app
+from vehicle_simulator.engine import VehicleSimulator
 
 
 class VehicleSimulatorServiceTests(unittest.TestCase):
@@ -169,6 +171,113 @@ class VehicleSimulatorServiceTests(unittest.TestCase):
         bad_vehicle["vehicle_id"] = "other-car"
         self.assertEqual(self.client.post(f"{self.base}/commands", json=bad_vehicle).status_code, 400)
         self.assertEqual(self.client.get(f"{self.base}/state").json()["state_version"], 0)
+
+    def test_fixture_extends_sensor_state_and_keeps_power_fields_in_sync(self):
+        response = self.client.put(
+            f"{self.control}/fixture",
+            json={
+                "power_state": "ready",
+                "battery_percent": 15,
+                "powertrain_temperature_celsius": 95,
+                "tire_pressures_kpa": {
+                    "front_left": 210,
+                    "front_right": 250,
+                    "rear_left": 250,
+                    "rear_right": 310,
+                },
+                "door_driver_open": True,
+            },
+        )
+        self.assertEqual(response.status_code, 200, response.text)
+        payload = response.json()
+        self.assertEqual(payload["power_state"], "ready")
+        self.assertFalse(payload["driving"])
+        self.assertEqual(payload["tire_pressures_kpa"]["front_left"], 210)
+        self.assertTrue(payload["door_states"]["driver"]["open"])
+
+        driving = self.client.put(f"{self.control}/fixture", json={"driving": True})
+        self.assertEqual(driving.status_code, 409)
+
+    def test_legacy_sqlite_state_is_migrated_before_validation(self):
+        database = Path(self.directory.name) / "legacy.sqlite3"
+        simulator = VehicleSimulator(database)
+        legacy = {
+            "vehicle_id": "legacy-car",
+            "state_version": 7,
+            "driving": True,
+            "battery_percent": 51,
+            "window_driver_percent": 40,
+            "door_driver_locked": True,
+            "seat_driver_heat_level": 2,
+        }
+        simulator._db.execute(
+            "INSERT INTO vehicles (vehicle_id, state_json) VALUES (?, ?)",
+            ("legacy-car", json.dumps(legacy)),
+        )
+        simulator.close()
+
+        reopened = VehicleSimulator(database)
+        try:
+            migrated = reopened.get_state("legacy-car")
+            self.assertEqual(migrated.power_state, "driving")
+            self.assertTrue(migrated.driving)
+            self.assertEqual(migrated.tire_pressures_kpa.front_left, 250)
+            self.assertEqual(migrated.window_positions.driver, 40)
+            self.assertTrue(migrated.door_states.driver.locked)
+            self.assertEqual(migrated.seat_heat_levels.driver, 2)
+            self.assertEqual(migrated.door_states.front_passenger.open, False)
+        finally:
+            reopened.close()
+
+    def test_fixture_and_reset_publish_changed_state(self):
+        published = []
+        simulator = VehicleSimulator(Path(self.directory.name) / "published.sqlite3")
+        app = create_app(
+            Path(self.directory.name) / "unused.sqlite3",
+            enable_test_control=True,
+            simulator=simulator,
+            publish_state=published.append,
+        )
+        try:
+            with TestClient(app) as client:
+                fixture = client.put(
+                    "/api/v1/test/vehicles/demo-car-1/fixture",
+                    json={"battery_percent": 10},
+                )
+                reset = client.post("/api/v1/test/vehicles/demo-car-1/reset")
+            self.assertEqual(fixture.status_code, 200)
+            self.assertEqual(reset.status_code, 200)
+            self.assertEqual([item.battery_percent for item in published], [10, 82])
+            self.assertGreater(published[1].state_version, published[0].state_version)
+        finally:
+            simulator.close()
+
+    def test_fixture_rejects_conflicting_legacy_and_structured_door_state(self):
+        response = self.client.put(
+            f"{self.control}/fixture",
+            json={
+                "door_driver_open": True,
+                "door_states": {"driver": {"open": False, "locked": False}},
+            },
+        )
+        self.assertEqual(response.status_code, 422, response.text)
+
+    def test_commands_control_each_cabin_zone_and_all_zones(self):
+        passenger_window = self.post(
+            self.command(
+                "window.set_position",
+                {"position_percent": 60, "zone": "front_passenger"},
+            )
+        )
+        self.assertEqual(passenger_window["state"]["window_positions"]["front_passenger"], 60)
+        self.assertEqual(passenger_window["state"]["window_positions"]["driver"], 0)
+
+        all_locked = self.post(self.command("door.set_lock", {"locked": True, "zone": "all"}))
+        self.assertTrue(all(item["locked"] for item in all_locked["state"]["door_states"].values()))
+
+        rear_heat = self.post(self.command("seat.set_heat_level", {"level": 3, "zone": "rear_right"}))
+        self.assertEqual(rear_heat["state"]["seat_heat_levels"]["rear_right"], 3)
+        self.assertEqual(rear_heat["state"]["seat_heat_levels"]["driver"], 0)
 
 
 if __name__ == "__main__":

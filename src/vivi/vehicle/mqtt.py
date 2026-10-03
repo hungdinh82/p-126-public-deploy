@@ -13,6 +13,7 @@ from pydantic import ValidationError
 
 from src.vivi.domain.models import ActionProposal, VehicleState
 from src.vivi.vehicle.memory import VehicleOutcome
+from src.vivi.vehicle.zones import selected_zones, zone_label
 from vehicle_simulator.models import VehicleAck, VehicleCommand, utc_now
 from vehicle_simulator.models import VehicleState as SimulatorState
 from vehicle_simulator.mqtt import topic
@@ -257,17 +258,29 @@ class MqttVehicleAdapter:
         if action.intent == "climate.set_temperature":
             return state.temperature_celsius == float(action.arguments["value_celsius"])
         if action.intent == "window.set_position":
-            return state.window_driver_percent == int(action.arguments["position_percent"])
+            return all(
+                getattr(state.window_positions, zone) == int(action.arguments["position_percent"])
+                for zone in selected_zones(action.arguments)
+            )
         if action.intent == "media.play":
             return state.media_playing
         if action.intent == "media.pause":
             return not state.media_playing
         if action.intent == "door.set_lock":
-            return state.door_driver_locked is action.arguments["locked"]
+            return all(
+                getattr(state.door_states, zone).locked is action.arguments["locked"]
+                for zone in selected_zones(action.arguments)
+            )
         if action.intent == "door.set_open":
-            return state.door_driver_open is action.arguments["open"]
+            return all(
+                getattr(state.door_states, zone).open is action.arguments["open"]
+                for zone in selected_zones(action.arguments)
+            )
         if action.intent == "seat.set_heat_level":
-            return state.seat_driver_heat_level == action.arguments["level"]
+            return all(
+                getattr(state.seat_heat_levels, zone) == action.arguments["level"]
+                for zone in selected_zones(action.arguments)
+            )
         return False
 
     @staticmethod
@@ -275,11 +288,12 @@ class MqttVehicleAdapter:
         if action.intent == "climate.set_temperature":
             return f"Mình đã đặt nhiệt độ ở {state.temperature_celsius:g} độ."
         if action.intent == "window.set_position":
-            return f"Mình đã đặt cửa sổ bên tài ở mức {state.window_driver_percent} phần trăm."
+            value = int(action.arguments["position_percent"])
+            return f"Mình đã đặt cửa sổ {zone_label(action.arguments)} ở mức {value} phần trăm."
         if action.intent == "door.set_lock":
-            return "Mình đã khóa cửa bên tài." if state.door_driver_locked else "Mình đã mở khóa cửa bên tài."
+            return f"Mình đã {'khóa' if action.arguments['locked'] else 'mở khóa'} cửa {zone_label(action.arguments)}."
         if action.intent == "door.set_open":
-            return "Mình đã mở cửa xe bên tài." if state.door_driver_open else "Mình đã đóng cửa xe bên tài."
+            return f"Mình đã {'mở' if action.arguments['open'] else 'đóng'} cửa xe {zone_label(action.arguments)}."
         if action.intent == "seat.set_heat_level":
-            return f"Mình đã đặt sưởi ghế bên tài ở mức {state.seat_driver_heat_level}."
+            return f"Mình đã đặt sưởi ghế {zone_label(action.arguments)} ở mức {action.arguments['level']}."
         return "Mình đã cập nhật trạng thái nhạc trong xe mô phỏng."

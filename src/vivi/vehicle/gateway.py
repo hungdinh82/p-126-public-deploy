@@ -14,6 +14,7 @@ from src.vivi.domain.models import ActionProposal as DomainActionProposal
 from src.vivi.domain.models import VehicleState
 from src.vivi.domain.safety import validate
 from src.vivi.vehicle.memory import VehicleSimulator
+from src.vivi.vehicle.zones import selected_zones
 
 
 @dataclass
@@ -184,13 +185,20 @@ class VehicleActionGateway:
         if proposal.intent == "climate.set_temperature":
             return state.temperature_celsius == float(arguments["value_celsius"])
         if proposal.intent == "window.set_position":
-            return state.window_driver_percent == int(arguments["position_percent"])
+            return all(
+                getattr(state.window_positions, zone) == int(arguments["position_percent"])
+                for zone in selected_zones(arguments)
+            )
         if proposal.intent == "door.set_open":
-            return state.door_driver_open is arguments["open"]
+            return all(getattr(state.door_states, zone).open is arguments["open"] for zone in selected_zones(arguments))
         if proposal.intent == "door.set_lock":
-            return state.door_driver_locked is arguments["locked"]
+            return all(
+                getattr(state.door_states, zone).locked is arguments["locked"] for zone in selected_zones(arguments)
+            )
         if proposal.intent == "seat.set_heat_level":
-            return state.seat_driver_heat_level == arguments["level"]
+            return all(
+                getattr(state.seat_heat_levels, zone) == arguments["level"] for zone in selected_zones(arguments)
+            )
         if proposal.intent == "media.play":
             return state.media_playing is True
         if proposal.intent == "media.pause":

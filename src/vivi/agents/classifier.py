@@ -23,8 +23,12 @@ Với yêu cầu tăng/giảm nhiệt độ, dùng nhiệt độ hiện tại tr
 value_celsius tuyệt đối. Không coi số độ tăng/giảm là nhiệt độ đích.
 Tên argument bắt buộc theo intent: climate.set_temperature dùng value_celsius;
 window.set_position dùng position_percent (0 là đóng, 100 là mở); door.set_open dùng open;
-door.set_lock dùng locked; seat.set_heat_level dùng level từ 0 đến 3;
+door.set_lock dùng locked; seat.set_heat_level dùng level từ 0 đến 3. Bốn intent cabin này
+phải có zone: driver, front_passenger, rear_left, rear_right hoặc all;
 manual.search dùng query; media.play có thể dùng media_query. Không tạo tên field khác.
+Không được tự mặc định vị trí cửa xe. Với yêu cầu mở hoặc đóng cửa xe, nếu người dùng chưa
+nói rõ cửa bên nào thì chọn conversation.clarify và hỏi “Bạn muốn mở/đóng cửa bên nào?”.
+Hỗ trợ bốn vị trí cabin và “tất cả”. Không được tự mặc định vị trí; nếu thiếu zone thì clarify.
 """
 
 
@@ -252,8 +256,17 @@ class RulesIntentClassifier(IntentClassifier):
         history: list[dict],
         vehicle_state: dict[str, Any] | None,
     ) -> IntentDecision:
-        del history
         text = _normalize(input_text)
+        if self._cabin_zone(text) is not None and self._is_cabin_zone_reply(text) and history:
+            previous = history[-1]
+            previous_query = _normalize(str(previous.get("query", "")))
+            previous_answer = _normalize(str(previous.get("answer", "")))
+            if (
+                previous.get("route") == "clarify"
+                and re.search(r"\b(?:mo|dong|khoa|suoi|tat)\b", previous_query)
+                and ("ben nao" in previous_answer or "vi tri nao" in previous_answer)
+            ):
+                text = f"{previous_query} {text}"
         if re.search(r"\b(phanh|danh lai|vo lang|tang toc|truyen dong|tat tui khi)\b", text):
             return IntentDecision(
                 route="unsupported",
@@ -331,19 +344,45 @@ class RulesIntentClassifier(IntentClassifier):
                     clarification_question="Bạn muốn mở hay đóng cửa sổ?",
                     response_text="Bạn muốn mở hay đóng cửa sổ?",
                 )
+            zone = self._cabin_zone(text)
+            if zone is None:
+                action = "mở" if opening else "đóng"
+                question = f"Bạn muốn {action} cửa sổ bên nào?"
+                return IntentDecision(
+                    route="clarify",
+                    intent="conversation.clarify",
+                    needs_clarification=True,
+                    clarification_question=question,
+                    response_text=question,
+                )
             return IntentDecision(
                 route="action",
                 intent="window.set_position",
-                arguments={"position_percent": 100 if opening else 0},
+                arguments={"position_percent": 100 if opening else 0, "zone": zone},
                 response_text="Mình đã tạo đề xuất điều chỉnh cửa sổ và đang chờ safety gateway.",
             )
-        if re.search(r"\b(?:mo|dong|khoa)\s+(?:khoa\s+)?cua\b", text):
-            if re.search(r"mo khoa|khoa cua", text):
+        door_request = re.search(
+            r"\b(?:mo|dong)\s+(?:(?:tat ca|toan bo)\s+)?cua\b|"
+            r"\b(?:mo\s+khoa|khoa)\s+(?:(?:tat ca|toan bo)\s+)?cua\b",
+            text,
+        )
+        if door_request:
+            if re.search(r"mo khoa|\bkhoa\s+(?:(?:tat ca|toan bo)\s+)?cua", text):
+                zone = self._cabin_zone(text)
+                if zone is None:
+                    question = "Bạn muốn điều chỉnh khóa cửa ở vị trí nào?"
+                    return IntentDecision(
+                        route="clarify",
+                        intent="conversation.clarify",
+                        needs_clarification=True,
+                        clarification_question=question,
+                        response_text=question,
+                    )
                 return IntentDecision(
                     route="action",
                     intent="door.set_lock",
-                    arguments={"locked": not bool(re.search(r"mo khoa", text))},
-                    response_text="Mình sẽ đề xuất điều chỉnh khóa cửa bên tài.",
+                    arguments={"locked": not bool(re.search(r"mo khoa", text)), "zone": zone},
+                    response_text="Mình sẽ đề xuất điều chỉnh khóa cửa.",
                 )
             opening = bool(re.search(r"\bmo\b", text))
             closing = bool(re.search(r"\bdong\b", text))
@@ -354,19 +393,40 @@ class RulesIntentClassifier(IntentClassifier):
                     needs_clarification=True,
                     clarification_question="Bạn muốn mở hay đóng cửa xe bên tài?",
                 )
+            zone = self._cabin_zone(text)
+            if zone is None:
+                action = "mở" if opening else "đóng"
+                question = f"Bạn muốn {action} cửa bên nào?"
+                return IntentDecision(
+                    route="clarify",
+                    intent="conversation.clarify",
+                    needs_clarification=True,
+                    clarification_question=question,
+                    response_text=question,
+                )
             return IntentDecision(
                 route="action",
                 intent="door.set_open",
-                arguments={"open": opening},
-                response_text="Mình sẽ đề xuất điều chỉnh cửa xe bên tài.",
+                arguments={"open": opening, "zone": zone},
+                response_text="Mình sẽ đề xuất điều chỉnh cửa xe.",
             )
-        if re.search(r"suoi ghe|ghe suoi|lam am ghe", text):
+        if re.search(r"suoi(?: (?:tat ca|toan bo))? ghe|ghe suoi|lam am ghe", text):
             match = re.search(r"(?:muc|cap)\s*(\d+)", text)
             level = 0 if re.search(r"\b(tat|dung)\b", text) else int(match.group(1)) if match else 1
+            zone = self._cabin_zone(text)
+            if zone is None:
+                question = "Bạn muốn điều chỉnh sưởi ghế ở vị trí nào?"
+                return IntentDecision(
+                    route="clarify",
+                    intent="conversation.clarify",
+                    needs_clarification=True,
+                    clarification_question=question,
+                    response_text=question,
+                )
             return IntentDecision(
                 route="action",
                 intent="seat.set_heat_level",
-                arguments={"level": level},
+                arguments={"level": level, "zone": zone},
                 response_text=f"Mình sẽ đề xuất đặt sưởi ghế mức {level}.",
             )
         if re.search(r"phat nhac|mo nhac", text):
@@ -435,6 +495,35 @@ class RulesIntentClassifier(IntentClassifier):
                 "điều khiển tiện ích cabin."
             ),
             confidence=0.4,
+        )
+
+    @staticmethod
+    def _cabin_zone(text: str) -> str | None:
+        if re.search(r"\b(tat ca|toan bo|ca bon|4)\b", text):
+            return "all"
+        if re.search(r"\b(sau|hang sau|phia sau).{0,12}\b(trai)\b", text):
+            return "rear_left"
+        if re.search(r"\b(sau|hang sau|phia sau).{0,12}\b(phai)\b", text):
+            return "rear_right"
+        if re.search(r"\b(ben phu|ghe phu|truoc phai)\b", text):
+            return "front_passenger"
+        if re.search(r"\b(ben tai|ben lai|tai xe|truoc trai)\b", text):
+            return "driver"
+        return None
+
+    @staticmethod
+    def _is_cabin_zone_reply(text: str) -> bool:
+        """Accept a location-only clarification reply, not a new sentence mentioning one."""
+        zone = (
+            r"(?:ben tai|ben lai|tai xe|truoc trai|ben phu|ghe phu|truoc phai|"
+            r"(?:sau|hang sau|phia sau)(?:\s+ben)?\s+(?:trai|phai)|"
+            r"tat ca|toan bo|ca bon|4)"
+        )
+        return bool(
+            re.fullmatch(
+                rf"(?:(?:o|cua|ghe)\s+)?{zone}(?:\s+(?:nhe|a|giup minh|giup toi))?",
+                text.strip(),
+            )
         )
 
     @staticmethod

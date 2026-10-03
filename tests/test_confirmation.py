@@ -63,13 +63,13 @@ class ConfirmationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(replay.status, "denied")
 
     async def test_denial_and_expiry_never_apply(self):
-        quote = await self.turn("Khóa cửa xe")
+        quote = await self.turn("Khóa tất cả cửa")
         denied = await self.turn("Hủy", quote.confirmation.confirmation_id, "deny")
         self.assertEqual(denied.status, "denied")
         self.assertFalse(self.vehicle.state_for("s1").door_driver_locked)
 
         self.orchestrator.gateway.confirmations = ConfirmationStore(ttl_seconds=0)
-        expired_quote = await self.turn("Khóa cửa xe")
+        expired_quote = await self.turn("Khóa tất cả cửa")
         expired = await self.turn(
             "Xác nhận", expired_quote.confirmation.confirmation_id, "approve"
         )
@@ -86,9 +86,22 @@ class ConfirmationTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(self.vehicle.state_for("s1").driving)
         self.assertFalse(self.vehicle.state_for("s1").door_driver_open)
 
+    async def test_vague_door_request_clarifies_location_before_confirmation(self):
+        vague = await self.turn("Mở cửa")
+        self.assertEqual(vague.status, "clarify")
+        self.assertEqual(vague.message, "Bạn muốn mở cửa bên nào?")
+        self.assertIsNone(vague.confirmation)
+
+        specified = await self.turn("Bên phụ")
+        self.assertEqual(specified.status, "confirmation_required")
+        self.assertEqual(specified.confirmation.preview, "Xác nhận mở cửa bên phụ?")
+        approved = await self.turn("Xác nhận", specified.confirmation.confirmation_id, "approve")
+        self.assertEqual(approved.status, "verified")
+        self.assertTrue(approved.vehicle_state.door_states.front_passenger.open)
+
     async def test_new_request_cancels_old_confirmation(self):
         quote = await self.turn("Mở cửa xe bên tài")
-        replacement = await self.turn("Khóa cửa xe")
+        replacement = await self.turn("Khóa tất cả cửa")
         self.assertEqual(replacement.status, "confirmation_required")
         stale = await self.turn("Xác nhận", quote.confirmation.confirmation_id, "approve")
         self.assertEqual(stale.status, "denied")
@@ -99,6 +112,6 @@ class ConfirmationTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(approved.vehicle_state.door_driver_locked)
 
     async def test_seat_does_not_require_confirmation(self):
-        response = await self.turn("Sưởi ghế mức 3")
+        response = await self.turn("Sưởi ghế bên phụ mức 3")
         self.assertEqual(response.status, "verified")
-        self.assertEqual(response.vehicle_state.seat_driver_heat_level, 3)
+        self.assertEqual(response.vehicle_state.seat_heat_levels.front_passenger, 3)
