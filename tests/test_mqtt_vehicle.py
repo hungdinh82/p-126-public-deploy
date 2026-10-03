@@ -13,11 +13,15 @@ from pathlib import Path
 from unittest.mock import patch
 from uuid import uuid4
 
+from fastapi.testclient import TestClient
+
 from src.vivi.config import Settings
 from src.vivi.domain.models import ActionProposal, TurnRequest, VehicleState
 from src.vivi.orchestration import create_langgraph_orchestrator
 from src.vivi.persistence.event_store import EventStore
+from src.vivi.vehicle.alerts import AlertEngine
 from src.vivi.vehicle.mqtt import MqttVehicleAdapter, VehicleUnavailableError
+from vehicle_simulator.app import create_app
 from vehicle_simulator.engine import VehicleSimulator
 from vehicle_simulator.models import FaultScenario, VehicleCommand, VehicleFixture, utc_now
 from vehicle_simulator.mqtt import MqttVehicleService
@@ -253,18 +257,18 @@ class MqttVehicleTests(unittest.TestCase):
         applied = turn("Xác nhận", "approve-open", opening.confirmation.confirmation_id, "approve")
         self.assertEqual(applied.status, "verified")
         self.assertTrue(applied.vehicle_state.door_driver_open)
-        self.assertEqual(turn("Khóa cửa xe", "lock-open").status, "blocked")
+        self.assertEqual(turn("Khóa cửa bên tài", "lock-open").status, "blocked")
 
         closing = turn("Đóng cửa xe bên tài", "close")
         self.assertEqual(turn("Xác nhận", "approve-close", closing.confirmation.confirmation_id, "approve").status, "verified")
-        locking = turn("Khóa cửa xe", "lock")
+        locking = turn("Khóa cửa bên tài", "lock")
         self.assertEqual(turn("Xác nhận", "approve-lock", locking.confirmation.confirmation_id, "approve").status, "verified")
         self.assertTrue(self.engine.get_state("demo-car-1").door_driver_locked)
         self.assertEqual(turn("Mở cửa xe bên tài", "open-locked").status, "blocked")
 
-        seat = turn("Sưởi ghế mức 2", "seat")
+        seat = turn("Sưởi ghế bên phụ mức 2", "seat")
         self.assertEqual(seat.status, "verified")
-        self.assertEqual(seat.vehicle_state.seat_driver_heat_level, 2)
+        self.assertEqual(seat.vehicle_state.seat_heat_levels.front_passenger, 2)
 
     def test_confirmation_rejects_changed_vehicle_state_over_mqtt(self) -> None:
         orchestrator = self._orchestrator()
@@ -280,3 +284,57 @@ class MqttVehicleTests(unittest.TestCase):
         )))
         self.assertEqual(confirmed.status, "denied")
         self.assertFalse(self.engine.get_state("demo-car-1").door_driver_open)
+
+    def test_http_fixture_publishes_state_to_adapter_and_alert_engine(self) -> None:
+        asyncio.run(self.adapter.get_state("fixture-session"))
+        with self.adapter._condition:
+            before = self.adapter._state_sequence
+        app = create_app(
+            self.directory / "unused.sqlite3",
+            enable_test_control=True,
+            simulator=self.engine,
+            publish_state=self.service.publish_state,
+        )
+        with TestClient(app) as client:
+            response = client.put(
+                "/api/v1/test/vehicles/demo-car-1/fixture",
+                json={"battery_percent": 10},
+            )
+            self.assertEqual(response.status_code, 200, response.text)
+
+        deadline = time.monotonic() + 2
+        with self.adapter._condition:
+            while self.adapter._state_sequence <= before and time.monotonic() < deadline:
+                self.adapter._condition.wait(deadline - time.monotonic())
+            received = self.adapter._state
+        self.assertIsNotNone(received)
+        self.assertEqual(received.battery_percent, 10)
+        domain_state = VehicleState.model_validate(received.model_dump())
+        snapshot = AlertEngine().evaluate(domain_state)
+        self.assertEqual([(item.code, item.source) for item in snapshot.active_alerts], [("LOW_BATTERY", "battery")])
+
+    def test_mqtt_clients_reconnect_after_broker_restart(self) -> None:
+        asyncio.run(self.adapter.get_state("before-restart"))
+        self.broker.terminate()
+        self.broker.communicate(timeout=3)
+        deadline = time.monotonic() + 3
+        while (self.service.connected.is_set() or self.adapter.is_connected()) and time.monotonic() < deadline:
+            time.sleep(0.02)
+        self.assertFalse(self.service.connected.is_set())
+
+        self.broker = subprocess.Popen(
+            [MOSQUITTO, "-c", str(self.directory / "mqtt/mosquitto.conf")],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+        )
+        deadline = time.monotonic() + 10
+        state = None
+        while time.monotonic() < deadline:
+            try:
+                state = asyncio.run(self.adapter.get_state("after-restart"))
+                break
+            except VehicleUnavailableError:
+                time.sleep(0.2)
+        self.assertIsNotNone(state)
+        self.assertTrue(self.service.connected.is_set())
+        self.assertEqual(state.vehicle_id, "demo-car-1")

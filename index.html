@@ -69,6 +69,11 @@
       <div class="interaction-footer"><span id="runtime-note"><span class="mini-dot"></span> Local runtime · đang kiểm tra dịch vụ</span><button id="sound-toggle" aria-pressed="false"><svg><use href="#i-volume"/></svg><span>Mai Chi: tắt</span></button></div>
     </section>
 
+    <section id="alert-panel" class="alert-panel" aria-label="Cảnh báo xe" aria-live="polite" hidden>
+      <div class="alert-panel-heading"><span>CẢNH BÁO CHỦ ĐỘNG</span><strong id="alert-count"></strong></div>
+      <div id="alert-list" class="alert-list"></div>
+    </section>
+
     <section class="vehicle-section" aria-label="Trạng thái xe mô phỏng">
       <div class="section-label"><h2>Một chút chăm sóc cho hành trình</h2><span>XE MÔ PHỎNG <i></i></span></div>
       <div class="vehicle-grid">
@@ -81,6 +86,6 @@
   </main>
 
   <dialog id="info-dialog"><div class="dialog-top"><span class="eyebrow">VIVI / SPACE CONCEPT</span><button id="close-dialog" aria-label="Đóng">×</button></div><div id="dialog-content"></div></dialog>
-  <script type="module" src="./app.js?v=4"></script>
+  <script type="module" src="./app.js?v=8"></script>
 </body>
 </html>

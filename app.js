@@ -7,7 +7,11 @@ const motionPreference = matchMedia('(prefers-reduced-motion: reduce)');
 const API_BASE = '';
 const sessionId = localStorage.getItem('vivi-session-id') || crypto.randomUUID();
 localStorage.setItem('vivi-session-id', sessionId);
-const state = { phase: 'idle', temp: 23, window: false, music: false, driving: false, battery: 82, range: 328, doorLocked: false, doorOpen: false, seatHeat: 0, reduced: motionPreference.matches, sound: false, busy: false, backendAvailable: false, vehicleProvider: '', sttAvailable: false, sttProvider: '', ttsAvailable: false, ttsProvider: '', storeAudio: false, storeTranscripts: false, llmProvider: '', llmOptions: [], lastCommand: '', manualAnswer: '', manualEvidence: [], progress: 0 };
+const state = { phase: 'idle', temp: 23, window: false, music: false, driving: false, powerState: 'off', battery: 82, range: 328, powertrainTemp: 45, tirePressures: {}, windows: {}, doors: {}, seatHeatLevels: {}, doorLocked: false, doorOpen: false, seatHeat: 0, alerts: [], alertSequence: 0, reduced: motionPreference.matches, sound: false, busy: false, backendAvailable: false, vehicleProvider: '', sttAvailable: false, sttProvider: '', ttsAvailable: false, ttsProvider: '', storeAudio: false, storeTranscripts: false, llmProvider: '', llmOptions: [], lastCommand: '', manualAnswer: '', manualEvidence: [], progress: 0 };
+let activePanelView = '';
+const seenAlertIds = new Set();
+const alertLastSpoken = new Map();
+const ALERT_TTS_COOLDOWN_MS = 30000;
 const phaseLabels = { idle: 'ViVi đang ở đây', listening: 'Mình đang nghe bạn', transcribing: 'Mình đang nhận diện lời nói', thinking: 'Để mình xem nhé', validating: 'Đang kiểm tra an toàn', acting: 'Đang chăm sóc không gian của bạn', synthesizing: 'Đang chuẩn bị giọng Mai Chi', speaking: 'Một chút dễ chịu, dành cho bạn', clarify: 'Mình chờ bạn nói thêm', blocked: 'Mình giữ nguyên trạng thái xe' };
 const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 let width = 1, height = 1, tick = 0, previous = 0;
@@ -150,6 +154,48 @@ function updateVehicle() {
   $('#music-toggle').textContent = state.music ? 'Ⅱ' : '▶';
   $('#music-toggle').setAttribute('aria-label', state.music ? 'Dừng nhạc mô phỏng' : 'Phát nhạc mô phỏng');
   $('#music-note').textContent = state.music ? 'Đang phát · trạng thái mô phỏng' : 'Để tâm trí được thảnh thơi';
+}
+const alertCodeLabels = {
+  LOW_BATTERY: 'Pin yếu',
+  TIRE_PRESSURE_LOW: 'Áp suất lốp thấp',
+  TIRE_PRESSURE_HIGH: 'Áp suất lốp cao',
+  POWERTRAIN_OVERHEAT: 'Hệ truyền động quá nhiệt',
+  DOOR_OPEN_WHEN_READY: 'Cửa đang mở'
+};
+const alertSourceLabels = {
+  battery: 'pin', powertrain: 'hệ truyền động', driver: 'bên tài', front_passenger: 'bên phụ',
+  front_left: 'trước trái', front_right: 'trước phải', rear_left: 'sau trái', rear_right: 'sau phải'
+};
+function renderAlerts(snapshot) {
+  state.alerts = snapshot.active_alerts || [];
+  state.alertSequence = snapshot.event_sequence || 0;
+  const panel = $('#alert-panel');
+  panel.hidden = state.alerts.length === 0;
+  $('#alert-count').textContent = state.alerts.length ? `${state.alerts.length} đang hoạt động` : '';
+  $('#alert-list').innerHTML = state.alerts.map(alert => `<article class="vehicle-alert ${alert.severity}"><i></i><div><strong>${escapeHtml(alert.message)}</strong><span>${escapeHtml(alertCodeLabels[alert.code] || alert.code)} · ${escapeHtml(alertSourceLabels[alert.source] || alert.source)}</span></div></article>`).join('');
+}
+function announceNewAlerts(alerts) {
+  for (const alert of alerts) {
+    if (seenAlertIds.has(alert.alert_id)) continue;
+    seenAlertIds.add(alert.alert_id);
+    const key = `${alert.code}:${alert.source}`;
+    const now = Date.now();
+    const inCooldown = now - (alertLastSpoken.get(key) || 0) < ALERT_TTS_COOLDOWN_MS;
+    if (!state.sound || (alert.severity !== 'critical' && inCooldown)) continue;
+    alertLastSpoken.set(key, now);
+    speak(alert.message, `alert-${alert.alert_id}`).catch(() => say(alert.message));
+  }
+}
+async function pollVehicleAlerts() {
+  if (!state.backendAvailable) return;
+  try {
+    const response = await fetch(`${API_BASE}/api/v1/vehicle/alerts?session_id=${encodeURIComponent(sessionId)}`);
+    if (!response.ok) return;
+    const snapshot = await response.json();
+    applyBackendState(snapshot.vehicle_state);
+    renderAlerts(snapshot);
+    announceNewAlerts(snapshot.active_alerts || []);
+  } catch { /* Polling resumes automatically after a temporary disconnect. */ }
 }
 function highlight(id) { $(id).classList.add('highlight'); setTimeout(() => $(id).classList.remove('highlight'), 2600); }
 function say(text) {
@@ -342,15 +388,24 @@ function applyBackendState(vehicle) {
   state.window = vehicle.window_driver_percent > 0;
   state.music = vehicle.media_playing;
   state.driving = vehicle.driving;
+  state.powerState = vehicle.power_state || (vehicle.driving ? 'driving' : 'off');
   state.battery = vehicle.battery_percent;
   state.range = vehicle.range_km;
-  state.doorLocked = vehicle.door_driver_locked;
-  state.doorOpen = vehicle.door_driver_open;
-  state.seatHeat = vehicle.seat_driver_heat_level;
+  state.powertrainTemp = vehicle.powertrain_temperature_celsius ?? 45;
+  state.tirePressures = vehicle.tire_pressures_kpa || {};
+  state.windows = vehicle.window_positions || { driver: vehicle.window_driver_percent };
+  state.doors = vehicle.door_states || { driver: { open: vehicle.door_driver_open, locked: vehicle.door_driver_locked } };
+  state.seatHeatLevels = vehicle.seat_heat_levels || { driver: vehicle.seat_driver_heat_level };
+  state.doorLocked = state.doors.driver?.locked ?? vehicle.door_driver_locked;
+  state.doorOpen = state.doors.driver?.open ?? vehicle.door_driver_open;
+  state.seatHeat = state.seatHeatLevels.driver ?? vehicle.seat_driver_heat_level;
   $('#drive-toggle').setAttribute('aria-pressed', String(state.driving));
   $('#drive-toggle span').textContent = state.driving ? 'Đang lái xe · Demo' : 'Đang đỗ xe';
   document.body.classList.toggle('driving', state.driving);
   updateVehicle();
+  if (activePanelView === 'vehicle' && $('#info-dialog').open) {
+    $('#dialog-content').innerHTML = vehicleDetailsMarkup();
+  }
 }
 
 async function runBackendCommand(command, turnId = crypto.randomUUID()) {
@@ -530,7 +585,7 @@ async function checkBackend() {
     $('#runtime-model').textContent = state.llmProvider;
     $('#drive-toggle').disabled = state.vehicleProvider !== 'memory';
     try {
-      const vehicleResponse = await fetch(`${API_BASE}/api/v1/vehicle/state`);
+      const vehicleResponse = await fetch(`${API_BASE}/api/v1/vehicle/state?session_id=${encodeURIComponent(sessionId)}`);
       if (vehicleResponse.ok) applyBackendState(await vehicleResponse.json());
     } catch { /* An external simulator may be temporarily offline. */ }
   } catch {
@@ -595,6 +650,18 @@ const modelModes = { rules: 'Phản hồi định sẵn', openai: 'Cloud · cầ
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>'"]/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character]);
 }
+const cabinZoneLabels = { driver: 'Bên tài', front_passenger: 'Bên phụ', rear_left: 'Sau trái', rear_right: 'Sau phải' };
+function vehicleDetailsMarkup() {
+  const zones = Object.keys(cabinZoneLabels);
+  const cabinRows = zones.map(zone => {
+    const door = state.doors[zone] || { open: false, locked: false };
+    const doorStatus = door.open ? 'Đang mở' : door.locked ? 'Đã đóng · đang khóa' : 'Đã đóng · mở khóa';
+    return `<div class="cabin-zone"><h3>${cabinZoneLabels[zone]}</h3><div class="detail-row"><span>Cửa xe</span><strong>${doorStatus}</strong></div><div class="detail-row"><span>Cửa sổ</span><strong>${state.windows[zone] ?? 0}%</strong></div><div class="detail-row"><span>Sưởi ghế</span><strong>Mức ${state.seatHeatLevels[zone] ?? 0}</strong></div></div>`;
+  }).join('');
+  const tireLabels = { front_left: 'Trước trái', front_right: 'Trước phải', rear_left: 'Sau trái', rear_right: 'Sau phải' };
+  const tireRows = Object.entries(tireLabels).map(([position, label]) => `<div class="detail-row"><span>${label}</span><strong>${state.tirePressures[position] ?? 250} kPa</strong></div>`).join('');
+  return `<h2>Không gian của bạn</h2><p>Digital Twin · trạng thái toàn bộ cabin được mô phỏng trong phiên trải nghiệm này.</p><div class="detail-row"><span>Pin còn lại</span><strong>${state.battery}% / ${state.range} km</strong></div><div class="detail-row"><span>Nhiệt độ cabin</span><strong>${state.temp}°C</strong></div><div class="detail-row"><span>Nhiệt độ hệ truyền động</span><strong>${state.powertrainTemp}°C</strong></div><div class="detail-row"><span>Chế độ nguồn</span><strong>${escapeHtml(state.powerState)}</strong></div><div class="cabin-grid">${cabinRows}<section class="cabin-zone tire-zone"><h3>Áp suất bốn lốp</h3>${tireRows}</section></div><div class="detail-row"><span>Multimedia</span><strong>${state.music ? 'Đang phát (mô phỏng)' : 'Đang dừng'}</strong></div><p class="dialog-note">Digital Twin mô phỏng bốn vị trí cabin; chưa kết nối xe thật hoặc dịch vụ VinFast.</p>`;
+}
 function modelOptionsMarkup() {
   if (!state.backendAvailable) return '<div class="config-empty"><i></i><span>Backend chưa kết nối</span><small>Chạy python run.py để tải danh sách model.</small></div>';
   return state.llmOptions.map(item => {
@@ -620,7 +687,8 @@ function selectLlmProvider(provider) {
   updateModelStatus();
 }
 function openPanel(view) {
-  if (view === 'home') { if (dialog.open) dialog.close(); document.querySelectorAll('.rail-main .rail-button').forEach(button => button.classList.toggle('active', button.dataset.view === 'home')); $('.settings-button').classList.remove('active'); return; }
+  if (view === 'home') { activePanelView = ''; if (dialog.open) dialog.close(); document.querySelectorAll('.rail-main .rail-button').forEach(button => button.classList.toggle('active', button.dataset.view === 'home')); $('.settings-button').classList.remove('active'); return; }
+  activePanelView = view;
   document.querySelectorAll('.rail-main .rail-button').forEach(button => button.classList.toggle('active', button.dataset.view === view));
   $('.settings-button').classList.toggle('active', view === 'settings');
   const currentModel = state.llmOptions.find(item => item.provider === state.llmProvider);
@@ -629,7 +697,7 @@ function openPanel(view) {
     : '<p class="dialog-note">Hãy hỏi một câu về kỹ thuật VF8 để xem nguồn từ cẩm nang.</p>';
   const manualContent = `<h2>Hiểu chiếc xe của bạn</h2><p>${escapeHtml(state.manualAnswer || 'ViVi sẽ hiển thị câu trả lời đã được grounding từ cẩm nang VF8 2026 tại đây.')}</p>${sourceMarkup}`;
   const contents = {
-    vehicle: `<h2>Không gian của bạn</h2><p>Digital Twin · trạng thái được mô phỏng trong phiên trải nghiệm này.</p><div class="detail-row"><span>Pin còn lại</span><strong>${state.battery}% / ${state.range} km</strong></div><div class="detail-row"><span>Nhiệt độ cài đặt</span><strong>${state.temp}°C</strong></div><div class="detail-row"><span>Cửa sổ bên tài</span><strong>${state.window ? 'Đang mở' : 'Đang đóng'}</strong></div><div class="detail-row"><span>Cửa xe bên tài</span><strong>${state.doorOpen ? 'Đang mở' : state.doorLocked ? 'Đang khóa' : 'Đã đóng, không khóa'}</strong></div><div class="detail-row"><span>Sưởi ghế bên tài</span><strong>Mức ${state.seatHeat}</strong></div><div class="detail-row"><span>Multimedia</span><strong>${state.music ? 'Đang phát (mô phỏng)' : 'Đang dừng'}</strong></div><div class="detail-row"><span>Chế độ</span><strong>${state.driving ? 'Đang lái xe (demo)' : 'Đang đỗ xe'}</strong></div><p class="dialog-note">Chưa kết nối xe thật, cảm biến hoặc dịch vụ VinFast.</p>`,
+    vehicle: vehicleDetailsMarkup(),
     journey: '<h2>Mỗi hành trình, một khám phá.</h2><p>Không gian dành cho địa điểm yêu thích, trạm sạc và chỉ đường trong phiên bản tiếp theo.</p><div class="detail-row"><span>Điểm đến</span><strong>Chưa thiết lập</strong></div><div class="detail-row"><span>Dịch vụ bản đồ</span><strong>Chưa kết nối</strong></div><p class="dialog-note">Prototype hiện tập trung vào trải nghiệm trợ lý và các thao tác cabin.</p>',
     manual: manualContent,
     settings: `<h2>Cấu hình ViVi</h2><p>Chọn cách ViVi suy nghĩ và chuyển động trong không gian của bạn.</p><section class="config-section"><div class="config-heading"><span>MÔ HÌNH HỘI THOẠI</span><strong id="active-model">${escapeHtml(modelLabels[state.llmProvider] || state.llmProvider || 'Chưa kết nối')} · ${escapeHtml(currentModel?.model || '')}</strong></div><div class="model-options">${modelOptionsMarkup()}</div><p class="dialog-note">Lựa chọn được áp dụng từ lượt hội thoại tiếp theo. Model ID và API key vẫn được quản lý an toàn trong .env.</p></section><section class="config-section"><div class="config-heading"><span>TRẢI NGHIỆM</span><strong>Không gian & giọng nói</strong></div><label class="motion-setting"><span><strong>Giảm chuyển động</strong><small>Dừng lơ lửng, quỹ đạo và hiệu ứng sóng</small></span><input id="reduce-motion" type="checkbox" ${state.reduced ? 'checked' : ''}><i></i></label><div class="config-runtime"><div><span>NHẬN DIỆN GIỌNG NÓI</span><strong>${state.sttAvailable ? `${escapeHtml(state.sttProvider)} · local` : 'Chưa sẵn sàng'}</strong></div><div><span>GIỌNG PHẢN HỒI</span><strong>${state.ttsAvailable ? `${escapeHtml(state.ttsProvider)} · local` : 'Trình duyệt/text fallback'}</strong></div></div><p class="dialog-note">Audio: ${state.storeAudio ? 'đang lưu' : 'không lưu'} · transcript: ${state.storeTranscripts ? 'đang lưu' : 'không lưu'}.</p></section>`
@@ -645,8 +713,8 @@ document.querySelectorAll('[data-view]').forEach(button => button.addEventListen
 $('.settings-button').addEventListener('click', () => openPanel('settings'));
 $('#close-dialog').addEventListener('click', () => dialog.close());
 dialog.addEventListener('click', event => { if (event.target === dialog) { const rect = dialog.getBoundingClientRect(); if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) dialog.close(); } });
-dialog.addEventListener('close', () => { document.querySelectorAll('.rail-main .rail-button').forEach(button => button.classList.toggle('active', button.dataset.view === 'home')); $('.settings-button').classList.remove('active'); dialog.classList.remove('config-dialog'); });
+dialog.addEventListener('close', () => { activePanelView = ''; document.querySelectorAll('.rail-main .rail-button').forEach(button => button.classList.toggle('active', button.dataset.view === 'home')); $('.settings-button').classList.remove('active'); dialog.classList.remove('config-dialog'); });
 motionPreference.addEventListener('change', event => { state.reduced = event.matches; document.body.classList.toggle('reduced-motion', state.reduced); });
 document.body.classList.toggle('reduced-motion', state.reduced);
 function updateClock() { $('#clock').textContent = new Intl.DateTimeFormat('vi-VN', { hour: '2-digit', minute: '2-digit' }).format(new Date()); }
-updateClock(); setInterval(updateClock, 60000); updateVehicle(); checkBackend();
+updateClock(); setInterval(updateClock, 60000); updateVehicle(); checkBackend().then(pollVehicleAlerts); setInterval(pollVehicleAlerts, 1500);

@@ -12,6 +12,7 @@ from typing import Any
 from .models import CommandResult, FaultScenario, VehicleAck, VehicleCommand, VehicleFixture, VehicleState, utc_now
 
 logger = logging.getLogger(__name__)
+CABIN_ZONES = ("driver", "front_passenger", "rear_left", "rear_right")
 
 
 class VehicleSimulator:
@@ -77,11 +78,29 @@ class VehicleSimulator:
             try:
                 state = self._state_in_transaction(vehicle_id)
                 updates = fixture.model_dump(exclude_none=True)
-                if updates.get("driving") is True and state.door_driver_open:
+                if "power_state" in updates:
+                    updates["driving"] = updates["power_state"] == "driving"
+                elif "driving" in updates:
+                    updates["power_state"] = "driving" if updates["driving"] else "off"
+                if "window_driver_percent" in updates and "window_positions" not in updates:
+                    windows = state.window_positions.model_dump()
+                    windows["driver"] = updates["window_driver_percent"]
+                    updates["window_positions"] = windows
+                if "door_driver_open" in updates and "door_states" not in updates:
+                    doors = state.door_states.model_dump()
+                    doors["driver"]["open"] = updates["door_driver_open"]
+                    updates["door_states"] = doors
+                if "seat_driver_heat_level" in updates and "seat_heat_levels" not in updates:
+                    seats = state.seat_heat_levels.model_dump()
+                    seats["driver"] = updates["seat_driver_heat_level"]
+                    updates["seat_heat_levels"] = seats
+                merged = {**state.model_dump(), **updates}
+                candidate = VehicleState.model_validate(merged)
+                if candidate.driving and any(getattr(candidate.door_states, zone).open for zone in CABIN_ZONES):
                     raise ValueError("Cannot set driving while driver door is open")
-                if any(getattr(state, name) != value for name, value in updates.items()):
-                    state = state.model_copy(
-                        update={**updates, "state_version": state.state_version + 1, "updated_at": utc_now()}
+                if any(getattr(state, name) != getattr(candidate, name) for name in updates):
+                    state = VehicleState.model_validate(
+                        {**merged, "state_version": state.state_version + 1, "updated_at": utc_now()}
                     )
                     self._save_state(state)
                 self._db.commit()
@@ -94,8 +113,9 @@ class VehicleSimulator:
         with self._lock:
             self._db.execute("BEGIN IMMEDIATE")
             try:
+                current = self._state_in_transaction(vehicle_id)
                 self._db.execute("DELETE FROM commands WHERE vehicle_id = ?", (vehicle_id,))
-                state = VehicleState(vehicle_id=vehicle_id)
+                state = VehicleState(vehicle_id=vehicle_id, state_version=current.state_version + 1)
                 self._save_state(state)
                 self._db.commit()
                 self._faults.pop(vehicle_id, None)
@@ -236,6 +256,17 @@ class VehicleSimulator:
         def exact_args(*names: str) -> bool:
             return set(args) == set(names)
 
+        def selected_zones() -> tuple[str, ...] | None:
+            zone = args.get("zone", "driver")
+            if zone == "all":
+                return CABIN_ZONES
+            if zone in CABIN_ZONES:
+                return (zone,)
+            return None
+
+        def zoned_args(value_name: str) -> bool:
+            return set(args) in ({value_name}, {value_name, "zone"})
+
         if action == "vehicle.get_state":
             return (state, None) if exact_args() else (state, "invalid_arguments")
         if action == "climate.set_temperature":
@@ -251,37 +282,60 @@ class VehicleSimulator:
             return state.model_copy(update={"temperature_celsius": float(value)}), None
         if action == "window.set_position":
             value = args.get("position_percent")
+            zones = selected_zones()
             if (
-                not exact_args("position_percent")
+                not zoned_args("position_percent")
+                or zones is None
                 or isinstance(value, bool)
                 or not isinstance(value, int)
                 or not 0 <= value <= 100
             ):
                 return state, "invalid_arguments"
-            if state.driving and value > state.window_driver_percent:
+            if state.driving and any(value > getattr(state.window_positions, zone) for zone in zones):
                 return state, "policy_invariant"
-            return state.model_copy(update={"window_driver_percent": value}), None
+            windows = state.window_positions.model_dump()
+            for zone in zones:
+                windows[zone] = value
+            return VehicleState.model_validate({**state.model_dump(), "window_positions": windows}), None
         if action in {"media.play", "media.pause"}:
             if not exact_args():
                 return state, "invalid_arguments"
             return state.model_copy(update={"media_playing": action == "media.play"}), None
         if action == "door.set_lock":
             value = args.get("locked")
-            if not exact_args("locked") or not isinstance(value, bool):
+            zones = selected_zones()
+            if not zoned_args("locked") or zones is None or not isinstance(value, bool):
                 return state, "invalid_arguments"
-            if value and state.door_driver_open:
+            if value and any(getattr(state.door_states, zone).open for zone in zones):
                 return state, "policy_invariant"
-            return state.model_copy(update={"door_driver_locked": value}), None
+            doors = state.door_states.model_dump()
+            for zone in zones:
+                doors[zone]["locked"] = value
+            return VehicleState.model_validate({**state.model_dump(), "door_states": doors}), None
         if action == "door.set_open":
             value = args.get("open")
-            if not exact_args("open") or not isinstance(value, bool):
+            zones = selected_zones()
+            if not zoned_args("open") or zones is None or not isinstance(value, bool):
                 return state, "invalid_arguments"
-            if value and (state.door_driver_locked or state.driving):
+            if value and (state.driving or any(getattr(state.door_states, zone).locked for zone in zones)):
                 return state, "policy_invariant"
-            return state.model_copy(update={"door_driver_open": value}), None
+            doors = state.door_states.model_dump()
+            for zone in zones:
+                doors[zone]["open"] = value
+            return VehicleState.model_validate({**state.model_dump(), "door_states": doors}), None
         if action == "seat.set_heat_level":
             value = args.get("level")
-            if not exact_args("level") or isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= 3:
+            zones = selected_zones()
+            if (
+                not zoned_args("level")
+                or zones is None
+                or isinstance(value, bool)
+                or not isinstance(value, int)
+                or not 0 <= value <= 3
+            ):
                 return state, "invalid_arguments"
-            return state.model_copy(update={"seat_driver_heat_level": value}), None
+            seats = state.seat_heat_levels.model_dump()
+            for zone in zones:
+                seats[zone] = value
+            return VehicleState.model_validate({**state.model_dump(), "seat_heat_levels": seats}), None
         return state, "unknown_action"

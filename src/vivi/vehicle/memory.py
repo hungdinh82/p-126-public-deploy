@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import threading
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 from src.vivi.domain.models import ActionProposal, VehicleState
+from src.vivi.vehicle.zones import selected_zones, zone_label
 
 
 @dataclass
@@ -47,11 +49,13 @@ class VehicleSimulator:
         """Set the local demo fixture without trusting browser state in a turn."""
         with self._lock:
             state = self._states.setdefault(session_id, VehicleState())
-            if driving and state.door_driver_open:
+            if driving and any(door.open for _, door in state.door_states):
                 raise ValueError("Không thể chuyển sang chế độ lái khi cửa xe đang mở.")
             if state.driving != driving:
                 state.driving = driving
+                state.power_state = "driving" if driving else "off"
                 state.state_version += 1
+                state.updated_at = datetime.now(UTC)
             return state.model_copy(deep=True)
 
     def execute_sync(
@@ -73,12 +77,19 @@ class VehicleSimulator:
             if action.intent not in self.ALLOWED_INTENTS:
                 raise ValueError(f"Action is not executable: {action.intent}")
             state = self._states.setdefault(session_id, VehicleState())
+            zones = selected_zones(action.arguments) if action.intent in {
+                "window.set_position", "door.set_open", "door.set_lock", "seat.set_heat_level"
+            } else ()
             if action.intent == "climate.set_temperature":
                 state.temperature_celsius = float(action.arguments["value_celsius"])
                 message = f"Mình đã đặt nhiệt độ ở {state.temperature_celsius:g} độ."
             elif action.intent == "window.set_position":
-                state.window_driver_percent = int(action.arguments["position_percent"])
-                message = f"Mình đã đặt cửa sổ bên tài ở mức {state.window_driver_percent} phần trăm."
+                windows = state.window_positions.model_dump()
+                value = int(action.arguments["position_percent"])
+                for zone in zones:
+                    windows[zone] = value
+                state = VehicleState.model_validate({**state.model_dump(), "window_positions": windows})
+                message = f"Mình đã đặt cửa sổ {zone_label(action.arguments)} ở mức {value} phần trăm."
             elif action.intent == "media.play":
                 state.media_playing = True
                 message = "Mình đã phát nhạc trong xe mô phỏng."
@@ -86,20 +97,34 @@ class VehicleSimulator:
                 state.media_playing = False
                 message = "Mình đã dừng nhạc trong xe mô phỏng."
             elif action.intent == "door.set_lock":
-                state.door_driver_locked = bool(action.arguments["locked"])
-                message = "Mình đã khóa cửa bên tài." if state.door_driver_locked else "Mình đã mở khóa cửa bên tài."
+                doors = state.door_states.model_dump()
+                locked = bool(action.arguments["locked"])
+                for zone in zones:
+                    doors[zone]["locked"] = locked
+                state = VehicleState.model_validate({**state.model_dump(), "door_states": doors})
+                message = f"Mình đã {'khóa' if locked else 'mở khóa'} cửa {zone_label(action.arguments)}."
             elif action.intent == "door.set_open":
-                state.door_driver_open = bool(action.arguments["open"])
-                message = "Mình đã mở cửa xe bên tài." if state.door_driver_open else "Mình đã đóng cửa xe bên tài."
+                doors = state.door_states.model_dump()
+                opening = bool(action.arguments["open"])
+                for zone in zones:
+                    doors[zone]["open"] = opening
+                state = VehicleState.model_validate({**state.model_dump(), "door_states": doors})
+                message = f"Mình đã {'mở' if opening else 'đóng'} cửa xe {zone_label(action.arguments)}."
             elif action.intent == "seat.set_heat_level":
-                state.seat_driver_heat_level = int(action.arguments["level"])
-                message = f"Mình đã đặt sưởi ghế bên tài ở mức {state.seat_driver_heat_level}."
+                seats = state.seat_heat_levels.model_dump()
+                level = int(action.arguments["level"])
+                for zone in zones:
+                    seats[zone] = level
+                state = VehicleState.model_validate({**state.model_dump(), "seat_heat_levels": seats})
+                message = f"Mình đã đặt sưởi ghế {zone_label(action.arguments)} ở mức {level}."
             elif action.intent == "vehicle.get_status":
                 message = f"Xe còn {state.battery_percent} phần trăm pin, nhiệt độ {state.temperature_celsius:g} độ."
             else:
                 raise ValueError(f"Action is not executable: {action.intent}")
             if action.intent != "vehicle.get_status":
                 state.state_version += 1
+                state.updated_at = datetime.now(UTC)
+                self._states[session_id] = state
             verified = state.model_copy(deep=True)
             self._executed[execution_key] = (action.model_copy(deep=True), verified, message)
             return verified, message

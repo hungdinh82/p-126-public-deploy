@@ -33,7 +33,7 @@ class DecisionArguments(BaseModel):
     open: bool | None = None
     locked: bool | None = None
     level: int | None = None
-    zone: str | None = None
+    zone: Literal["driver", "front_passenger", "rear_left", "rear_right", "all"] | None = None
     media_query: str | None = None
 
 

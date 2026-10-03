@@ -16,6 +16,7 @@ from src.vivi.rag.generator import ExtractiveHandbookGenerator, validate_groundi
 from src.vivi.rag.runtime import HandbookServices, create_services
 from src.vivi.rag.schemas import ModelDecision
 from src.vivi.rag.scope import scope_rejection_reason
+from src.vivi.vehicle.zones import selected_zones, zoned_noun
 
 ABSTAIN_MESSAGE = "Mình chưa tìm thấy đủ bằng chứng trong cẩm nang VF8 2026 để trả lời câu hỏi này."
 _FOLLOW_UP_RE = re.compile(r"\b(vậy|thế|nó|cái đó|việc đó|còn|như vậy)\b", re.IGNORECASE)
@@ -55,6 +56,11 @@ def _legacy_manual_decision(raw: dict[str, Any]) -> tuple[str, IntentDecision]:
 
 def _validate_action(decision: IntentDecision) -> tuple[ActionProposal | None, str | None]:
     arguments = decision.arguments.model_dump(exclude_none=True)
+    if decision.intent in {"window.set_position", "door.set_open", "door.set_lock", "seat.set_heat_level"}:
+        try:
+            selected_zones(arguments)
+        except ValueError as exc:
+            return None, str(exc)
     if decision.intent == "climate.set_temperature":
         value = arguments.get("value_celsius")
         if not isinstance(value, (int, float)):
@@ -91,13 +97,13 @@ def _action_preview_text(proposal: ActionProposal) -> str:
         request = f"đặt nhiệt độ ở {target:g} độ C"
     elif proposal.intent == "window.set_position":
         position = float(arguments["position_percent"])
-        request = f"điều chỉnh cửa sổ đến {position:g}%"
+        request = f"điều chỉnh {zoned_noun('cửa sổ', arguments)} đến {position:g}%"
     elif proposal.intent == "door.set_open":
-        request = "mở cửa" if arguments["open"] else "đóng cửa"
+        request = f"{'mở' if arguments['open'] else 'đóng'} {zoned_noun('cửa', arguments)}"
     elif proposal.intent == "door.set_lock":
-        request = "khóa cửa" if arguments["locked"] else "mở khóa cửa"
+        request = f"{'khóa' if arguments['locked'] else 'mở khóa'} {zoned_noun('cửa', arguments)}"
     elif proposal.intent == "seat.set_heat_level":
-        request = f"đặt sưởi ghế mức {arguments['level']}"
+        request = f"đặt sưởi {zoned_noun('ghế', arguments)} mức {arguments['level']}"
     elif proposal.intent == "media.play":
         request = "phát nội dung âm thanh"
     elif proposal.intent == "media.pause":

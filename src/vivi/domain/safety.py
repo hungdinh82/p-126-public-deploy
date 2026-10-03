@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from src.vivi.vehicle.zones import selected_zones, zoned_noun
+
 from .models import ActionProposal, VehicleState
 
 
@@ -34,10 +36,13 @@ RISK_BY_INTENT = {
 
 def _r2_preview(proposal: ActionProposal) -> str:
     if proposal.intent == "window.set_position":
-        return f"Xác nhận đặt cửa sổ bên tài ở mức {int(proposal.arguments['position_percent'])} phần trăm?"
+        target = zoned_noun("cửa sổ", proposal.arguments)
+        return f"Xác nhận đặt {target} ở mức {int(proposal.arguments['position_percent'])} phần trăm?"
     if proposal.intent == "door.set_lock":
-        return "Xác nhận khóa cửa bên tài?" if proposal.arguments.get("locked") else "Xác nhận mở khóa cửa bên tài?"
-    return "Xác nhận mở cửa bên tài?" if proposal.arguments.get("open") else "Xác nhận đóng cửa bên tài?"
+        target = zoned_noun("cửa", proposal.arguments)
+        return f"Xác nhận khóa {target}?" if proposal.arguments.get("locked") else f"Xác nhận mở khóa {target}?"
+    target = zoned_noun("cửa", proposal.arguments)
+    return f"Xác nhận mở {target}?" if proposal.arguments.get("open") else f"Xác nhận đóng {target}?"
 
 
 def validate(proposal: ActionProposal, vehicle: VehicleState, *, confirmed: bool = False) -> SafetyResult:
@@ -61,28 +66,44 @@ def validate(proposal: ActionProposal, vehicle: VehicleState, *, confirmed: bool
         value = proposal.arguments.get("position_percent")
         if not isinstance(value, (int, float)) or isinstance(value, bool) or not 0 <= float(value) <= 100:
             return SafetyResult(False, "clarify", "Bạn muốn mở cửa sổ ở mức bao nhiêu phần trăm?", risk)
-        if vehicle.driving and float(value) > vehicle.window_driver_percent:
+        try:
+            zones = selected_zones(proposal.arguments)
+        except ValueError as exc:
+            return SafetyResult(False, "clarify", str(exc), risk)
+        if vehicle.driving and any(float(value) > getattr(vehicle.window_positions, zone) for zone in zones):
             return SafetyResult(False, "blocked", "Mình giữ nguyên cửa sổ vì xe đang ở chế độ lái.", risk)
-        if float(value) <= vehicle.window_driver_percent:
+        if all(float(value) <= getattr(vehicle.window_positions, zone) for zone in zones):
             risk = "R1"
     if proposal.intent == "door.set_open":
         opening = proposal.arguments.get("open")
         if not isinstance(opening, bool):
-            return SafetyResult(False, "clarify", "Bạn muốn mở hay đóng cửa bên tài?", risk)
+            return SafetyResult(False, "clarify", "Bạn muốn mở hay đóng cửa nào?", risk)
+        try:
+            zones = selected_zones(proposal.arguments)
+        except ValueError as exc:
+            return SafetyResult(False, "clarify", str(exc), risk)
         if vehicle.driving and opening:
             return SafetyResult(False, "blocked", "Không thể mở cửa khi xe đang ở chế độ lái.", risk)
-        if vehicle.door_driver_locked and opening:
-            return SafetyResult(False, "blocked", "Hãy mở khóa cửa trước khi mở cửa bên tài.", risk)
+        if opening and any(getattr(vehicle.door_states, zone).locked for zone in zones):
+            return SafetyResult(False, "blocked", "Hãy mở khóa cửa trước khi mở cửa.", risk)
     if proposal.intent == "door.set_lock":
         locked = proposal.arguments.get("locked")
         if not isinstance(locked, bool):
-            return SafetyResult(False, "clarify", "Bạn muốn khóa hay mở khóa cửa bên tài?", risk)
-        if locked and vehicle.door_driver_open:
-            return SafetyResult(False, "blocked", "Không thể khóa khi cửa bên tài đang mở.", risk)
+            return SafetyResult(False, "clarify", "Bạn muốn khóa hay mở khóa cửa nào?", risk)
+        try:
+            zones = selected_zones(proposal.arguments)
+        except ValueError as exc:
+            return SafetyResult(False, "clarify", str(exc), risk)
+        if locked and any(getattr(vehicle.door_states, zone).open for zone in zones):
+            return SafetyResult(False, "blocked", "Không thể khóa khi cửa đang mở.", risk)
     if proposal.intent == "seat.set_heat_level":
         level = proposal.arguments.get("level")
         if not isinstance(level, int) or isinstance(level, bool) or not 0 <= level <= 3:
             return SafetyResult(False, "blocked", "Mức sưởi ghế hợp lệ nằm trong khoảng 0 đến 3.", risk)
+        try:
+            selected_zones(proposal.arguments)
+        except ValueError as exc:
+            return SafetyResult(False, "clarify", str(exc), risk)
     if risk == "R2" and not confirmed:
         preview = _r2_preview(proposal)
         return SafetyResult(False, "confirmation_required", preview, risk, True, preview)

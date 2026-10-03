@@ -2,7 +2,7 @@
 
 **Trạng thái:** MQTT MVP và xác nhận hội thoại cho cửa/kính đã triển khai
 
-**Ngày:** 2026-09-23
+**Cập nhật:** 2026-10-03
 
 **Phạm vi đã chốt:** service MQTT độc lập; HVAC, media, cửa sổ, cửa xe, ghế và trạng thái xe; mô phỏng success, delay, timeout, reject, disconnected và state mismatch.
 
@@ -46,21 +46,21 @@ Mỗi `vehicle_id` có một state hiện hành và `state_version` tăng đơn 
 | Identity | `vehicle_id`, `state_version`, `updated_at` | ID ổn định, version nguyên không âm, UTC timestamp |
 | Vehicle | `driving`, `battery_percent`, `range_km` | boolean, 0–100, số km không âm |
 | HVAC | `temperature_celsius` | 16–30°C |
-| Window | `window_driver_percent` | 0–100% |
-| Door | `door_driver_locked`, `door_driver_open` | boolean; không mở được khi đã khóa hoặc đang lái; không khóa khi cửa đang mở |
+| Window | `window_positions` | 0–100% cho `driver`, `front_passenger`, `rear_left`, `rear_right` |
+| Door | `door_states` | open/locked cho bốn vị trí; không mở khi đã khóa hoặc đang lái; không khóa khi đang mở |
 | Media | `media_playing` | boolean |
-| Seat | `seat_driver_heat_level` | 0–3; giả định MVP cho “seat comfort” |
+| Seat | `seat_heat_levels` | Sưởi ghế 0–3 cho bốn vị trí |
 
 Command được hỗ trợ:
 
 | Action | Tham số | Kết quả |
 |---|---|---|
 | `climate.set_temperature` | `value_celsius` | Đặt nhiệt độ tuyệt đối |
-| `window.set_position` | `position_percent` | Đặt vị trí kính bên tài |
+| `window.set_position` | `position_percent`, `zone` | Đặt kính theo vị trí hoặc `all` |
 | `media.play`, `media.pause` | Không có | Đổi trạng thái media |
-| `door.set_lock` | `locked` | Khóa/mở khóa cửa bên tài |
-| `door.set_open` | `open` | Mở/đóng cửa bên tài |
-| `seat.set_heat_level` | `level` | Đặt sưởi ghế bên tài |
+| `door.set_lock` | `locked`, `zone` | Khóa/mở khóa cửa theo vị trí hoặc `all` |
+| `door.set_open` | `open`, `zone` | Mở/đóng cửa theo vị trí hoặc `all` |
+| `seat.set_heat_level` | `level`, `zone` | Đặt sưởi ghế theo vị trí hoặc `all` |
 | `vehicle.get_state` | Không có | Trả snapshot hiện hành; không tăng `state_version` |
 
 Giới hạn cabin và điều kiện an toàn cần được kiểm tra ở safety gateway ngay trước publish. Simulator kiểm tra lại các giới hạn cơ bản; ví dụ từ chối mở cửa hoặc tăng độ mở cửa sổ khi `driving=true`. Chuyển đổi `driving`, pin và quãng đường là thao tác fixture của kỹ sư/test, không phải command cho tài xế. Lệnh `vehicle.get_state` là read only; `expected_state_version` chỉ bắt buộc với lệnh thay đổi state.
@@ -164,12 +164,12 @@ Thứ tự triển khai ban đầu: **contract + broker → simulator độc l�
 
 - CAN adapter hoặc xe thật.
 - Điều khiển phanh, lái, truyền động, pin và quãng đường bằng intent của tài xế.
-- Nhiều vùng điều hòa, nhiều cửa/kính/ghế và các tính năng ghế ngoài sưởi ghế bên tài.
+- Nhiều vùng điều hòa và các tính năng ghế ngoài sưởi ghế.
 - RAG cẩm nang, STT/TTS, route planning, OTA và dashboard kỹ sư đầy đủ.
 - MQTT qua mạng công cộng hoặc hạ tầng production nhiều node.
 
 ## 11. Giả định cần xác nhận trước khi triển khai
 
-1. “Ghế” trong MVP được hiểu là **sưởi ghế bên tài mức 0–3**. Nếu nhóm muốn chỉnh vị trí, ngả lưng hoặc massage, cần đổi command catalog trước khi code.
-2. “Cửa” gồm **khóa/mở khóa** và **mở/đóng cửa bên tài**. Xác nhận người dùng áp dụng cho mọi thay đổi cửa/kính theo PRD; policy chi tiết khi xe đang lái cần được khóa trong safety spec.
+1. “Ghế” trong MVP được hiểu là **sưởi ghế ở bốn vị trí mức 0–3**. Chỉnh vị trí, ngả lưng hoặc massage vẫn ngoài phạm vi.
+2. “Cửa” gồm **khóa/mở khóa** và **mở/đóng** ở bốn vị trí. `zone=all` áp dụng nguyên tử cho cả bốn; xác nhận người dùng áp dụng cho mọi thay đổi cửa/kính.
 3. Một service local và một broker local là profile chạy đầu tiên. Contract vẫn gắn `vehicle_id` để mở rộng sau.

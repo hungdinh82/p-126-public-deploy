@@ -10,7 +10,7 @@ import paho.mqtt.client as mqtt
 from pydantic import ValidationError
 
 from .engine import VehicleSimulator
-from .models import VehicleAck, VehicleCommand, utc_now
+from .models import VehicleAck, VehicleCommand, VehicleState, utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +79,13 @@ class MqttVehicleService:
         self.client.disconnect()
         self.client.loop_stop()
 
+    def publish_state(self, state: VehicleState | None = None):
+        """Publish the latest state as a retained MQTT message."""
+        state = state or self.simulator.get_state(self.vehicle_id)
+        if state.vehicle_id != self.vehicle_id:
+            raise ValueError("vehicle_id does not match MQTT service")
+        return self._publish("state", state.model_dump(mode="json"), retain=True)
+
     def _on_connect(self, client, _userdata, _flags, reason_code, _properties) -> None:
         if reason_code.is_failure:
             logger.error("Simulator MQTT connection refused: %s", reason_code)
@@ -91,7 +98,7 @@ class MqttVehicleService:
         if any(code.is_failure for code in reason_codes):
             logger.error("Simulator MQTT subscription refused: %s", reason_codes)
             return
-        self._publish("state", self.simulator.get_state(self.vehicle_id).model_dump(mode="json"), retain=True)
+        self.publish_state()
         self._publish(
             "availability",
             {"vehicle_id": self.vehicle_id, "status": "online", "updated_at": utc_now().isoformat()},
@@ -136,7 +143,7 @@ class MqttVehicleService:
         except Exception:
             logger.exception("Vehicle command failed unexpectedly: %s", command.command_id)
             return
-        self._publish("state", result.state.model_dump(mode="json"), retain=True)
+        self.publish_state(result.state)
         if fault.mode != "ack_lost_after_apply" or result.ack.status != "applied":
             self._publish("acks", result.ack.model_dump(mode="json"))
 
