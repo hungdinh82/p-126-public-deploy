@@ -151,6 +151,20 @@ class RulesTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(followup.intent, "door.set_open")
         self.assertEqual(followup.arguments.model_dump(exclude_none=True), {"open": True, "zone": "driver"})
 
+        changed_topic = self.rules.classify_with_context(
+            "Bên tài đang bị bẩn",
+            [
+                {
+                    "query": "Mở cửa",
+                    "answer": "Bạn muốn mở cửa bên nào?",
+                    "route": "clarify",
+                    "intent": "conversation.clarify",
+                }
+            ],
+            VehicleState().model_dump(mode="json"),
+        )
+        self.assertEqual(changed_topic.intent, "conversation.clarify")
+
         passenger = self.classify("Mở cửa bên phụ", VehicleState())
         self.assertEqual(passenger.intent, "door.set_open")
         self.assertEqual(passenger.arguments.zone, "front_passenger")

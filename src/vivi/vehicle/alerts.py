@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import threading
+from collections import OrderedDict
 from datetime import UTC, datetime, timedelta
 from typing import Literal
 from uuid import uuid4
@@ -210,15 +211,21 @@ class AlertEngine:
 class AlertAnnouncementGate:
     """Deduplicate spoken alerts while never suppressing critical alerts."""
 
-    def __init__(self, cooldown_seconds: float = 30.0) -> None:
+    def __init__(self, cooldown_seconds: float = 30.0, max_seen_ids: int = 1024) -> None:
+        if max_seen_ids < 1:
+            raise ValueError("max_seen_ids must be positive")
         self.cooldown = timedelta(seconds=cooldown_seconds)
-        self._seen_ids: set[str] = set()
+        self.max_seen_ids = max_seen_ids
+        self._seen_ids: OrderedDict[str, None] = OrderedDict()
         self._last_announced: dict[tuple[str, str], datetime] = {}
 
     def should_announce(self, alert: VehicleAlert, now: datetime | None = None) -> bool:
         if alert.alert_id in self._seen_ids:
+            self._seen_ids.move_to_end(alert.alert_id)
             return False
-        self._seen_ids.add(alert.alert_id)
+        self._seen_ids[alert.alert_id] = None
+        while len(self._seen_ids) > self.max_seen_ids:
+            self._seen_ids.popitem(last=False)
         now = now or datetime.now(UTC)
         key = (alert.code, alert.source)
         last = self._last_announced.get(key)

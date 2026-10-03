@@ -12,6 +12,7 @@ let activePanelView = '';
 const seenAlertIds = new Set();
 const alertLastSpoken = new Map();
 const ALERT_TTS_COOLDOWN_MS = 30000;
+const MAX_SEEN_ALERT_IDS = 1024;
 const phaseLabels = { idle: 'ViVi đang ở đây', listening: 'Mình đang nghe bạn', transcribing: 'Mình đang nhận diện lời nói', thinking: 'Để mình xem nhé', validating: 'Đang kiểm tra an toàn', acting: 'Đang chăm sóc không gian của bạn', synthesizing: 'Đang chuẩn bị giọng Mai Chi', speaking: 'Một chút dễ chịu, dành cho bạn', clarify: 'Mình chờ bạn nói thêm', blocked: 'Mình giữ nguyên trạng thái xe' };
 const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 let width = 1, height = 1, tick = 0, previous = 0;
@@ -176,8 +177,13 @@ function renderAlerts(snapshot) {
 }
 function announceNewAlerts(alerts) {
   for (const alert of alerts) {
-    if (seenAlertIds.has(alert.alert_id)) continue;
+    if (seenAlertIds.has(alert.alert_id)) {
+      seenAlertIds.delete(alert.alert_id);
+      seenAlertIds.add(alert.alert_id);
+      continue;
+    }
     seenAlertIds.add(alert.alert_id);
+    while (seenAlertIds.size > MAX_SEEN_ALERT_IDS) seenAlertIds.delete(seenAlertIds.values().next().value);
     const key = `${alert.code}:${alert.source}`;
     const now = Date.now();
     const inCooldown = now - (alertLastSpoken.get(key) || 0) < ALERT_TTS_COOLDOWN_MS;

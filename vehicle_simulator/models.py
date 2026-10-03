@@ -192,4 +192,7 @@ class VehicleFixture(BaseModel):
         if self.power_state is not None and self.driving is not None:
             if self.driving != (self.power_state == "driving"):
                 raise ValueError("driving must match power_state")
+        if self.door_driver_open is not None and self.door_states is not None:
+            if self.door_driver_open != self.door_states.driver.open:
+                raise ValueError("door_driver_open must match door_states.driver.open")
         return self

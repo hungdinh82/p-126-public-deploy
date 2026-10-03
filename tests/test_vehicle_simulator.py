@@ -252,6 +252,16 @@ class VehicleSimulatorServiceTests(unittest.TestCase):
         finally:
             simulator.close()
 
+    def test_fixture_rejects_conflicting_legacy_and_structured_door_state(self):
+        response = self.client.put(
+            f"{self.control}/fixture",
+            json={
+                "door_driver_open": True,
+                "door_states": {"driver": {"open": False, "locked": False}},
+            },
+        )
+        self.assertEqual(response.status_code, 422, response.text)
+
     def test_commands_control_each_cabin_zone_and_all_zones(self):
         passenger_window = self.post(
             self.command(

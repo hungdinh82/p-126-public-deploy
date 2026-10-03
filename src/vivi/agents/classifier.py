@@ -257,7 +257,7 @@ class RulesIntentClassifier(IntentClassifier):
         vehicle_state: dict[str, Any] | None,
     ) -> IntentDecision:
         text = _normalize(input_text)
-        if self._cabin_zone(text) is not None and history:
+        if self._cabin_zone(text) is not None and self._is_cabin_zone_reply(text) and history:
             previous = history[-1]
             previous_query = _normalize(str(previous.get("query", "")))
             previous_answer = _normalize(str(previous.get("answer", "")))
@@ -510,6 +510,21 @@ class RulesIntentClassifier(IntentClassifier):
         if re.search(r"\b(ben tai|ben lai|tai xe|truoc trai)\b", text):
             return "driver"
         return None
+
+    @staticmethod
+    def _is_cabin_zone_reply(text: str) -> bool:
+        """Accept a location-only clarification reply, not a new sentence mentioning one."""
+        zone = (
+            r"(?:ben tai|ben lai|tai xe|truoc trai|ben phu|ghe phu|truoc phai|"
+            r"(?:sau|hang sau|phia sau)(?:\s+ben)?\s+(?:trai|phai)|"
+            r"tat ca|toan bo|ca bon|4)"
+        )
+        return bool(
+            re.fullmatch(
+                rf"(?:(?:o|cua|ghe)\s+)?{zone}(?:\s+(?:nhe|a|giup minh|giup toi))?",
+                text.strip(),
+            )
+        )
 
     @staticmethod
     def _temperature_number(text: str) -> float | None:

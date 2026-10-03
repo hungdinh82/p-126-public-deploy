@@ -115,3 +115,20 @@ def test_announcement_gate_deduplicates_and_only_cools_down_warnings() -> None:
     critical_again = critical.model_copy(update={"alert_id": "new-critical"})
     assert gate.should_announce(critical, now)
     assert gate.should_announce(critical_again, now + timedelta(seconds=1))
+
+
+def test_announcement_gate_bounds_and_refreshes_seen_alert_ids() -> None:
+    now = datetime(2026, 1, 1, tzinfo=UTC)
+    critical = AlertEngine().evaluate(
+        state(powertrain_temperature_celsius=100)
+    ).active_alerts[0]
+    gate = AlertAnnouncementGate(max_seen_ids=2)
+    first = critical.model_copy(update={"alert_id": "first"})
+    second = critical.model_copy(update={"alert_id": "second"})
+    third = critical.model_copy(update={"alert_id": "third"})
+
+    assert gate.should_announce(first, now)
+    assert gate.should_announce(second, now + timedelta(seconds=1))
+    assert not gate.should_announce(first, now + timedelta(seconds=2))
+    assert gate.should_announce(third, now + timedelta(seconds=3))
+    assert list(gate._seen_ids) == ["first", "third"]
