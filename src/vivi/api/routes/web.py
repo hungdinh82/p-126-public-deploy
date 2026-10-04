@@ -16,6 +16,8 @@ async def index():
 
 @router.get("/{asset_name}")
 async def asset(asset_name: str):
-    if asset_name not in {"app.js", "style.css"}:
+    if asset_name == "monitor":
+        return FileResponse(PROJECT_ROOT / "monitor.html", headers={"Cache-Control": "no-store"})
+    if asset_name not in {"app.js", "style.css", "monitor.js"}:
         raise HTTPException(status_code=404)
     return FileResponse(PROJECT_ROOT / asset_name, headers={"Cache-Control": "no-store"})
