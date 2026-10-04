@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import threading
 import time
+from collections import OrderedDict
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -17,8 +18,8 @@ class EventStore:
         self.last_event: dict[str, Any] | None = None
         self.last_tts: dict[str, Any] | None = None
         self.recent_events: list[dict[str, Any]] = []
-        self.tts_by_turn: dict[tuple[str, str], list[dict[str, Any]]] = {}
-        self.input_starts: dict[tuple[str, str], tuple[float, float]] = {}
+        self.tts_by_turn: OrderedDict[tuple[str, str], list[dict[str, Any]]] = OrderedDict()
+        self.input_starts: OrderedDict[tuple[str, str], tuple[float, float]] = OrderedDict()
 
     def _day_dir(self) -> Path:
         path = self.config.data_dir / datetime.now(UTC).strftime("%Y-%m-%d")
@@ -65,6 +66,7 @@ class EventStore:
     def mark_input_start(self, session_id: str, turn_id: str, monotonic_time: float, wall_time: float) -> None:
         with self._lock:
             self.input_starts[(session_id, turn_id)] = (monotonic_time, wall_time)
+            self.input_starts.move_to_end((session_id, turn_id))
             while len(self.input_starts) > 60:
                 del self.input_starts[next(iter(self.input_starts))]
 
@@ -72,6 +74,7 @@ class EventStore:
         key = (session_id, turn_id)
         with self._lock:
             chunks = self.tts_by_turn.setdefault(key, [])
+            self.tts_by_turn.move_to_end(key)
             chunks.append(measurement)
             del chunks[:-20]
             while len(self.tts_by_turn) > 60:
@@ -95,3 +98,11 @@ class EventStore:
                             event["input_to_audio_ready_ms"] = measurement["input_to_audio_ready_ms"]
                         break
             self.last_tts = measurement
+
+    def metrics_snapshot(self) -> tuple[list[dict[str, Any]], dict[tuple[str, str], list[dict[str, Any]]], dict[str, Any] | None]:
+        with self._lock:
+            return (
+                list(self.recent_events),
+                {key: list(value) for key, value in self.tts_by_turn.items()},
+                dict(self.last_tts) if self.last_tts is not None else None,
+            )
