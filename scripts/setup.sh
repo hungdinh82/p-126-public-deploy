@@ -52,7 +52,7 @@ source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -r requirements-dev.txt
 
-# Create .env if not exists
+# Create local secrets file if it does not exist. Shared runtime defaults live in config.toml.
 if [ ! -f .env ]; then
     cp .env.example .env
     echo "Created .env with offline rules + memory simulator defaults"

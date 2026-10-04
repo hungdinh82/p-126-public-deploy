@@ -111,19 +111,20 @@ Dependency chỉ còn ba profile có mục đích khác nhau:
 .venv/bin/python -m pip install -r requirements-ai.txt
 ```
 
-Repo chỉ có một `.env.example`. Các giá trị mặc định là text-only; preset PC AI và Nano
-được ghi ở cuối file và trong tài liệu setup tương ứng.
+`config.toml` giữ cấu hình runtime dùng chung; `.env.example` chỉ liệt kê API keys và
+credentials tùy chọn. Environment variables và `.env` có thể override TOML, thuận tiện
+cho cấu hình riêng theo máy/container.
 
 Cấu hình nhẹ để dev text:
 
-```dotenv
-LLM_PROVIDER=rules
-STT_PROVIDER=off
-TTS_PROVIDER=off
-PHOWHISPER_PRELOAD=false
-ZEROTTS_PRELOAD=false
-VIVI_VEHICLE_PROVIDER=memory
-RAG_RETRIEVAL_MODE=sqlite
+```toml
+llm_provider = "rules"
+stt_provider = "off"
+tts_provider = "off"
+phowhisper_preload = false
+zerotts_preload = false
+vehicle_provider = "memory"
+rag_retrieval_mode = "sqlite"
 ```
 
 Khởi động:
@@ -139,15 +140,15 @@ Mở `http://127.0.0.1:8787`. Kiểm tra runtime tại
 
 ### Bật từng thành phần
 
-- STT local: `STT_PROVIDER=phowhisper` hoặc `whisper_cpp`.
-- TTS local: `TTS_PROVIDER=zerotts`.
-- LLM local: đặt `LLM_PROVIDER=local`, `LOCAL_LLM_BASE_URL` và
-  `LOCAL_LLM_MODEL`.
-- Google/OpenAI: đặt provider và API key tương ứng.
-- MQTT vehicle: đặt `VIVI_VEHICLE_PROVIDER=mqtt`, chạy broker và
+- STT local: đặt `stt_provider = "phowhisper"` hoặc `"whisper_cpp"`.
+- TTS local: đặt `tts_provider = "zerotts"`.
+- LLM local: đặt `llm_provider = "local"`, `local_llm_base_url` và
+  `local_llm_model`.
+- Google/OpenAI: đặt provider trong TOML và API key trong `.env`.
+- MQTT vehicle: đặt `vehicle_provider = "mqtt"`, chạy broker và
   `vehicle_simulator` theo `docs/VEHICLE_SIMULATOR_SPEC.md`.
 
-Sau khi đổi `.env`, khởi động lại backend vì runtime được compose một lần khi process
+Sau khi đổi `config.toml` hoặc `.env`, khởi động lại backend vì runtime được compose một lần khi process
 khởi động.
 
 ## 4. Quy trình development

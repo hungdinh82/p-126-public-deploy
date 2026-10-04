@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Literal
 
 from pydantic import Field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, SettingsConfigDict, TomlConfigSettingsSource
 
 
 class Settings(BaseSettings):
@@ -14,9 +14,29 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=(".env", "data/mqtt/credentials.env"),
         env_file_encoding="utf-8",
+        toml_file="config.toml",
         extra="ignore",
         populate_by_name=True,
     )
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls,
+        init_settings,
+        env_settings,
+        dotenv_settings,
+        file_secret_settings,
+    ):
+        # Secrets and per-machine overrides stay in .env; shared runtime defaults
+        # live in config.toml so changing providers does not clutter .env.
+        return (
+            init_settings,
+            env_settings,
+            dotenv_settings,
+            file_secret_settings,
+            TomlConfigSettingsSource(settings_cls),
+        )
 
     runtime_profile: Literal["pc", "nano", "test"] = Field(
         default="pc", validation_alias="VIVI_RUNTIME_PROFILE"
