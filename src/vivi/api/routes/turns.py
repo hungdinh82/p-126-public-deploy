@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
@@ -37,8 +38,13 @@ def _reject_inline_confirmation(request: TurnRequest) -> None:
 async def turn(request: TurnRequest):
     _reject_inline_confirmation(request)
     provider = _provider(request.llm_provider)
+    started = time.perf_counter()
+    received_at = time.time()
     try:
-        return await runtime.orchestrator.run(request, provider=provider)
+        response = await runtime.orchestrator.run(request, provider=provider)
+        finished = time.perf_counter()
+        runtime.store.update_turn(request.session_id, request.turn_id, {"received_at": received_at, "output_at": time.time(), "end_to_end_ms": round((finished - started) * 1000, 2)})
+        return response
     except Exception as exc:
         raise HTTPException(
             status_code=502, detail=f"Không xử lý được lượt hội thoại: {exc}"
@@ -51,8 +57,13 @@ async def turn_stream(request: TurnRequest):
     provider = _provider(request.llm_provider)
 
     async def events():
+        started = time.perf_counter()
+        received_at = time.time()
         try:
             async for event in runtime.orchestrator.run_stream(request, provider=provider):
+                if event.get("type") == "final":
+                    finished = time.perf_counter()
+                    runtime.store.update_turn(request.session_id, request.turn_id, {"received_at": received_at, "output_at": time.time(), "end_to_end_ms": round((finished - started) * 1000, 2)})
                 yield json.dumps(event, ensure_ascii=False) + "\n"
         except Exception as exc:
             yield json.dumps(

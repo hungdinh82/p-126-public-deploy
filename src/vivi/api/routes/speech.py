@@ -39,6 +39,7 @@ async def transcribe(
     path = stored_path or temporary_path
     assert path is not None
     started = time.perf_counter()
+    runtime.store.mark_input_start(session_id, turn_id, started, time.time())
     try:
         transcript = await runtime.stt.transcribe(path)
     except Exception as exc:
@@ -52,6 +53,7 @@ async def transcribe(
     audio_path = str(stored_path) if stored_path is not None else None
     runtime.store.append_event(
         {
+            "event_type": "stt",
             "type": "stt",
             "session_id": session_id,
             "turn_id": turn_id,
@@ -78,6 +80,8 @@ async def transcribe_stream(socket: WebSocket, session_id: str, turn_id: str):
     one ``done`` with the transcript, or ``error``.
     """
     await socket.accept()
+    input_started = time.perf_counter()
+    input_received_at = time.time()
     stream = getattr(runtime.stt, "stream", None)
     available, reason = runtime.stt.availability()
     if getattr(runtime.stt, "streaming", True) is False:
@@ -87,6 +91,7 @@ async def transcribe_stream(socket: WebSocket, session_id: str, turn_id: str):
         await socket.send_json({"type": "error", "detail": f"STT chưa sẵn sàng: {detail}"})
         await socket.close()
         return
+    runtime.store.mark_input_start(session_id, turn_id, input_started, input_received_at)
 
     received: list[bytes] = []
     # Latency is measured from the end of speech, not from the first chunk.
@@ -129,6 +134,7 @@ async def transcribe_stream(socket: WebSocket, session_id: str, turn_id: str):
     audio_path = str(stored_path) if stored_path is not None else None
     runtime.store.append_event(
         {
+            "event_type": "stt",
             "type": "stt",
             "session_id": session_id,
             "turn_id": turn_id,
@@ -174,8 +180,28 @@ async def synthesize_stream(request: TTSRequest):
             await ensure_loaded()
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"TTS chưa sẵn sàng: {exc}") from exc
+    async def timed_stream():
+        started = time.perf_counter()
+        received_at = time.time()
+        first_chunk = None
+        audio_duration_ms = 0.0
+        async for chunk in runtime.tts.stream(request.text):
+            if first_chunk is None:
+                first_chunk = round((time.perf_counter() - started) * 1000, 2)
+            audio_duration_ms += len(chunk) / 2 / runtime.tts._model.sample_rate * 1000
+            yield chunk
+        runtime.store.record_tts(request.session_id, request.turn_id, {
+            "session_id": request.session_id,
+            "turn_id": request.turn_id,
+            "received_at": received_at,
+            "text": request.text,
+            "time_to_first_chunk_ms": first_chunk,
+            "synthesis_ms": round((time.perf_counter() - started) * 1000, 2),
+            "audio_duration_ms": round(audio_duration_ms, 2),
+        })
+
     return StreamingResponse(
-        runtime.tts.stream(request.text),
+        timed_stream(),
         media_type="application/octet-stream",
         headers={
             "X-ViVi-Voice": runtime.settings.zerotts_voice,
