@@ -38,6 +38,9 @@ class CompiledAssistantGraph:
     async def ainvoke(self, state: AgentState) -> dict[str, Any]:
         return await self.compiled.ainvoke(state)
 
+    def astream(self, state: AgentState, stream_mode):
+        return self.compiled.astream(state, stream_mode=stream_mode)
+
 
 def _elapsed(started: float) -> float:
     return round((time.perf_counter() - started) * 1000, 2)

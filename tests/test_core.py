@@ -18,6 +18,7 @@ from src.vivi.config import Settings, settings
 from src.vivi.domain.models import ActionProposal, TurnRequest, VehicleState
 from src.vivi.domain.safety import validate
 from src.vivi.orchestration import (
+    PROGRESS_MESSAGES,
     LangGraphOrchestrator,
     create_langgraph_orchestrator,
 )
@@ -379,6 +380,9 @@ class APITests(unittest.TestCase):
                     "tts_text": "Xin chào. Mình là ViVi.",
                 }}
 
+            async def astream(self, state, stream_mode):
+                yield "values", await self.ainvoke(state)
+
         with tempfile.TemporaryDirectory() as directory:
             config = Settings(data_dir=Path(directory))
             vehicle = VehicleSimulator()
@@ -413,6 +417,10 @@ class TurnStreamingTests(unittest.IsolatedAsyncioTestCase):
                     "tts_text": "Xin chào bạn. Mình là ViVi.",
                 }}
 
+            async def astream(self, state, stream_mode):
+                yield "updates", {"classify_intent": {"route": "conversation"}}
+                yield "values", await self.ainvoke(state)
+
         with tempfile.TemporaryDirectory() as directory:
             config = Settings(data_dir=Path(directory))
             vehicle = VehicleSimulator()
@@ -442,6 +450,20 @@ class TurnStreamingTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(events[-1]["streamed_speech"])
         self.assertEqual(events[-1]["response"]["status"], "confirmation_required")
         self.assertEqual(events[-1]["response"]["vehicle_state"]["window_driver_percent"], 0)
+        self.assertNotIn("progress", [event["type"] for event in events])
+
+    async def test_handbook_stream_announces_wait_first(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config = Settings(data_dir=Path(directory))
+            orchestrator = create_langgraph_orchestrator(
+                VehicleSimulator(), EventStore(config), config
+            )
+            request = TurnRequest(transcript="Cách sạc AC cho VF8 thế nào?", session_id="stream", turn_id="stream-manual")
+            events = [event async for event in orchestrator.run_stream(request, provider="rules")]
+
+        self.assertEqual(events[0]["type"], "progress")
+        self.assertIn(events[0]["text"], PROGRESS_MESSAGES)
+        self.assertEqual(events[-1]["response"]["route"], "handbook")
 
 
 class IntegratedLangGraphVoiceTests(unittest.IsolatedAsyncioTestCase):
@@ -468,6 +490,10 @@ class IntegratedLangGraphVoiceTests(unittest.IsolatedAsyncioTestCase):
                     }
                 }
 
+            async def astream(self, state, stream_mode):
+                yield "updates", {"scope_guard": {"grounding_status": "pending"}}
+                yield "values", await self.ainvoke(state)
+
         with tempfile.TemporaryDirectory() as directory:
             config = Settings(data_dir=Path(directory))
             vehicle = VehicleSimulator()
@@ -480,7 +506,8 @@ class IntegratedLangGraphVoiceTests(unittest.IsolatedAsyncioTestCase):
             )
             events = [event async for event in pipeline.run_stream(request, provider="rules")]
 
-        self.assertEqual([event["type"] for event in events], ["speech", "final"])
+        self.assertEqual([event["type"] for event in events], ["progress", "speech", "final"])
+        self.assertIn(events[0]["text"], PROGRESS_MESSAGES)
         response = events[-1]["response"]
         self.assertEqual(response["route"], "handbook")
         self.assertEqual(response["status"], "verified")
