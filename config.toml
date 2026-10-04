@@ -1,0 +1,72 @@
+# Shared runtime configuration. Edit this file to enable components.
+# Secrets and machine-specific overrides belong in .env.
+
+# App
+runtime_profile = "pc"
+host = "127.0.0.1"
+port = 8787
+log_level = "INFO"
+data_dir = "./data"
+store_audio = false
+store_transcripts = false
+
+# Vehicle simulator: memory or mqtt
+vehicle_provider = "memory"
+vehicle_id = "demo-car-1"
+mqtt_host = "127.0.0.1"
+mqtt_port = 1883
+mqtt_timeout_seconds = 3
+
+# Language model: rules, google, openai, openrouter, or local
+llm_provider = "rules"
+llm_timeout_seconds = 30
+google_model = "gemini-3.1-flash-lite"
+openai_model = "gpt-4o-mini"
+openrouter_model = "qwen/qwen3.7-flash"
+openrouter_reasoning = false
+openrouter_max_tokens = 1536
+local_llm_base_url = "http://127.0.0.1:1234/v1"
+local_llm_api_key = "local"
+local_llm_model = ""
+local_llm_max_tokens = 512
+
+# Speech: provider = off to disable; preload = true to load at startup
+stt_provider = "off"
+stt_fallback_provider = "off"
+stt_fallback_preload = false
+phowhisper_model = "vinai/PhoWhisper-medium"
+phowhisper_device = "auto"
+phowhisper_dtype = "auto"
+phowhisper_preload = false
+phowhisper_language = "vi"
+whisper_cpp_binary = "./models/whisper.cpp/build/bin/whisper-cli"
+whisper_cpp_model = "./models/whisper.cpp/models/ggml-base.bin"
+ffmpeg_binary = "ffmpeg"
+soniox_model = "stt-rt-v5"
+soniox_language_hints = "vi,en"
+soniox_timeout_seconds = 30
+soniox_stream_max_seconds = 60
+
+tts_provider = "off"
+zerotts_model = "zeroweight-ai/ZeroTTS"
+zerotts_voice = "VIVI"
+zerotts_device = "auto"
+zerotts_preload = false
+
+# Handbook retrieval
+rag_generation_model = "gemini-3.1-flash-lite"
+rag_embedding_model = "gemini-embedding-001"
+rag_embedding_dimensions = 768
+rag_data_dir = "./data/handbooks"
+rag_history_db = "./data/vivi_rag.sqlite3"
+rag_handbook_db = "./data/handbooks/handbook.sqlite3"
+rag_collection_name = "vivi_handbook"
+rag_retrieval_mode = "sqlite"
+rag_default_vehicle_model = "VF8"
+rag_default_model_year = 2026
+rag_default_locale = "vi_vn"
+rag_retrieval_k = 12
+rag_final_k = 5
+rag_history_turns = 6
+rag_prompt_max_characters = 6000
+rag_max_cosine_distance = 0.62

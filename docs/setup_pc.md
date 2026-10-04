@@ -25,8 +25,8 @@ curl http://127.0.0.1:8787/api/v1/health
 ```
 
 Smoke test phải đi qua được truy vấn handbook, action thường, action cần xác nhận và bước
-verify state. File `.env` được tạo từ `.env.example`, mặc định dùng `LLM_PROVIDER=rules`,
-`VIVI_VEHICLE_PROVIDER=memory`, `STT_PROVIDER=off` và `TTS_PROVIDER=off`. Nhập text
+verify state. `config.toml` mặc định dùng rules, simulator memory và tắt STT/TTS.
+`.env` chỉ chứa API keys và log-server credentials. Nhập text
 trên UI vẫn chạy đủ LangGraph, RAG và vehicle flow.
 
 Nếu `scripts/setup.sh` báo thiếu handbook, kiểm tra file đã được commit/push từ máy nguồn:
@@ -73,26 +73,26 @@ Cài thêm PhoWhisper và ZeroTTS trên PC:
 .venv/bin/python -m pip install -r requirements-ai.txt
 ```
 
-Sau đó bật các component cần dùng trong `.env`:
+Sau đó bật các component cần dùng trong `config.toml`:
 
-```dotenv
-VIVI_RUNTIME_PROFILE=pc
-STT_PROVIDER=phowhisper
-PHOWHISPER_PRELOAD=true
-LLM_PROVIDER=rules
-TTS_PROVIDER=zerotts
-ZEROTTS_PRELOAD=true
+```toml
+runtime_profile = "pc"
+stt_provider = "phowhisper"
+phowhisper_preload = true
+llm_provider = "rules"
+tts_provider = "zerotts"
+zerotts_preload = true
 ```
 
 Có thể chỉ bật STT mà không bật TTS:
 
-```dotenv
-STT_PROVIDER=phowhisper
-PHOWHISPER_PRELOAD=false
-TTS_PROVIDER=off
+```toml
+stt_provider = "phowhisper"
+phowhisper_preload = false
+tts_provider = "off"
 ```
 
-`PRELOAD=false` là lazy-load, không phải disable. Muốn component không bao giờ nạp
+`*_preload = false` là lazy-load, không phải disable. Muốn component không bao giờ nạp
 model trong phiên dev/test, đặt provider của component thành `off`.
 
 Máy không dùng NVIDIA nên cài wheel PyTorch phù hợp hệ điều hành trước, sau đó cài phần
@@ -121,13 +121,13 @@ llama-server \
 
 Cấu hình:
 
-```dotenv
-LLM_PROVIDER=local
-LOCAL_LLM_BASE_URL=http://127.0.0.1:8080/v1
-LOCAL_LLM_MODEL=qwen2.5-3b-instruct-q4_k_m.gguf
+```toml
+llm_provider = "local"
+local_llm_base_url = "http://127.0.0.1:8080/v1"
+local_llm_model = "qwen2.5-3b-instruct-q4_k_m.gguf"
 ```
 
-Để kiểm tra luồng trước khi tải LLM, dùng `LLM_PROVIDER=rules`.
+Để kiểm tra luồng trước khi tải LLM, dùng `llm_provider = "rules"` trong `config.toml`.
 
 ## 5. Handbook SQLite
 

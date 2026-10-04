@@ -29,33 +29,34 @@ cài wheel CUDA dành cho PC.
 
 Backend chỉ bind
 `127.0.0.1` ở profile PC. ZeroTTS và PhoWhisper chỉ được nạp/warm lúc khởi động khi các
-biến `ZEROTTS_PRELOAD` và `PHOWHISPER_PRELOAD` được bật; nếu tắt, model được nạp ở lượt
+giá trị `zerotts_preload` và `phowhisper_preload` trong `config.toml` được bật; nếu tắt, model được nạp ở lượt
 dùng đầu tiên. Lần đầu có thể tải model, các lần sau dùng cache local. Font Google Fonts có
 fallback font hệ thống khi offline.
 
-Mỗi component có thể bật/tắt độc lập trong `.env`; thay đổi env cần restart backend:
+Thiết lập provider/model trong `config.toml`; khóa API và ghi đè riêng cho máy đặt trong
+`.env`. Thay đổi cấu hình cần restart backend:
 
 | Component | Biến | Lựa chọn |
 | --- | --- | --- |
 | Text input | luôn bật | gửi thẳng transcript tới `/api/v1/turn` |
-| STT | `STT_PROVIDER` | `off`, `phowhisper`, `whisper_cpp` |
-| LLM/router | `LLM_PROVIDER` | `rules`, `local`, `openai`, `google` |
-| TTS | `TTS_PROVIDER` | `off`, `zerotts` |
-| Handbook retrieval | `RAG_RETRIEVAL_MODE` | `sqlite`, `lexical`, `hybrid` |
-| Vehicle | `VIVI_VEHICLE_PROVIDER` | `memory`, `mqtt` |
+| STT | `stt_provider` trong `config.toml` | `off`, `phowhisper`, `whisper_cpp`, `soniox` |
+| LLM/router | `llm_provider` trong `config.toml` | `rules`, `local`, `openai`, `google`, `openrouter` |
+| TTS | `tts_provider` trong `config.toml` | `off`, `zerotts` |
+| Handbook retrieval | `rag_retrieval_mode` trong `config.toml` | `sqlite`, `lexical`, `hybrid` |
+| Vehicle | `vehicle_provider` trong `config.toml` | `memory`, `mqtt` |
 
 Profile text-only nhẹ nhất cho dev/test:
 
-```dotenv
-STT_PROVIDER=off
-LLM_PROVIDER=rules
-TTS_PROVIDER=off
-RAG_RETRIEVAL_MODE=sqlite
-VIVI_VEHICLE_PROVIDER=memory
+```toml
+stt_provider = "off"
+llm_provider = "rules"
+tts_provider = "off"
+rag_retrieval_mode = "sqlite"
+vehicle_provider = "memory"
 ```
 
-`PHOWHISPER_PRELOAD=false` hoặc `ZEROTTS_PRELOAD=false` không tắt component; chúng
-chỉ chuyển model sang lazy-load ở request đầu tiên. Dùng `*_PROVIDER=off` khi muốn
+`phowhisper_preload = false` hoặc `zerotts_preload = false` không tắt component; chúng
+chỉ chuyển model sang lazy-load ở request đầu tiên. Đặt provider thành `"off"` khi muốn
 chắc chắn model không được nạp trong phiên dev/test.
 
 Model tải từ Hugging Face nằm trong `~/.cache/huggingface/hub/`. Ví dụ PhoWhisper
@@ -134,12 +135,12 @@ dữ liệu nằm trong `data/` cho đến khi người vận hành xóa; thư m
 
 ## Provider LLM
 
-Đặt provider mặc định trong `.env`, sau đó có thể đổi model hội thoại ngay trên giao diện mà không cần khởi động lại backend. Danh sách UI chỉ cho chọn các provider đã cấu hình; model ID và khóa API vẫn được quản lý trên backend.
+Đặt provider mặc định trong `config.toml`, sau đó có thể đổi model hội thoại ngay trên giao diện mà không cần khởi động lại backend. Danh sách UI chỉ cho chọn các provider đã cấu hình; model ID ở `config.toml`, khóa API ở `.env`.
 
-- `LLM_PROVIDER=rules`: mặc định, chạy offline ngay và hữu ích cho test.
-- `LLM_PROVIDER=local`: API local tương thích OpenAI Chat Completions; cấu hình `LOCAL_LLM_BASE_URL` và `LOCAL_LLM_MODEL`.
-- `LLM_PROVIDER=openai`: OpenAI Responses API; cấu hình `OPENAI_API_KEY` và `OPENAI_MODEL`.
-- `LLM_PROVIDER=google`: Gemini API; cấu hình `GOOGLE_API_KEY` và `GOOGLE_MODEL`.
+- `llm_provider = "rules"`: mặc định, chạy offline ngay và hữu ích cho test.
+- `llm_provider = "local"`: API local tương thích OpenAI Chat Completions; cấu hình `local_llm_base_url` và `local_llm_model`.
+- `llm_provider = "openai"`: OpenAI Responses API; cấu hình `OPENAI_API_KEY` trong `.env` và `openai_model` trong `config.toml`.
+- `llm_provider = "google"`: Gemini API; cấu hình `GOOGLE_API_KEY` trong `.env` và `google_model` trong `config.toml`.
 
 Với Google, `GOOGLE_MODEL` phân loại intent/hội thoại; `RAG_GENERATION_MODEL` sinh câu
 trả lời handbook sau retrieval. Structured routing cố định ở temperature 0 để kết quả
@@ -150,7 +151,7 @@ OpenAI/Google cần mạng. Chỉ `rules` và `local` đáp ứng runtime offlin
 `rules`, `google`, `openai` và `local` đều đi qua LangGraph thống nhất. `rules` dùng bộ định
 tuyến deterministic và câu trả lời handbook extractive; ba provider model dùng structured
 classification, SQLite retrieval và grounded generation với cùng safety graph. Sau khi thay
-đổi model hoặc khóa trong `.env`, cần khởi động lại backend. Nếu giao diện báo backend
+đổi model trong `config.toml` hoặc khóa trong `.env`, cần khởi động lại backend. Nếu giao diện báo backend
 offline thì nó không gửi lệnh vehicle và chỉ hiển thị fallback an toàn.
 
 ## API local

@@ -33,22 +33,22 @@ docker build -f Dockerfile.nano -t vivi-edge:nano .
 docker build -f Dockerfile.nano-builder -t vivi-edge:nano-builder .
 ```
 
-Đặt profile Nano trong `.env`:
+Đặt profile Nano trong `config.toml`:
 
-```dotenv
-VIVI_RUNTIME_PROFILE=nano
-VIVI_HOST=0.0.0.0
-VIVI_VEHICLE_PROVIDER=mqtt
-STT_PROVIDER=whisper_cpp
-LLM_PROVIDER=local
-LOCAL_LLM_BASE_URL=http://127.0.0.1:8080/v1
-LOCAL_LLM_MODEL=qwen2.5-1.5b-instruct-q4_k_m.gguf
-LOCAL_LLM_MAX_TOKENS=512
-TTS_PROVIDER=off
-RAG_RETRIEVAL_MODE=sqlite
-RAG_FINAL_K=3
-RAG_HISTORY_TURNS=3
-RAG_PROMPT_MAX_CHARACTERS=4000
+```toml
+runtime_profile = "nano"
+host = "0.0.0.0"
+vehicle_provider = "mqtt"
+stt_provider = "whisper_cpp"
+llm_provider = "local"
+local_llm_base_url = "http://127.0.0.1:8080/v1"
+local_llm_model = "qwen2.5-1.5b-instruct-q4_k_m.gguf"
+local_llm_max_tokens = 512
+tts_provider = "off"
+rag_retrieval_mode = "sqlite"
+rag_final_k = 3
+rag_history_turns = 3
+rag_prompt_max_characters = 4000
 ```
 
 Nano không preload PhoWhisper hoặc ZeroTTS. API, LangGraph, SQLite FTS5 và MQTT dùng
@@ -82,7 +82,7 @@ docker run --rm --user "$(id -u):$(id -g)" \
   -f /app/sample.wav -l vi
 ```
 
-`STT_PROVIDER=whisper_cpp` khiến API gọi binary này. Bản `base` là baseline nhẹ; chỉ chuyển
+`stt_provider = "whisper_cpp"` khiến API gọi binary này. Bản `base` là baseline nhẹ; chỉ chuyển
 sang `small` sau khi đo peak RSS và latency.
 
 Tham chiếu lệnh build/model: [whisper.cpp](https://github.com/ggml-org/whisper.cpp).
@@ -130,7 +130,7 @@ docker run --rm --network host \
   --host 127.0.0.1 --port 8080 --ctx-size 2048 --threads 3
 ```
 
-Nếu latency không đạt, chuyển toàn profile sang `LLM_PROVIDER=rules`; vehicle command vẫn
+Nếu latency không đạt, chuyển toàn profile sang `llm_provider = "rules"`; vehicle command vẫn
 qua safety/MQTT và handbook dùng câu trả lời extractive có citation mà không cần Qwen.
 Không chạy model 3B cùng PhoWhisper/ZeroTTS resident trên Nano 4 GB.
 
@@ -188,7 +188,7 @@ docker run --rm --network host vivi-edge:nano \
 
 ## 7. TTS trên Nano
 
-ZeroTTS hiện là profile PC. Trên Nano, `ZEROTTS_PRELOAD=false`; UI vẫn hiển thị text nếu
+ZeroTTS hiện là profile PC. Trên Nano, `zerotts_preload = false`; UI vẫn hiển thị text nếu
 TTS trả 503. Chỉ cài ZeroTTS CPU sau khi đã benchmark STT + LLM, và không bật preload đồng
 thời cả ba model. Một adapter TTS nhẹ hơn có thể thay thế qua `TextToSpeechPort` mà không
 đổi orchestrator.
