@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import random
 import re
 from collections.abc import AsyncIterator
 from typing import Any
@@ -24,6 +25,14 @@ from .domain.models import (
 )
 from .vehicle.memory import VehicleSimulator
 
+# Spoken while a handbook answer is retrieved and generated, which takes a few
+# seconds on cloud models, so the cabin is not silent.
+PROGRESS_MESSAGES = (
+    "Mình đang tìm thông tin trong cẩm nang, bạn chờ chút nhé.",
+    "Để mình tra cẩm nang VF8 một chút nhé.",
+    "Mình đang tìm kiếm thông tin, bạn đợi mình một lát.",
+)
+
 
 class LangGraphOrchestrator:
     """Expose the LangGraph pipeline through ViVi's existing voice contract."""
@@ -46,33 +55,53 @@ class LangGraphOrchestrator:
     def graph_providers(self) -> set[str]:
         return set(self.graphs)
 
-    async def run(self, request: TurnRequest, provider: str | None = None) -> TurnResponse:
+    def _graph(self, provider: str | None) -> tuple[str, Any]:
         provider = provider or self.default_provider
         graph = self.graphs.get(provider)
         if graph is None:
             detail = self.provider_errors.get(provider, "LLM provider không khả dụng")
             raise ValueError(detail)
-        result = await graph.ainvoke(
-            {
-                "input_text": request.transcript,
-                "session_id": request.session_id,
-                "turn_id": request.turn_id,
-                "vehicle_model": "VF8",
-                "model_year": 2026,
-                "locale": "vi_vn",
-                # Client state is never trusted at the policy boundary.
-                "vehicle_state": None,
-                "confirmation_id": request.confirmation_id,
-                "confirmation_decision": request.confirmation_decision,
-            }
-        )
+        return provider, graph
+
+    @staticmethod
+    def _graph_input(request: TurnRequest) -> dict[str, Any]:
+        return {
+            "input_text": request.transcript,
+            "session_id": request.session_id,
+            "turn_id": request.turn_id,
+            "vehicle_model": "VF8",
+            "model_year": 2026,
+            "locale": "vi_vn",
+            # Client state is never trusted at the policy boundary.
+            "vehicle_state": None,
+            "confirmation_id": request.confirmation_id,
+            "confirmation_decision": request.confirmation_decision,
+        }
+
+    async def run(self, request: TurnRequest, provider: str | None = None) -> TurnResponse:
+        provider, graph = self._graph(provider)
+        result = await graph.ainvoke(self._graph_input(request))
         output = AssistantOutput.model_validate(result["output"])
         return self._to_turn_response(request, provider, output)
 
     async def run_stream(
         self, request: TurnRequest, provider: str | None = None
     ) -> AsyncIterator[dict]:
-        response = await self.run(request, provider=provider)
+        provider, graph = self._graph(provider)
+        result: dict[str, Any] = {}
+        async for mode, chunk in graph.astream(
+            self._graph_input(request), stream_mode=["updates", "values"]
+        ):
+            if mode == "values":
+                result = chunk
+            elif "scope_guard" in chunk and (chunk["scope_guard"] or {}).get(
+                "status"
+            ) != "out_of_scope":
+                # The question passed the scope check, so retrieval and answer
+                # generation follow; announce the wait before the slow part.
+                yield {"type": "progress", "text": random.choice(PROGRESS_MESSAGES)}
+        output = AssistantOutput.model_validate(result["output"])
+        response = self._to_turn_response(request, provider, output)
         speech_segments, remainder = self._take_speech_segments(response.message)
         if remainder.strip():
             speech_segments.append(remainder.strip())

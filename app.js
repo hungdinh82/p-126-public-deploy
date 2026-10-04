@@ -439,7 +439,16 @@ async function runBackendCommand(command, turnId = crypto.randomUUID()) {
     let speechPlayback = null;
     const handleEvent = (event) => {
       if (event.type === 'error') throw new Error(event.detail || 'Pipeline streaming bị lỗi');
-      if (event.type === 'speech' && event.text) {
+      if (event.type === 'progress' && event.text) {
+        // Slow turns (handbook lookup) announce the wait; the answer is queued
+        // on the same playback so it follows without cutting this phrase off.
+        setPhase('thinking', event.text);
+        if (state.sound && state.ttsAvailable) {
+          speechPlayback ||= createTtsPlayback();
+          voiceStreamed = true;
+          speechQueue = speechQueue.then(() => speak(event.text, turnId, speechPlayback));
+        } else say(event.text);
+      } else if (event.type === 'speech' && event.text) {
         streamedSpeech = true;
         // Speech events may contain one event per sentence. Keep them for
         // low-latency audio, but render only the authoritative final response
