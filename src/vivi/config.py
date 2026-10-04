@@ -42,7 +42,11 @@ class Settings(BaseSettings):
     mqtt_api_password: str = ""
     mqtt_timeout_seconds: float = 3.0
 
-    stt_provider: Literal["off", "phowhisper", "whisper_cpp"] = "off"
+    stt_provider: Literal["off", "phowhisper", "whisper_cpp", "soniox"] = "soniox"
+    # Local STT used when the primary (cloud) provider is missing or fails.
+    stt_fallback_provider: Literal["off", "phowhisper", "whisper_cpp"] = "phowhisper"
+    # Warm the fallback in a background task so startup is not blocked.
+    stt_fallback_preload: bool = True
     phowhisper_model: str = "vinai/PhoWhisper-medium"
     phowhisper_device: str = "auto"
     phowhisper_dtype: str = "auto"
@@ -51,12 +55,25 @@ class Settings(BaseSettings):
     whisper_cpp_binary: str = "./models/whisper.cpp/build/bin/whisper-cli"
     whisper_cpp_model: Path = Path("./models/whisper.cpp/models/ggml-base.bin")
     ffmpeg_binary: str = "ffmpeg"
+    soniox_api_key: str = ""
+    soniox_model: str = "stt-rt-v5"
+    soniox_language_hints: str = "vi,en"
+    soniox_ws_url: str = "wss://stt-rt.soniox.com/transcribe-websocket"
+    soniox_timeout_seconds: float = 30
+    soniox_stream_max_seconds: float = 60
 
-    llm_provider: Literal["rules", "openai", "google", "local"] = "rules"
+    llm_provider: Literal["rules", "openai", "google", "local", "openrouter"] = "rules"
     llm_timeout_seconds: float = 30
     openai_api_key: str = ""
     openai_base_url: str = "https://api.openai.com/v1"
     openai_model: str = "gpt-4o-mini"
+    openrouter_api_key: str = ""
+    openrouter_base_url: str = "https://openrouter.ai/api/v1"
+    openrouter_model: str = "qwen/qwen3.7-flash"
+    # Qwen3.7 thinks by default; ViVi needs short JSON, so reasoning is off.
+    openrouter_reasoning: bool = False
+    # Vietnamese answers with citations exceed the 512-token local default.
+    openrouter_max_tokens: int = Field(default=1536, ge=64, le=8192)
     google_api_key: str = ""
     google_model: str = "gemini-2.5-flash"
     local_llm_base_url: str = "http://127.0.0.1:1234/v1"

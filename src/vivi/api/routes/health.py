@@ -82,6 +82,7 @@ async def health():
             "detail": stt_detail,
             "device": runtime.stt.device,
             "dtype": runtime.stt.dtype,
+            "streaming": bool(getattr(runtime.stt, "streaming", hasattr(runtime.stt, "stream"))),
         },
         "tts": {
             "provider": runtime.tts.name,

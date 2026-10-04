@@ -223,7 +223,7 @@ class TurnRequest(BaseModel):
     )
     confirmation_id: str | None = Field(default=None, max_length=100)
     confirmation_decision: Literal["approve", "deny"] | None = None
-    llm_provider: Literal["rules", "openai", "google", "local"] | None = None
+    llm_provider: Literal["rules", "openai", "google", "local", "openrouter"] | None = None
 
 
 class TurnResponse(BaseModel):
@@ -265,7 +265,7 @@ class ConfirmationDecisionRequest(BaseModel):
     session_id: str = Field(min_length=1, max_length=100)
     turn_id: str = Field(min_length=1, max_length=100)
     decision: Literal["approve", "deny"]
-    llm_provider: Literal["rules", "openai", "google", "local"] | None = None
+    llm_provider: Literal["rules", "openai", "google", "local", "openrouter"] | None = None
 
 
 class DemoDrivingRequest(BaseModel):

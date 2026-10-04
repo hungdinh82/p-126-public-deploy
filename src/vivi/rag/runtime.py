@@ -9,6 +9,7 @@ from src.vivi.agents.classifier import (
     IntentClassifier,
     LocalIntentClassifier,
     OpenAIIntentClassifier,
+    OpenRouterIntentClassifier,
     RulesIntentClassifier,
 )
 from src.vivi.config import Settings, get_settings
@@ -19,6 +20,7 @@ from src.vivi.rag.generator import (
     HandbookGenerator,
     LocalHandbookGenerator,
     OpenAIHandbookGenerator,
+    OpenRouterHandbookGenerator,
 )
 from src.vivi.rag.retrieval_lexical import LexicalHandbookRetriever
 from src.vivi.rag.schemas import RetrievedChunk
@@ -104,6 +106,11 @@ def create_services(
             raise RuntimeError("OPENAI_API_KEY is required for the openai handbook graph")
         generator = OpenAIHandbookGenerator(config)
         classifier = OpenAIIntentClassifier(config)
+    elif selected == "openrouter":
+        if not config.openrouter_api_key:
+            raise RuntimeError("OPENROUTER_API_KEY is required for the openrouter handbook graph")
+        generator = OpenRouterHandbookGenerator(config)
+        classifier = OpenRouterIntentClassifier(config)
     elif selected == "rules":
         generator = ExtractiveHandbookGenerator()
         classifier = RulesIntentClassifier()

@@ -20,6 +20,9 @@ class StructuredChatClient:
         timeout_seconds: float,
         max_tokens: int = 512,
         transport: httpx.BaseTransport | None = None,
+        extra_body: dict[str, Any] | None = None,
+        extra_headers: dict[str, str] | None = None,
+        schema_in_prompt: bool = False,
     ) -> None:
         if not model:
             raise RuntimeError("A model name is required for structured generation")
@@ -29,6 +32,11 @@ class StructuredChatClient:
         self.timeout_seconds = timeout_seconds
         self.max_tokens = max_tokens
         self.transport = transport
+        self.extra_body = extra_body or {}
+        self.extra_headers = extra_headers or {}
+        # Some routed models accept response_format without enforcing the
+        # schema, so the schema is also spelled out in the system prompt.
+        self.schema_in_prompt = schema_in_prompt
 
     def generate_json(
         self,
@@ -39,7 +47,7 @@ class StructuredChatClient:
         schema_name: str,
     ) -> str:
         payload = self._request_payload(system, user, schema, schema_name)
-        headers = {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
+        headers = self._headers()
         for attempt in range(3):
             try:
                 with httpx.Client(
@@ -64,7 +72,7 @@ class StructuredChatClient:
         schema_name: str,
     ) -> str:
         payload = self._request_payload(system, user, schema, schema_name)
-        headers = {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
+        headers = self._headers()
         for attempt in range(3):
             try:
                 async with httpx.AsyncClient(
@@ -87,7 +95,13 @@ class StructuredChatClient:
         schema: dict[str, Any],
         schema_name: str,
     ) -> dict[str, Any]:
+        if self.schema_in_prompt:
+            system = (
+                f"{system}\nChỉ trả về một object JSON hợp lệ theo JSON Schema sau, "
+                f"không thêm chữ nào khác:\n{json.dumps(schema, ensure_ascii=False)}"
+            )
         return {
+            **self.extra_body,
             "model": self.model,
             "messages": [
                 {"role": "system", "content": system},
@@ -104,6 +118,10 @@ class StructuredChatClient:
                 },
             },
         }
+
+    def _headers(self) -> dict[str, str]:
+        headers = {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
+        return {**headers, **self.extra_headers}
 
     def _response_content(self, response: httpx.Response) -> str:
         content = response.json()["choices"][0]["message"]["content"]
@@ -134,6 +152,21 @@ class StructuredChatClient:
         # Validate here so failures are attributed to the inference boundary.
         json.loads(value)
         return value
+
+
+def openrouter_client(config: Any) -> StructuredChatClient:
+    """OpenAI-compatible client for OpenRouter with ViVi's latency defaults."""
+
+    return StructuredChatClient(
+        base_url=config.openrouter_base_url,
+        api_key=config.openrouter_api_key,
+        model=config.openrouter_model,
+        timeout_seconds=config.llm_timeout_seconds,
+        max_tokens=config.openrouter_max_tokens,
+        extra_body={"reasoning": {"enabled": config.openrouter_reasoning}},
+        extra_headers={"X-Title": "ViVi Cabin Copilot"},
+        schema_in_prompt=True,
+    )
 
 
 def compact_history(history: list[dict], *, limit: int = 3) -> list[dict[str, str]]:

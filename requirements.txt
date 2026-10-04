@@ -8,3 +8,4 @@ pydantic-settings>=2.6,<3
 python-multipart>=0.0.12,<1
 rank-bm25>=0.2.2,<1
 uvicorn[standard]>=0.32,<1
+websockets>=13,<17
