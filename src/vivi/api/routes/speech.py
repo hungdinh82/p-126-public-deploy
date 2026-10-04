@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 import tempfile
 import time
 from pathlib import Path
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, UploadFile, WebSocket
 from fastapi.responses import Response, StreamingResponse
 
 from src.vivi.api.runtime import runtime
@@ -67,6 +68,86 @@ async def transcribe(
         audio_path=audio_path,
         latency_ms=latency,
     )
+
+
+@router.websocket("/stt/stream")
+async def transcribe_stream(socket: WebSocket, session_id: str, turn_id: str):
+    """Live STT: the browser sends audio chunks and a final "stop" text frame.
+
+    Replies are JSON: ``partial`` (final + interim text while speaking), then
+    one ``done`` with the transcript, or ``error``.
+    """
+    await socket.accept()
+    stream = getattr(runtime.stt, "stream", None)
+    available, reason = runtime.stt.availability()
+    if getattr(runtime.stt, "streaming", True) is False:
+        stream = None
+    if stream is None or not available:
+        detail = reason if not available else f"{runtime.stt.name} không hỗ trợ streaming"
+        await socket.send_json({"type": "error", "detail": f"STT chưa sẵn sàng: {detail}"})
+        await socket.close()
+        return
+
+    received: list[bytes] = []
+    # Latency is measured from the end of speech, not from the first chunk.
+    stopped_at: list[float] = []
+
+    async def audio_chunks():
+        while True:
+            message = await socket.receive()
+            if message["type"] == "websocket.disconnect":
+                return
+            data = message.get("bytes")
+            if data:
+                received.append(data)
+                yield data
+            elif message.get("text") == "stop":
+                stopped_at.append(time.perf_counter())
+                return
+
+    async def on_update(final: str, interim: str) -> None:
+        await socket.send_json({"type": "partial", "final": final, "interim": interim})
+
+    try:
+        transcript = await asyncio.wait_for(
+            stream(audio_chunks(), on_update),
+            timeout=getattr(runtime.stt, "stream_max_seconds", 60),
+        )
+    except Exception as exc:
+        try:
+            await socket.send_json({"type": "error", "detail": f"STT lỗi: {exc}"})
+            await socket.close()
+        except Exception:
+            pass  # The browser already left.
+        return
+    latency = round((time.perf_counter() - stopped_at[0]) * 1000, 2) if stopped_at else None
+    if not transcript:
+        await socket.send_json({"type": "error", "detail": "Không nhận diện được lời nói"})
+        await socket.close()
+        return
+    stored_path = runtime.store.save_audio(session_id, turn_id, ".webm", b"".join(received))
+    audio_path = str(stored_path) if stored_path is not None else None
+    runtime.store.append_event(
+        {
+            "type": "stt",
+            "session_id": session_id,
+            "turn_id": turn_id,
+            "transcript": transcript,
+            "audio_path": audio_path,
+            "latency_ms": latency,
+            "streaming": True,
+        }
+    )
+    await socket.send_json(
+        {
+            "type": "done",
+            "transcript": transcript,
+            "provider": runtime.stt.name,
+            "audio_path": audio_path,
+            "latency_ms": latency,
+        }
+    )
+    await socket.close()
 
 
 @router.post("/tts")

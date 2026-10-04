@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import shutil
 from pathlib import Path
 
 from src.vivi.config import Settings
+
+logger = logging.getLogger(__name__)
 
 
 class DisabledSTTAdapter:
@@ -104,13 +107,86 @@ class PhoWhisperAdapter:
         return str(result.get("text", "")).strip()
 
 
-def create_stt(config: Settings):
-    if config.stt_provider == "off":
+class FallbackSTTAdapter:
+    """Use the primary STT (e.g. Soniox) and fall back to a local model.
+
+    The fallback answers when the primary is unavailable (missing key) or a
+    request fails, so the microphone keeps working offline.
+    """
+
+    def __init__(self, primary, fallback):
+        self.primary = primary
+        self.fallback = fallback
+
+    def _active(self):
+        return self.primary if self.primary.availability()[0] else self.fallback
+
+    @property
+    def name(self) -> str:
+        active = self._active()
+        return active.name if active is self.primary else f"{active.name} (dự phòng)"
+
+    @property
+    def device(self) -> str:
+        return self._active().device
+
+    @property
+    def dtype(self) -> str:
+        return self._active().dtype
+
+    @property
+    def streaming(self) -> bool:
+        return hasattr(self.primary, "stream") and self.primary.availability()[0]
+
+    @property
+    def stream_max_seconds(self) -> float:
+        return getattr(self.primary, "stream_max_seconds", 60)
+
+    def availability(self) -> tuple[bool, str]:
+        primary_ok, primary_detail = self.primary.availability()
+        if primary_ok:
+            return True, primary_detail
+        fallback_ok, fallback_detail = self.fallback.availability()
+        return fallback_ok, f"{self.primary.name}: {primary_detail}; dùng {self.fallback.name}: {fallback_detail}"
+
+    async def preload(self) -> None:
+        await self.primary.preload()
+
+    async def preload_fallback(self) -> None:
+        if self.fallback.availability()[0]:
+            await self.fallback.preload()
+
+    async def transcribe(self, path: Path) -> str:
+        if self.primary.availability()[0]:
+            try:
+                return await self.primary.transcribe(path)
+            except Exception:
+                logger.exception("%s lỗi, chuyển sang %s", self.primary.name, self.fallback.name)
+        return await self.fallback.transcribe(path)
+
+    async def stream(self, audio_chunks, on_update=None) -> str:
+        return await self.primary.stream(audio_chunks, on_update)
+
+
+def _create_single(provider: str, config: Settings):
+    if provider == "off":
         return DisabledSTTAdapter()
-    if config.stt_provider == "phowhisper":
+    if provider == "phowhisper":
         return PhoWhisperAdapter(config)
-    if config.stt_provider == "whisper_cpp":
+    if provider == "whisper_cpp":
         from src.vivi.speech.whisper_cpp import WhisperCppAdapter
 
         return WhisperCppAdapter(config)
-    raise ValueError(f"STT_PROVIDER không hợp lệ: {config.stt_provider}")
+    if provider == "soniox":
+        from src.vivi.speech.soniox import SonioxAdapter
+
+        return SonioxAdapter(config)
+    raise ValueError(f"STT_PROVIDER không hợp lệ: {provider}")
+
+
+def create_stt(config: Settings):
+    primary = _create_single(config.stt_provider, config)
+    fallback = config.stt_fallback_provider
+    if config.stt_provider in {"off", fallback} or fallback == "off":
+        return primary
+    return FallbackSTTAdapter(primary, _create_single(fallback, config))

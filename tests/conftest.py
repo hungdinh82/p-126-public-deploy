@@ -10,6 +10,8 @@ os.environ.update(
         "APP_ENV": "test",
         "LLM_PROVIDER": "rules",
         "STT_PROVIDER": "off",
+        "STT_FALLBACK_PROVIDER": "off",
+        "SONIOX_API_KEY": "",
         "TTS_PROVIDER": "off",
         "VIVI_VEHICLE_PROVIDER": "memory",
         "RAG_RETRIEVAL_MODE": "sqlite",
@@ -17,6 +19,7 @@ os.environ.update(
         "ZEROTTS_PRELOAD": "false",
         "OPENAI_API_KEY": "",
         "GOOGLE_API_KEY": "",
+        "OPENROUTER_API_KEY": "",
         "LOCAL_LLM_MODEL": "",
     }
 )

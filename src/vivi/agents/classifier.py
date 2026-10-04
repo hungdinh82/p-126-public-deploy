@@ -10,7 +10,7 @@ from typing import Any
 
 from src.vivi.agents.contracts import IntentDecision
 from src.vivi.config import Settings
-from src.vivi.structured_llm import StructuredChatClient, compact_history
+from src.vivi.structured_llm import StructuredChatClient, compact_history, openrouter_client
 
 CLASSIFIER_INSTRUCTION = """Bạn là bộ định tuyến cho trợ lý ô tô ViVi.
 Nhận transcript tiếng Việt và trả JSON đúng schema. Chọn handbook/manual.search cho câu hỏi
@@ -237,6 +237,11 @@ class OpenAIIntentClassifier(StructuredAPIIntentClassifier):
                 max_tokens=config.local_llm_max_tokens,
             )
         )
+
+
+class OpenRouterIntentClassifier(StructuredAPIIntentClassifier):
+    def __init__(self, config: Settings) -> None:
+        super().__init__(openrouter_client(config))
 
 
 def _normalize(text: str) -> str:

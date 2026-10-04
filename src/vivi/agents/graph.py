@@ -12,7 +12,11 @@ from pydantic import ValidationError
 from src.vivi.agents.classifier import RulesIntentClassifier
 from src.vivi.agents.contracts import ActionProposal, AssistantOutput, IntentDecision
 from src.vivi.agents.state import AgentState
-from src.vivi.rag.generator import ExtractiveHandbookGenerator, validate_grounding
+from src.vivi.rag.generator import (
+    ExtractiveHandbookGenerator,
+    normalize_answer,
+    validate_grounding,
+)
 from src.vivi.rag.runtime import HandbookServices, create_services
 from src.vivi.rag.schemas import ModelDecision
 from src.vivi.rag.scope import scope_rejection_reason
@@ -547,8 +551,8 @@ def build_graph(services: HandbookServices | None = None):
         payload = state.get("metadata", {}).get("generated_answer")
         if payload is None:
             return {"timings": _merge_timing(state, "validate_citations", started)}
-        answer = GroundedAnswer.model_validate(payload)
         chunks = [RetrievedChunk.model_validate(value) for value in state["accepted_chunks"]]
+        answer = normalize_answer(GroundedAnswer.model_validate(payload), chunks)
         valid, reason = validate_grounding(answer, chunks)
         if not valid:
             message = reason or ABSTAIN_MESSAGE

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -7,6 +9,16 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from src.vivi.api.routes import health, speech, turns, vehicle, web
 from src.vivi.api.runtime import runtime
+
+logger = logging.getLogger(__name__)
+
+
+async def _preload_stt_fallback() -> None:
+    try:
+        await runtime.stt.preload_fallback()
+        logger.info("STT dự phòng đã tải xong")
+    except Exception:
+        logger.exception("Không tải được STT dự phòng")
 
 
 @asynccontextmanager
@@ -17,7 +29,12 @@ async def lifespan(app: FastAPI):
         await runtime.tts.preload()
     if config.stt_provider != "off" and config.phowhisper_preload:
         await runtime.stt.preload()
+    background = []
+    if config.stt_fallback_preload and hasattr(runtime.stt, "preload_fallback"):
+        background.append(asyncio.create_task(_preload_stt_fallback()))
     yield
+    for task in background:
+        task.cancel()
     runtime.close()
 
 
