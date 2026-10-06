@@ -111,6 +111,36 @@ def _pipeline(events: list[dict]) -> dict:
     return {"status": event.get("status", "unknown"), "command": event.get("transcript", ""), "session_id": event.get("session_id"), "turn_id": event.get("turn_id"), "timings_ms": event.get("latency_ms", {}), "received_at": event.get("received_at"), "output_at": event.get("output_at"), "end_to_end_ms": event.get("end_to_end_ms"), "input_to_output_ms": event.get("input_to_output_ms"), "input_to_audio_ready_ms": event.get("input_to_audio_ready_ms")}
 
 
+def _components() -> dict[str, dict[str, str]]:
+    stt_available, stt_detail = runtime.stt.availability()
+    tts_available, tts_detail = runtime.tts.availability()
+    providers = sorted(runtime.orchestrator.graph_providers)
+    vehicle_available = runtime.vehicle.is_connected()
+    handbook_available = runtime.settings.rag_handbook_db.is_file()
+    return {
+        "orchestration": {
+            "status": "ready" if providers else "offline",
+            "detail": ", ".join(providers) or "No configured providers",
+        },
+        "stt": {
+            "status": "ready" if stt_available else "offline",
+            "detail": f"{runtime.stt.name}: {stt_detail}",
+        },
+        "tts": {
+            "status": "ready" if tts_available else "offline",
+            "detail": f"{runtime.tts.name}: {tts_detail}",
+        },
+        "vehicle": {
+            "status": "ready" if vehicle_available else "offline",
+            "detail": runtime.vehicle.name,
+        },
+        "rag": {
+            "status": "ready" if handbook_available else "offline",
+            "detail": runtime.settings.rag_retrieval_mode,
+        },
+    }
+
+
 @router.get("/metrics")
 def metrics():
     events, tts_by_turn, last_tts = runtime.store.metrics_snapshot()
@@ -124,6 +154,8 @@ def metrics():
         "process": {"rss_bytes": usage.ru_maxrss * 1024, "user_seconds": round(usage.ru_utime, 3), "system_seconds": round(usage.ru_stime, 3)},
         "disk": {"free_bytes": disk.free, "percent": round(disk.used / disk.total * 100, 1)},
         "gpu": _gpu(),
+        "components": _components(),
+        "storage": {"transcripts": runtime.settings.store_transcripts},
         "pipeline": _pipeline(events),
         "history": [
             {

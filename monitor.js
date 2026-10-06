@@ -93,6 +93,34 @@ function updateHardware(item) {
   $('#disk-detail').textContent = `${bytes(item.disk?.free_bytes)} còn trống`;
   $('#updated').textContent = `Cập nhật ${new Date(item.timestamp * 1000).toLocaleTimeString('vi-VN')}`;
   $('#sample-count').textContent = `${samples.length} mẫu · lưu cục bộ trên trình duyệt`;
+  updateComponents(item.components || {});
+}
+
+function updateComponents(components) {
+  const labels = { orchestration: 'Điều phối', stt: 'Nhận dạng giọng nói', tts: 'Tổng hợp giọng nói', vehicle: 'Vehicle adapter', rag: 'Cẩm nang RAG' };
+  const entries = Object.entries(components);
+  $('#components').innerHTML = entries.length
+    ? entries.map(([name, item]) => {
+      const status = item.status === 'ready' ? 'ready' : 'offline';
+      return `<div class="component"><span>${esc(labels[name] || name)}</span><strong class="${status}">${status === 'ready' ? 'Sẵn sàng' : 'Ngoại tuyến'}</strong><small>${esc(item.detail)}</small></div>`;
+    }).join('')
+    : '<div class="empty">Không có trạng thái component.</div>';
+}
+
+function updateRetainedCommands(enabled) {
+  const panel = $('#retained-command-panel');
+  panel.hidden = !enabled;
+  if (!enabled) return;
+  let commands = [];
+  try {
+    const stored = JSON.parse(localStorage.getItem('vivi-command-history') || '[]');
+    if (Array.isArray(stored)) commands = stored.slice(0, 12);
+  } catch {
+    commands = [];
+  }
+  $('#retained-command-list').innerHTML = commands.length
+    ? commands.map(command => `<div class="row"><span>${new Date(command.at).toLocaleTimeString('vi-VN')}</span><strong>${esc(command.text)}</strong></div>`).join('')
+    : '<div class="empty">Chưa có lệnh được lưu.</div>';
 }
 
 function updateTurnList() {
@@ -178,6 +206,7 @@ async function poll() {
     samples.splice(0, Math.max(0, samples.length - MAX_SAMPLES));
     localStorage.setItem(STORAGE_KEY, JSON.stringify(samples));
     updateHardware(item);
+    updateRetainedCommands(Boolean(item.storage?.transcripts));
     updateTurns(item);
     drawChart();
   } catch {
@@ -196,6 +225,8 @@ $('#reset').addEventListener('click', () => {
   resetAt = Date.now();
   localStorage.setItem(STORAGE_KEY, '[]');
   localStorage.setItem(RESET_KEY, String(resetAt));
+  localStorage.removeItem('vivi-command-history');
+  $('#retained-command-list').innerHTML = '<div class="empty">Chưa có lệnh được lưu.</div>';
   updateTurnList();
   updateTurnDetail();
   drawChart();
