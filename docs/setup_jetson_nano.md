@@ -175,8 +175,13 @@ docker run --rm --network host \
   -v "$PWD/data:/app/data" \
   -v "$PWD/models:/app/models:ro" \
   -v "$PWD/voices:/app/voices:ro" \
+  -v /usr/bin/tegrastats:/usr/bin/tegrastats:ro \
   vivi-edge:nano
 ```
+
+The monitor reads Jetson GPU load and temperature from the host `tegrastats` utility
+(`GR3D_FREQ`). Jetson shares system RAM between CPU and GPU, so the dashboard reports
+GPU load and temperature without a separate VRAM figure.
 
 Kiểm tra:
 
