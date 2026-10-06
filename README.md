@@ -37,6 +37,23 @@ giá trị `zerotts_preload` và `phowhisper_preload` trong `config.toml` đư�
 dùng đầu tiên. Lần đầu có thể tải model, các lần sau dùng cache local. Font Google Fonts có
 fallback font hệ thống khi offline.
 
+### Chạy riêng qua ngrok
+
+Để truy cập demo từ thiết bị bên ngoài, cài ngrok và điền `NGROK_AUTHTOKEN` trong `.env`.
+Nếu muốn URL cố định, tạo/reserve static domain trong dashboard ngrok và điền URL vào
+`NGROK_URL` trong `.env`. Có thể ghi đè domain bằng tham số `--url`:
+
+```bash
+.venv/bin/python scripts/run_ngrok.py --url https://ten-mien-cua-ban.ngrok.app
+```
+
+Launcher khởi động backend hiện tại trên cổng trong cấu hình (mặc định `8787`) và chạy
+ngrok trỏ vào cổng đó. URL HTTPS xuất hiện trong output của ngrok. Nhấn `Ctrl+C` để dừng
+cả tunnel và backend. Luồng này dùng nguyên API/pipeline hiện tại; chỉ bật khi chủ động
+chạy launcher. URL ngrok công khai API và giao diện ra Internet, vì vậy chỉ dùng cho demo
+với dữ liệu phù hợp. Domain cố định phải được reserve trong tài khoản ngrok của bạn;
+authtoken xác thực agent nhưng không tự tạo domain.
+
 Thiết lập provider/model trong `config.toml`; khóa API và ghi đè riêng cho máy đặt trong
 `.env`. Thay đổi cấu hình cần restart backend:
 
