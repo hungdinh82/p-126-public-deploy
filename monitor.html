@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>ViVi Edge Monitor</title>
+  <link rel="stylesheet" href="/style.css">
+  <style>
+    body{min-height:100vh}.monitor{max-width:1180px;margin:auto;padding:42px 5%}.monitor h1{font-size:42px;font-weight:300;margin:14px 0 8px}.monitor p,.muted{color:#8395aa;font-size:12px}.monitor-head{display:flex;justify-content:space-between;align-items:end;margin-bottom:28px}.back,.reset{color:#9bdcff;text-decoration:none;font-size:11px}.reset{border:1px solid #8cc8ef33;border-radius:6px;padding:8px 11px;background:#102031;cursor:pointer}.top-actions{display:flex;align-items:center;gap:14px}.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}.card,.panel{background:linear-gradient(125deg,#111d2a,#0c1520);border:1px solid #a3d5fc18;border-radius:13px;padding:18px}.card span{font-size:9px;letter-spacing:1px;color:#7893aa}.card strong{display:block;font-size:27px;font-weight:300;color:#d8efff;margin:7px 0}.card small{color:#7893aa;font-size:10px}.panel{margin-bottom:16px}.panel-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.panel h2{font-size:14px;font-weight:400;margin:0}.panel select{background:#132538;color:#d8efff;border:1px solid #8cc8ef33;border-radius:5px;padding:7px}.chart{width:100%;height:280px;display:block}.columns{display:grid;grid-template-columns:1fr 1.3fr;gap:16px}.row{display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid #a3d5fc12;padding:10px 0;color:#8ea9bf;font-size:11px}.row strong{color:#d8efff;font-weight:400;text-align:right}.command-list{display:grid;gap:4px;max-height:270px;overflow:auto}.command-item{width:100%;text-align:left;background:transparent;color:#8ea9bf;border:1px solid transparent;border-radius:6px;padding:9px;cursor:pointer}.command-item:hover,.command-item.selected{color:#d8efff;background:#a4dfff0b;border-color:#a4dfff1c}.command-item strong,.command-item small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.command-item small{margin-top:5px;color:#7893aa;font-size:9px}.details{margin-top:14px;border-top:1px solid #a3d5fc18;padding-top:8px;min-height:60px}.empty{padding:12px;color:#7893aa;font-size:11px}@media(max-width:700px){.cards{grid-template-columns:repeat(2,1fr)}.columns{grid-template-columns:1fr}.monitor-head{align-items:start;gap:20px;flex-direction:column}}
+    .components{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}.component{display:grid;grid-template-columns:1fr auto;gap:5px 9px;align-items:center;padding:11px;border:1px solid #a3d5fc18;border-radius:8px;background:#a3d5fc08;color:#c4d7e8;font-size:11px}.component strong{font-size:9px;font-weight:400;text-transform:uppercase}.component small{grid-column:1/-1;color:#7893aa;font-size:10px;overflow-wrap:anywhere}.component .ready{color:#83d8bd}.component .offline{color:#f0a19a}
+  </style>
+</head>
+<body>
+<main>
+  <header class="topbar">
+    <div class="wordmark">ViVi <span>/</span> <small>EDGE HARDWARE MONITOR</small></div>
+    <div class="top-actions"><button id="reset" class="reset" type="button">Reset history</button><a class="back" href="/">← Về giao diện chính</a></div>
+  </header>
+  <section class="monitor">
+    <div class="monitor-head"><div><div class="eyebrow"><span></span> EDGE RUNTIME</div><h1>Hardware Monitor</h1><p>Biến động tài nguyên và thời gian xử lý của từng lượt.</p></div><span id="updated" class="muted">Đang kết nối…</span></div>
+    <div class="cards">
+      <div class="card"><span>RAM</span><strong id="ram-value">—</strong><small id="ram-detail">—</small></div>
+      <div class="card"><span>CPU LOAD</span><strong id="cpu-value">—</strong><small id="cpu-detail">—</small></div>
+      <div class="card"><span>GPU</span><strong id="gpu-value">—</strong><small id="gpu-detail">—</small></div>
+      <div class="card"><span>DISK</span><strong id="disk-value">—</strong><small id="disk-detail">—</small></div>
+    </div>
+    <section class="panel"><div class="panel-head"><h2>Trạng thái pipeline</h2><span class="muted">Thành phần runtime</span></div><div id="components" class="components"><div class="empty">Đang kiểm tra…</div></div></section>
+    <section class="panel"><div class="panel-head"><div><h2>Tài nguyên theo thời gian</h2><p id="sample-count">Lịch sử lưu trong trình duyệt.</p></div><select id="metric"><option value="memory">RAM %</option><option value="cpu">CPU load</option><option value="gpu">GPU peak · 20 giây</option><option value="gpu_memory">GPU memory %</option><option value="disk">Disk %</option></select></div><canvas id="chart" class="chart"></canvas></section>
+    <div class="columns">
+      <section class="panel"><div class="panel-head"><h2>Các lượt gần đây</h2><span id="turn-count" class="muted">0</span></div><div id="command-list" class="command-list"><div class="empty">Chưa có lượt chạy.</div></div></section>
+      <section class="panel"><div class="panel-head"><h2>Chi tiết lượt</h2><span id="turn-status" class="muted">Chọn một lượt</span></div><div id="turn-detail" class="details"><div class="empty">Thời gian STT, pipeline, model và TTS sẽ hiện tại đây.</div></div></section>
+    </div>
+    <section id="retained-command-panel" class="panel" hidden><div class="panel-head"><h2>Lịch sử lệnh đã lưu trên trình duyệt</h2><span class="muted">Bật VIVI_STORE_TRANSCRIPTS</span></div><div id="retained-command-list" class="command-list"><div class="empty">Chưa có lệnh được lưu.</div></div></section>
+  </section>
+</main>
+<script src="/monitor.js?v=2"></script>
+</body>
+</html>

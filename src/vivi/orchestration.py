@@ -206,7 +206,7 @@ class LangGraphOrchestrator:
             latency_ms={**output.timings, "total": round(sum(output.timings.values()), 2)},
             trace=trace,
         )
-        self.store.append_event(response.model_dump(mode="json"))
+        self.store.append_event({"event_type": "turn", **response.model_dump(mode="json")})
         return response
 
     @staticmethod

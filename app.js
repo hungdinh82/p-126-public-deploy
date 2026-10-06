@@ -5,9 +5,27 @@ const motionPreference = matchMedia('(prefers-reduced-motion: reduce)');
 // The FastAPI backend serves this UI, so API calls follow the configured
 // VIVI_PORT automatically instead of being tied to a hard-coded port.
 const API_BASE = '';
-const sessionId = localStorage.getItem('vivi-session-id') || crypto.randomUUID();
+const makeId = () => globalThis.crypto?.randomUUID?.() || `vivi-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+const sessionId = localStorage.getItem('vivi-session-id') || makeId();
 localStorage.setItem('vivi-session-id', sessionId);
 const state = { phase: 'idle', temp: 23, window: false, music: false, driving: false, powerState: 'off', battery: 82, range: 328, powertrainTemp: 45, tirePressures: {}, windows: {}, doors: {}, seatHeatLevels: {}, doorLocked: false, doorOpen: false, seatHeat: 0, alerts: [], alertSequence: 0, reduced: motionPreference.matches, sound: false, busy: false, backendAvailable: false, vehicleProvider: '', sttAvailable: false, sttProvider: '', sttStreaming: false, sttDevice: '', ttsAvailable: false, ttsProvider: '', storeAudio: false, storeTranscripts: false, llmProvider: '', llmOptions: [], lastCommand: '', manualAnswer: '', manualEvidence: [], progress: 0 };
+const edgeCommandHistoryKey = 'vivi-command-history';
+function readEdgeCommandHistory() {
+  try {
+    const history = JSON.parse(localStorage.getItem(edgeCommandHistoryKey) || '[]');
+    return Array.isArray(history) ? history.slice(0, 12) : [];
+  } catch {
+    return [];
+  }
+}
+let edgeCommandHistory = readEdgeCommandHistory();
+function rememberEdgeCommand(command) {
+  if (!state.storeTranscripts) return;
+  edgeCommandHistory = readEdgeCommandHistory();
+  edgeCommandHistory.unshift({ text: command.trim(), at: Date.now() });
+  edgeCommandHistory = edgeCommandHistory.slice(0, 12);
+  try { localStorage.setItem(edgeCommandHistoryKey, JSON.stringify(edgeCommandHistory)); } catch {}
+}
 let activePanelView = '';
 const seenAlertIds = new Set();
 const alertLastSpoken = new Map();
@@ -242,7 +260,7 @@ async function finishTtsPlayback(playback) {
   await playback.done;
   if (currentPlayback === playback) currentPlayback = null;
 }
-async function speak(text, turnId = crypto.randomUUID(), sequencePlayback = null) {
+async function speak(text, turnId = makeId(), sequencePlayback = null) {
   if (!state.sound) return;
   if (!sequencePlayback) {
     stopPlayback();
@@ -414,8 +432,9 @@ function applyBackendState(vehicle) {
   }
 }
 
-async function runBackendCommand(command, turnId = crypto.randomUUID()) {
+async function runBackendCommand(command, turnId = makeId()) {
   if (state.busy || !command.trim()) return;
+  rememberEdgeCommand(command);
   state.busy = true; state.lastCommand = command; lockControls(true); $('#command-input').value = '';
   try {
     setPhase('thinking', `“${command}”`);
@@ -483,7 +502,7 @@ async function runBackendCommand(command, turnId = crypto.randomUUID()) {
         voiceStreamed = false;
       }
       const approved = window.confirm(payload.confirmation.preview);
-      turnId = crypto.randomUUID();
+      turnId = makeId();
       response = await fetch(`${API_BASE}/api/v1/confirmations/${payload.confirmation.confirmation_id}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -598,7 +617,7 @@ async function startRecording() {
     recorderChunks = [];
     const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : '';
     recorder = new MediaRecorder(recorderStream, mimeType ? { mimeType } : undefined);
-    const turnId = crypto.randomUUID();
+    const turnId = makeId();
     sttSocket = null; sttResult = null;
     if (state.sttStreaming) {
       // Fall back to the upload endpoint when the live socket cannot open.
@@ -639,6 +658,8 @@ async function checkBackend() {
   try {
     const response = await fetch(`${API_BASE}/api/v1/health`); if (!response.ok) throw new Error();
     const health = await response.json(); state.backendAvailable = true; state.vehicleProvider = health.vehicle.provider; state.sttAvailable = health.stt.available; state.sttProvider = health.stt.provider; state.sttStreaming = Boolean(health.stt.streaming); state.sttDevice = health.stt.device; state.ttsAvailable = health.tts.available; state.ttsProvider = health.tts.provider; state.storeAudio = health.storage.audio; state.storeTranscripts = health.storage.transcripts;
+    edgeCommandHistory = state.storeTranscripts ? readEdgeCommandHistory() : [];
+    if (!state.storeTranscripts) localStorage.removeItem(edgeCommandHistoryKey);
     state.llmOptions = health.llm.options || [];
     const saved = localStorage.getItem('vivi-llm-provider');
     const defaultProvider = state.llmOptions.find(item => item.provider === health.llm.provider && item.available)?.provider

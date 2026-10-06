@@ -23,6 +23,10 @@ Mở http://127.0.0.1:8787, sau đó chạy smoke test ở terminal khác:
 .venv/bin/python scripts/smoke_runtime.py --provider rules
 ```
 
+Trang `/monitor` xem tài nguyên máy, trạng thái STT/TTS/RAG/vehicle, lịch sử lượt và
+thời gian từng bước pipeline. Có thể dùng `bash scripts/run_edge.sh` để khởi động cùng
+runtime và in URL monitor theo cấu hình hiện tại.
+
 Xem [setup PC](docs/setup_pc.md) để cài PhoWhisper, ZeroTTS, LLM local hoặc MQTT. Jetson
 Nano dùng hướng dẫn riêng trong [setup Jetson Nano 4 GB](docs/setup_jetson_nano.md), không
 cài wheel CUDA dành cho PC.
@@ -149,6 +153,8 @@ Yêu cầu đang chờ chỉ lưu trong RAM backend, nên hết hiệu lực khi
 chặn mở cửa khi lái chỉ là quy tắc demo. Audio và transcript mặc định không được lưu
 (`VIVI_STORE_AUDIO=false`, `VIVI_STORE_TRANSCRIPTS=false`). Khi chủ động bật retention,
 dữ liệu nằm trong `data/` cho đến khi người vận hành xóa; thư mục này không được commit.
+Lịch sử lệnh của monitor cũng chỉ được lưu trong localStorage của trình duyệt khi
+`VIVI_STORE_TRANSCRIPTS=true`; nút **Reset history** trên trang `/monitor` xóa bản local này.
 
 ## Provider LLM
 
