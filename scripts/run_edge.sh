@@ -22,8 +22,10 @@ echo "  URL: http://${HOST}:${PORT}"
 echo "  Monitor: http://${HOST}:${PORT}/monitor"
 if command -v nvidia-smi >/dev/null 2>&1; then
   echo "GPU: $(nvidia-smi --query-gpu=name --format=csv,noheader | head -1)"
+elif command -v tegrastats >/dev/null 2>&1; then
+  echo "GPU: Jetson integrated GPU (tegrastats)"
 else
-  echo "GPU: không tìm thấy nvidia-smi; sẽ chạy CPU"
+  echo "GPU: không tìm thấy nvidia-smi/tegrastats; telemetry GPU sẽ không có"
 fi
 
 exec "$PYTHON" run.py

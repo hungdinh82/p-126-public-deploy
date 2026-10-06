@@ -86,13 +86,19 @@ function updateHardware(item) {
   $('#cpu-value').textContent = item.host?.load_1m ?? '—';
   $('#cpu-detail').textContent = `${item.host?.cpu_count ?? '—'} core · load average`;
   $('#gpu-value').textContent = gpu ? percent(gpu.usage_percent) : 'N/A';
+  const gpuTemperature = Number.isFinite(gpu?.temperature_c) ? `${gpu.temperature_c}°C` : 'nhiệt độ N/A';
+  const gpuMemory = Number.isFinite(gpu?.memory_used_mb) && Number.isFinite(gpu?.memory_total_mb)
+    ? `VRAM ${gpu.memory_used_mb}/${gpu.memory_total_mb} MB`
+    : 'bộ nhớ dùng chung với RAM';
   $('#gpu-detail').textContent = gpu
-    ? `${gpu.name} · ${gpu.temperature_c}°C · VRAM ${gpu.memory_used_mb}/${gpu.memory_total_mb} MB · peak 20s ${gpu.peak_usage_percent_20s ?? gpu.usage_percent}%`
-    : 'GPU telemetry unavailable';
+    ? `${gpu.name} · ${gpuTemperature} · ${gpuMemory} · peak 20s ${gpu.peak_usage_percent_20s ?? gpu.usage_percent}%`
+    : 'Không có GPU telemetry; đang dùng CPU';
   $('#disk-value').textContent = percent(item.disk?.percent);
   $('#disk-detail').textContent = `${bytes(item.disk?.free_bytes)} còn trống`;
+  const device = item.device || {};
+  const kinds = { jetson: 'NVIDIA Jetson', nvidia_rtx: 'NVIDIA RTX', nvidia_gpu: 'NVIDIA GPU', cpu: 'CPU' };
+  $('#device-info').textContent = `Thiết bị: ${kinds[device.kind] || device.kind || 'chưa xác định'}${device.name ? ` · ${device.name}` : ''}${device.gpu_backend ? ` · ${device.gpu_backend}` : ''}`;
   $('#updated').textContent = `Cập nhật ${new Date(item.timestamp * 1000).toLocaleTimeString('vi-VN')}`;
-  $('#sample-count').textContent = `${samples.length} mẫu · lưu cục bộ trên trình duyệt`;
   updateComponents(item.components || {});
 }
 
@@ -230,7 +236,6 @@ $('#reset').addEventListener('click', () => {
   updateTurnList();
   updateTurnDetail();
   drawChart();
-  $('#sample-count').textContent = 'Đã reset · đang lấy mẫu mới';
 });
 $('#metric').addEventListener('change', drawChart);
 window.addEventListener('resize', drawChart);
