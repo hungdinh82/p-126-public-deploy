@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from src.vivi.api.routes import health, metrics, speech, turns, vehicle, web
+from src.vivi.api.routes import health, memory, metrics, speech, turns, vehicle, web
 from src.vivi.api.runtime import runtime
 
 logger = logging.getLogger(__name__)
@@ -58,7 +58,7 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    for router in (health.router, metrics.router, vehicle.router, turns.router, speech.router, web.router):
+    for router in (health.router, memory.router, metrics.router, vehicle.router, turns.router, speech.router, web.router):
         application.include_router(router)
     return application
 

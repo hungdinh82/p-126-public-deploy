@@ -150,11 +150,18 @@ Yêu cầu đang chờ chỉ lưu trong RAM backend, nên hết hiệu lực khi
 ## Phạm vi
 
 Đây là concept độc lập, chưa phải sản phẩm VinFast chính thức. Xe vẫn là simulator; policy
-chặn mở cửa khi lái chỉ là quy tắc demo. Audio và transcript mặc định không được lưu
+chặn mở cửa khi lái chỉ là quy tắc demo. Audio và transcript của EventStore mặc định không được lưu
 (`VIVI_STORE_AUDIO=false`, `VIVI_STORE_TRANSCRIPTS=false`). Khi chủ động bật retention,
 dữ liệu nằm trong `data/` cho đến khi người vận hành xóa; thư mục này không được commit.
 Lịch sử lệnh của monitor cũng chỉ được lưu trong localStorage của trình duyệt khi
 `VIVI_STORE_TRANSCRIPTS=true`; nút **Reset history** trên trang `/monitor` xóa bản local này.
+
+Bộ nhớ hội thoại: short-term đọc các lượt gần nhất theo session từ SQLite;
+long-term lưu tên, sở thích, ghi chú và lệnh có tên khi người dùng yêu cầu rõ.
+Dữ liệu nằm trong `data/memory/long_term.sqlite3`, dùng được qua nhiều phiên và
+có API xem/sửa/xoá/reset. Xem [thiết kế và cách dùng memory](docs/memory.md).
+SQLite history vẫn ghi ngữ cảnh kể cả khi `store_transcripts=false`; reset trên
+monitor không xoá SQLite history hay long-term memory.
 
 ## Provider LLM
 
@@ -174,6 +181,8 @@ Xem [RAG local](docs/rag_local.md) và [benchmark](eval/README.md).
 ## API local
 
 - `GET /api/v1/health`
+- `GET/DELETE /api/v1/memory` — xem/reset long-term memory
+- `PUT/DELETE /api/v1/memory/{key}` — ghi/sửa/xoá một mục memory
 - `POST /api/v1/stt` — multipart audio, `session_id`, `turn_id`
 - `POST /api/v1/turn` — transcript → LangGraph/RAG hoặc action → response thống nhất
 - `POST /api/v1/confirmations/{confirmation_id}` — approve/deny đúng một action R2 đang chờ

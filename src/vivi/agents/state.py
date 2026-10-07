@@ -29,6 +29,8 @@ class AgentState(TypedDict, total=False):
     risk_class: str
 
     conversation_history: list[dict[str, Any]]
+    memory_context: list[dict[str, Any]]
+    memory_handled: bool
     retrieved_chunks: list[dict[str, Any]]
     accepted_chunks: list[dict[str, Any]]
     citations: list[dict[str, Any]]

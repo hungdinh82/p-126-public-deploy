@@ -99,6 +99,12 @@ async def health():
             "transcripts": config.store_transcripts,
             "path": str(config.data_dir),
         },
+        "memory": {
+            "short_term_turns": config.rag_history_turns,
+            "long_term_enabled": config.memory_enabled,
+            "profile_id": config.memory_profile_id,
+            "path": str(config.memory_path),
+        },
         "vehicle": {
             "provider": runtime.vehicle.name,
             "connected": runtime.vehicle.is_connected(),

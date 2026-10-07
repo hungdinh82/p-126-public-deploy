@@ -24,6 +24,7 @@ def main():
     results = []
     with tempfile.TemporaryDirectory(prefix="vivi-voice-eval-") as directory, local_network_only():
         config = Settings(rag_local_only=True, rag_retrieval_mode="sqlite_local",
+                          data_dir=Path(directory), memory_enabled=False,
                           rag_history_db=Path(directory) / "history.sqlite3")
         graph = build_graph(create_services(config, provider=args.provider))
         for case in cases:

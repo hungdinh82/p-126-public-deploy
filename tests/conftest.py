@@ -20,6 +20,7 @@ os.environ.update(
         "OPENAI_API_KEY": "",
         "OPENROUTER_API_KEY": "",
         "LOCAL_LLM_MODEL": "",
+        "VIVI_MEMORY_ENABLED": "false",
     }
 )
 

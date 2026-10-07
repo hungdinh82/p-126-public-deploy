@@ -10,10 +10,12 @@ from langchain_core.runnables import RunnableLambda
 from langgraph.graph import END, StateGraph
 from pydantic import ValidationError
 
+from src.vivi.agents.action_validation import validate_action_arguments as _validate_action
 from src.vivi.agents.classifier import RulesIntentClassifier
 from src.vivi.agents.contracts import ActionProposal, AssistantOutput, IntentDecision
 from src.vivi.agents.state import AgentState
 from src.vivi.agents.voice import verified_action_reply
+from src.vivi.memory.conversation import handle_memory_request, memory_action_decision
 from src.vivi.rag.generator import (
     ExtractiveHandbookGenerator,
     normalize_answer,
@@ -22,7 +24,7 @@ from src.vivi.rag.generator import (
 from src.vivi.rag.runtime import HandbookServices, create_services
 from src.vivi.rag.schemas import ModelDecision
 from src.vivi.rag.scope import scope_rejection_reason
-from src.vivi.vehicle.zones import selected_zones, zoned_noun
+from src.vivi.vehicle.zones import zoned_noun
 
 ABSTAIN_MESSAGE = "Mình chưa có thông tin chắc chắn để trả lời câu này."
 _FOLLOW_UP_RE = re.compile(r"\b(vậy|thế|nó|cái đó|việc đó|còn|như vậy)\b", re.IGNORECASE)
@@ -73,42 +75,6 @@ def _legacy_manual_decision(raw: dict[str, Any]) -> tuple[str, IntentDecision]:
     )
 
 
-def _validate_action(decision: IntentDecision) -> tuple[ActionProposal | None, str | None]:
-    arguments = decision.arguments.model_dump(exclude_none=True)
-    if decision.intent in {"window.set_position", "door.set_open", "door.set_lock", "seat.set_heat_level"}:
-        try:
-            selected_zones(arguments)
-        except ValueError as exc:
-            return None, str(exc)
-    if decision.intent == "climate.set_temperature":
-        value = arguments.get("value_celsius")
-        if not isinstance(value, (int, float)):
-            return None, "Bạn muốn đặt nhiệt độ bao nhiêu?"
-        if not 16 <= float(value) <= 30:
-            return None, "Nhiệt độ hỗ trợ nằm trong khoảng 16 đến 30 độ C."
-    elif decision.intent == "window.set_position":
-        position = arguments.get("position_percent")
-        if not isinstance(position, (int, float)):
-            return None, "Bạn muốn mở hoặc đóng cửa sổ đến mức nào?"
-        if not 0 <= float(position) <= 100:
-            return None, "Vị trí cửa sổ phải nằm trong khoảng 0 đến 100 phần trăm."
-    elif decision.intent == "door.set_open":
-        if not isinstance(arguments.get("open"), bool):
-            return None, "Bạn muốn mở hay đóng cửa?"
-    elif decision.intent == "door.set_lock":
-        if not isinstance(arguments.get("locked"), bool):
-            return None, "Bạn muốn khóa hay mở khóa cửa?"
-    elif decision.intent == "seat.set_heat_level":
-        level = arguments.get("level")
-        if not isinstance(level, int) or isinstance(level, bool) or not 0 <= level <= 3:
-            return None, "Mức sưởi ghế hợp lệ nằm trong khoảng 0 đến 3."
-    return ActionProposal(
-        intent=decision.intent,
-        arguments=arguments,
-        confidence=decision.confidence,
-    ), None
-
-
 def _action_preview_text(proposal: ActionProposal) -> str:
     arguments = proposal.arguments
     if proposal.intent == "climate.set_temperature":
@@ -136,6 +102,11 @@ def build_graph(services: HandbookServices | None = None):
     runtime = services or create_services()
     classifier = runtime.classifier or RulesIntentClassifier()
     action_gateway = runtime.action_gateway
+
+    def history_session(state: AgentState) -> str:
+        session = state["session_id"]
+        # Preserve existing default-driver logs; other profiles have separate dialogue context.
+        return session if runtime.memory_profile_id == "default" else f"profile:{runtime.memory_profile_id}:{session}"
 
     def validate_input(state: AgentState) -> dict[str, Any]:
         started = time.perf_counter()
@@ -198,7 +169,7 @@ def build_graph(services: HandbookServices | None = None):
     def load_history(state: AgentState) -> dict[str, Any]:
         started = time.perf_counter()
         try:
-            history = runtime.history.recent(state["session_id"], runtime.history_turns)
+            history = runtime.history.recent(history_session(state), runtime.history_turns)
         except Exception as exc:
             return {
                 "conversation_history": [],
@@ -222,12 +193,53 @@ def build_graph(services: HandbookServices | None = None):
             }
         except Exception as exc:
             return {
-                "errors": [
-                    *state.get("errors", []),
-                    {"stage": "observe_vehicle_state", "message": str(exc)},
-                ],
+                "errors": [*state.get("errors", []), {"stage": "observe_vehicle_state", "message": str(exc)}],
                 "timings": _merge_timing(state, "observe_vehicle_state", started),
             }
+
+    def load_memory(state: AgentState) -> dict[str, Any]:
+        started = time.perf_counter()
+        context, decision, errors = [], None, list(state.get("errors", []))
+        available_memory = runtime.memory
+        try:
+            if runtime.memory is not None:
+                context = runtime.memory.context(
+                    runtime.memory_profile_id, state["input_text"], limit=runtime.memory_context_limit,
+                    max_characters=runtime.memory_context_max_characters,
+                )
+        except Exception as exc:
+            errors.append({"stage": "load_memory", "message": str(exc)})
+            available_memory = None
+        try:
+            # A preclassified request/confirmation is not a memory write request.
+            if not state.get("confirmation_id") and not state.get("metadata", {}).get("preclassified_decision"):
+                decision = handle_memory_request(
+                    available_memory, runtime.memory_profile_id, state["input_text"],
+                    session_id=state["session_id"], turn_id=state["turn_id"],
+                    vehicle_state=state.get("vehicle_state"),
+                )
+        except Exception as exc:
+            errors.append({"stage": "load_memory", "message": str(exc)})
+            # Never claim a failed write succeeded or reinterpret it as a vehicle action.
+            message = "Mình chưa xử lý được bộ nhớ lúc này. Bạn kiểm tra lại thông tin muốn lưu nhé."
+            if isinstance(exc, ValidationError):
+                message = str(exc.errors()[0]["msg"]).removeprefix("Value error, ")
+            decision = IntentDecision(route="clarify", intent="conversation.clarify", needs_clarification=True,
+                                      clarification_question=message)
+            context = []
+        updates = {"memory_context": context, "memory_handled": decision is not None,
+                   "errors": errors, "timings": _merge_timing(state, "load_memory", started)}
+        if decision is not None:
+            updates.update(decision=decision.model_dump(mode="json"), route=decision.route, intent=decision.intent)
+        return updates
+
+    def memory_decision(state: AgentState) -> IntentDecision | None:
+        try:
+            return memory_action_decision(runtime.memory, runtime.memory_profile_id, state["input_text"],
+                                          state.get("conversation_history", []), state.get("vehicle_state"))
+        except Exception:
+            return IntentDecision(route="clarify", intent="conversation.clarify", needs_clarification=True,
+                                  clarification_question="Mình chưa đọc được lệnh đã nhớ. Bạn nói trực tiếp thao tác nhé.")
 
     async def observe_vehicle_state_async(state: AgentState) -> dict[str, Any]:
         started = time.perf_counter()
@@ -255,10 +267,11 @@ def build_graph(services: HandbookServices | None = None):
             decision = (
                 IntentDecision.model_validate(preclassified)
                 if preclassified is not None
-                else classifier.classify_with_context(
+                else memory_decision(state) or classifier.classify_with_memory(
                     state["input_text"],
                     state.get("conversation_history", []),
                     state.get("vehicle_state"),
+                    state.get("memory_context", []),
                 )
             )
         except Exception as exc:
@@ -305,10 +318,11 @@ def build_graph(services: HandbookServices | None = None):
             decision = (
                 IntentDecision.model_validate(preclassified)
                 if preclassified is not None
-                else await classifier.aclassify_with_context(
+                else (await asyncio.to_thread(memory_decision, state)) or await classifier.aclassify_with_memory(
                     state["input_text"],
                     state.get("conversation_history", []),
                     state.get("vehicle_state"),
+                    state.get("memory_context", []),
                 )
             )
         except Exception as exc:
@@ -799,7 +813,7 @@ def build_graph(services: HandbookServices | None = None):
     def persist(state: AgentState) -> dict[str, Any]:
         started = time.perf_counter()
         try:
-            runtime.history.save(state)
+            runtime.history.save({**state, "session_id": history_session(state)})
         except Exception as exc:
             return {
                 "errors": [*state.get("errors", []), {"stage": "persist", "message": str(exc)}],
@@ -841,8 +855,8 @@ def build_graph(services: HandbookServices | None = None):
 
     def runnable(func, afunc=None):
         async def default_async_func(state: AgentState) -> Any:
-            if func is retrieve:
-                # ONNX inference must not block the FastAPI event loop.
+            if func in {retrieve, load_memory, load_history, persist}:
+                # ONNX and SQLite I/O must not block speech/API processing.
                 return await asyncio.to_thread(func, state)
             return func(state)
 
@@ -851,6 +865,7 @@ def build_graph(services: HandbookServices | None = None):
     graph = StateGraph(AgentState)
     graph.add_node("validate_input", runnable(validate_input))
     graph.add_node("load_history", runnable(load_history))
+    graph.add_node("load_memory", runnable(load_memory))
     graph.add_node(
         "observe_vehicle_state",
         runnable(observe_vehicle_state, observe_vehicle_state_async),
@@ -882,7 +897,10 @@ def build_graph(services: HandbookServices | None = None):
             else "observe_vehicle_state"
         ),
     )
-    graph.add_edge("observe_vehicle_state", "classify_intent")
+    graph.add_edge("observe_vehicle_state", "load_memory")
+    graph.add_conditional_edges("load_memory", runnable(
+        lambda state: "compose_decision_response" if state.get("memory_handled") else "classify_intent"
+    ))
     graph.add_conditional_edges("resolve_confirmation", runnable(after_confirmation))
     graph.add_conditional_edges("classify_intent", runnable(after_classification))
     graph.add_conditional_edges("scope_guard", runnable(after_scope))

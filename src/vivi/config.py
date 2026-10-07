@@ -51,6 +51,16 @@ class Settings(BaseSettings):
     data_dir: Path = Field(default=Path("./data"), validation_alias="VIVI_DATA_DIR")
     store_audio: bool = Field(default=False, validation_alias="VIVI_STORE_AUDIO")
     store_transcripts: bool = Field(default=False, validation_alias="VIVI_STORE_TRANSCRIPTS")
+    memory_enabled: bool = Field(default=True, validation_alias="VIVI_MEMORY_ENABLED")
+    memory_db: Path | None = Field(default=None, validation_alias="VIVI_MEMORY_DB")
+    memory_profile_id: str = Field(default="default", pattern=r"^[a-zA-Z0-9_-]{1,64}$",
+                                   validation_alias="VIVI_MEMORY_PROFILE_ID")
+    memory_context_limit: int = Field(default=8, ge=1, le=20)
+    memory_context_max_characters: int = Field(default=2000, ge=200, le=6000)
+
+    @property
+    def memory_path(self) -> Path:
+        return self.memory_db or self.data_dir / "memory" / "long_term.sqlite3"
 
     vehicle_provider: Literal["memory", "mqtt"] = Field(
         default="memory", validation_alias="VIVI_VEHICLE_PROVIDER"

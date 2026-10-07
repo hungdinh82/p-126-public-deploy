@@ -114,3 +114,15 @@ length checks against an in-memory car. See [voice behavior](../docs/voice_assis
 `results/voice-dev.json` and `results/voice-rag-dev.*` record the updated behavior.
 The original reports are historical; their extractive oracle coverage is not the
 current selector's score. No held-out labels were edited for this change.
+
+## Memory regressions
+
+`memory_cases.jsonl` has 29 authored development turns in ordered episodes.
+Run `python -m eval.memory_benchmark` to verify persistence across sessions/restart,
+correction, profile isolation, selective forgetting/reset and saved commands going
+through confirmation and driving policy. Labels are draft and can be edited.
+The runner uses temporary SQLite databases, rules and a simulated car; TCP is
+disabled, and user memory is never modified. Reports include per-turn checks and
+full-graph p50/p95 latency, excluding graph construction. These measurements are
+from the development host, not AGX Xavier or a real speech/SLM workload.
+See [memory design](../docs/memory.md) and `results/memory-dev.json`.

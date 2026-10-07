@@ -14,6 +14,7 @@ from src.vivi.agents.classifier import (
 )
 from src.vivi.config import Settings, get_settings
 from src.vivi.history.sqlite import SQLiteConversationHistory
+from src.vivi.memory.sqlite import SQLiteLongTermMemory
 from src.vivi.rag.generator import (
     ExtractiveHandbookGenerator,
     HandbookGenerator,
@@ -41,6 +42,10 @@ class HandbookServices:
     history_turns: int = 6
     classifier: IntentClassifier | None = None
     action_gateway: VehicleActionGateway | None = None
+    memory: SQLiteLongTermMemory | None = None
+    memory_profile_id: str = "default"
+    memory_context_limit: int = 8
+    memory_context_max_characters: int = 2000
 
 
 @lru_cache(maxsize=2)
@@ -105,4 +110,8 @@ def create_services(
         history_turns=config.rag_history_turns,
         classifier=classifier,
         action_gateway=action_gateway,
+        memory=SQLiteLongTermMemory(config.memory_path) if config.memory_enabled else None,
+        memory_profile_id=config.memory_profile_id,
+        memory_context_limit=config.memory_context_limit,
+        memory_context_max_characters=config.memory_context_max_characters,
     )

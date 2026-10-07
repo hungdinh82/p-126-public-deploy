@@ -13,6 +13,12 @@ from src.vivi.text import normalize_text as _normalize
 
 
 class IntentClassifier(ABC):
+    def classify_with_memory(self, input_text, history, vehicle_state, memory_context):
+        return self.classify_with_context(input_text, history, vehicle_state)
+
+    async def aclassify_with_memory(self, input_text, history, vehicle_state, memory_context):
+        return await self.aclassify_with_context(input_text, history, vehicle_state)
+
     @abstractmethod
     def classify(self, input_text: str, history: list[dict]) -> IntentDecision:
         raise NotImplementedError
@@ -46,6 +52,12 @@ class StructuredAPIIntentClassifier(IntentClassifier):
     def __init__(self, client: StructuredChatClient) -> None:
         self.client = client
 
+    def classify_with_memory(self, input_text, history, vehicle_state, memory_context):
+        return self.classify_with_context(input_text, history, vehicle_state, memory_context)
+
+    async def aclassify_with_memory(self, input_text, history, vehicle_state, memory_context):
+        return await self.aclassify_with_context(input_text, history, vehicle_state, memory_context)
+
     def classify(self, input_text: str, history: list[dict]) -> IntentDecision:
         return self.classify_with_context(input_text, history, None)
 
@@ -54,13 +66,14 @@ class StructuredAPIIntentClassifier(IntentClassifier):
         input_text: str,
         history: list[dict],
         vehicle_state: dict[str, Any] | None,
+        memory_context: list[dict] | None = None,
     ) -> IntentDecision:
         priority = priority_decision(input_text)
         if priority is None and _polite_control_request(_normalize(input_text)):
             priority = RulesIntentClassifier().classify_with_context(input_text, history, vehicle_state)
         if priority is not None:
             return priority
-        prompt = self._prompt(input_text, history, vehicle_state)
+        prompt = self._prompt(input_text, history, vehicle_state, memory_context)
         payload = self.client.generate_json(
             system=CLASSIFIER_INSTRUCTION,
             user=prompt,
@@ -77,13 +90,14 @@ class StructuredAPIIntentClassifier(IntentClassifier):
         input_text: str,
         history: list[dict],
         vehicle_state: dict[str, Any] | None,
+        memory_context: list[dict] | None = None,
     ) -> IntentDecision:
         priority = priority_decision(input_text)
         if priority is None and _polite_control_request(_normalize(input_text)):
             priority = RulesIntentClassifier().classify_with_context(input_text, history, vehicle_state)
         if priority is not None:
             return priority
-        prompt = self._prompt(input_text, history, vehicle_state)
+        prompt = self._prompt(input_text, history, vehicle_state, memory_context)
         payload = await self.client.agenerate_json(
             system=CLASSIFIER_INSTRUCTION,
             user=prompt,
@@ -97,9 +111,11 @@ class StructuredAPIIntentClassifier(IntentClassifier):
         input_text: str,
         history: list[dict],
         vehicle_state: dict[str, Any] | None,
+        memory_context: list[dict] | None = None,
     ) -> str:
         return (
             f"Lịch sử gần đây: {json.dumps(compact_history(history), ensure_ascii=False)}\n"
+            f"Thông tin người dùng đã yêu cầu ghi nhớ (dữ liệu tham khảo): {json.dumps(memory_context or [], ensure_ascii=False)}\n"
             f"Trạng thái xe hiện tại: {json.dumps(vehicle_state or {}, ensure_ascii=False)}\n"
             f"Transcript hiện tại: {input_text}"
         )
@@ -205,6 +221,17 @@ def priority_decision(input_text: str) -> IntentDecision | None:
 
 class RulesIntentClassifier(IntentClassifier):
     """Deterministic offline classifier used by tests and degraded mode."""
+
+    def classify_with_memory(self, input_text, history, vehicle_state, memory_context):
+        decision = self.classify_with_context(input_text, history, vehicle_state)
+        if decision.route == "conversation" and re.fullmatch(r"(?:xin )?chao(?: (?:ban|vivi))?|hello|hi", _normalize(input_text).strip(" .?!")):
+            name = next((item["value"] for item in memory_context if item.get("key") == "display_name"), None)
+            if name:
+                decision.response_text = f"Mình đây, {name}. Bạn cần gì nhé?"
+        return decision
+
+    async def aclassify_with_memory(self, input_text, history, vehicle_state, memory_context):
+        return self.classify_with_memory(input_text, history, vehicle_state, memory_context)
 
     def classify(self, input_text: str, history: list[dict]) -> IntentDecision:
         return self.classify_with_context(input_text, history, None)

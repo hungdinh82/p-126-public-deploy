@@ -10,6 +10,13 @@ data_dir = "./data"
 store_audio = false
 store_transcripts = false
 
+# Long-term memory: explicit user requests, shared across sessions of this driver.
+# Database defaults to <data_dir>/memory/long_term.sqlite3; optional memory_db override.
+memory_enabled = true
+memory_profile_id = "default"
+memory_context_limit = 8
+memory_context_max_characters = 2000
+
 # Vehicle simulator: memory or mqtt
 vehicle_provider = "memory"
 vehicle_id = "demo-car-1"
