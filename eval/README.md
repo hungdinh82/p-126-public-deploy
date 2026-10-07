@@ -105,3 +105,12 @@ versions, thread limit, hardware, peak process RSS and first-query cold loading.
 Warm latency uses one pass and nearest-rank p95. Current timing is from the dev
 host, not AGX Xavier. Repeat on Xavier with STT/TTS/SLM loaded, including cold start,
 concurrent load, and the memory/power mode actually used in deployment.
+
+## Conversation regressions
+
+`voice_cases.jsonl` contains recent short utterances and authored tool-boundary
+cases. Run `python -m eval.voice_benchmark` for local full-graph routing and reply
+length checks against an in-memory car. See [voice behavior](../docs/voice_assistant.md).
+`results/voice-dev.json` and `results/voice-rag-dev.*` record the updated behavior.
+The original reports are historical; their extractive oracle coverage is not the
+current selector's score. No held-out labels were edited for this change.

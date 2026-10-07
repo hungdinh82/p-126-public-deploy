@@ -1,0 +1,40 @@
+{"id": "voice-01", "query": "điều hoà đang là bao nhiêu độ", "expected_route": "action", "expected_intent": "vehicle.get_status", "review_status": "draft", "category": "conversation_regression"}
+{"id": "voice-02", "query": "tình trạng pin hiện tại", "expected_route": "action", "expected_intent": "vehicle.get_status", "review_status": "draft", "category": "conversation_regression"}
+{"id": "voice-03", "query": "pin còn bao nhiêu phần trăm", "expected_route": "action", "expected_intent": "vehicle.get_status", "review_status": "draft", "category": "conversation_regression"}
+{"id": "voice-04", "query": "tình trạng áp suất lốp hiện tại", "expected_route": "action", "expected_intent": "vehicle.get_status", "review_status": "draft", "category": "conversation_regression"}
+{"id": "voice-05", "query": "còn đi được bao xa", "expected_route": "action", "expected_intent": "vehicle.get_status", "review_status": "draft", "category": "conversation_regression"}
+{"id": "voice-06", "query": "cửa bên tài đã khoá chưa", "expected_route": "action", "expected_intent": "vehicle.get_status", "review_status": "draft", "category": "conversation_regression"}
+{"id": "voice-07", "query": "thông tin về lốp dự phòng", "expected_route": "handbook", "expected_intent": "manual.search", "review_status": "draft", "category": "conversation_regression"}
+{"id": "voice-08", "query": "thay lốp dự phòng", "expected_route": "handbook", "expected_intent": "manual.search", "review_status": "draft", "category": "conversation_regression"}
+{"id": "voice-09", "query": "thay lốp dự phòng như nào", "expected_route": "handbook", "expected_intent": "manual.search", "review_status": "draft", "category": "conversation_regression"}
+{"id": "voice-10", "query": "tính năng cruise control", "expected_route": "handbook", "expected_intent": "manual.search", "review_status": "draft", "category": "conversation_regression"}
+{"id": "voice-11", "query": "bạn có cruise control không?", "expected_route": "handbook", "expected_intent": "manual.search", "review_status": "draft", "category": "conversation_regression"}
+{"id": "voice-12", "query": "tiện ích cabin có những gì", "expected_route": "handbook", "expected_intent": "manual.search", "review_status": "draft", "category": "conversation_regression"}
+{"id": "voice-13", "query": "Cách kiểm tra áp suất lốp", "expected_route": "handbook", "expected_intent": "manual.search", "review_status": "draft", "category": "conversation_regression"}
+{"id": "voice-14", "query": "Dung lượng pin SDI bao nhiêu", "expected_route": "handbook", "expected_intent": "manual.search", "review_status": "draft", "category": "conversation_regression"}
+{"id": "voice-15", "query": "Phanh ABS hoạt động như thế nào", "expected_route": "handbook", "expected_intent": "manual.search", "review_status": "draft", "category": "conversation_regression"}
+{"id": "voice-16", "query": "Bạn có thể mở cửa sổ bên tài giúp tôi không?", "expected_route": "action", "expected_intent": "window.set_position", "review_status": "draft", "category": "conversation_regression"}
+{"id": "voice-17", "query": "Có thể mở cửa bên tài không?", "expected_route": "action", "expected_intent": "door.set_open", "review_status": "draft", "category": "conversation_regression"}
+{"id": "voice-18", "query": "Mở khoá cửa bên phụ giúp tôi", "expected_route": "action", "expected_intent": "door.set_lock", "review_status": "draft", "category": "conversation_regression"}
+{"id": "voice-19", "query": "Cửa sổ bên tài không mở được", "expected_route": "handbook", "expected_intent": "manual.search", "review_status": "draft", "category": "conversation_regression"}
+{"id": "voice-20", "query": "Đừng mở cửa sổ", "expected_route": "conversation", "expected_intent": "conversation.respond", "review_status": "draft", "category": "conversation_regression"}
+{"id": "voice-21", "query": "Mở cửa sổ bên tài và phát nhạc", "expected_route": "clarify", "expected_intent": "conversation.clarify", "review_status": "draft", "category": "conversation_regression"}
+{"id": "voice-22", "query": "Lát nữa mở cửa bên tài", "expected_route": "clarify", "expected_intent": "conversation.clarify", "review_status": "draft", "category": "conversation_regression"}
+{"id": "voice-23", "query": "Tôi hơi lạnh", "expected_route": "action", "expected_intent": "climate.set_temperature", "review_status": "draft", "category": "conversation_regression"}
+{"id": "voice-24", "query": "Phát nhạc thư giãn", "expected_route": "action", "expected_intent": "media.play", "review_status": "draft", "category": "conversation_regression"}
+{"id": "voice-25", "query": "Dừng nhạc", "expected_route": "action", "expected_intent": "media.pause", "review_status": "draft", "category": "conversation_regression"}
+{"id": "voice-26", "query": "Hướng dẫn sử dụng xe", "expected_route": "clarify", "expected_intent": "conversation.clarify", "review_status": "draft", "category": "conversation_regression"}
+{"id": "voice-27", "query": "bộ cẩm nang có những thông tin gì", "expected_route": "clarify", "expected_intent": "conversation.clarify", "review_status": "draft", "category": "conversation_regression"}
+{"id": "voice-28", "query": "bật cruise control", "expected_route": "unsupported", "expected_intent": "unsupported.request", "review_status": "draft", "category": "conversation_regression"}
+{"id": "voice-29", "query": "Đạp phanh giúp tôi", "expected_route": "unsupported", "expected_intent": "vehicle.prohibited", "review_status": "draft", "category": "conversation_regression"}
+{"id": "voice-30", "query": "chào bạn", "expected_route": "conversation", "expected_intent": "conversation.respond", "review_status": "draft", "category": "conversation_regression"}
+{"id": "voice-31", "query": "cảm ơn", "expected_route": "conversation", "expected_intent": "conversation.respond", "review_status": "draft", "category": "conversation_regression"}
+{"id": "voice-32", "query": "Hạ kính bên tài giúp mình", "expected_route": "action", "expected_intent": "window.set_position", "review_status": "draft", "category": "conversation_regression"}
+{"id": "voice-33", "query": "Bật điều hoà", "expected_route": "unsupported", "expected_intent": "unsupported.request", "review_status": "draft", "category": "conversation_regression"}
+{"id": "voice-34", "query": "Áp suất lốp khuyến nghị bao nhiêu", "expected_route": "handbook", "expected_intent": "manual.search", "review_status": "draft", "category": "conversation_regression"}
+{"id": "voice-35", "query": "Bạn là xe gì?", "expected_route": "conversation", "expected_intent": "conversation.respond", "review_status": "draft", "category": "smalltalk_boundary"}
+{"id": "voice-36", "query": "Bạn có khoẻ không?", "expected_route": "conversation", "expected_intent": "conversation.respond", "review_status": "draft", "category": "smalltalk_boundary"}
+{"id": "voice-37", "query": "Tôi hơi mệt", "expected_route": "conversation", "expected_intent": "conversation.respond", "review_status": "draft", "category": "smalltalk_boundary"}
+{"id": "voice-38", "query": "Chán quá", "expected_route": "conversation", "expected_intent": "conversation.respond", "review_status": "draft", "category": "smalltalk_boundary"}
+{"id": "voice-39", "query": "Bạn không hiểu ý tôi", "expected_route": "conversation", "expected_intent": "conversation.respond", "review_status": "draft", "category": "smalltalk_boundary"}
+{"id": "voice-40", "query": "Tạm biệt", "expected_route": "conversation", "expected_intent": "conversation.respond", "review_status": "draft", "category": "smalltalk_boundary"}

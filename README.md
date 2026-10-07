@@ -187,6 +187,7 @@ Frontend giữ khoảng 1 giây audio trong bộ đệm trước khi phát để
 
 Pipeline RAG offline mới cho VF8: [SQLite vector + E5 local](docs/rag_local.md).
 Golden dataset và benchmark riêng intent/retrieval/answer nằm trong [eval](eval/README.md).
+Persona, câu trả lời ngắn và quy tắc gọi tool: [trải nghiệm thoại ViVi](docs/voice_assistant.md).
 Sau khi chuẩn bị model, `run.py` và `scripts/run_rag_local.sh` đều dùng profile này mặc định.
 
 ```sh

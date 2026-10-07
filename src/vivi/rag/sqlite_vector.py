@@ -6,6 +6,8 @@ import threading
 from pathlib import Path
 
 from src.vivi.rag.embeddings.base import EmbeddingProvider
+from src.vivi.rag.query import expand_query, lexical_query
+from src.vivi.rag.relevance import variant_filter
 from src.vivi.rag.schemas import RetrievedChunk
 from src.vivi.rag.sqlite_store import SQLiteHandbookStore
 
@@ -72,13 +74,15 @@ class SQLiteVectorRetriever:
         chunks, matrix = self._load(scope)
         if not chunks:
             return []
-        vector = np.asarray(self.embeddings.embed_query(query), dtype=np.float32)
+        vector = np.asarray(self.embeddings.embed_query(expand_query(query)), dtype=np.float32)
         if vector.shape != (self.manifest["dimensions"],) or not np.isfinite(vector).all():
             raise ValueError("Query embedding has invalid dimensions or values")
         vector /= max(float(np.linalg.norm(vector)), 1e-12)
         # Avoid activating a large BLAS thread pool for this small matrix.
         scores = np.einsum("ij,j->i", matrix, vector, optimize=False)
-        order = np.argsort(-scores, kind="stable")[:self.retrieval_k]
+        accept_variant = variant_filter(query)
+        eligible = np.asarray([accept_variant(chunk) for chunk in chunks])
+        order = [int(index) for index in np.argsort(-scores, kind="stable") if eligible[index]][:self.retrieval_k]
         candidates: dict[str, RetrievedChunk] = {}
         for rank, index in enumerate(order, 1):
             if float(scores[index]) < self.min_similarity:
@@ -88,8 +92,9 @@ class SQLiteVectorRetriever:
             chunk.fused_score = 1 / (60 + rank)
             candidates[chunk.source_id] = chunk
         if self.mode == "hybrid":
-            lexical = self.store.search(query, vehicle_model=scope[0], model_year=scope[1], locale=scope[2],
-                                        limit=self.retrieval_k)
+            lexical = self.store.search(lexical_query(expand_query(query)), vehicle_model=scope[0], model_year=scope[1], locale=scope[2],
+                                        limit=self.retrieval_k * 4)
+            lexical = [chunk for chunk in lexical if accept_variant(chunk)][:self.retrieval_k]
             by_id = {chunk.source_id: i for i, chunk in enumerate(chunks)}
             for rank, chunk in enumerate(lexical, 1):
                 index = by_id.get(chunk.source_id)

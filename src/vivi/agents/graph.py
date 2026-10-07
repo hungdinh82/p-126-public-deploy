@@ -13,6 +13,7 @@ from pydantic import ValidationError
 from src.vivi.agents.classifier import RulesIntentClassifier
 from src.vivi.agents.contracts import ActionProposal, AssistantOutput, IntentDecision
 from src.vivi.agents.state import AgentState
+from src.vivi.agents.voice import verified_action_reply
 from src.vivi.rag.generator import (
     ExtractiveHandbookGenerator,
     normalize_answer,
@@ -23,8 +24,18 @@ from src.vivi.rag.schemas import ModelDecision
 from src.vivi.rag.scope import scope_rejection_reason
 from src.vivi.vehicle.zones import selected_zones, zoned_noun
 
-ABSTAIN_MESSAGE = "Mình chưa tìm thấy đủ bằng chứng trong cẩm nang VF8 2026 để trả lời câu hỏi này."
+ABSTAIN_MESSAGE = "Mình chưa có thông tin chắc chắn để trả lời câu này."
 _FOLLOW_UP_RE = re.compile(r"\b(vậy|thế|nó|cái đó|việc đó|còn|như vậy)\b", re.IGNORECASE)
+
+
+def _retrieval_query(state: AgentState) -> str:
+    query = state["query"]
+    history = state.get("conversation_history", [])
+    if history and history[-1].get("route") == "handbook" and (
+        _FOLLOW_UP_RE.search(query) or re.search(r"tính năng.*khác", query, re.I)
+    ):
+        return f"{history[-1]['query']}\n{query}"
+    return query
 
 
 class CompiledAssistantGraph:
@@ -392,9 +403,7 @@ def build_graph(services: HandbookServices | None = None):
 
     def scope_guard(state: AgentState) -> dict[str, Any]:
         started = time.perf_counter()
-        reason = scope_rejection_reason(state["query"])
-        if reason and state.get("conversation_history") and _FOLLOW_UP_RE.search(state["query"]):
-            reason = None
+        reason = scope_rejection_reason(_retrieval_query(state))
         if reason:
             return {
                 "answer": reason,
@@ -413,10 +422,7 @@ def build_graph(services: HandbookServices | None = None):
 
     def retrieve(state: AgentState) -> dict[str, Any]:
         started = time.perf_counter()
-        retrieval_query = state["query"]
-        history = state.get("conversation_history", [])
-        if history and _FOLLOW_UP_RE.search(state["query"]):
-            retrieval_query = f"{history[-1]['query']}\n{state['query']}"
+        retrieval_query = _retrieval_query(state)
         try:
             chunks = runtime.retriever.retrieve(
                 retrieval_query, state["vehicle_model"], state["model_year"], state["locale"]
@@ -465,7 +471,7 @@ def build_graph(services: HandbookServices | None = None):
         chunks = [RetrievedChunk.model_validate(value) for value in state["accepted_chunks"]]
         try:
             result = runtime.generator.generate(
-                state["query"], chunks, state.get("conversation_history", [])
+                state.get("retrieval_query", state["query"]), chunks, state.get("conversation_history", [])
             )
         except Exception as exc:
             if isinstance(runtime.generator, ExtractiveHandbookGenerator):
@@ -484,7 +490,7 @@ def build_graph(services: HandbookServices | None = None):
                     "timings": _merge_timing(state, "generate", started),
                 }
             result = ExtractiveHandbookGenerator().generate(
-                state["query"], chunks, state.get("conversation_history", [])
+                state.get("retrieval_query", state["query"]), chunks, state.get("conversation_history", [])
             )
             errors = [
                 *state.get("errors", []),
@@ -507,11 +513,11 @@ def build_graph(services: HandbookServices | None = None):
             async_generate = getattr(runtime.generator, "agenerate", None)
             result = (
                 await async_generate(
-                    state["query"], chunks, state.get("conversation_history", [])
+                    state.get("retrieval_query", state["query"]), chunks, state.get("conversation_history", [])
                 )
                 if async_generate is not None
                 else runtime.generator.generate(
-                    state["query"], chunks, state.get("conversation_history", [])
+                    state.get("retrieval_query", state["query"]), chunks, state.get("conversation_history", [])
                 )
             )
         except Exception as exc:
@@ -531,7 +537,7 @@ def build_graph(services: HandbookServices | None = None):
                     "timings": _merge_timing(state, "generate", started),
                 }
             result = ExtractiveHandbookGenerator().generate(
-                state["query"], chunks, state.get("conversation_history", [])
+                state.get("retrieval_query", state["query"]), chunks, state.get("conversation_history", [])
             )
             errors = [
                 *state.get("errors", []),
@@ -708,7 +714,10 @@ def build_graph(services: HandbookServices | None = None):
         started = time.perf_counter()
         result = state.get("metadata", {}).get("gateway_execution") or {}
         verified = bool(result.get("executed") and result.get("verified"))
-        message = result.get("message") or "Chưa thể xác minh thao tác."
+        message = result.get("message") or "Mình chưa xác minh được thao tác này."
+        if verified:
+            message = verified_action_reply(ActionProposal.model_validate(state["action_proposal"]),
+                                            state["query"], result.get("vehicle_state") or {}, message)
         execution = {
             "allowed": True,
             "executed": bool(result.get("executed")),

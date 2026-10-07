@@ -2,32 +2,14 @@ from __future__ import annotations
 
 import json
 import re
-import unicodedata
 from abc import ABC, abstractmethod
 from typing import Any
 
 from src.vivi.agents.contracts import IntentDecision
+from src.vivi.agents.prompts import CLASSIFIER_INSTRUCTION
 from src.vivi.config import Settings
 from src.vivi.structured_llm import StructuredChatClient, compact_history, openrouter_client
-
-CLASSIFIER_INSTRUCTION = """Bạn là bộ định tuyến cho trợ lý ô tô ViVi.
-Nhận transcript tiếng Việt và trả JSON đúng schema. Chọn handbook/manual.search cho câu hỏi
-về cách dùng, cảnh báo, thông số, sạc, bảo dưỡng hoặc tính năng VF8. Chọn action cho lệnh
-điều khiển xe được hỗ trợ. Chọn clarify khi thiếu tham số quan trọng hoặc câu nói mơ hồ.
-Phanh, lái, truyền động hay vô hiệu hóa an toàn phải là vehicle.prohibited/unsupported.
-Không bao giờ nói một action đã hoàn tất; response_text chỉ được nói “mình sẽ” hoặc “cần
-xác nhận”. Nhiệt độ hợp lệ 16-30°C, vị trí cửa sổ 0-100.
-Với yêu cầu tăng/giảm nhiệt độ, dùng nhiệt độ hiện tại trong trạng thái xe để tính ra
-value_celsius tuyệt đối. Không coi số độ tăng/giảm là nhiệt độ đích.
-Tên argument bắt buộc theo intent: climate.set_temperature dùng value_celsius;
-window.set_position dùng position_percent (0 là đóng, 100 là mở); door.set_open dùng open;
-door.set_lock dùng locked; seat.set_heat_level dùng level từ 0 đến 3. Bốn intent cabin này
-phải có zone: driver, front_passenger, rear_left, rear_right hoặc all;
-manual.search dùng query; media.play có thể dùng media_query. Không tạo tên field khác.
-Không được tự mặc định vị trí cửa xe. Với yêu cầu mở hoặc đóng cửa xe, nếu người dùng chưa
-nói rõ cửa bên nào thì chọn conversation.clarify và hỏi “Bạn muốn mở/đóng cửa bên nào?”.
-Hỗ trợ bốn vị trí cabin và “tất cả”. Không được tự mặc định vị trí; nếu thiếu zone thì clarify.
-"""
+from src.vivi.text import normalize_text as _normalize
 
 
 class IntentClassifier(ABC):
@@ -73,6 +55,11 @@ class StructuredAPIIntentClassifier(IntentClassifier):
         history: list[dict],
         vehicle_state: dict[str, Any] | None,
     ) -> IntentDecision:
+        priority = priority_decision(input_text)
+        if priority is None and _polite_control_request(_normalize(input_text)):
+            priority = RulesIntentClassifier().classify_with_context(input_text, history, vehicle_state)
+        if priority is not None:
+            return priority
         prompt = self._prompt(input_text, history, vehicle_state)
         payload = self.client.generate_json(
             system=CLASSIFIER_INSTRUCTION,
@@ -91,6 +78,11 @@ class StructuredAPIIntentClassifier(IntentClassifier):
         history: list[dict],
         vehicle_state: dict[str, Any] | None,
     ) -> IntentDecision:
+        priority = priority_decision(input_text)
+        if priority is None and _polite_control_request(_normalize(input_text)):
+            priority = RulesIntentClassifier().classify_with_context(input_text, history, vehicle_state)
+        if priority is not None:
+            return priority
         prompt = self._prompt(input_text, history, vehicle_state)
         payload = await self.client.agenerate_json(
             system=CLASSIFIER_INSTRUCTION,
@@ -144,9 +136,71 @@ class OpenRouterIntentClassifier(StructuredAPIIntentClassifier):
         super().__init__(openrouter_client(config))
 
 
-def _normalize(text: str) -> str:
-    value = unicodedata.normalize("NFD", text.lower())
-    return "".join(char for char in value if unicodedata.category(char) != "Mn").replace("đ", "d")
+def is_live_status_request(input_text: str) -> bool:
+    """Read observations, while instructions/specifications still use the handbook."""
+    text = _normalize(input_text)
+    if _polite_control_request(text):
+        return False
+    if re.search(r"\b(cach|lam sao|huong dan|tai sao|vi sao|nhu nao|the nao|"
+                 r"dung luong|thong so|khuyen cao|khuyen nghi|nen|tieu chuan|sdi|catl|toi da|"
+                 r"thi|xu ly|ra sao|can lam gi|gap vat can|khi)\b", text):
+        return False
+    if re.search(r"\b(dat|tang|giam|ha|chinh|mo|dong|bat|tat|khoa)\b", text) and not re.search(
+        r"\b(dang|hien tai|bay gio|da.*chua|co.*khong)\b", text
+    ):
+        return False
+    if re.search(r"trang thai xe|tinh trang xe|quang duong con lai|con di duoc|"
+                 r"di (?:them |duoc ).*(?:bao xa|bao nhieu|km)", text):
+        return True
+    if re.search(r"\bpin\b", text) and re.search(r"\b(con|hien tai|bay gio|luc nay|"
+                                               r"tinh trang|trang thai|phan tram|muc pin|kiem tra|doc)\b", text):
+        return True
+    if re.search(r"nhiet do|dieu hoa", text) and re.search(r"dang|hien tai|bay gio|bao nhieu|may do", text):
+        return not re.search(r"\b(dat|tang|giam|ha|chinh)\b", text)
+    if "ap suat lop" in text and re.search(r"hien tai|bay gio|dang|kiem tra|tinh trang|doc|cho biet|bao nhieu", text):
+        return True
+    return bool(re.search(r"cua|ghe|nhac", text) and re.search(
+        r"dang|hien tai|da.*chua|co.*(?:dong|mo|khoa).*khong", text
+    ))
+
+
+def _polite_control_request(text: str) -> bool:
+    if not re.search(r"\b(mo|dong|khoa|dat|tang|giam|ha|bat|tat|phat|dung)\b", text):
+        return False
+    if re.search(r"\b(cach|lam sao|huong dan|tai sao|vi sao)\b", text):
+        return False
+    return bool(re.search(r"(?:ban|vivi).{0,20}(?:co the|giup)|giup (?:minh|toi)|"
+                          r"^co the.{0,10}(?:mo|dong|khoa|dat|tang|giam|ha|bat|tat|phat)|"
+                          r"^(?:mo|dong|khoa|dat|tang|giam|ha|bat|tat|phat|dung).*duoc khong", text))
+
+
+def priority_decision(input_text: str) -> IntentDecision | None:
+    """Protect common tool boundaries even when an SLM routes them incorrectly."""
+    from src.vivi.rag.scope import scope_rejection_reason
+
+    text = _normalize(input_text)
+    if scope_rejection_reason(input_text) is None and re.search(
+        r"khong (?:the )?(?:mo|dong|sac|khoa).*duoc|(?:mo|dong|sac|khoa).*khong duoc|"
+        r"bi ket|khong hoat dong", text
+    ):
+        return IntentDecision(route="handbook", intent="manual.search", arguments={"query": input_text})
+    if not re.search(r"\b(cach|lam sao|vi sao|tai sao|huong dan)\b", text) and re.search(
+        r"\b(dung|khong)\s+(?:mo|dong|khoa|tang|giam|bat|tat|phat|ha)\b", text
+    ):
+        return IntentDecision(route="conversation", intent="conversation.respond",
+                              response_text="Được nhé, mình sẽ không thực hiện thao tác đó.")
+    if not re.search(r"\b(cach|huong dan|nhu nao|the nao|tai sao|vi sao)\b", text):
+        controls = re.findall(r"\b(?:mo|dong|khoa|dat|chinh|phat|tat|suoi)\b.{0,25}?(?:cua|nhiet do|nhac|ghe)", text)
+        if len(controls) > 1 and re.search(r"\bva\b|roi|dong thoi", text):
+            return IntentDecision(route="clarify", intent="conversation.clarify", needs_clarification=True,
+                                  clarification_question="Bạn muốn mình thực hiện thao tác nào trước?")
+        if controls and re.search(r"\b(neu|lat nua|ti nua|ngay mai)\b", text):
+            return IntentDecision(route="clarify", intent="conversation.clarify", needs_clarification=True,
+                                  clarification_question="Mình chưa hẹn giờ thao tác được. Bạn muốn thực hiện ngay không?")
+    if is_live_status_request(input_text) and scope_rejection_reason(input_text) is None:
+        return IntentDecision(route="action", intent="vehicle.get_status",
+                              response_text="Mình kiểm tra nhé.")
+    return None
 
 
 class RulesIntentClassifier(IntentClassifier):
@@ -161,7 +215,30 @@ class RulesIntentClassifier(IntentClassifier):
         history: list[dict],
         vehicle_state: dict[str, Any] | None,
     ) -> IntentDecision:
-        text = _normalize(input_text)
+        text = _normalize(input_text).strip()
+        priority = priority_decision(input_text)
+        if priority is not None:
+            return priority
+        if re.fullmatch(r"(?:huong dan (?:su dung )?xe|(?:bo )?cam nang(?: co (?:gi|nhung thong tin gi))?)[.?! ]*", text):
+            return IntentDecision(route="clarify", intent="conversation.clarify", needs_clarification=True,
+                                  clarification_question="Bạn muốn tìm hiểu về sạc pin, tiện ích cabin hay hỗ trợ lái?")
+        if re.search(r"ban la xe gi|vivi la xe gi|xe nay la xe gi", text):
+            return IntentDecision(route="conversation", intent="conversation.respond",
+                                  response_text="Mình là ViVi trên chiếc VF8 đang đồng hành cùng bạn.")
+        if re.search(r"tam biet|hen gap lai", text):
+            return IntentDecision(route="conversation", intent="conversation.respond", response_text="Hẹn gặp lại bạn nhé.")
+        if re.search(r"ban (?:co )?khoe|vivi (?:co )?khoe", text):
+            return IntentDecision(route="conversation", intent="conversation.respond",
+                                  response_text="Mình luôn sẵn sàng đồng hành cùng bạn nhé.")
+        if re.search(r"\b(?:toi|minh)\b.*met|met qua|buon ngu", text):
+            return IntentDecision(route="conversation", intent="conversation.respond",
+                                  response_text="Nếu bạn mệt, hãy tìm chỗ an toàn để nghỉ một chút nhé.")
+        if re.search(r"\b(?:toi|minh)\b.*buon|chan qua", text):
+            return IntentDecision(route="conversation", intent="conversation.respond",
+                                  response_text="Mình ở đây với bạn. Bạn muốn nghe nhạc một chút không?")
+        if re.search(r"sai roi|ban khong hieu|vivi khong hieu", text):
+            return IntentDecision(route="conversation", intent="conversation.respond",
+                                  response_text="Mình hiểu chưa đúng rồi. Bạn nói lại điều muốn mình làm nhé.")
         # Knowledge questions about physical controls must not become commands.
         # Run this before both prohibited-command matching and cabin parsers.
         from src.vivi.rag.scope import scope_rejection_reason
@@ -169,13 +246,22 @@ class RulesIntentClassifier(IntentClassifier):
         knowledge_question = bool(re.search(
             r"\b(cach|lam sao|huong dan|tai sao|vi sao|the nao|la gi|bao nhieu|"
             r"o dau|khi nao|co.*khong|hoat dong|can luu y|can lam gi|can gi|"
-            r"tac dung|ra sao|giup gi|loai nao)\b", text
+            r"tac dung|ra sao|giup gi|loai nao|nhu nao|thi sao|xu ly|de lam gi|la.*gi|co nhung|thong tin|tinh nang)\b", text
         ))
+        knowledge_question = knowledge_question and not _polite_control_request(text)
         rejection = scope_rejection_reason(input_text)
         if knowledge_question and rejection is None:
             return IntentDecision(route="handbook", intent="manual.search", arguments={"query": input_text})
         if knowledge_question and rejection and re.search(r"\b(vf\s*\d|xe|pin|sac|cua|ghe)\b", text):
             return IntentDecision(route="unsupported", intent="unsupported.request", response_text=rejection)
+        if history and history[-1].get("route") == "action" and history[-1].get("intent") == "climate.set_temperature" and re.fullmatch(
+            r"(?:tang|giam|ha|them|bot)(?: them| bot)? \d+(?:[.,]\d+)?(?: do)?[.!? ]*", text
+        ):
+            text = f"{text} do nhiet do"
+        if history and history[-1].get("route") == "clarify" and re.fullmatch(r"\d+(?:[.,]\d+)?(?: do)?[.!? ]*", text):
+            previous = _normalize(str(history[-1].get("query", "")))
+            if re.search(r"nhiet do|dieu hoa|lanh|nong", previous):
+                text = f"dat nhiet do {text} do"
         if self._cabin_zone(text) is not None and self._is_cabin_zone_reply(text) and history:
             previous = history[-1]
             previous_query = _normalize(str(previous.get("query", "")))
@@ -200,12 +286,6 @@ class RulesIntentClassifier(IntentClassifier):
                 clarification_question="Bạn muốn mình thực hiện thao tác nào?",
                 response_text="Mình chưa chắc ý bạn. Bạn nói rõ thao tác giúp mình nhé.",
             )
-        if re.search(r"trang thai xe|pin con bao nhieu|quang duong con lai|xe con bao nhieu", text):
-            return IntentDecision(
-                route="action",
-                intent="vehicle.get_status",
-                response_text="Mình sẽ kiểm tra trạng thái xe.",
-            )
         climate_request = re.search(
             r"nhiet do|dieu hoa|nong|lanh|mat hon|am hon|"
             r"\b(?:tang|giam|ha|them|bot)\b.{0,20}(?:do|°)",
@@ -213,13 +293,8 @@ class RulesIntentClassifier(IntentClassifier):
         )
         if climate_request:
             if re.search(r"\b(bat|tat)\b", text) and not re.search(r"\d|\b(?:mot|hai|ba|bon|nam)\b", text):
-                return IntentDecision(
-                    route="clarify",
-                    intent="conversation.clarify",
-                    needs_clarification=True,
-                    clarification_question="Bạn muốn đặt nhiệt độ bao nhiêu?",
-                    response_text="Bạn muốn đặt nhiệt độ bao nhiêu?",
-                )
+                return IntentDecision(route="unsupported", intent="unsupported.request",
+                                      response_text="Mình chưa bật hay tắt điều hoà bằng giọng nói được. Mình có thể chỉnh nhiệt độ.")
             amount = self._temperature_number(text)
             relative_cue = bool(
                 re.search(r"\b(tang|giam|ha|them|bot)\b", text)
@@ -239,10 +314,15 @@ class RulesIntentClassifier(IntentClassifier):
                     response_text="Bạn muốn đặt nhiệt độ bao nhiêu?",
                 )
             if relative:
-                current = float((vehicle_state or {}).get("temperature_celsius", 23))
+                if vehicle_state is None or vehicle_state.get("temperature_celsius") is None:
+                    return IntentDecision(route="clarify", intent="conversation.clarify", needs_clarification=True,
+                                          clarification_question="Bạn muốn đặt điều hoà bao nhiêu độ?")
+                current = float(vehicle_state["temperature_celsius"])
                 delta = amount if amount is not None else 2.0
-                lower = bool(re.search(r"\b(giam|ha|bot)\b|\bnong\b|\bmat hon\b", text))
-                value = current + (-delta if lower else delta)
+                lower = bool(re.search(r"\b(giam|ha|bot)\b|\bmat hon\b", text)) or (
+                    not re.search(r"\b(tang|them)\b|\bam hon\b", text) and "nong" in text
+                )
+                value = min(30.0, max(16.0, current + (-delta if lower else delta)))
             else:
                 value = amount
             assert value is not None
@@ -250,12 +330,12 @@ class RulesIntentClassifier(IntentClassifier):
                 route="action",
                 intent="climate.set_temperature",
                 arguments={"value_celsius": value},
-                response_text=f"Mình sẽ đề xuất đặt nhiệt độ ở {value:g} độ.",
+                response_text=f"Mình sẽ đặt điều hoà ở {value:g} độ nhé.",
             )
-        if re.search(r"cua so|cua kinh", text):
+        if re.search(r"cua so|cua kinh|\bkinh\b", text):
             opening = bool(re.search(r"\b(mo|ha)\b", text))
             closing = bool(re.search(r"\b(dong|len)\b", text))
-            if not opening and not closing:
+            if opening == closing:
                 return IntentDecision(
                     route="clarify",
                     intent="conversation.clarify",
@@ -277,8 +357,9 @@ class RulesIntentClassifier(IntentClassifier):
             return IntentDecision(
                 route="action",
                 intent="window.set_position",
-                arguments={"position_percent": 100 if opening else 0, "zone": zone},
-                response_text="Mình đã tạo đề xuất điều chỉnh cửa sổ và đang chờ safety gateway.",
+                arguments={"position_percent": int(percent.group(1)) if (percent := re.search(r"(\d+)\s*(?:%|phan tram)", text))
+                           else 50 if "mot nua" in text else 100 if opening else 0, "zone": zone},
+                response_text="Mình sẽ điều chỉnh cửa sổ nhé.",
             )
         door_request = re.search(
             r"\b(?:mo|dong)\s+(?:(?:tat ca|toan bo)\s+)?cua\b|"
@@ -301,7 +382,7 @@ class RulesIntentClassifier(IntentClassifier):
                     route="action",
                     intent="door.set_lock",
                     arguments={"locked": not bool(re.search(r"mo khoa", text)), "zone": zone},
-                    response_text="Mình sẽ đề xuất điều chỉnh khóa cửa.",
+                    response_text="Mình sẽ điều chỉnh khoá cửa nhé.",
                 )
             opening = bool(re.search(r"\bmo\b", text))
             closing = bool(re.search(r"\bdong\b", text))
@@ -327,7 +408,7 @@ class RulesIntentClassifier(IntentClassifier):
                 route="action",
                 intent="door.set_open",
                 arguments={"open": opening, "zone": zone},
-                response_text="Mình sẽ đề xuất điều chỉnh cửa xe.",
+                response_text="Mình sẽ điều chỉnh cửa xe nhé.",
             )
         if re.search(r"suoi(?: (?:tat ca|toan bo))? ghe|ghe suoi|lam am ghe", text):
             match = re.search(r"(?:muc|cap)\s*(\d+)", text)
@@ -346,19 +427,20 @@ class RulesIntentClassifier(IntentClassifier):
                 route="action",
                 intent="seat.set_heat_level",
                 arguments={"level": level, "zone": zone},
-                response_text=f"Mình sẽ đề xuất đặt sưởi ghế mức {level}.",
+                response_text=f"Mình sẽ đặt sưởi ghế ở mức {level} nhé.",
             )
         if re.search(r"phat nhac|mo nhac", text):
-            return IntentDecision(route="action", intent="media.play", response_text="Mình sẽ đề xuất phát nhạc.")
+            media_query = re.split(r"phát nhạc|mở nhạc|phat nhac|mo nhac", input_text, flags=re.IGNORECASE)[-1].strip(" .?!")
+            return IntentDecision(route="action", intent="media.play", arguments={"media_query": media_query or None},
+                                  response_text="Mình sẽ bật nhạc nhé.")
         if re.search(r"dung nhac|tat nhac", text):
-            return IntentDecision(route="action", intent="media.pause", response_text="Mình sẽ đề xuất dừng nhạc.")
+            return IntentDecision(route="action", intent="media.pause", response_text="Mình sẽ dừng nhạc nhé.")
         if re.search(r"ban la ai|vivi la ai|gioi thieu.*ban", text):
             return IntentDecision(
                 route="conversation",
                 intent="conversation.respond",
                 response_text=(
-                    "Mình là ViVi, trợ lý AI trên ô tô. Mình có thể điều khiển các tiện ích "
-                    "cabin an toàn và trả lời câu hỏi từ cẩm nang VF8."
+                    "Mình là ViVi, tiếng nói của chiếc VF8 đang đồng hành cùng bạn."
                 ),
             )
         if re.search(r"alo|nghe (thay|ro)|co nghe", text):
@@ -367,11 +449,13 @@ class RulesIntentClassifier(IntentClassifier):
                 intent="conversation.respond",
                 response_text="Mình nghe rõ. Bạn muốn mình hỗ trợ gì trên xe?",
             )
-        if re.search(r"xin chao|chao vivi|cam on|cam on ban", text):
+        if re.search(r"cam on", text):
+            return IntentDecision(route="conversation", intent="conversation.respond", response_text="Không có gì nhé.")
+        if re.search(r"xin chao|chao (?:vivi|ban)|^vivi[.!? ]*$", text):
             return IntentDecision(
                 route="conversation",
                 intent="conversation.respond",
-                response_text="Xin chào, mình là ViVi. Mình có thể hỗ trợ gì cho bạn?",
+                response_text="Mình đây, bạn cần gì nhé?",
             )
         if re.search(r"ban (co the|lam duoc)|giup duoc gi|chuc nang cua ban", text):
             return IntentDecision(
@@ -382,6 +466,13 @@ class RulesIntentClassifier(IntentClassifier):
                     "đọc trạng thái xe và tra cứu cẩm nang VF8."
                 ),
             )
+        if re.search(r"\b(bat|tat|mo|dong|chinh|kich hoat)\b.*(?:adas|cruise|tu lai|den pha|gat nuoc|guong|cop)", text):
+            return IntentDecision(route="unsupported", intent="unsupported.request",
+                                  response_text="Mình chưa điều khiển tính năng này bằng giọng nói được.")
+        if re.search(r"\b(con|vay|the)\b.*(?:tinh nang|chuc nang).*(?:khac|gi)", text) and history and history[-1].get("route") == "handbook":
+            return IntentDecision(route="handbook", intent="manual.search", arguments={"query": input_text})
+        if rejection is None:
+            return IntentDecision(route="handbook", intent="manual.search", arguments={"query": input_text})
         automotive = re.search(
             r"\b(vf8|xe|adas|cruise|sac|pin|bao duong|canh bao|thong so|"
             r"che do|lop|den|phanh|vo lang|dong co|cabin)\b",
@@ -406,12 +497,10 @@ class RulesIntentClassifier(IntentClassifier):
             intent="conversation.clarify",
             needs_clarification=True,
             clarification_question=(
-                "Mình đang ở chế độ offline. Bạn có thể hỏi về cẩm nang VF8 hoặc yêu cầu "
-                "điều khiển tiện ích cabin."
+                "Bạn muốn mình hỗ trợ việc gì trên xe?"
             ),
             response_text=(
-                "Mình đang ở chế độ offline. Bạn có thể hỏi về cẩm nang VF8 hoặc yêu cầu "
-                "điều khiển tiện ích cabin."
+                "Bạn muốn mình hỗ trợ việc gì trên xe?"
             ),
             confidence=0.4,
         )
