@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "dataset_version": "vf8-draft-v1",
+  "cases": 74,
+  "source_sha256": "46a6e6a41061333773f258ed5216b59ad3957ede1ff45b7454149abaddf82496",
+  "status": "draft_pending_user_review",
+  "generation": "authored_queries_with_literal_source_validation",
+  "no_follow_up": true,
+  "split_policy": "source grouped; do not tune on test"
+}

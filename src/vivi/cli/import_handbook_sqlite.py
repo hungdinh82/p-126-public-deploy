@@ -11,12 +11,12 @@ from src.vivi.rag.sqlite_store import SQLiteHandbookStore
 
 def main() -> None:
     settings = get_settings()
-    parser = argparse.ArgumentParser(description="Import parsed handbook chunks into SQLite FTS5")
+    parser = argparse.ArgumentParser(description="Import parsed chunks into the source SQLite corpus before building local vectors")
     parser.add_argument("--model", default=settings.rag_default_vehicle_model)
     parser.add_argument("--year", type=int, default=settings.rag_default_model_year)
     parser.add_argument("--locale", default=settings.rag_default_locale)
     parser.add_argument("--chunks", type=Path, help="Override the parsed chunks.jsonl path")
-    parser.add_argument("--database", type=Path, default=settings.rag_handbook_db)
+    parser.add_argument("--database", type=Path, default=settings.rag_data_dir / "handbook-source.sqlite3")
     args = parser.parse_args()
 
     target = CrawlTarget(args.model, args.year, args.locale)

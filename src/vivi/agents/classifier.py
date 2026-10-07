@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import asyncio
 import json
 import re
-import time
 import unicodedata
 from abc import ABC, abstractmethod
 from typing import Any
@@ -58,104 +56,6 @@ class IntentClassifier(ABC):
         # Preserve the context-aware sync implementation for deterministic
         # classifiers. Model-backed classifiers override this with native I/O.
         return self.classify_with_context(input_text, history, vehicle_state)
-
-
-class GoogleIntentClassifier(IntentClassifier):
-    def __init__(self, api_key: str, model: str) -> None:
-        if not api_key:
-            raise RuntimeError("GOOGLE_API_KEY is required for intent classification")
-        from google import genai
-
-        self.client = genai.Client(api_key=api_key)
-        self.model = model
-
-    def classify(self, input_text: str, history: list[dict]) -> IntentDecision:
-        return self.classify_with_context(input_text, history, None)
-
-    async def aclassify(self, input_text: str, history: list[dict]) -> IntentDecision:
-        return await self.aclassify_with_context(input_text, history, None)
-
-    def classify_with_context(
-        self,
-        input_text: str,
-        history: list[dict],
-        vehicle_state: dict[str, Any] | None,
-    ) -> IntentDecision:
-        from google.genai import types
-
-        prompt = self._prompt(input_text, history, vehicle_state)
-        config = types.GenerateContentConfig(
-            system_instruction=CLASSIFIER_INSTRUCTION,
-            temperature=0,
-            response_mime_type="application/json",
-            response_json_schema=IntentDecision.model_json_schema(),
-        )
-        for attempt in range(3):
-            try:
-                response = self.client.models.generate_content(
-                    model=self.model,
-                    contents=prompt,
-                    config=config,
-                )
-                break
-            except Exception as exc:
-                transient = any(
-                    marker in str(exc).upper()
-                    for marker in ("429", "500", "502", "503", "504", "RESOURCE_EXHAUSTED", "UNAVAILABLE")
-                )
-                if not transient or attempt == 2:
-                    raise
-                time.sleep(0.75 * (2**attempt))
-        if not response.text:
-            raise RuntimeError("Gemini returned an empty intent decision")
-        return IntentDecision.model_validate_json(response.text)
-
-    async def aclassify_with_context(
-        self,
-        input_text: str,
-        history: list[dict],
-        vehicle_state: dict[str, Any] | None,
-    ) -> IntentDecision:
-        from google.genai import types
-
-        prompt = self._prompt(input_text, history, vehicle_state)
-        config = types.GenerateContentConfig(
-            system_instruction=CLASSIFIER_INSTRUCTION,
-            temperature=0,
-            response_mime_type="application/json",
-            response_json_schema=IntentDecision.model_json_schema(),
-        )
-        for attempt in range(3):
-            try:
-                response = await self.client.aio.models.generate_content(
-                    model=self.model,
-                    contents=prompt,
-                    config=config,
-                )
-                break
-            except Exception as exc:
-                transient = any(
-                    marker in str(exc).upper()
-                    for marker in ("429", "500", "502", "503", "504", "RESOURCE_EXHAUSTED", "UNAVAILABLE")
-                )
-                if not transient or attempt == 2:
-                    raise
-                await asyncio.sleep(0.75 * (2**attempt))
-        if not response.text:
-            raise RuntimeError("Gemini returned an empty intent decision")
-        return IntentDecision.model_validate_json(response.text)
-
-    @staticmethod
-    def _prompt(
-        input_text: str,
-        history: list[dict],
-        vehicle_state: dict[str, Any] | None,
-    ) -> str:
-        return (
-            f"Lịch sử gần đây: {json.dumps(compact_history(history), ensure_ascii=False)}\n"
-            f"Trạng thái xe hiện tại: {json.dumps(vehicle_state or {}, ensure_ascii=False)}\n"
-            f"Transcript hiện tại: {input_text}"
-        )
 
 
 class StructuredAPIIntentClassifier(IntentClassifier):
@@ -262,6 +162,20 @@ class RulesIntentClassifier(IntentClassifier):
         vehicle_state: dict[str, Any] | None,
     ) -> IntentDecision:
         text = _normalize(input_text)
+        # Knowledge questions about physical controls must not become commands.
+        # Run this before both prohibited-command matching and cabin parsers.
+        from src.vivi.rag.scope import scope_rejection_reason
+
+        knowledge_question = bool(re.search(
+            r"\b(cach|lam sao|huong dan|tai sao|vi sao|the nao|la gi|bao nhieu|"
+            r"o dau|khi nao|co.*khong|hoat dong|can luu y|can lam gi|can gi|"
+            r"tac dung|ra sao|giup gi|loai nao)\b", text
+        ))
+        rejection = scope_rejection_reason(input_text)
+        if knowledge_question and rejection is None:
+            return IntentDecision(route="handbook", intent="manual.search", arguments={"query": input_text})
+        if knowledge_question and rejection and re.search(r"\b(vf\s*\d|xe|pin|sac|cua|ghe)\b", text):
+            return IntentDecision(route="unsupported", intent="unsupported.request", response_text=rejection)
         if self._cabin_zone(text) is not None and self._is_cabin_zone_reply(text) and history:
             previous = history[-1]
             previous_query = _normalize(str(previous.get("query", "")))

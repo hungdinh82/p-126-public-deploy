@@ -112,7 +112,6 @@ def test_configured_local_provider_is_registered_in_canonical_graph(tmp_path):
     config = Settings(
         llm_provider="local",
         local_llm_model="qwen-test.gguf",
-        google_api_key="",
         openai_api_key="",
         data_dir=tmp_path / "data",
         rag_handbook_db=tmp_path / "handbook.sqlite3",

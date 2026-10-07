@@ -732,8 +732,8 @@ $('#sound-toggle').addEventListener('click', () => {
 });
 
 const dialog = $('#info-dialog');
-const modelLabels = { rules: 'Kịch bản', openai: 'OpenAI', google: 'Google', local: 'Local API', openrouter: 'OpenRouter' };
-const modelModes = { rules: 'Phản hồi định sẵn', openai: 'Cloud · cần Internet', google: 'Cloud · cần Internet', local: 'On-device · riêng tư', openrouter: 'Cloud · cần Internet' };
+const modelLabels = { rules: 'Kịch bản', openai: 'OpenAI', local: 'Local API', openrouter: 'OpenRouter' };
+const modelModes = { rules: 'Phản hồi định sẵn', openai: 'Cloud · cần Internet', local: 'On-device · riêng tư', openrouter: 'Cloud · cần Internet' };
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>'"]/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character]);
 }

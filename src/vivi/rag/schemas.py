@@ -44,20 +44,6 @@ class HandbookChunk(BaseModel):
     checksum: str
     chunk_index: int
 
-    def chroma_metadata(self) -> dict[str, str | int]:
-        return {
-            "document_id": self.document_id,
-            "source_url": self.source_url,
-            "vehicle_model": self.vehicle_model,
-            "model_year": self.model_year,
-            "locale": self.locale,
-            "chapter_id": self.chapter_id,
-            "chapter": self.chapter,
-            "section_path": " > ".join(self.section_path),
-            "content_type": self.content_type,
-            "checksum": self.checksum,
-            "chunk_index": self.chunk_index,
-        }
 
 
 class RetrievedChunk(HandbookChunk):

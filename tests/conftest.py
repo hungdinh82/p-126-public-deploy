@@ -18,7 +18,6 @@ os.environ.update(
         "PHOWHISPER_PRELOAD": "false",
         "ZEROTTS_PRELOAD": "false",
         "OPENAI_API_KEY": "",
-        "GOOGLE_API_KEY": "",
         "OPENROUTER_API_KEY": "",
         "LOCAL_LLM_MODEL": "",
     }

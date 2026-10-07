@@ -47,10 +47,15 @@ PY
 "$PYTHON_BIN" -m venv .venv
 source .venv/bin/activate
 
-# Install the core runtime and development/test tooling. AI model dependencies are
-# intentionally opt-in; see docs/setup_pc.md.
+# Install local RAG and development tooling; retain an existing speech GPU runtime.
 python -m pip install --upgrade pip
 python -m pip install -r requirements-dev.txt
+if ! python -c 'import onnxruntime' >/dev/null 2>&1; then
+    python -m pip install -r requirements-rag.txt
+fi
+if [ ! -f models/multilingual-e5-small-int8/manifest.json ]; then
+    python -m src.vivi.cli.prepare_embeddings
+fi
 
 # Create local secrets file if it does not exist. Shared runtime defaults live in config.toml.
 if [ ! -f .env ]; then

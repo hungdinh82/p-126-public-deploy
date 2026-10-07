@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import re
 import time
 from typing import Any, Literal
@@ -831,10 +832,9 @@ def build_graph(services: HandbookServices | None = None):
 
     def runnable(func, afunc=None):
         async def default_async_func(state: AgentState) -> Any:
-            # SQLite connections and the in-memory vehicle gateway are short,
-            # synchronous critical sections. Running them through the default
-            # executor can strand LangGraph's async runner during loop wake-up;
-            # providing an explicit coroutine keeps the async graph deterministic.
+            if func is retrieve:
+                # ONNX inference must not block the FastAPI event loop.
+                return await asyncio.to_thread(func, state)
             return func(state)
 
         return RunnableLambda(func, afunc=afunc or default_async_func, name=func.__name__)

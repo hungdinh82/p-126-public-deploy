@@ -1,0 +1,3547 @@
+{
+  "schema_version": 1,
+  "dataset_sha256": "2911f22e906eb8c5c0ea8050fe9dad0b47b27ed349de5f7a69913277b4a64cc5",
+  "source_sha256": "46a6e6a41061333773f258ed5216b59ad3957ede1ff45b7454149abaddf82496",
+  "split": "test",
+  "k": 5,
+  "cases": 19,
+  "provider": "rules",
+  "generation_model": "extractive_baseline",
+  "network_policy": "tcp_loopback_only",
+  "hardware": {
+    "platform": "Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.43",
+    "cpu": ""
+  },
+  "embedding": {
+    "model": {
+      "schema_version": 1,
+      "model": "intfloat/multilingual-e5-small",
+      "artifact_repository": "Xenova/multilingual-e5-small",
+      "revision": "761b726dd34fb83930e26aab4e9ac3899aa1fa78",
+      "dimensions": 384,
+      "quantization": "int8",
+      "files": {
+        "tokenizer.json": "0b44a9d7b51c3c62626640cda0e2c2f70fdacdc25bbbd68038369d14ebdf4c39",
+        "model_quantized.onnx": "f80102d3f2a1229f387d3c81909990d8945513e347b0eab049f7de3c6f98c193"
+      }
+    },
+    "threads": 2,
+    "cold_load_and_first_query_ms": 906.19
+  },
+  "runtime_versions": {
+    "python": "3.12.12",
+    "numpy": "2.5.3",
+    "onnxruntime": "1.30.0",
+    "tokenizers": "0.22.2",
+    "onnxruntime_imported": "1.23.2",
+    "embedding_execution_providers": [
+      "CPUExecutionProvider"
+    ]
+  },
+  "min_similarity": 0,
+  "database_sha256": "aa17bd04a3f2cf21533f7d4a5176e93b40d884374864862ee9fc212154a6743c",
+  "peak_process_rss_bytes": 594796544,
+  "intent": {
+    "route_accuracy": 0.8947,
+    "intent_accuracy": 0.8947,
+    "route_macro_f1": 0.8571,
+    "latency": {
+      "n": 19,
+      "p50_ms": 0.04,
+      "p95_ms": 0.95
+    },
+    "cases": [
+      {
+        "id": "vf8-window_control-1",
+        "query": "Cách điều khiển cửa sổ điện VF8 như thế nào?",
+        "expected_route": "handbook",
+        "route": "handbook",
+        "expected_intent": "manual.search",
+        "intent": "manual.search",
+        "latency_ms": 0.38,
+        "error": null
+      },
+      {
+        "id": "vf8-window_control-2",
+        "query": "Các nút chỉnh kính xe nằm ở đâu?",
+        "expected_route": "handbook",
+        "route": "handbook",
+        "expected_intent": "manual.search",
+        "intent": "manual.search",
+        "latency_ms": 0.04,
+        "error": null
+      },
+      {
+        "id": "vf8-rear_window_lock-1",
+        "query": "Công tắc khóa cửa sổ điện dùng để làm gì?",
+        "expected_route": "handbook",
+        "route": "clarify",
+        "expected_intent": "manual.search",
+        "intent": "conversation.clarify",
+        "latency_ms": 0.95,
+        "error": null
+      },
+      {
+        "id": "vf8-rear_window_lock-2",
+        "query": "Làm sao ngăn hành khách phía sau tự điều khiển cửa kính?",
+        "expected_route": "handbook",
+        "route": "handbook",
+        "expected_intent": "manual.search",
+        "intent": "manual.search",
+        "latency_ms": 0.04,
+        "error": null
+      },
+      {
+        "id": "vf8-charge_adapter_warning-1",
+        "query": "Dùng bộ chuyển đổi sạc cần lưu ý gì?",
+        "expected_route": "handbook",
+        "route": "handbook",
+        "expected_intent": "manual.search",
+        "intent": "manual.search",
+        "latency_ms": 0.03,
+        "error": null
+      },
+      {
+        "id": "vf8-charge_adapter_warning-2",
+        "query": "Có được rút súng sạc khi đang sạc qua bộ chuyển đổi không?",
+        "expected_route": "handbook",
+        "route": "handbook",
+        "expected_intent": "manual.search",
+        "intent": "manual.search",
+        "latency_ms": 0.03,
+        "error": null
+      },
+      {
+        "id": "vf8-child_seat-1",
+        "query": "Trẻ sơ sinh trên VF8 cần dùng loại ghế nào?",
+        "expected_route": "handbook",
+        "route": "handbook",
+        "expected_intent": "manual.search",
+        "intent": "manual.search",
+        "latency_ms": 0.91,
+        "error": null
+      },
+      {
+        "id": "vf8-child_seat-2",
+        "query": "Dây đai của người lớn có đủ để bảo vệ trẻ nhỏ không?",
+        "expected_route": "handbook",
+        "route": "handbook",
+        "expected_intent": "manual.search",
+        "intent": "manual.search",
+        "latency_ms": 0.04,
+        "error": null
+      },
+      {
+        "id": "vf8-mirror_control-1",
+        "query": "Cách điều chỉnh gương chiếu hậu bên ngoài VF8 như thế nào?",
+        "expected_route": "handbook",
+        "route": "handbook",
+        "expected_intent": "manual.search",
+        "intent": "manual.search",
+        "latency_ms": 0.03,
+        "error": null
+      },
+      {
+        "id": "vf8-mirror_control-2",
+        "query": "Muốn chỉnh gương bên thì dùng màn hình và nút nào?",
+        "expected_route": "handbook",
+        "route": "clarify",
+        "expected_intent": "manual.search",
+        "intent": "conversation.clarify",
+        "latency_ms": 0.14,
+        "error": null
+      },
+      {
+        "id": "vf8-starting_key-1",
+        "query": "Khởi động VF8 cần chìa khóa ở đâu?",
+        "expected_route": "handbook",
+        "route": "handbook",
+        "expected_intent": "manual.search",
+        "intent": "manual.search",
+        "latency_ms": 0.03,
+        "error": null
+      },
+      {
+        "id": "vf8-starting_key-2",
+        "query": "Xe VF8 có thể khởi động khi chìa khóa hợp lệ ở ngoài xe không?",
+        "expected_route": "handbook",
+        "route": "handbook",
+        "expected_intent": "manual.search",
+        "intent": "manual.search",
+        "latency_ms": 0.03,
+        "error": null
+      },
+      {
+        "id": "vf8-battery_12v-1",
+        "query": "Ắc quy 12V của VF8 có định mức bao nhiêu Ah?",
+        "expected_route": "handbook",
+        "route": "handbook",
+        "expected_intent": "manual.search",
+        "intent": "manual.search",
+        "latency_ms": 0.03,
+        "error": null
+      },
+      {
+        "id": "vf8-battery_12v-2",
+        "query": "Thông số định mức ắc quy thấp áp là gì?",
+        "expected_route": "handbook",
+        "route": "handbook",
+        "expected_intent": "manual.search",
+        "intent": "manual.search",
+        "latency_ms": 0.13,
+        "error": null
+      },
+      {
+        "id": "vf8-boundary-1",
+        "query": "Mở cửa sổ bên tài",
+        "expected_route": "action",
+        "route": "action",
+        "expected_intent": "window.set_position",
+        "intent": "window.set_position",
+        "latency_ms": 0.32,
+        "error": null
+      },
+      {
+        "id": "vf8-boundary-5",
+        "query": "Khóa tất cả cửa",
+        "expected_route": "action",
+        "route": "action",
+        "expected_intent": "door.set_lock",
+        "intent": "door.set_lock",
+        "latency_ms": 0.15,
+        "error": null
+      },
+      {
+        "id": "vf8-boundary-9",
+        "query": "Đạp phanh giúp tôi",
+        "expected_route": "unsupported",
+        "route": "unsupported",
+        "expected_intent": "vehicle.prohibited",
+        "intent": "vehicle.prohibited",
+        "latency_ms": 0.02,
+        "error": null
+      },
+      {
+        "id": "vf8-boundary-13",
+        "query": "Thời tiết hôm nay thế nào?",
+        "expected_route": "clarify",
+        "route": "clarify",
+        "expected_intent": "conversation.clarify",
+        "intent": "conversation.clarify",
+        "latency_ms": 0.04,
+        "error": null
+      },
+      {
+        "id": "vf8-boundary-17",
+        "query": "Mã nguồn firmware điều khiển pin VF8 là gì?",
+        "expected_route": "handbook",
+        "route": "handbook",
+        "expected_intent": "manual.search",
+        "intent": "manual.search",
+        "latency_ms": 0.03,
+        "error": null
+      }
+    ]
+  },
+  "answer_with_oracle_evidence": {
+    "reference_fact_coverage": 1.0,
+    "citation_reference_precision": 1.0,
+    "latency": {
+      "n": 14,
+      "p50_ms": 0.12,
+      "p95_ms": 0.32
+    },
+    "cases": [
+      {
+        "id": "vf8-window_control-1",
+        "abstained": false,
+        "answer": "Theo mục Đóng Mở và Khoang chứa đồ > Cửa sổ điện > Điều khiển cửa số điện: Cửa sổ điện của xe có thể được điều khiển bằng các công tắc cửa sổ điện, nằm trên cửa bên của người lái xe và cửa bên của hành khách. Cửa bên của người lái xe: Công tắc cửa sổ điện của người lái xe Công tắc cửa sổ điện hành khách phía trước Công tắc cửa sổ phía sau bên phải Công tắc cửa sổ phía sau bên trái Công tắc cửa sổ điện của người lái xe Công tắc cửa sổ điện hành khách phía trước Công tắc cửa sổ phía sau bên phải Công tắc cửa sổ phía sau bên trái Cửa bên hành khách: Để mở và đóng cửa sổ: Xác định vị trí các công tắc điều khiển cửa sổ trên cửa trước bên người lái xe hoặc cửa bên hành khách .",
+        "citation_valid": true,
+        "citations": [
+          {
+            "source_id": "vf-0d6263708252d33da182",
+            "title": "Cửa sổ điện",
+            "section_path": [
+              "Đóng Mở và Khoang chứa đồ",
+              "Cửa sổ điện",
+              "Điều khiển cửa số điện"
+            ],
+            "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266337"
+          }
+        ],
+        "reference_fact_coverage": 1.0,
+        "citation_reference_precision": 1.0,
+        "error": null,
+        "latency_ms": 0.32
+      },
+      {
+        "id": "vf8-window_control-2",
+        "abstained": false,
+        "answer": "Theo mục Đóng Mở và Khoang chứa đồ > Cửa sổ điện > Điều khiển cửa số điện: Cửa sổ điện của xe có thể được điều khiển bằng các công tắc cửa sổ điện, nằm trên cửa bên của người lái xe và cửa bên của hành khách. Cửa bên của người lái xe: Công tắc cửa sổ điện của người lái xe Công tắc cửa sổ điện hành khách phía trước Công tắc cửa sổ phía sau bên phải Công tắc cửa sổ phía sau bên trái Công tắc cửa sổ điện của người lái xe Công tắc cửa sổ điện hành khách phía trước Công tắc cửa sổ phía sau bên phải Công tắc cửa sổ phía sau bên trái Cửa bên hành khách: Để mở và đóng cửa sổ: Xác định vị trí các công tắc điều khiển cửa sổ trên cửa trước bên người lái xe hoặc cửa bên hành khách .",
+        "citation_valid": true,
+        "citations": [
+          {
+            "source_id": "vf-0d6263708252d33da182",
+            "title": "Cửa sổ điện",
+            "section_path": [
+              "Đóng Mở và Khoang chứa đồ",
+              "Cửa sổ điện",
+              "Điều khiển cửa số điện"
+            ],
+            "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266337"
+          }
+        ],
+        "reference_fact_coverage": 1.0,
+        "citation_reference_precision": 1.0,
+        "error": null,
+        "latency_ms": 0.22
+      },
+      {
+        "id": "vf8-rear_window_lock-1",
+        "abstained": false,
+        "answer": "Theo mục Đóng Mở và Khoang chứa đồ > Cửa sổ điện > Công tắc khóa cửa sổ điện: Nút công tắc khóa cửa sổ điện ngăn không cho hành khách ngồi phía sau điều khiển cửa sổ bằng cách tắt chức năng điều khiển cửa sổ điện hàng ghế sau. Điều này giúp cung cấp sự an toàn bổ sung cho trẻ em ngồi ở hàng ghế sau, những người có thể vô tình mở cửa sổ và ra khỏi xe khi xe đang di chuyển. LƯU Ý Bạn nên sử dụng công tắc khóa cửa sổ điện bất cứ khi nào trẻ em ngồi ở hàng ghế sau.",
+        "citation_valid": true,
+        "citations": [
+          {
+            "source_id": "vf-286bd74f224936f643ac",
+            "title": "Cửa sổ điện",
+            "section_path": [
+              "Đóng Mở và Khoang chứa đồ",
+              "Cửa sổ điện",
+              "Công tắc khóa cửa sổ điện"
+            ],
+            "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266337"
+          }
+        ],
+        "reference_fact_coverage": 1.0,
+        "citation_reference_precision": 1.0,
+        "error": null,
+        "latency_ms": 0.13
+      },
+      {
+        "id": "vf8-rear_window_lock-2",
+        "abstained": false,
+        "answer": "Theo mục Đóng Mở và Khoang chứa đồ > Cửa sổ điện > Công tắc khóa cửa sổ điện: Nút công tắc khóa cửa sổ điện ngăn không cho hành khách ngồi phía sau điều khiển cửa sổ bằng cách tắt chức năng điều khiển cửa sổ điện hàng ghế sau. Điều này giúp cung cấp sự an toàn bổ sung cho trẻ em ngồi ở hàng ghế sau, những người có thể vô tình mở cửa sổ và ra khỏi xe khi xe đang di chuyển. LƯU Ý Bạn nên sử dụng công tắc khóa cửa sổ điện bất cứ khi nào trẻ em ngồi ở hàng ghế sau.",
+        "citation_valid": true,
+        "citations": [
+          {
+            "source_id": "vf-286bd74f224936f643ac",
+            "title": "Cửa sổ điện",
+            "section_path": [
+              "Đóng Mở và Khoang chứa đồ",
+              "Cửa sổ điện",
+              "Công tắc khóa cửa sổ điện"
+            ],
+            "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266337"
+          }
+        ],
+        "reference_fact_coverage": 1.0,
+        "citation_reference_precision": 1.0,
+        "error": null,
+        "latency_ms": 0.12
+      },
+      {
+        "id": "vf8-charge_adapter_warning-1",
+        "abstained": false,
+        "answer": "Theo mục Pin và Sạc > Hướng dẫn sạc > Cổng sạc trên xe: CẢNH BÁO Khi sử dụng bộ chuyển đổi, xe sẽ không thể khóa tay cầm sạc (súng sạc). Do đó, tuyệt đối không được rút tay cầm sạc ra trong suốt quá trình sạc để đảm bảo an toàn.",
+        "citation_valid": true,
+        "citations": [
+          {
+            "source_id": "vf-24a9fb188d036e4527e0",
+            "title": "Hướng dẫn sạc",
+            "section_path": [
+              "Pin và Sạc",
+              "Hướng dẫn sạc",
+              "Cổng sạc trên xe"
+            ],
+            "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266370"
+          }
+        ],
+        "reference_fact_coverage": 1.0,
+        "citation_reference_precision": 1.0,
+        "error": null,
+        "latency_ms": 0.08
+      },
+      {
+        "id": "vf8-charge_adapter_warning-2",
+        "abstained": false,
+        "answer": "Theo mục Pin và Sạc > Hướng dẫn sạc > Cổng sạc trên xe: CẢNH BÁO Khi sử dụng bộ chuyển đổi, xe sẽ không thể khóa tay cầm sạc (súng sạc). Do đó, tuyệt đối không được rút tay cầm sạc ra trong suốt quá trình sạc để đảm bảo an toàn.",
+        "citation_valid": true,
+        "citations": [
+          {
+            "source_id": "vf-24a9fb188d036e4527e0",
+            "title": "Hướng dẫn sạc",
+            "section_path": [
+              "Pin và Sạc",
+              "Hướng dẫn sạc",
+              "Cổng sạc trên xe"
+            ],
+            "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266370"
+          }
+        ],
+        "reference_fact_coverage": 1.0,
+        "citation_reference_precision": 1.0,
+        "error": null,
+        "latency_ms": 0.07
+      },
+      {
+        "id": "vf8-child_seat-1",
+        "abstained": false,
+        "answer": "Theo mục Ghế và hệ thống an toàn > Ghế trẻ em > Tổng quan về ghế trẻ em (CRS): Dây đai an toàn được lắp trong xe được thiết kế phù hợp với người lớn và trẻ lớn. Trẻ nhỏ và trẻ sơ sinh phải được đảm bảo trong một Ghế An toàn Trẻ em (CRS) được chứng nhận phù hợp với độ tuổi, chiều cao và cân nặng của trẻ, và cho vị trí ghế mà trẻ lựa chọn. Không phải tất cả CRS đều an toàn để sử dụng ở tất cả các vị trí ghế (chi tiết hơn được cung cấp thêm dưới đây) Sử dụng theo thứ tự ưu tiên ghế ngoài của hàng ghế thứ hai, ghế trung tâm của hàng ghế thứ hai, và chỉ trong trường hợp cần thiết ghế hành khách phía trước để lắp CRS để chứa trẻ nhỏ và trẻ sơ sinh.",
+        "citation_valid": true,
+        "citations": [
+          {
+            "source_id": "vf-71737ffbe2c9e4c4b18a",
+            "title": "Ghế trẻ em",
+            "section_path": [
+              "Ghế và hệ thống an toàn",
+              "Ghế trẻ em",
+              "Tổng quan về ghế trẻ em (CRS)"
+            ],
+            "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266342"
+          }
+        ],
+        "reference_fact_coverage": 1.0,
+        "citation_reference_precision": 1.0,
+        "error": null,
+        "latency_ms": 0.18
+      },
+      {
+        "id": "vf8-child_seat-2",
+        "abstained": false,
+        "answer": "Theo mục Ghế và hệ thống an toàn > Ghế trẻ em > Tổng quan về ghế trẻ em (CRS): Dây đai an toàn được lắp trong xe được thiết kế phù hợp với người lớn và trẻ lớn. Trẻ nhỏ và trẻ sơ sinh phải được đảm bảo trong một Ghế An toàn Trẻ em (CRS) được chứng nhận phù hợp với độ tuổi, chiều cao và cân nặng của trẻ, và cho vị trí ghế mà trẻ lựa chọn. Không phải tất cả CRS đều an toàn để sử dụng ở tất cả các vị trí ghế (chi tiết hơn được cung cấp thêm dưới đây) Sử dụng theo thứ tự ưu tiên ghế ngoài của hàng ghế thứ hai, ghế trung tâm của hàng ghế thứ hai, và chỉ trong trường hợp cần thiết ghế hành khách phía trước để lắp CRS để chứa trẻ nhỏ và trẻ sơ sinh.",
+        "citation_valid": true,
+        "citations": [
+          {
+            "source_id": "vf-71737ffbe2c9e4c4b18a",
+            "title": "Ghế trẻ em",
+            "section_path": [
+              "Ghế và hệ thống an toàn",
+              "Ghế trẻ em",
+              "Tổng quan về ghế trẻ em (CRS)"
+            ],
+            "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266342"
+          }
+        ],
+        "reference_fact_coverage": 1.0,
+        "citation_reference_precision": 1.0,
+        "error": null,
+        "latency_ms": 0.17
+      },
+      {
+        "id": "vf8-mirror_control-1",
+        "abstained": false,
+        "answer": "Theo mục Lái xe > Gương > Điều chỉnh gương: Gương bên có thể được điều chỉnh bằng cách sử dụng các nút điều khiển trong Khu vực điều khiển xe trên màn hình trung tâm Chạm vào biểu tượng để mở bảng điều khiển công thái học. Chạm vào gương chiếu hậu bên ngoài . Chọn gương bên nào để điều chỉnh. Sử dụng cụm nút điều khiển bên trái trên vô lăng để điều chỉnh gương. Chạm vào Gập để gập các gương vào bên trong. LƯU Ý Các gương chiếu hậu bên ngoài chỉ có thể gập lại nếu tốc độ của xe dưới 16km/h (10 mph). Khi vị trí gương được thay đổi, một thông báo sẽ xuất hiện trên màn cho biết có lưu vị trí mới hay không. Chạm vào Lưu, và vị trí gương sẽ được lưu vào hồ sơ người dùng hiện tại.",
+        "citation_valid": true,
+        "citations": [
+          {
+            "source_id": "vf-ac6117205fa59dcdd10f",
+            "title": "Gương",
+            "section_path": [
+              "Lái xe",
+              "Gương",
+              "Điều chỉnh gương"
+            ],
+            "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266351"
+          }
+        ],
+        "reference_fact_coverage": 1.0,
+        "citation_reference_precision": 1.0,
+        "error": null,
+        "latency_ms": 0.17
+      },
+      {
+        "id": "vf8-mirror_control-2",
+        "abstained": false,
+        "answer": "Theo mục Lái xe > Gương > Điều chỉnh gương: Gương bên có thể được điều chỉnh bằng cách sử dụng các nút điều khiển trong Khu vực điều khiển xe trên màn hình trung tâm Chạm vào biểu tượng để mở bảng điều khiển công thái học. Chạm vào gương chiếu hậu bên ngoài . Chọn gương bên nào để điều chỉnh. Sử dụng cụm nút điều khiển bên trái trên vô lăng để điều chỉnh gương. Chạm vào Gập để gập các gương vào bên trong. LƯU Ý Các gương chiếu hậu bên ngoài chỉ có thể gập lại nếu tốc độ của xe dưới 16km/h (10 mph). Khi vị trí gương được thay đổi, một thông báo sẽ xuất hiện trên màn cho biết có lưu vị trí mới hay không. Chạm vào Lưu, và vị trí gương sẽ được lưu vào hồ sơ người dùng hiện tại.",
+        "citation_valid": true,
+        "citations": [
+          {
+            "source_id": "vf-ac6117205fa59dcdd10f",
+            "title": "Gương",
+            "section_path": [
+              "Lái xe",
+              "Gương",
+              "Điều chỉnh gương"
+            ],
+            "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266351"
+          }
+        ],
+        "reference_fact_coverage": 1.0,
+        "citation_reference_precision": 1.0,
+        "error": null,
+        "latency_ms": 0.16
+      },
+      {
+        "id": "vf8-starting_key-1",
+        "abstained": false,
+        "answer": "Theo mục Lái xe > Khởi động/dừng > Khởi động xe: Xe được trang bị công nghệ cho phép khởi động/tắt không cần chìa khóa. Phải có chìa khóa điều khiển từ xa hợp lệ bên trong xe để khởi động xe.",
+        "citation_valid": true,
+        "citations": [
+          {
+            "source_id": "vf-3329b85b8636f8da4ef8",
+            "title": "Khởi động/dừng",
+            "section_path": [
+              "Lái xe",
+              "Khởi động/dừng",
+              "Khởi động xe"
+            ],
+            "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266348"
+          }
+        ],
+        "reference_fact_coverage": 1.0,
+        "citation_reference_precision": 1.0,
+        "error": null,
+        "latency_ms": 0.06
+      },
+      {
+        "id": "vf8-starting_key-2",
+        "abstained": false,
+        "answer": "Theo mục Lái xe > Khởi động/dừng > Khởi động xe: Xe được trang bị công nghệ cho phép khởi động/tắt không cần chìa khóa. Phải có chìa khóa điều khiển từ xa hợp lệ bên trong xe để khởi động xe.",
+        "citation_valid": true,
+        "citations": [
+          {
+            "source_id": "vf-3329b85b8636f8da4ef8",
+            "title": "Khởi động/dừng",
+            "section_path": [
+              "Lái xe",
+              "Khởi động/dừng",
+              "Khởi động xe"
+            ],
+            "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266348"
+          }
+        ],
+        "reference_fact_coverage": 1.0,
+        "citation_reference_precision": 1.0,
+        "error": null,
+        "latency_ms": 0.06
+      },
+      {
+        "id": "vf8-battery_12v-1",
+        "abstained": false,
+        "answer": "Theo mục Thông số kỹ thuật > Thông số kỹ thuật > Ắc quy - 12V: Mô tả Chi tiết Định mức 45Ah Điện áp 12V Mô tả Chi tiết Định mức 45Ah Điện áp 12V",
+        "citation_valid": true,
+        "citations": [
+          {
+            "source_id": "vf-a8b4f0d68e85b84ce58f",
+            "title": "Thông số kỹ thuật",
+            "section_path": [
+              "Thông số kỹ thuật",
+              "Thông số kỹ thuật",
+              "Ắc quy - 12V"
+            ],
+            "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266381"
+          }
+        ],
+        "reference_fact_coverage": 1.0,
+        "citation_reference_precision": 1.0,
+        "error": null,
+        "latency_ms": 0.05
+      },
+      {
+        "id": "vf8-battery_12v-2",
+        "abstained": false,
+        "answer": "Theo mục Thông số kỹ thuật > Thông số kỹ thuật > Ắc quy - 12V: Mô tả Chi tiết Định mức 45Ah Điện áp 12V Mô tả Chi tiết Định mức 45Ah Điện áp 12V",
+        "citation_valid": true,
+        "citations": [
+          {
+            "source_id": "vf-a8b4f0d68e85b84ce58f",
+            "title": "Thông số kỹ thuật",
+            "section_path": [
+              "Thông số kỹ thuật",
+              "Thông số kỹ thuật",
+              "Ắc quy - 12V"
+            ],
+            "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266381"
+          }
+        ],
+        "reference_fact_coverage": 1.0,
+        "citation_reference_precision": 1.0,
+        "error": null,
+        "latency_ms": 0.04
+      }
+    ]
+  },
+  "retrieval": {
+    "fts": {
+      "recall_at_k": 0.7857,
+      "mrr_at_k": 0.5643,
+      "latency": {
+        "n": 15,
+        "p50_ms": 2.94,
+        "p95_ms": 5.31
+      },
+      "answer_with_retrieved_evidence": {
+        "reference_fact_coverage": 0.5357,
+        "citation_reference_precision": 0.4231,
+        "unanswerable_abstention_rate": 0,
+        "latency": {
+          "n": 15,
+          "p50_ms": 0.23,
+          "p95_ms": 0.32
+        }
+      },
+      "errors": 0,
+      "cases": [
+        {
+          "id": "vf8-window_control-1",
+          "query": "Cách điều khiển cửa sổ điện VF8 như thế nào?",
+          "answerable": true,
+          "retrieved_source_ids": [
+            "vf-59affa7f02a931fe08c4",
+            "vf-b18db172999a6fc309c2",
+            "vf-286bd74f224936f643ac",
+            "vf-4c48b6461d01825175b5",
+            "vf-0d6263708252d33da182"
+          ],
+          "semantic_similarities": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 0.2,
+          "latency_ms": 2.94,
+          "error": null,
+          "answer": {
+            "abstained": false,
+            "answer": "Theo mục Đóng Mở và Khoang chứa đồ > Cửa sổ điện > Điều khiển cửa số điện: CẢNH BÁO Trước khi đóng cửa sổ điện, đảm bảo rằng tất cả người trên xe, đặc biệt là trẻ em, không để lộ bất kỳ bộ phận cơ thể nào ra ngoài cửa sổ điện. Điều này có thể gây ra thương tích nghiêm trọng. Trong khi đóng cửa sổ điện, hãy kiểm tra các vật cản như đầu, tay, v.v. có thể dẫn đến thương tích cá nhân. Vì lý do an toàn, luôn bật khóa an toàn, nó có thể ngăn trẻ em vô tình sử dụng cửa sổ điện. Không cho phép trẻ em sử dụng cửa sổ điện. Không để chìa khóa bên trong xe. Không bao giờ đóng cửa sổ hoặc màn kéo che nắng một cách bất cẩn hoặc không kiểm soát được vì điều này có thể làm tăng nguy cơ chấn thương.",
+            "citation_valid": true,
+            "citations": [
+              {
+                "source_id": "vf-59affa7f02a931fe08c4",
+                "title": "Cửa sổ điện",
+                "section_path": [
+                  "Đóng Mở và Khoang chứa đồ",
+                  "Cửa sổ điện",
+                  "Điều khiển cửa số điện"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266337"
+              }
+            ],
+            "reference_fact_coverage": 0.5,
+            "citation_reference_precision": 0.0,
+            "error": null,
+            "latency_ms": 0.23
+          }
+        },
+        {
+          "id": "vf8-window_control-2",
+          "query": "Các nút chỉnh kính xe nằm ở đâu?",
+          "answerable": true,
+          "retrieved_source_ids": [
+            "vf-9c44b6d5d79cc7eefc02",
+            "vf-585e83fcf6ee0e520726",
+            "vf-0a57a555e140a8b05263",
+            "vf-bde00b9d71a0d0f0a59a",
+            "vf-04330847ce669b8da340"
+          ],
+          "semantic_similarities": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "recall_at_k": 0.0,
+          "reciprocal_rank": 0.0,
+          "latency_ms": 2.92,
+          "error": null,
+          "answer": {
+            "abstained": false,
+            "answer": "Theo mục Đóng Mở và Khoang chứa đồ > Khoang chứa đồ > Khoang chứa đồ phía trước: Khoang chứa đồ phía trước nằm ở đầu xe phía dưới nắp ca pô. Khoang hàng phía trước cung cấp chỗ để các kiện hành lý nhỏ hơn và cung cấp khả năng tiếp cận các vật dụng bảo dưỡng. Để mở Khoang chứa đồ phía trước: Xem > Khoang phía trước và phía sau > ; Nắp ca pô. Bình nước rửa kính Dung dịch làm mát Ắc quy 12V Hộp cầu chì Dầu phanh Bình nước rửa kính Dung dịch làm mát Ắc quy 12V Hộp cầu chì Dầu phanh Mở khoang chứa đồ phía trước khẩn cấp: Trong trường hợp khẩn cấp, có thể mở nắp ca pô bằng nút mở ở bên trong khoang chứa đồ phía trước. Nút mở nội thất cũng sáng đèn khi mở nắp ca pô và tắt khi đóng nắp ca pô.",
+            "citation_valid": true,
+            "citations": [
+              {
+                "source_id": "vf-9c44b6d5d79cc7eefc02",
+                "title": "Khoang chứa đồ",
+                "section_path": [
+                  "Đóng Mở và Khoang chứa đồ",
+                  "Khoang chứa đồ",
+                  "Khoang chứa đồ phía trước"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266338"
+              }
+            ],
+            "reference_fact_coverage": 0.0,
+            "citation_reference_precision": 0.0,
+            "error": null,
+            "latency_ms": 0.28
+          }
+        },
+        {
+          "id": "vf8-rear_window_lock-1",
+          "query": "Công tắc khóa cửa sổ điện dùng để làm gì?",
+          "answerable": true,
+          "retrieved_source_ids": [
+            "vf-7a84e0e5cf48aa936d9f",
+            "vf-286bd74f224936f643ac",
+            "vf-0d6263708252d33da182",
+            "vf-a1558ec30bedf09e6c20",
+            "vf-3ef359ed8c662a6b7f39"
+          ],
+          "semantic_similarities": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 0.5,
+          "latency_ms": 2.92,
+          "error": null,
+          "answer": {
+            "abstained": false,
+            "answer": "Theo mục Đóng Mở và Khoang chứa đồ > Cửa sổ điện > Công tắc khóa cửa sổ điện: CẢNH BÁO Khóa cửa sổ trẻ em phải luôn được sử dụng để tránh trẻ em vô tình mở cửa sổ phía sau và có khả năng rơi ra khi xe đang di chuyển. Để kích hoạt/hủy kích hoạt công tắc khóa cửa sổ điện: Nhấn nút để kích hoạt khóa cửa sổ điện phía sau. Đèn chỉ báo sẽ sáng. Để hủy kích hoạt, nhấn nút một lần nữa. Đèn chỉ báo sẽ tắt. LƯU Ý Đảm bảo đã bật công tắc khóa cửa sổ điện bằng cách kiểm tra chức năng thông qua công tắc cửa sổ điện phía sau. Theo mục Đóng Mở và Khoang chứa đồ > Cửa sổ điện > Công tắc khóa cửa sổ điện: Nút công tắc khóa cửa sổ điện ngăn không cho hành khách ngồi phía sau điều khiển cửa sổ bằng cách tắt ch",
+            "citation_valid": true,
+            "citations": [
+              {
+                "source_id": "vf-7a84e0e5cf48aa936d9f",
+                "title": "Cửa sổ điện",
+                "section_path": [
+                  "Đóng Mở và Khoang chứa đồ",
+                  "Cửa sổ điện",
+                  "Công tắc khóa cửa sổ điện"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266337"
+              },
+              {
+                "source_id": "vf-286bd74f224936f643ac",
+                "title": "Cửa sổ điện",
+                "section_path": [
+                  "Đóng Mở và Khoang chứa đồ",
+                  "Cửa sổ điện",
+                  "Công tắc khóa cửa sổ điện"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266337"
+              }
+            ],
+            "reference_fact_coverage": 0.5,
+            "citation_reference_precision": 0.5,
+            "error": null,
+            "latency_ms": 0.22
+          }
+        },
+        {
+          "id": "vf8-rear_window_lock-2",
+          "query": "Làm sao ngăn hành khách phía sau tự điều khiển cửa kính?",
+          "answerable": true,
+          "retrieved_source_ids": [
+            "vf-9cba27562d52106eee12",
+            "vf-2bb9bf2c6f3a3fb39bcf",
+            "vf-eda855a9fefded8e0b35",
+            "vf-0a57a555e140a8b05263",
+            "vf-616ad82a5d50bb5f487f"
+          ],
+          "semantic_similarities": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "recall_at_k": 0.0,
+          "reciprocal_rank": 0.0,
+          "latency_ms": 3.12,
+          "error": null,
+          "answer": {
+            "abstained": false,
+            "answer": "Theo mục Lái xe > Gạt nước rửa kính > Điều khiển gạt nước rửa kính phía sau: THẬN TRỌNG Trước khi sử dụng gạt nước rửa kính phía sau, hãy dọn sạch băng hoặc tuyết ra khỏi cửa sổ phía sau, nếu không, sẽ ngăn không cho lưỡi gạt nước rửa kính di chuyển. Việc này cũng có thể gây hỏng mô-tơ gạt nước rửa kính. Không sử dụng chất chống đông của bộ tản nhiệt trong ngăn chứa nước rửa kính chắn gió. Việc này có thể ảnh hưởng nghiêm trọng đến tầm nhìn khi xịt trên cửa sổ phía sau và có thể làm hỏng lớp sơn của xe. Theo mục Đóng Mở và Khoang chứa đồ > Cửa sổ điện > Điều khiển cửa số điện: THẬN TRỌNG Để tránh công tắc bị quá nhiệt do điện, hoạt động của cửa sổ điện tạm thời bị vô hiệu hóa nếu cửa sổ được",
+            "citation_valid": true,
+            "citations": [
+              {
+                "source_id": "vf-9cba27562d52106eee12",
+                "title": "Gạt nước rửa kính",
+                "section_path": [
+                  "Lái xe",
+                  "Gạt nước rửa kính",
+                  "Điều khiển gạt nước rửa kính phía sau"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266354"
+              },
+              {
+                "source_id": "vf-2bb9bf2c6f3a3fb39bcf",
+                "title": "Cửa sổ điện",
+                "section_path": [
+                  "Đóng Mở và Khoang chứa đồ",
+                  "Cửa sổ điện",
+                  "Điều khiển cửa số điện"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266337"
+              }
+            ],
+            "reference_fact_coverage": 0.0,
+            "citation_reference_precision": 0.0,
+            "error": null,
+            "latency_ms": 0.2
+          }
+        },
+        {
+          "id": "vf8-charge_adapter_warning-1",
+          "query": "Dùng bộ chuyển đổi sạc cần lưu ý gì?",
+          "answerable": true,
+          "retrieved_source_ids": [
+            "vf-f8ea25c8cf40b2765f3a",
+            "vf-45e650baa1af51ca3fce",
+            "vf-594eab14a2b54eecec16",
+            "vf-f4476fb5ba607af7ed27",
+            "vf-24a9fb188d036e4527e0"
+          ],
+          "semantic_similarities": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 0.2,
+          "latency_ms": 2.37,
+          "error": null,
+          "answer": {
+            "abstained": false,
+            "answer": "Theo mục Pin và Sạc > Hướng dẫn sạc > Cổng sạc trên xe: Xe này hỗ trợ Hệ thống Sạc Kết hợp (CCS). Tùy theo phiên bản xe, chuẩn CCS1 hoặc CCS2 sẽ được trang bị. Tay cầm sạc CCS1 Tay cầm sạc CCS2 LƯU Ý Nếu xe của bạn có cổng kết nối sạc không giống với loại đầu nối của thiết bị sạc hiện có, cần sử dụng bộ chuyển đổi như CCS1 sang CCS2 (hoặc ngược lại). Để đảm bảo an toàn, chỉ sử dụng bộ chuyển đổi chính hãng. Vui lòng liên hệ VinFast để được tư vấn và hỗ trợ lựa chọn bộ chuyển đổi phù hợp. Theo mục Pin và Sạc > Hướng dẫn sạc > Các vấn đề an toàn quan trọng liên quan đến sạc: WARNING Tiếp xúc với nguồn điện áp cao có thể dẫn đến thương tích nghiêm trọng hoặc tử vong.",
+            "citation_valid": true,
+            "citations": [
+              {
+                "source_id": "vf-f8ea25c8cf40b2765f3a",
+                "title": "Hướng dẫn sạc",
+                "section_path": [
+                  "Pin và Sạc",
+                  "Hướng dẫn sạc",
+                  "Cổng sạc trên xe"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266370"
+              },
+              {
+                "source_id": "vf-45e650baa1af51ca3fce",
+                "title": "Hướng dẫn sạc",
+                "section_path": [
+                  "Pin và Sạc",
+                  "Hướng dẫn sạc",
+                  "Các vấn đề an toàn quan trọng liên quan đến sạc"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266370"
+              }
+            ],
+            "reference_fact_coverage": 0.0,
+            "citation_reference_precision": 0.0,
+            "error": null,
+            "latency_ms": 0.23
+          }
+        },
+        {
+          "id": "vf8-charge_adapter_warning-2",
+          "query": "Có được rút súng sạc khi đang sạc qua bộ chuyển đổi không?",
+          "answerable": true,
+          "retrieved_source_ids": [
+            "vf-24a9fb188d036e4527e0",
+            "vf-8dc47457790ef6be7007",
+            "vf-7aa25a675ad751831940",
+            "vf-731761599bc8a01e7fa8",
+            "vf-45e650baa1af51ca3fce"
+          ],
+          "semantic_similarities": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "latency_ms": 3.81,
+          "error": null,
+          "answer": {
+            "abstained": false,
+            "answer": "Theo mục Pin và Sạc > Hướng dẫn sạc > Cổng sạc trên xe: CẢNH BÁO Khi sử dụng bộ chuyển đổi, xe sẽ không thể khóa tay cầm sạc (súng sạc). Do đó, tuyệt đối không được rút tay cầm sạc ra trong suốt quá trình sạc để đảm bảo an toàn. Theo mục Màn hình, Kết nối và Điều hòa > Điều hướng > Tự động bổ sung các trạm sạc dọc theo lộ trình: Hệ thống tự động thêm các trạm sạc vào lộ trình đã chọn nếu xác định tình trạng sạc sẽ không đủ để hoàn thành hành trình hoặc đáp ứng dung lượng pin tối thiểu do bạn chọn. Để bật Tự động thêm trạm sạc vào lộ trình: Chạm vào Cài đặt điều hướng > Tùy chọn tuyến đường . Chuyển đổi Tự động thêm trạm sạc để BẬT/TẮT tự động thêm các trạm sạc vào tuyến đường.",
+            "citation_valid": true,
+            "citations": [
+              {
+                "source_id": "vf-24a9fb188d036e4527e0",
+                "title": "Hướng dẫn sạc",
+                "section_path": [
+                  "Pin và Sạc",
+                  "Hướng dẫn sạc",
+                  "Cổng sạc trên xe"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266370"
+              },
+              {
+                "source_id": "vf-8dc47457790ef6be7007",
+                "title": "Điều hướng",
+                "section_path": [
+                  "Màn hình, Kết nối và Điều hòa",
+                  "Điều hướng",
+                  "Tự động bổ sung các trạm sạc dọc theo lộ trình"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266363"
+              }
+            ],
+            "reference_fact_coverage": 1.0,
+            "citation_reference_precision": 0.5,
+            "error": null,
+            "latency_ms": 0.29
+          }
+        },
+        {
+          "id": "vf8-child_seat-1",
+          "query": "Trẻ sơ sinh trên VF8 cần dùng loại ghế nào?",
+          "answerable": true,
+          "retrieved_source_ids": [
+            "vf-71737ffbe2c9e4c4b18a",
+            "vf-a66756e787e7a82cebbf",
+            "vf-5f4d797dc83fad763874",
+            "vf-763fd456597dbe5382d6",
+            "vf-7af9dc709655bc2e2754"
+          ],
+          "semantic_similarities": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "latency_ms": 3.43,
+          "error": null,
+          "answer": {
+            "abstained": false,
+            "answer": "Theo mục Ghế và hệ thống an toàn > Ghế trẻ em > Tổng quan về ghế trẻ em (CRS): Dây đai an toàn được lắp trong xe được thiết kế phù hợp với người lớn và trẻ lớn. Trẻ nhỏ và trẻ sơ sinh phải được đảm bảo trong một Ghế An toàn Trẻ em (CRS) được chứng nhận phù hợp với độ tuổi, chiều cao và cân nặng của trẻ, và cho vị trí ghế mà trẻ lựa chọn. Không phải tất cả CRS đều an toàn để sử dụng ở tất cả các vị trí ghế (chi tiết hơn được cung cấp thêm dưới đây) Sử dụng theo thứ tự ưu tiên ghế ngoài của hàng ghế thứ hai, ghế trung tâm của hàng ghế thứ hai, và chỉ trong trường hợp cần thiết ghế hành khách phía trước để lắp CRS để chứa trẻ nhỏ và trẻ sơ sinh.",
+            "citation_valid": true,
+            "citations": [
+              {
+                "source_id": "vf-71737ffbe2c9e4c4b18a",
+                "title": "Ghế trẻ em",
+                "section_path": [
+                  "Ghế và hệ thống an toàn",
+                  "Ghế trẻ em",
+                  "Tổng quan về ghế trẻ em (CRS)"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266342"
+              }
+            ],
+            "reference_fact_coverage": 1.0,
+            "citation_reference_precision": 1.0,
+            "error": null,
+            "latency_ms": 0.25
+          }
+        },
+        {
+          "id": "vf8-child_seat-2",
+          "query": "Dây đai của người lớn có đủ để bảo vệ trẻ nhỏ không?",
+          "answerable": true,
+          "retrieved_source_ids": [
+            "vf-a66756e787e7a82cebbf",
+            "vf-71737ffbe2c9e4c4b18a",
+            "vf-d317db5982bda3d288fc",
+            "vf-5eb7b5bbac472b36896a",
+            "vf-ae5b0c3d34ad9ac31064"
+          ],
+          "semantic_similarities": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 0.5,
+          "latency_ms": 5.31,
+          "error": null,
+          "answer": {
+            "abstained": false,
+            "answer": "Theo mục Ghế và hệ thống an toàn > Dây đai an toàn > Chỉ báo cảnh báo dây đai an toàn: t chặt một cách an toàn. Không tuân theo cảnh báo này có thể dẫn đến thương tích cá nhân nghiêm trọng hoặc tử vong. Trẻ em dưới 13 tuổi phải được ngồi ở ghế trẻ em và lắp đặt ở hàng ghế sau.Không tuân theo cảnh báo này có thể dẫn đến thương tích cá nhân nghiêm trọng hoặc tử vong. Không bao giờ cho phép trẻ em ngồi ở ghế hành khách phía trước, trừ khi túi khí đã bị vô hiệu hóa. Nếu trẻ em ngồi ở ghế hành khách phía trước, hãy di chuyển ghế càng xa về phía sau càng tốt và cho chúng ngồi trên ghế trẻ em. Theo mục Ghế và hệ thống an toàn > Ghế trẻ em > Tổng quan về ghế trẻ em (CRS): Dây đai an toàn được lắp tr",
+            "citation_valid": true,
+            "citations": [
+              {
+                "source_id": "vf-a66756e787e7a82cebbf",
+                "title": "Dây đai an toàn",
+                "section_path": [
+                  "Ghế và hệ thống an toàn",
+                  "Dây đai an toàn",
+                  "Chỉ báo cảnh báo dây đai an toàn"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266341"
+              },
+              {
+                "source_id": "vf-71737ffbe2c9e4c4b18a",
+                "title": "Ghế trẻ em",
+                "section_path": [
+                  "Ghế và hệ thống an toàn",
+                  "Ghế trẻ em",
+                  "Tổng quan về ghế trẻ em (CRS)"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266342"
+              }
+            ],
+            "reference_fact_coverage": 0.5,
+            "citation_reference_precision": 0.5,
+            "error": null,
+            "latency_ms": 0.32
+          }
+        },
+        {
+          "id": "vf8-mirror_control-1",
+          "query": "Cách điều chỉnh gương chiếu hậu bên ngoài VF8 như thế nào?",
+          "answerable": true,
+          "retrieved_source_ids": [
+            "vf-ac6117205fa59dcdd10f",
+            "vf-54dd7e2cff519d3e44d0",
+            "vf-efa7b60022ff893451b1",
+            "vf-14aac35d9364a7b21abb",
+            "vf-90bf58f81e262d67728a"
+          ],
+          "semantic_similarities": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "latency_ms": 3.06,
+          "error": null,
+          "answer": {
+            "abstained": false,
+            "answer": "Theo mục Lái xe > Gương > Điều chỉnh gương: Gương bên có thể được điều chỉnh bằng cách sử dụng các nút điều khiển trong Khu vực điều khiển xe trên màn hình trung tâm Chạm vào biểu tượng để mở bảng điều khiển công thái học. Chạm vào gương chiếu hậu bên ngoài . Chọn gương bên nào để điều chỉnh. Sử dụng cụm nút điều khiển bên trái trên vô lăng để điều chỉnh gương. Chạm vào Gập để gập các gương vào bên trong. LƯU Ý Các gương chiếu hậu bên ngoài chỉ có thể gập lại nếu tốc độ của xe dưới 16km/h (10 mph). Khi vị trí gương được thay đổi, một thông báo sẽ xuất hiện trên màn cho biết có lưu vị trí mới hay không. Chạm vào Lưu, và vị trí gương sẽ được lưu vào hồ sơ người dùng hiện tại.",
+            "citation_valid": true,
+            "citations": [
+              {
+                "source_id": "vf-ac6117205fa59dcdd10f",
+                "title": "Gương",
+                "section_path": [
+                  "Lái xe",
+                  "Gương",
+                  "Điều chỉnh gương"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266351"
+              }
+            ],
+            "reference_fact_coverage": 1.0,
+            "citation_reference_precision": 1.0,
+            "error": null,
+            "latency_ms": 0.24
+          }
+        },
+        {
+          "id": "vf8-mirror_control-2",
+          "query": "Muốn chỉnh gương bên thì dùng màn hình và nút nào?",
+          "answerable": true,
+          "retrieved_source_ids": [
+            "vf-ac6117205fa59dcdd10f",
+            "vf-efa7b60022ff893451b1",
+            "vf-4a77e702a3588c137ea0",
+            "vf-19da87fb62bf20eb5979",
+            "vf-14aac35d9364a7b21abb"
+          ],
+          "semantic_similarities": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "latency_ms": 3.35,
+          "error": null,
+          "answer": {
+            "abstained": false,
+            "answer": "Theo mục Lái xe > Gương > Điều chỉnh gương: Gương bên có thể được điều chỉnh bằng cách sử dụng các nút điều khiển trong Khu vực điều khiển xe trên màn hình trung tâm Chạm vào biểu tượng để mở bảng điều khiển công thái học. Chạm vào gương chiếu hậu bên ngoài . Chọn gương bên nào để điều chỉnh. Sử dụng cụm nút điều khiển bên trái trên vô lăng để điều chỉnh gương. Chạm vào Gập để gập các gương vào bên trong. LƯU Ý Các gương chiếu hậu bên ngoài chỉ có thể gập lại nếu tốc độ của xe dưới 16km/h (10 mph). Khi vị trí gương được thay đổi, một thông báo sẽ xuất hiện trên màn cho biết có lưu vị trí mới hay không. Chạm vào Lưu, và vị trí gương sẽ được lưu vào hồ sơ người dùng hiện tại.",
+            "citation_valid": true,
+            "citations": [
+              {
+                "source_id": "vf-ac6117205fa59dcdd10f",
+                "title": "Gương",
+                "section_path": [
+                  "Lái xe",
+                  "Gương",
+                  "Điều chỉnh gương"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266351"
+              }
+            ],
+            "reference_fact_coverage": 1.0,
+            "citation_reference_precision": 1.0,
+            "error": null,
+            "latency_ms": 0.26
+          }
+        },
+        {
+          "id": "vf8-starting_key-1",
+          "query": "Khởi động VF8 cần chìa khóa ở đâu?",
+          "answerable": true,
+          "retrieved_source_ids": [
+            "vf-0f0f86155b8abafe1c0b",
+            "vf-3329b85b8636f8da4ef8",
+            "vf-b534426b05d3d89ea8f3",
+            "vf-116853ed967456b8b7cb",
+            "vf-3fe52f84629d654250ef"
+          ],
+          "semantic_similarities": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 0.5,
+          "latency_ms": 2.66,
+          "error": null,
+          "answer": {
+            "abstained": false,
+            "answer": "Theo mục Lái xe > Khởi động/dừng > Thông tin chế độ khởi động của xe: Xe bao gồm ba chế độ khởi động chính: TẮT - xe đã TẮT nguồn và sẽ không có phụ kiện hoặc chế độ lái xe nào khả dụng. Phụ kiện (ACC) - chế độ điện phụ kiện đang hoạt động cho phép truy cập vào các tính năng thông tin giải trí của màn hình cảm ứng. BẬT (Sẵn sàng) - bật nguồn cả phụ kiện và các chế độ lái xe. Để Chuyển đổi từ TẮT sang ACC, cần đáp ứng một trong các tình huống sau: Xe được mở khóa thông qua chìa khóa điều khiển từ xa, ứng dụng VinFast hoặc chìa khóa cơ. Nhấn nút mở cửa thuận tiện trên tay nắm cửa bên ngoài. Cửa hậu điện được mở khóa thông qua chìa khóa điều khiển từ xa, nút bên ngoài hoặc cảm biến đá chân.",
+            "citation_valid": true,
+            "citations": [
+              {
+                "source_id": "vf-0f0f86155b8abafe1c0b",
+                "title": "Khởi động/dừng",
+                "section_path": [
+                  "Lái xe",
+                  "Khởi động/dừng",
+                  "Thông tin chế độ khởi động của xe"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266348"
+              }
+            ],
+            "reference_fact_coverage": 0.0,
+            "citation_reference_precision": 0.0,
+            "error": null,
+            "latency_ms": 0.32
+          }
+        },
+        {
+          "id": "vf8-starting_key-2",
+          "query": "Xe VF8 có thể khởi động khi chìa khóa hợp lệ ở ngoài xe không?",
+          "answerable": true,
+          "retrieved_source_ids": [
+            "vf-3329b85b8636f8da4ef8",
+            "vf-cc00646b02cd07fddada",
+            "vf-f1b6bd59e66961063660",
+            "vf-b41c4f44dbeb81a5be30",
+            "vf-0f0f86155b8abafe1c0b"
+          ],
+          "semantic_similarities": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "latency_ms": 4.36,
+          "error": null,
+          "answer": {
+            "abstained": false,
+            "answer": "Theo mục Lái xe > Khởi động/dừng > Khởi động xe: Xe được trang bị công nghệ cho phép khởi động/tắt không cần chìa khóa. Phải có chìa khóa điều khiển từ xa hợp lệ bên trong xe để khởi động xe. Theo mục Đóng Mở và Khoang chứa đồ > Hệ thống bảo vệ xe > Vận hành hệ thống mã hóa động cơ của xe: Hệ thống mã hóa động cơ sẽ tự động bật khi xe ở trạng thái khóa. Đèn báo hệ thống mã hóa động cơ sẽ được hiển thị ngắn gọn trên màn hình cảm ứng. Khi hệ thống mã hóa động cơ phát hiện chìa khoá điều khiển từ xa hợp lệ, đèn báo sẽ tự động tắt. Nếu hệ thống không nhận diện được chìa khoá điều khiển từ xa hợp lệ đèn báo sẽ nhấp nháy và ngăn không cho xe khởi động.",
+            "citation_valid": true,
+            "citations": [
+              {
+                "source_id": "vf-3329b85b8636f8da4ef8",
+                "title": "Khởi động/dừng",
+                "section_path": [
+                  "Lái xe",
+                  "Khởi động/dừng",
+                  "Khởi động xe"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266348"
+              },
+              {
+                "source_id": "vf-cc00646b02cd07fddada",
+                "title": "Hệ thống bảo vệ xe",
+                "section_path": [
+                  "Đóng Mở và Khoang chứa đồ",
+                  "Hệ thống bảo vệ xe",
+                  "Vận hành hệ thống mã hóa động cơ của xe"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266339"
+              }
+            ],
+            "reference_fact_coverage": 1.0,
+            "citation_reference_precision": 0.5,
+            "error": null,
+            "latency_ms": 0.23
+          }
+        },
+        {
+          "id": "vf8-battery_12v-1",
+          "query": "Ắc quy 12V của VF8 có định mức bao nhiêu Ah?",
+          "answerable": true,
+          "retrieved_source_ids": [
+            "vf-a8b4f0d68e85b84ce58f",
+            "vf-2681a20c11de3074f27f",
+            "vf-184dab0f331cb17a40bc",
+            "vf-02135603b28de932287d",
+            "vf-d019aa3793272e5e2009"
+          ],
+          "semantic_similarities": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "latency_ms": 2.79,
+          "error": null,
+          "answer": {
+            "abstained": false,
+            "answer": "Theo mục Thông số kỹ thuật > Thông số kỹ thuật > Ắc quy - 12V: Mô tả Chi tiết Định mức 45Ah Điện áp 12V Mô tả Chi tiết Định mức 45Ah Điện áp 12V Theo mục Bảo dưỡng > Hệ thống điện > Ắc quy 12V: THẬN TRỌNG Luôn đọc và làm theo hướng dẫn cẩn thận khi xử lý ắc quy 12V. Không sử dụng ắc quy 12V làm nguồn điện cố định. Làm như vậy sẽ làm mất hiệu lực bảo hành.",
+            "citation_valid": true,
+            "citations": [
+              {
+                "source_id": "vf-a8b4f0d68e85b84ce58f",
+                "title": "Thông số kỹ thuật",
+                "section_path": [
+                  "Thông số kỹ thuật",
+                  "Thông số kỹ thuật",
+                  "Ắc quy - 12V"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266381"
+              },
+              {
+                "source_id": "vf-2681a20c11de3074f27f",
+                "title": "Hệ thống điện",
+                "section_path": [
+                  "Bảo dưỡng",
+                  "Hệ thống điện",
+                  "Ắc quy 12V"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266374"
+              }
+            ],
+            "reference_fact_coverage": 1.0,
+            "citation_reference_precision": 0.5,
+            "error": null,
+            "latency_ms": 0.13
+          }
+        },
+        {
+          "id": "vf8-battery_12v-2",
+          "query": "Thông số định mức ắc quy thấp áp là gì?",
+          "answerable": true,
+          "retrieved_source_ids": [],
+          "semantic_similarities": [],
+          "recall_at_k": 0.0,
+          "reciprocal_rank": 0.0,
+          "latency_ms": 0.02,
+          "error": null,
+          "answer": {
+            "abstained": true,
+            "answer": "Không đủ bằng chứng.",
+            "citation_valid": true,
+            "reference_fact_coverage": 0.0,
+            "citation_reference_precision": null,
+            "latency_ms": 0.0,
+            "error": null
+          }
+        },
+        {
+          "id": "vf8-boundary-17",
+          "query": "Mã nguồn firmware điều khiển pin VF8 là gì?",
+          "answerable": false,
+          "retrieved_source_ids": [
+            "vf-286a448e844d19e2f0f5",
+            "vf-ae3164ed374a2f3b6284",
+            "vf-d84b09a180ec33416312",
+            "vf-4eecfb81cedb09c5f44c",
+            "vf-071305c0ca8b5e1ff5c7"
+          ],
+          "semantic_similarities": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "recall_at_k": null,
+          "reciprocal_rank": null,
+          "latency_ms": 2.06,
+          "error": null,
+          "answer": {
+            "abstained": false,
+            "answer": "Theo mục Màn hình, Kết nối và Điều hòa > Màn hình cảm ứng > Hủy kích hoạt: Chế độ người lạ có thể được hủy kích hoạt bằng bất kỳ phương pháp nào sau đây: Bằng cách sử dụng mã PIN Chế độ Người lạ. Để hủy kích hoạt bằng cách sử dụng mã PIN Chế độ Người lạ: Chạm vào Người lạ > Thoát chế độ người lạ. HOẶC Chạm vào Thoát Chế độ người lạ . Nhập mã PIN hợp lệ. Theo mục Màn hình, Kết nối và Điều hòa > Màn hình cảm ứng > Xác thực: Trang này cung cấp quyền truy cập vào các cài đặt sau: PIN Liên kết chìa khóa điều khiển từ xa (nếu được trang bị) Để cài đặt PIN: Chạm vào Cài đặt . Nhập Mã PIN 6 chữ số. Để đặt lại/xóa mã PIN: Chạm vào Đặt lại/xóa mã PIN . Nhập mã PIN để xác nhận.",
+            "citation_valid": true,
+            "citations": [
+              {
+                "source_id": "vf-286a448e844d19e2f0f5",
+                "title": "Màn hình cảm ứng",
+                "section_path": [
+                  "Màn hình, Kết nối và Điều hòa",
+                  "Màn hình cảm ứng",
+                  "Hủy kích hoạt"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266359"
+              },
+              {
+                "source_id": "vf-ae3164ed374a2f3b6284",
+                "title": "Màn hình cảm ứng",
+                "section_path": [
+                  "Màn hình, Kết nối và Điều hòa",
+                  "Màn hình cảm ứng",
+                  "Xác thực"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266359"
+              }
+            ],
+            "reference_fact_coverage": null,
+            "citation_reference_precision": null,
+            "error": null,
+            "latency_ms": 0.05
+          }
+        }
+      ]
+    },
+    "fts_local": {
+      "recall_at_k": 0.7857,
+      "mrr_at_k": 0.5524,
+      "latency": {
+        "n": 15,
+        "p50_ms": 3.96,
+        "p95_ms": 5.54
+      },
+      "answer_with_retrieved_evidence": {
+        "reference_fact_coverage": 0.5357,
+        "citation_reference_precision": 0.4231,
+        "unanswerable_abstention_rate": 0,
+        "latency": {
+          "n": 15,
+          "p50_ms": 0.29,
+          "p95_ms": 0.45
+        }
+      },
+      "errors": 0,
+      "cases": [
+        {
+          "id": "vf8-window_control-1",
+          "query": "Cách điều khiển cửa sổ điện VF8 như thế nào?",
+          "answerable": true,
+          "retrieved_source_ids": [
+            "vf-59affa7f02a931fe08c4",
+            "vf-b18db172999a6fc309c2",
+            "vf-286bd74f224936f643ac",
+            "vf-4c48b6461d01825175b5",
+            "vf-0d6263708252d33da182"
+          ],
+          "semantic_similarities": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 0.2,
+          "latency_ms": 3.37,
+          "error": null,
+          "answer": {
+            "abstained": false,
+            "answer": "Theo mục Đóng Mở và Khoang chứa đồ > Cửa sổ điện > Điều khiển cửa số điện: CẢNH BÁO Trước khi đóng cửa sổ điện, đảm bảo rằng tất cả người trên xe, đặc biệt là trẻ em, không để lộ bất kỳ bộ phận cơ thể nào ra ngoài cửa sổ điện. Điều này có thể gây ra thương tích nghiêm trọng. Trong khi đóng cửa sổ điện, hãy kiểm tra các vật cản như đầu, tay, v.v. có thể dẫn đến thương tích cá nhân. Vì lý do an toàn, luôn bật khóa an toàn, nó có thể ngăn trẻ em vô tình sử dụng cửa sổ điện. Không cho phép trẻ em sử dụng cửa sổ điện. Không để chìa khóa bên trong xe. Không bao giờ đóng cửa sổ hoặc màn kéo che nắng một cách bất cẩn hoặc không kiểm soát được vì điều này có thể làm tăng nguy cơ chấn thương.",
+            "citation_valid": true,
+            "citations": [
+              {
+                "source_id": "vf-59affa7f02a931fe08c4",
+                "title": "Cửa sổ điện",
+                "section_path": [
+                  "Đóng Mở và Khoang chứa đồ",
+                  "Cửa sổ điện",
+                  "Điều khiển cửa số điện"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266337"
+              }
+            ],
+            "reference_fact_coverage": 0.5,
+            "citation_reference_precision": 0.0,
+            "error": null,
+            "latency_ms": 0.38
+          }
+        },
+        {
+          "id": "vf8-window_control-2",
+          "query": "Các nút chỉnh kính xe nằm ở đâu?",
+          "answerable": true,
+          "retrieved_source_ids": [
+            "vf-9c44b6d5d79cc7eefc02",
+            "vf-585e83fcf6ee0e520726",
+            "vf-0a57a555e140a8b05263",
+            "vf-bde00b9d71a0d0f0a59a",
+            "vf-04330847ce669b8da340"
+          ],
+          "semantic_similarities": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "recall_at_k": 0.0,
+          "reciprocal_rank": 0.0,
+          "latency_ms": 4.34,
+          "error": null,
+          "answer": {
+            "abstained": false,
+            "answer": "Theo mục Đóng Mở và Khoang chứa đồ > Khoang chứa đồ > Khoang chứa đồ phía trước: Khoang chứa đồ phía trước nằm ở đầu xe phía dưới nắp ca pô. Khoang hàng phía trước cung cấp chỗ để các kiện hành lý nhỏ hơn và cung cấp khả năng tiếp cận các vật dụng bảo dưỡng. Để mở Khoang chứa đồ phía trước: Xem > Khoang phía trước và phía sau > ; Nắp ca pô. Bình nước rửa kính Dung dịch làm mát Ắc quy 12V Hộp cầu chì Dầu phanh Bình nước rửa kính Dung dịch làm mát Ắc quy 12V Hộp cầu chì Dầu phanh Mở khoang chứa đồ phía trước khẩn cấp: Trong trường hợp khẩn cấp, có thể mở nắp ca pô bằng nút mở ở bên trong khoang chứa đồ phía trước. Nút mở nội thất cũng sáng đèn khi mở nắp ca pô và tắt khi đóng nắp ca pô.",
+            "citation_valid": true,
+            "citations": [
+              {
+                "source_id": "vf-9c44b6d5d79cc7eefc02",
+                "title": "Khoang chứa đồ",
+                "section_path": [
+                  "Đóng Mở và Khoang chứa đồ",
+                  "Khoang chứa đồ",
+                  "Khoang chứa đồ phía trước"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266338"
+              }
+            ],
+            "reference_fact_coverage": 0.0,
+            "citation_reference_precision": 0.0,
+            "error": null,
+            "latency_ms": 0.37
+          }
+        },
+        {
+          "id": "vf8-rear_window_lock-1",
+          "query": "Công tắc khóa cửa sổ điện dùng để làm gì?",
+          "answerable": true,
+          "retrieved_source_ids": [
+            "vf-7a84e0e5cf48aa936d9f",
+            "vf-286bd74f224936f643ac",
+            "vf-0d6263708252d33da182",
+            "vf-5ef8b1e7120149d8fc2c-p1",
+            "vf-a1558ec30bedf09e6c20"
+          ],
+          "semantic_similarities": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 0.5,
+          "latency_ms": 4.96,
+          "error": null,
+          "answer": {
+            "abstained": false,
+            "answer": "Theo mục Đóng Mở và Khoang chứa đồ > Cửa sổ điện > Công tắc khóa cửa sổ điện: CẢNH BÁO Khóa cửa sổ trẻ em phải luôn được sử dụng để tránh trẻ em vô tình mở cửa sổ phía sau và có khả năng rơi ra khi xe đang di chuyển. Để kích hoạt/hủy kích hoạt công tắc khóa cửa sổ điện: Nhấn nút để kích hoạt khóa cửa sổ điện phía sau. Đèn chỉ báo sẽ sáng. Để hủy kích hoạt, nhấn nút một lần nữa. Đèn chỉ báo sẽ tắt. LƯU Ý Đảm bảo đã bật công tắc khóa cửa sổ điện bằng cách kiểm tra chức năng thông qua công tắc cửa sổ điện phía sau. Theo mục Đóng Mở và Khoang chứa đồ > Cửa sổ điện > Công tắc khóa cửa sổ điện: Nút công tắc khóa cửa sổ điện ngăn không cho hành khách ngồi phía sau điều khiển cửa sổ bằng cách tắt ch",
+            "citation_valid": true,
+            "citations": [
+              {
+                "source_id": "vf-7a84e0e5cf48aa936d9f",
+                "title": "Cửa sổ điện",
+                "section_path": [
+                  "Đóng Mở và Khoang chứa đồ",
+                  "Cửa sổ điện",
+                  "Công tắc khóa cửa sổ điện"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266337"
+              },
+              {
+                "source_id": "vf-286bd74f224936f643ac",
+                "title": "Cửa sổ điện",
+                "section_path": [
+                  "Đóng Mở và Khoang chứa đồ",
+                  "Cửa sổ điện",
+                  "Công tắc khóa cửa sổ điện"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266337"
+              }
+            ],
+            "reference_fact_coverage": 0.5,
+            "citation_reference_precision": 0.5,
+            "error": null,
+            "latency_ms": 0.39
+          }
+        },
+        {
+          "id": "vf8-rear_window_lock-2",
+          "query": "Làm sao ngăn hành khách phía sau tự điều khiển cửa kính?",
+          "answerable": true,
+          "retrieved_source_ids": [
+            "vf-9cba27562d52106eee12",
+            "vf-2bb9bf2c6f3a3fb39bcf",
+            "vf-eda855a9fefded8e0b35",
+            "vf-0a57a555e140a8b05263",
+            "vf-616ad82a5d50bb5f487f"
+          ],
+          "semantic_similarities": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "recall_at_k": 0.0,
+          "reciprocal_rank": 0.0,
+          "latency_ms": 3.96,
+          "error": null,
+          "answer": {
+            "abstained": false,
+            "answer": "Theo mục Lái xe > Gạt nước rửa kính > Điều khiển gạt nước rửa kính phía sau: THẬN TRỌNG Trước khi sử dụng gạt nước rửa kính phía sau, hãy dọn sạch băng hoặc tuyết ra khỏi cửa sổ phía sau, nếu không, sẽ ngăn không cho lưỡi gạt nước rửa kính di chuyển. Việc này cũng có thể gây hỏng mô-tơ gạt nước rửa kính. Không sử dụng chất chống đông của bộ tản nhiệt trong ngăn chứa nước rửa kính chắn gió. Việc này có thể ảnh hưởng nghiêm trọng đến tầm nhìn khi xịt trên cửa sổ phía sau và có thể làm hỏng lớp sơn của xe. Theo mục Đóng Mở và Khoang chứa đồ > Cửa sổ điện > Điều khiển cửa số điện: THẬN TRỌNG Để tránh công tắc bị quá nhiệt do điện, hoạt động của cửa sổ điện tạm thời bị vô hiệu hóa nếu cửa sổ được",
+            "citation_valid": true,
+            "citations": [
+              {
+                "source_id": "vf-9cba27562d52106eee12",
+                "title": "Gạt nước rửa kính",
+                "section_path": [
+                  "Lái xe",
+                  "Gạt nước rửa kính",
+                  "Điều khiển gạt nước rửa kính phía sau"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266354"
+              },
+              {
+                "source_id": "vf-2bb9bf2c6f3a3fb39bcf",
+                "title": "Cửa sổ điện",
+                "section_path": [
+                  "Đóng Mở và Khoang chứa đồ",
+                  "Cửa sổ điện",
+                  "Điều khiển cửa số điện"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266337"
+              }
+            ],
+            "reference_fact_coverage": 0.0,
+            "citation_reference_precision": 0.0,
+            "error": null,
+            "latency_ms": 0.41
+          }
+        },
+        {
+          "id": "vf8-charge_adapter_warning-1",
+          "query": "Dùng bộ chuyển đổi sạc cần lưu ý gì?",
+          "answerable": true,
+          "retrieved_source_ids": [
+            "vf-f8ea25c8cf40b2765f3a",
+            "vf-45e650baa1af51ca3fce",
+            "vf-594eab14a2b54eecec16",
+            "vf-f4476fb5ba607af7ed27",
+            "vf-24a9fb188d036e4527e0"
+          ],
+          "semantic_similarities": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 0.2,
+          "latency_ms": 5.24,
+          "error": null,
+          "answer": {
+            "abstained": false,
+            "answer": "Theo mục Pin và Sạc > Hướng dẫn sạc > Cổng sạc trên xe: Xe này hỗ trợ Hệ thống Sạc Kết hợp (CCS). Tùy theo phiên bản xe, chuẩn CCS1 hoặc CCS2 sẽ được trang bị. Tay cầm sạc CCS1 Tay cầm sạc CCS2 LƯU Ý Nếu xe của bạn có cổng kết nối sạc không giống với loại đầu nối của thiết bị sạc hiện có, cần sử dụng bộ chuyển đổi như CCS1 sang CCS2 (hoặc ngược lại). Để đảm bảo an toàn, chỉ sử dụng bộ chuyển đổi chính hãng. Vui lòng liên hệ VinFast để được tư vấn và hỗ trợ lựa chọn bộ chuyển đổi phù hợp. Theo mục Pin và Sạc > Hướng dẫn sạc > Các vấn đề an toàn quan trọng liên quan đến sạc: WARNING Tiếp xúc với nguồn điện áp cao có thể dẫn đến thương tích nghiêm trọng hoặc tử vong.",
+            "citation_valid": true,
+            "citations": [
+              {
+                "source_id": "vf-f8ea25c8cf40b2765f3a",
+                "title": "Hướng dẫn sạc",
+                "section_path": [
+                  "Pin và Sạc",
+                  "Hướng dẫn sạc",
+                  "Cổng sạc trên xe"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266370"
+              },
+              {
+                "source_id": "vf-45e650baa1af51ca3fce",
+                "title": "Hướng dẫn sạc",
+                "section_path": [
+                  "Pin và Sạc",
+                  "Hướng dẫn sạc",
+                  "Các vấn đề an toàn quan trọng liên quan đến sạc"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266370"
+              }
+            ],
+            "reference_fact_coverage": 0.0,
+            "citation_reference_precision": 0.0,
+            "error": null,
+            "latency_ms": 0.45
+          }
+        },
+        {
+          "id": "vf8-charge_adapter_warning-2",
+          "query": "Có được rút súng sạc khi đang sạc qua bộ chuyển đổi không?",
+          "answerable": true,
+          "retrieved_source_ids": [
+            "vf-24a9fb188d036e4527e0",
+            "vf-8dc47457790ef6be7007",
+            "vf-7aa25a675ad751831940-p1",
+            "vf-731761599bc8a01e7fa8",
+            "vf-45e650baa1af51ca3fce"
+          ],
+          "semantic_similarities": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "latency_ms": 5.54,
+          "error": null,
+          "answer": {
+            "abstained": false,
+            "answer": "Theo mục Pin và Sạc > Hướng dẫn sạc > Cổng sạc trên xe: CẢNH BÁO Khi sử dụng bộ chuyển đổi, xe sẽ không thể khóa tay cầm sạc (súng sạc). Do đó, tuyệt đối không được rút tay cầm sạc ra trong suốt quá trình sạc để đảm bảo an toàn. Theo mục Màn hình, Kết nối và Điều hòa > Điều hướng > Tự động bổ sung các trạm sạc dọc theo lộ trình: Hệ thống tự động thêm các trạm sạc vào lộ trình đã chọn nếu xác định tình trạng sạc sẽ không đủ để hoàn thành hành trình hoặc đáp ứng dung lượng pin tối thiểu do bạn chọn. Để bật Tự động thêm trạm sạc vào lộ trình: Chạm vào Cài đặt điều hướng > Tùy chọn tuyến đường . Chuyển đổi Tự động thêm trạm sạc để BẬT/TẮT tự động thêm các trạm sạc vào tuyến đường.",
+            "citation_valid": true,
+            "citations": [
+              {
+                "source_id": "vf-24a9fb188d036e4527e0",
+                "title": "Hướng dẫn sạc",
+                "section_path": [
+                  "Pin và Sạc",
+                  "Hướng dẫn sạc",
+                  "Cổng sạc trên xe"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266370"
+              },
+              {
+                "source_id": "vf-8dc47457790ef6be7007",
+                "title": "Điều hướng",
+                "section_path": [
+                  "Màn hình, Kết nối và Điều hòa",
+                  "Điều hướng",
+                  "Tự động bổ sung các trạm sạc dọc theo lộ trình"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266363"
+              }
+            ],
+            "reference_fact_coverage": 1.0,
+            "citation_reference_precision": 0.5,
+            "error": null,
+            "latency_ms": 0.4
+          }
+        },
+        {
+          "id": "vf8-child_seat-1",
+          "query": "Trẻ sơ sinh trên VF8 cần dùng loại ghế nào?",
+          "answerable": true,
+          "retrieved_source_ids": [
+            "vf-71737ffbe2c9e4c4b18a",
+            "vf-a66756e787e7a82cebbf",
+            "vf-763fd456597dbe5382d6-p1",
+            "vf-5f4d797dc83fad763874-p1",
+            "vf-7af9dc709655bc2e2754-p1"
+          ],
+          "semantic_similarities": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "latency_ms": 4.43,
+          "error": null,
+          "answer": {
+            "abstained": false,
+            "answer": "Theo mục Ghế và hệ thống an toàn > Ghế trẻ em > Tổng quan về ghế trẻ em (CRS): Dây đai an toàn được lắp trong xe được thiết kế phù hợp với người lớn và trẻ lớn. Trẻ nhỏ và trẻ sơ sinh phải được đảm bảo trong một Ghế An toàn Trẻ em (CRS) được chứng nhận phù hợp với độ tuổi, chiều cao và cân nặng của trẻ, và cho vị trí ghế mà trẻ lựa chọn. Không phải tất cả CRS đều an toàn để sử dụng ở tất cả các vị trí ghế (chi tiết hơn được cung cấp thêm dưới đây) Sử dụng theo thứ tự ưu tiên ghế ngoài của hàng ghế thứ hai, ghế trung tâm của hàng ghế thứ hai, và chỉ trong trường hợp cần thiết ghế hành khách phía trước để lắp CRS để chứa trẻ nhỏ và trẻ sơ sinh.",
+            "citation_valid": true,
+            "citations": [
+              {
+                "source_id": "vf-71737ffbe2c9e4c4b18a",
+                "title": "Ghế trẻ em",
+                "section_path": [
+                  "Ghế và hệ thống an toàn",
+                  "Ghế trẻ em",
+                  "Tổng quan về ghế trẻ em (CRS)"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266342"
+              }
+            ],
+            "reference_fact_coverage": 1.0,
+            "citation_reference_precision": 1.0,
+            "error": null,
+            "latency_ms": 0.38
+          }
+        },
+        {
+          "id": "vf8-child_seat-2",
+          "query": "Dây đai của người lớn có đủ để bảo vệ trẻ nhỏ không?",
+          "answerable": true,
+          "retrieved_source_ids": [
+            "vf-a66756e787e7a82cebbf",
+            "vf-71737ffbe2c9e4c4b18a",
+            "vf-d317db5982bda3d288fc",
+            "vf-763fd456597dbe5382d6-p2",
+            "vf-5eb7b5bbac472b36896a"
+          ],
+          "semantic_similarities": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 0.5,
+          "latency_ms": 4.51,
+          "error": null,
+          "answer": {
+            "abstained": false,
+            "answer": "Theo mục Ghế và hệ thống an toàn > Dây đai an toàn > Chỉ báo cảnh báo dây đai an toàn: t chặt một cách an toàn. Không tuân theo cảnh báo này có thể dẫn đến thương tích cá nhân nghiêm trọng hoặc tử vong. Trẻ em dưới 13 tuổi phải được ngồi ở ghế trẻ em và lắp đặt ở hàng ghế sau.Không tuân theo cảnh báo này có thể dẫn đến thương tích cá nhân nghiêm trọng hoặc tử vong. Không bao giờ cho phép trẻ em ngồi ở ghế hành khách phía trước, trừ khi túi khí đã bị vô hiệu hóa. Nếu trẻ em ngồi ở ghế hành khách phía trước, hãy di chuyển ghế càng xa về phía sau càng tốt và cho chúng ngồi trên ghế trẻ em. Theo mục Ghế và hệ thống an toàn > Ghế trẻ em > Tổng quan về ghế trẻ em (CRS): Dây đai an toàn được lắp tr",
+            "citation_valid": true,
+            "citations": [
+              {
+                "source_id": "vf-a66756e787e7a82cebbf",
+                "title": "Dây đai an toàn",
+                "section_path": [
+                  "Ghế và hệ thống an toàn",
+                  "Dây đai an toàn",
+                  "Chỉ báo cảnh báo dây đai an toàn"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266341"
+              },
+              {
+                "source_id": "vf-71737ffbe2c9e4c4b18a",
+                "title": "Ghế trẻ em",
+                "section_path": [
+                  "Ghế và hệ thống an toàn",
+                  "Ghế trẻ em",
+                  "Tổng quan về ghế trẻ em (CRS)"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266342"
+              }
+            ],
+            "reference_fact_coverage": 0.5,
+            "citation_reference_precision": 0.5,
+            "error": null,
+            "latency_ms": 0.28
+          }
+        },
+        {
+          "id": "vf8-mirror_control-1",
+          "query": "Cách điều chỉnh gương chiếu hậu bên ngoài VF8 như thế nào?",
+          "answerable": true,
+          "retrieved_source_ids": [
+            "vf-ac6117205fa59dcdd10f",
+            "vf-54dd7e2cff519d3e44d0",
+            "vf-efa7b60022ff893451b1",
+            "vf-14aac35d9364a7b21abb",
+            "vf-90bf58f81e262d67728a"
+          ],
+          "semantic_similarities": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "latency_ms": 3.52,
+          "error": null,
+          "answer": {
+            "abstained": false,
+            "answer": "Theo mục Lái xe > Gương > Điều chỉnh gương: Gương bên có thể được điều chỉnh bằng cách sử dụng các nút điều khiển trong Khu vực điều khiển xe trên màn hình trung tâm Chạm vào biểu tượng để mở bảng điều khiển công thái học. Chạm vào gương chiếu hậu bên ngoài . Chọn gương bên nào để điều chỉnh. Sử dụng cụm nút điều khiển bên trái trên vô lăng để điều chỉnh gương. Chạm vào Gập để gập các gương vào bên trong. LƯU Ý Các gương chiếu hậu bên ngoài chỉ có thể gập lại nếu tốc độ của xe dưới 16km/h (10 mph). Khi vị trí gương được thay đổi, một thông báo sẽ xuất hiện trên màn cho biết có lưu vị trí mới hay không. Chạm vào Lưu, và vị trí gương sẽ được lưu vào hồ sơ người dùng hiện tại.",
+            "citation_valid": true,
+            "citations": [
+              {
+                "source_id": "vf-ac6117205fa59dcdd10f",
+                "title": "Gương",
+                "section_path": [
+                  "Lái xe",
+                  "Gương",
+                  "Điều chỉnh gương"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266351"
+              }
+            ],
+            "reference_fact_coverage": 1.0,
+            "citation_reference_precision": 1.0,
+            "error": null,
+            "latency_ms": 0.27
+          }
+        },
+        {
+          "id": "vf8-mirror_control-2",
+          "query": "Muốn chỉnh gương bên thì dùng màn hình và nút nào?",
+          "answerable": true,
+          "retrieved_source_ids": [
+            "vf-ac6117205fa59dcdd10f",
+            "vf-efa7b60022ff893451b1",
+            "vf-4a77e702a3588c137ea0",
+            "vf-19da87fb62bf20eb5979",
+            "vf-14aac35d9364a7b21abb"
+          ],
+          "semantic_similarities": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "latency_ms": 3.73,
+          "error": null,
+          "answer": {
+            "abstained": false,
+            "answer": "Theo mục Lái xe > Gương > Điều chỉnh gương: Gương bên có thể được điều chỉnh bằng cách sử dụng các nút điều khiển trong Khu vực điều khiển xe trên màn hình trung tâm Chạm vào biểu tượng để mở bảng điều khiển công thái học. Chạm vào gương chiếu hậu bên ngoài . Chọn gương bên nào để điều chỉnh. Sử dụng cụm nút điều khiển bên trái trên vô lăng để điều chỉnh gương. Chạm vào Gập để gập các gương vào bên trong. LƯU Ý Các gương chiếu hậu bên ngoài chỉ có thể gập lại nếu tốc độ của xe dưới 16km/h (10 mph). Khi vị trí gương được thay đổi, một thông báo sẽ xuất hiện trên màn cho biết có lưu vị trí mới hay không. Chạm vào Lưu, và vị trí gương sẽ được lưu vào hồ sơ người dùng hiện tại.",
+            "citation_valid": true,
+            "citations": [
+              {
+                "source_id": "vf-ac6117205fa59dcdd10f",
+                "title": "Gương",
+                "section_path": [
+                  "Lái xe",
+                  "Gương",
+                  "Điều chỉnh gương"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266351"
+              }
+            ],
+            "reference_fact_coverage": 1.0,
+            "citation_reference_precision": 1.0,
+            "error": null,
+            "latency_ms": 0.28
+          }
+        },
+        {
+          "id": "vf8-starting_key-1",
+          "query": "Khởi động VF8 cần chìa khóa ở đâu?",
+          "answerable": true,
+          "retrieved_source_ids": [
+            "vf-b534426b05d3d89ea8f3-p2",
+            "vf-0f0f86155b8abafe1c0b",
+            "vf-3329b85b8636f8da4ef8",
+            "vf-b534426b05d3d89ea8f3-p1",
+            "vf-116853ed967456b8b7cb"
+          ],
+          "semantic_similarities": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 0.3333333333333333,
+          "latency_ms": 3.53,
+          "error": null,
+          "answer": {
+            "abstained": false,
+            "answer": "Theo mục Đóng Mở và Khoang chứa đồ > Chìa khóa > Cài đặt khóa xe: đã sẵn sàng. Sau đó, bộ đếm thời gian bắt đầu. Khi chìa khóa ra khỏi vùng nhận diện, tất cả cửa và cốp sẽ tự động khóa. LƯU Ý Hãy luôn mang theo chìa khóa bên mình khi rời khỏi xe. Trong một số trường hợp có nhiễu tín hiệu, tính năng có thể bị chậm hoặc không kích hoạt. Người dùng có thể nghe/nhìn thấy tín hiệu phản hồi để xác nhận xe đã được khóa. Tính năng chỉ kích hoạt khi cửa phía người lái mở rồi đóng lại. Phản hồi khóa/mở khóa Khi mở khóa xe thông qua chìa khóa điện tử, bạn có thể chọn phản hồi mong muốn ở dạng Đèn, Còi hoặc Cả hai. Bạn có thể tắt tính năng này bằng cách chọn TẮT.",
+            "citation_valid": true,
+            "citations": [
+              {
+                "source_id": "vf-b534426b05d3d89ea8f3-p2",
+                "title": "Chìa khóa",
+                "section_path": [
+                  "Đóng Mở và Khoang chứa đồ",
+                  "Chìa khóa",
+                  "Cài đặt khóa xe"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266334"
+              }
+            ],
+            "reference_fact_coverage": 0.0,
+            "citation_reference_precision": 0.0,
+            "error": null,
+            "latency_ms": 0.29
+          }
+        },
+        {
+          "id": "vf8-starting_key-2",
+          "query": "Xe VF8 có thể khởi động khi chìa khóa hợp lệ ở ngoài xe không?",
+          "answerable": true,
+          "retrieved_source_ids": [
+            "vf-3329b85b8636f8da4ef8",
+            "vf-cc00646b02cd07fddada",
+            "vf-f1b6bd59e66961063660",
+            "vf-b41c4f44dbeb81a5be30",
+            "vf-0f0f86155b8abafe1c0b"
+          ],
+          "semantic_similarities": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "latency_ms": 5.0,
+          "error": null,
+          "answer": {
+            "abstained": false,
+            "answer": "Theo mục Lái xe > Khởi động/dừng > Khởi động xe: Xe được trang bị công nghệ cho phép khởi động/tắt không cần chìa khóa. Phải có chìa khóa điều khiển từ xa hợp lệ bên trong xe để khởi động xe. Theo mục Đóng Mở và Khoang chứa đồ > Hệ thống bảo vệ xe > Vận hành hệ thống mã hóa động cơ của xe: Hệ thống mã hóa động cơ sẽ tự động bật khi xe ở trạng thái khóa. Đèn báo hệ thống mã hóa động cơ sẽ được hiển thị ngắn gọn trên màn hình cảm ứng. Khi hệ thống mã hóa động cơ phát hiện chìa khoá điều khiển từ xa hợp lệ, đèn báo sẽ tự động tắt. Nếu hệ thống không nhận diện được chìa khoá điều khiển từ xa hợp lệ đèn báo sẽ nhấp nháy và ngăn không cho xe khởi động.",
+            "citation_valid": true,
+            "citations": [
+              {
+                "source_id": "vf-3329b85b8636f8da4ef8",
+                "title": "Khởi động/dừng",
+                "section_path": [
+                  "Lái xe",
+                  "Khởi động/dừng",
+                  "Khởi động xe"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266348"
+              },
+              {
+                "source_id": "vf-cc00646b02cd07fddada",
+                "title": "Hệ thống bảo vệ xe",
+                "section_path": [
+                  "Đóng Mở và Khoang chứa đồ",
+                  "Hệ thống bảo vệ xe",
+                  "Vận hành hệ thống mã hóa động cơ của xe"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266339"
+              }
+            ],
+            "reference_fact_coverage": 1.0,
+            "citation_reference_precision": 0.5,
+            "error": null,
+            "latency_ms": 0.26
+          }
+        },
+        {
+          "id": "vf8-battery_12v-1",
+          "query": "Ắc quy 12V của VF8 có định mức bao nhiêu Ah?",
+          "answerable": true,
+          "retrieved_source_ids": [
+            "vf-a8b4f0d68e85b84ce58f",
+            "vf-2681a20c11de3074f27f",
+            "vf-184dab0f331cb17a40bc",
+            "vf-02135603b28de932287d",
+            "vf-d019aa3793272e5e2009"
+          ],
+          "semantic_similarities": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "latency_ms": 3.32,
+          "error": null,
+          "answer": {
+            "abstained": false,
+            "answer": "Theo mục Thông số kỹ thuật > Thông số kỹ thuật > Ắc quy - 12V: Mô tả Chi tiết Định mức 45Ah Điện áp 12V Mô tả Chi tiết Định mức 45Ah Điện áp 12V Theo mục Bảo dưỡng > Hệ thống điện > Ắc quy 12V: THẬN TRỌNG Luôn đọc và làm theo hướng dẫn cẩn thận khi xử lý ắc quy 12V. Không sử dụng ắc quy 12V làm nguồn điện cố định. Làm như vậy sẽ làm mất hiệu lực bảo hành.",
+            "citation_valid": true,
+            "citations": [
+              {
+                "source_id": "vf-a8b4f0d68e85b84ce58f",
+                "title": "Thông số kỹ thuật",
+                "section_path": [
+                  "Thông số kỹ thuật",
+                  "Thông số kỹ thuật",
+                  "Ắc quy - 12V"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266381"
+              },
+              {
+                "source_id": "vf-2681a20c11de3074f27f",
+                "title": "Hệ thống điện",
+                "section_path": [
+                  "Bảo dưỡng",
+                  "Hệ thống điện",
+                  "Ắc quy 12V"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266374"
+              }
+            ],
+            "reference_fact_coverage": 1.0,
+            "citation_reference_precision": 0.5,
+            "error": null,
+            "latency_ms": 0.15
+          }
+        },
+        {
+          "id": "vf8-battery_12v-2",
+          "query": "Thông số định mức ắc quy thấp áp là gì?",
+          "answerable": true,
+          "retrieved_source_ids": [],
+          "semantic_similarities": [],
+          "recall_at_k": 0.0,
+          "reciprocal_rank": 0.0,
+          "latency_ms": 0.02,
+          "error": null,
+          "answer": {
+            "abstained": true,
+            "answer": "Không đủ bằng chứng.",
+            "citation_valid": true,
+            "reference_fact_coverage": 0.0,
+            "citation_reference_precision": null,
+            "latency_ms": 0.0,
+            "error": null
+          }
+        },
+        {
+          "id": "vf8-boundary-17",
+          "query": "Mã nguồn firmware điều khiển pin VF8 là gì?",
+          "answerable": false,
+          "retrieved_source_ids": [
+            "vf-286a448e844d19e2f0f5",
+            "vf-ae3164ed374a2f3b6284",
+            "vf-d84b09a180ec33416312-p1",
+            "vf-4eecfb81cedb09c5f44c",
+            "vf-071305c0ca8b5e1ff5c7"
+          ],
+          "semantic_similarities": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "recall_at_k": null,
+          "reciprocal_rank": null,
+          "latency_ms": 2.79,
+          "error": null,
+          "answer": {
+            "abstained": false,
+            "answer": "Theo mục Màn hình, Kết nối và Điều hòa > Màn hình cảm ứng > Hủy kích hoạt: Chế độ người lạ có thể được hủy kích hoạt bằng bất kỳ phương pháp nào sau đây: Bằng cách sử dụng mã PIN Chế độ Người lạ. Để hủy kích hoạt bằng cách sử dụng mã PIN Chế độ Người lạ: Chạm vào Người lạ > Thoát chế độ người lạ. HOẶC Chạm vào Thoát Chế độ người lạ . Nhập mã PIN hợp lệ. Theo mục Màn hình, Kết nối và Điều hòa > Màn hình cảm ứng > Xác thực: Trang này cung cấp quyền truy cập vào các cài đặt sau: PIN Liên kết chìa khóa điều khiển từ xa (nếu được trang bị) Để cài đặt PIN: Chạm vào Cài đặt . Nhập Mã PIN 6 chữ số. Để đặt lại/xóa mã PIN: Chạm vào Đặt lại/xóa mã PIN . Nhập mã PIN để xác nhận.",
+            "citation_valid": true,
+            "citations": [
+              {
+                "source_id": "vf-286a448e844d19e2f0f5",
+                "title": "Màn hình cảm ứng",
+                "section_path": [
+                  "Màn hình, Kết nối và Điều hòa",
+                  "Màn hình cảm ứng",
+                  "Hủy kích hoạt"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266359"
+              },
+              {
+                "source_id": "vf-ae3164ed374a2f3b6284",
+                "title": "Màn hình cảm ứng",
+                "section_path": [
+                  "Màn hình, Kết nối và Điều hòa",
+                  "Màn hình cảm ứng",
+                  "Xác thực"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266359"
+              }
+            ],
+            "reference_fact_coverage": null,
+            "citation_reference_precision": null,
+            "error": null,
+            "latency_ms": 0.08
+          }
+        }
+      ]
+    },
+    "vector": {
+      "recall_at_k": 0.7143,
+      "mrr_at_k": 0.6429,
+      "latency": {
+        "n": 15,
+        "p50_ms": 6.98,
+        "p95_ms": 37.4
+      },
+      "answer_with_retrieved_evidence": {
+        "reference_fact_coverage": 0.75,
+        "citation_reference_precision": 0.5,
+        "unanswerable_abstention_rate": 0,
+        "latency": {
+          "n": 15,
+          "p50_ms": 0.25,
+          "p95_ms": 0.43
+        }
+      },
+      "errors": 0,
+      "cases": [
+        {
+          "id": "vf8-window_control-1",
+          "query": "Cách điều khiển cửa sổ điện VF8 như thế nào?",
+          "answerable": true,
+          "retrieved_source_ids": [
+            "vf-b18db172999a6fc309c2",
+            "vf-33802bc119b3216ddd39",
+            "vf-d0c6af95a4680f91a193",
+            "vf-8da1b4d0ad899a7071d1",
+            "vf-471da459f20e08e1108e"
+          ],
+          "semantic_similarities": [
+            0.8673,
+            0.8619,
+            0.8605,
+            0.8605,
+            0.86
+          ],
+          "recall_at_k": 0.0,
+          "reciprocal_rank": 0.0,
+          "latency_ms": 37.4,
+          "error": null,
+          "answer": {
+            "abstained": false,
+            "answer": "Theo mục Giới thiệu > Hướng dẫn sử dụng > Giới thiệu: Xin chúc mừng và cảm ơn bạn đã chọn VF 8. Hướng dẫn sử dụng này mô tả tất cả các tính năng và cách vận hành chiếc xe VinFast, đồng thời chứa các thông tin và cảnh báo quan trọng để giúp cho bạn an toàn và được cập nhật trong suốt quá trình sở hữu. Thông tin trong Hướng dẫn sử dụng này dành riêng cho xe của bạn, tuy nhiên, một số mô tả về các tính năng, chức năng và hiển thị có thể không có sẵn, tùy thuộc vào cấu hình xe bạn chọn, thị trường bán hoặc phiên bản phần mềm. Làm quen kỹ với các nội dung trong Hướng dẫn sử dụng này trước khi vận hành xe của bạn. Phiên bản hướng dẫn sử dụng: VF8_22-26_VN_VI_ 3.5.1 [NewUI]",
+            "citation_valid": true,
+            "citations": [
+              {
+                "source_id": "vf-b18db172999a6fc309c2",
+                "title": "Hướng dẫn sử dụng",
+                "section_path": [
+                  "Giới thiệu",
+                  "Hướng dẫn sử dụng",
+                  "Giới thiệu"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266332"
+              }
+            ],
+            "reference_fact_coverage": 0.5,
+            "citation_reference_precision": 0.0,
+            "error": null,
+            "latency_ms": 0.25
+          }
+        },
+        {
+          "id": "vf8-window_control-2",
+          "query": "Các nút chỉnh kính xe nằm ở đâu?",
+          "answerable": true,
+          "retrieved_source_ids": [
+            "vf-f6f33c48831109a6e7f9",
+            "vf-16707134e027ebd06841",
+            "vf-677bb56fe0cfab02c962",
+            "vf-6deff7dfc2a9d403b219",
+            "vf-0124ea4cbf2d6026328a"
+          ],
+          "semantic_similarities": [
+            0.8634,
+            0.8547,
+            0.8505,
+            0.8478,
+            0.8476
+          ],
+          "recall_at_k": 0.0,
+          "reciprocal_rank": 0.0,
+          "latency_ms": 5.15,
+          "error": null,
+          "answer": {
+            "abstained": false,
+            "answer": "Theo mục Màn hình, Kết nối và Điều hòa > CarBuddy > Tổng quan về khu vực điều khiển xe trên màn hình trung tâm: Khu vực điều khiển xe trên màn hình trung tâm nằm ở phía bên trái của màn hình cảm ứng hiển thị thông tin tình trạng xe và hệ thống cùng với việc cung cấp quyền truy cập hoặc điều chỉnh các điều khiển xe quan trọng. Khu vực điều khiển xe trên màn hình trung tâm thay thế nhiều màn hình và điều khiển theo truyền thống được cung cấp bởi cụm thiết bị của người lái xe hoặc các công tắc và nút vật lý. Theo mục Đóng Mở và Khoang chứa đồ > Chìa khóa > Nút khóa trung tâm bên trong: Nút khóa trung tâm nằm ở bệ tỳ tay trung tâm.",
+            "citation_valid": true,
+            "citations": [
+              {
+                "source_id": "vf-f6f33c48831109a6e7f9",
+                "title": "CarBuddy",
+                "section_path": [
+                  "Màn hình, Kết nối và Điều hòa",
+                  "CarBuddy",
+                  "Tổng quan về khu vực điều khiển xe trên màn hình trung tâm"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266361"
+              },
+              {
+                "source_id": "vf-16707134e027ebd06841",
+                "title": "Chìa khóa",
+                "section_path": [
+                  "Đóng Mở và Khoang chứa đồ",
+                  "Chìa khóa",
+                  "Nút khóa trung tâm bên trong"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266334"
+              }
+            ],
+            "reference_fact_coverage": 1.0,
+            "citation_reference_precision": 0.0,
+            "error": null,
+            "latency_ms": 0.21
+          }
+        },
+        {
+          "id": "vf8-rear_window_lock-1",
+          "query": "Công tắc khóa cửa sổ điện dùng để làm gì?",
+          "answerable": true,
+          "retrieved_source_ids": [
+            "vf-7a84e0e5cf48aa936d9f",
+            "vf-286bd74f224936f643ac",
+            "vf-0d6263708252d33da182",
+            "vf-f97517daedbece4bc77c",
+            "vf-2bb9bf2c6f3a3fb39bcf"
+          ],
+          "semantic_similarities": [
+            0.9098,
+            0.8973,
+            0.8787,
+            0.8773,
+            0.8764
+          ],
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 0.5,
+          "latency_ms": 6.24,
+          "error": null,
+          "answer": {
+            "abstained": false,
+            "answer": "Theo mục Đóng Mở và Khoang chứa đồ > Cửa sổ điện > Công tắc khóa cửa sổ điện: CẢNH BÁO Khóa cửa sổ trẻ em phải luôn được sử dụng để tránh trẻ em vô tình mở cửa sổ phía sau và có khả năng rơi ra khi xe đang di chuyển. Để kích hoạt/hủy kích hoạt công tắc khóa cửa sổ điện: Nhấn nút để kích hoạt khóa cửa sổ điện phía sau. Đèn chỉ báo sẽ sáng. Để hủy kích hoạt, nhấn nút một lần nữa. Đèn chỉ báo sẽ tắt. LƯU Ý Đảm bảo đã bật công tắc khóa cửa sổ điện bằng cách kiểm tra chức năng thông qua công tắc cửa sổ điện phía sau. Theo mục Đóng Mở và Khoang chứa đồ > Cửa sổ điện > Công tắc khóa cửa sổ điện: Nút công tắc khóa cửa sổ điện ngăn không cho hành khách ngồi phía sau điều khiển cửa sổ bằng cách tắt ch",
+            "citation_valid": true,
+            "citations": [
+              {
+                "source_id": "vf-7a84e0e5cf48aa936d9f",
+                "title": "Cửa sổ điện",
+                "section_path": [
+                  "Đóng Mở và Khoang chứa đồ",
+                  "Cửa sổ điện",
+                  "Công tắc khóa cửa sổ điện"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266337"
+              },
+              {
+                "source_id": "vf-286bd74f224936f643ac",
+                "title": "Cửa sổ điện",
+                "section_path": [
+                  "Đóng Mở và Khoang chứa đồ",
+                  "Cửa sổ điện",
+                  "Công tắc khóa cửa sổ điện"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266337"
+              }
+            ],
+            "reference_fact_coverage": 0.5,
+            "citation_reference_precision": 0.5,
+            "error": null,
+            "latency_ms": 0.25
+          }
+        },
+        {
+          "id": "vf8-rear_window_lock-2",
+          "query": "Làm sao ngăn hành khách phía sau tự điều khiển cửa kính?",
+          "answerable": true,
+          "retrieved_source_ids": [
+            "vf-9cba27562d52106eee12",
+            "vf-286bd74f224936f643ac",
+            "vf-309bcc6bd3c184785afe",
+            "vf-aad3755af3717df8cde0-p2",
+            "vf-02e6991a8128077f2c96"
+          ],
+          "semantic_similarities": [
+            0.8656,
+            0.8646,
+            0.8632,
+            0.8629,
+            0.8612
+          ],
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 0.5,
+          "latency_ms": 6.18,
+          "error": null,
+          "answer": {
+            "abstained": false,
+            "answer": "Theo mục Lái xe > Gạt nước rửa kính > Điều khiển gạt nước rửa kính phía sau: THẬN TRỌNG Trước khi sử dụng gạt nước rửa kính phía sau, hãy dọn sạch băng hoặc tuyết ra khỏi cửa sổ phía sau, nếu không, sẽ ngăn không cho lưỡi gạt nước rửa kính di chuyển. Việc này cũng có thể gây hỏng mô-tơ gạt nước rửa kính. Không sử dụng chất chống đông của bộ tản nhiệt trong ngăn chứa nước rửa kính chắn gió. Việc này có thể ảnh hưởng nghiêm trọng đến tầm nhìn khi xịt trên cửa sổ phía sau và có thể làm hỏng lớp sơn của xe. Theo mục Đóng Mở và Khoang chứa đồ > Cửa sổ điện > Công tắc khóa cửa sổ điện: Nút công tắc khóa cửa sổ điện ngăn không cho hành khách ngồi phía sau điều khiển cửa sổ bằng cách tắt chức năng đ",
+            "citation_valid": true,
+            "citations": [
+              {
+                "source_id": "vf-9cba27562d52106eee12",
+                "title": "Gạt nước rửa kính",
+                "section_path": [
+                  "Lái xe",
+                  "Gạt nước rửa kính",
+                  "Điều khiển gạt nước rửa kính phía sau"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266354"
+              },
+              {
+                "source_id": "vf-286bd74f224936f643ac",
+                "title": "Cửa sổ điện",
+                "section_path": [
+                  "Đóng Mở và Khoang chứa đồ",
+                  "Cửa sổ điện",
+                  "Công tắc khóa cửa sổ điện"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266337"
+              }
+            ],
+            "reference_fact_coverage": 0.5,
+            "citation_reference_precision": 0.5,
+            "error": null,
+            "latency_ms": 0.22
+          }
+        },
+        {
+          "id": "vf8-charge_adapter_warning-1",
+          "query": "Dùng bộ chuyển đổi sạc cần lưu ý gì?",
+          "answerable": true,
+          "retrieved_source_ids": [
+            "vf-24a9fb188d036e4527e0",
+            "vf-f8ea25c8cf40b2765f3a",
+            "vf-45e650baa1af51ca3fce",
+            "vf-731761599bc8a01e7fa8",
+            "vf-cdbe65b2088bcde76d4b"
+          ],
+          "semantic_similarities": [
+            0.8915,
+            0.8906,
+            0.8894,
+            0.8799,
+            0.8794
+          ],
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "latency_ms": 5.68,
+          "error": null,
+          "answer": {
+            "abstained": false,
+            "answer": "Theo mục Pin và Sạc > Hướng dẫn sạc > Cổng sạc trên xe: CẢNH BÁO Khi sử dụng bộ chuyển đổi, xe sẽ không thể khóa tay cầm sạc (súng sạc). Do đó, tuyệt đối không được rút tay cầm sạc ra trong suốt quá trình sạc để đảm bảo an toàn. Theo mục Pin và Sạc > Hướng dẫn sạc > Cổng sạc trên xe: Xe này hỗ trợ Hệ thống Sạc Kết hợp (CCS). Tùy theo phiên bản xe, chuẩn CCS1 hoặc CCS2 sẽ được trang bị. Tay cầm sạc CCS1 Tay cầm sạc CCS2 LƯU Ý Nếu xe của bạn có cổng kết nối sạc không giống với loại đầu nối của thiết bị sạc hiện có, cần sử dụng bộ chuyển đổi như CCS1 sang CCS2 (hoặc ngược lại). Để đảm bảo an toàn, chỉ sử dụng bộ chuyển đổi chính hãng.",
+            "citation_valid": true,
+            "citations": [
+              {
+                "source_id": "vf-24a9fb188d036e4527e0",
+                "title": "Hướng dẫn sạc",
+                "section_path": [
+                  "Pin và Sạc",
+                  "Hướng dẫn sạc",
+                  "Cổng sạc trên xe"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266370"
+              },
+              {
+                "source_id": "vf-f8ea25c8cf40b2765f3a",
+                "title": "Hướng dẫn sạc",
+                "section_path": [
+                  "Pin và Sạc",
+                  "Hướng dẫn sạc",
+                  "Cổng sạc trên xe"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266370"
+              }
+            ],
+            "reference_fact_coverage": 1.0,
+            "citation_reference_precision": 0.5,
+            "error": null,
+            "latency_ms": 0.22
+          }
+        },
+        {
+          "id": "vf8-charge_adapter_warning-2",
+          "query": "Có được rút súng sạc khi đang sạc qua bộ chuyển đổi không?",
+          "answerable": true,
+          "retrieved_source_ids": [
+            "vf-24a9fb188d036e4527e0",
+            "vf-594eab14a2b54eecec16",
+            "vf-731761599bc8a01e7fa8",
+            "vf-45e650baa1af51ca3fce",
+            "vf-f8ea25c8cf40b2765f3a"
+          ],
+          "semantic_similarities": [
+            0.8985,
+            0.8773,
+            0.8768,
+            0.8762,
+            0.874
+          ],
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "latency_ms": 7.47,
+          "error": null,
+          "answer": {
+            "abstained": false,
+            "answer": "Theo mục Pin và Sạc > Hướng dẫn sạc > Cổng sạc trên xe: CẢNH BÁO Khi sử dụng bộ chuyển đổi, xe sẽ không thể khóa tay cầm sạc (súng sạc). Do đó, tuyệt đối không được rút tay cầm sạc ra trong suốt quá trình sạc để đảm bảo an toàn. Theo mục Pin và Sạc > Hướng dẫn sạc > Để cắm bộ sạc:: CẢNH BÁO Không được có nước, bụi, bẩn hoặc mảnh vụn trong đầu nối và phích cắm của súng sạc. Luôn đảm bảo chúng sạch sẽ trước khi kết nối với bộ sạc và đầu vào sạc. Kết nối khi có nước hoặc bụi trong súng sạc và phích cắm có thể gây ra hỏa hoạn hoặc bị điện giật. Cẩn thận không chạm hoặc nhét bất cứ thứ gì vào lỗ ổ cắm sạc, lỗ cổng sạc và lỗ súng sạc khi kết nối súng sạc với cổng sạc trên xe.",
+            "citation_valid": true,
+            "citations": [
+              {
+                "source_id": "vf-24a9fb188d036e4527e0",
+                "title": "Hướng dẫn sạc",
+                "section_path": [
+                  "Pin và Sạc",
+                  "Hướng dẫn sạc",
+                  "Cổng sạc trên xe"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266370"
+              },
+              {
+                "source_id": "vf-594eab14a2b54eecec16",
+                "title": "Hướng dẫn sạc",
+                "section_path": [
+                  "Pin và Sạc",
+                  "Hướng dẫn sạc",
+                  "Để cắm bộ sạc:"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266370"
+              }
+            ],
+            "reference_fact_coverage": 1.0,
+            "citation_reference_precision": 0.5,
+            "error": null,
+            "latency_ms": 0.28
+          }
+        },
+        {
+          "id": "vf8-child_seat-1",
+          "query": "Trẻ sơ sinh trên VF8 cần dùng loại ghế nào?",
+          "answerable": true,
+          "retrieved_source_ids": [
+            "vf-71737ffbe2c9e4c4b18a",
+            "vf-5f4d797dc83fad763874-p1",
+            "vf-6756ff9954d4d3c406ee",
+            "vf-46a68273f88040443f54",
+            "vf-7af9dc709655bc2e2754-p1"
+          ],
+          "semantic_similarities": [
+            0.8811,
+            0.876,
+            0.8751,
+            0.8688,
+            0.8683
+          ],
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "latency_ms": 6.58,
+          "error": null,
+          "answer": {
+            "abstained": false,
+            "answer": "Theo mục Ghế và hệ thống an toàn > Ghế trẻ em > Tổng quan về ghế trẻ em (CRS): Dây đai an toàn được lắp trong xe được thiết kế phù hợp với người lớn và trẻ lớn. Trẻ nhỏ và trẻ sơ sinh phải được đảm bảo trong một Ghế An toàn Trẻ em (CRS) được chứng nhận phù hợp với độ tuổi, chiều cao và cân nặng của trẻ, và cho vị trí ghế mà trẻ lựa chọn. Không phải tất cả CRS đều an toàn để sử dụng ở tất cả các vị trí ghế (chi tiết hơn được cung cấp thêm dưới đây) Sử dụng theo thứ tự ưu tiên ghế ngoài của hàng ghế thứ hai, ghế trung tâm của hàng ghế thứ hai, và chỉ trong trường hợp cần thiết ghế hành khách phía trước để lắp CRS để chứa trẻ nhỏ và trẻ sơ sinh.",
+            "citation_valid": true,
+            "citations": [
+              {
+                "source_id": "vf-71737ffbe2c9e4c4b18a",
+                "title": "Ghế trẻ em",
+                "section_path": [
+                  "Ghế và hệ thống an toàn",
+                  "Ghế trẻ em",
+                  "Tổng quan về ghế trẻ em (CRS)"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266342"
+              }
+            ],
+            "reference_fact_coverage": 1.0,
+            "citation_reference_precision": 1.0,
+            "error": null,
+            "latency_ms": 0.3
+          }
+        },
+        {
+          "id": "vf8-child_seat-2",
+          "query": "Dây đai của người lớn có đủ để bảo vệ trẻ nhỏ không?",
+          "answerable": true,
+          "retrieved_source_ids": [
+            "vf-d38ac9e5cf4ed4684d72-p2",
+            "vf-a66756e787e7a82cebbf",
+            "vf-9bab90bed69acca52e3c",
+            "vf-df791e0dc6ba339108bb",
+            "vf-be064a9b73447fafb0c9"
+          ],
+          "semantic_similarities": [
+            0.887,
+            0.8707,
+            0.8649,
+            0.8601,
+            0.8599
+          ],
+          "recall_at_k": 0.0,
+          "reciprocal_rank": 0.0,
+          "latency_ms": 7.33,
+          "error": null,
+          "answer": {
+            "abstained": false,
+            "answer": "Theo mục Ghế và hệ thống an toàn > Dây đai an toàn > Chỉ báo cảnh báo dây đai an toàn: sử dụng được cho nhiều người. Dây đai an toàn được thiết kế để bảo vệ một người ngồi trên một ghế cụ thể nơi nó được gắn vào. Đảm bảo rằng không có gì kẹt bên trong khóa của dây đai an toàn. Điều này có thể khiến cho dây đai an toàn không được thắt chặt một cách an toàn. Không tuân theo cảnh báo này có thể dẫn đến thương tích cá nhân nghiêm trọng hoặc tử vong. Trẻ em dưới 13 tuổi phải được ngồi ở ghế trẻ em và lắp đặt ở hàng ghế sau.Không tuân theo cảnh báo này có thể dẫn đến thương tích cá nhân nghiêm trọng hoặc tử vong.",
+            "citation_valid": true,
+            "citations": [
+              {
+                "source_id": "vf-d38ac9e5cf4ed4684d72-p2",
+                "title": "Dây đai an toàn",
+                "section_path": [
+                  "Ghế và hệ thống an toàn",
+                  "Dây đai an toàn",
+                  "Chỉ báo cảnh báo dây đai an toàn"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266341"
+              }
+            ],
+            "reference_fact_coverage": 0.0,
+            "citation_reference_precision": 0.0,
+            "error": null,
+            "latency_ms": 0.28
+          }
+        },
+        {
+          "id": "vf8-mirror_control-1",
+          "query": "Cách điều chỉnh gương chiếu hậu bên ngoài VF8 như thế nào?",
+          "answerable": true,
+          "retrieved_source_ids": [
+            "vf-ac6117205fa59dcdd10f",
+            "vf-14aac35d9364a7b21abb",
+            "vf-4e65b5cfd3322d01bd2a",
+            "vf-e5b81b96e76ef36e2292",
+            "vf-efa7b60022ff893451b1"
+          ],
+          "semantic_similarities": [
+            0.9128,
+            0.9016,
+            0.8838,
+            0.8799,
+            0.8789
+          ],
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "latency_ms": 7.04,
+          "error": null,
+          "answer": {
+            "abstained": false,
+            "answer": "Theo mục Lái xe > Gương > Điều chỉnh gương: Gương bên có thể được điều chỉnh bằng cách sử dụng các nút điều khiển trong Khu vực điều khiển xe trên màn hình trung tâm Chạm vào biểu tượng để mở bảng điều khiển công thái học. Chạm vào gương chiếu hậu bên ngoài . Chọn gương bên nào để điều chỉnh. Sử dụng cụm nút điều khiển bên trái trên vô lăng để điều chỉnh gương. Chạm vào Gập để gập các gương vào bên trong. LƯU Ý Các gương chiếu hậu bên ngoài chỉ có thể gập lại nếu tốc độ của xe dưới 16km/h (10 mph). Khi vị trí gương được thay đổi, một thông báo sẽ xuất hiện trên màn cho biết có lưu vị trí mới hay không. Chạm vào Lưu, và vị trí gương sẽ được lưu vào hồ sơ người dùng hiện tại.",
+            "citation_valid": true,
+            "citations": [
+              {
+                "source_id": "vf-ac6117205fa59dcdd10f",
+                "title": "Gương",
+                "section_path": [
+                  "Lái xe",
+                  "Gương",
+                  "Điều chỉnh gương"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266351"
+              }
+            ],
+            "reference_fact_coverage": 1.0,
+            "citation_reference_precision": 1.0,
+            "error": null,
+            "latency_ms": 0.27
+          }
+        },
+        {
+          "id": "vf8-mirror_control-2",
+          "query": "Muốn chỉnh gương bên thì dùng màn hình và nút nào?",
+          "answerable": true,
+          "retrieved_source_ids": [
+            "vf-ac6117205fa59dcdd10f",
+            "vf-14aac35d9364a7b21abb",
+            "vf-c8de1310c60517ab9c12",
+            "vf-efa7b60022ff893451b1",
+            "vf-4e65b5cfd3322d01bd2a"
+          ],
+          "semantic_similarities": [
+            0.876,
+            0.8646,
+            0.8568,
+            0.8561,
+            0.8552
+          ],
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "latency_ms": 6.98,
+          "error": null,
+          "answer": {
+            "abstained": false,
+            "answer": "Theo mục Lái xe > Gương > Điều chỉnh gương: Gương bên có thể được điều chỉnh bằng cách sử dụng các nút điều khiển trong Khu vực điều khiển xe trên màn hình trung tâm Chạm vào biểu tượng để mở bảng điều khiển công thái học. Chạm vào gương chiếu hậu bên ngoài . Chọn gương bên nào để điều chỉnh. Sử dụng cụm nút điều khiển bên trái trên vô lăng để điều chỉnh gương. Chạm vào Gập để gập các gương vào bên trong. LƯU Ý Các gương chiếu hậu bên ngoài chỉ có thể gập lại nếu tốc độ của xe dưới 16km/h (10 mph). Khi vị trí gương được thay đổi, một thông báo sẽ xuất hiện trên màn cho biết có lưu vị trí mới hay không. Chạm vào Lưu, và vị trí gương sẽ được lưu vào hồ sơ người dùng hiện tại.",
+            "citation_valid": true,
+            "citations": [
+              {
+                "source_id": "vf-ac6117205fa59dcdd10f",
+                "title": "Gương",
+                "section_path": [
+                  "Lái xe",
+                  "Gương",
+                  "Điều chỉnh gương"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266351"
+              }
+            ],
+            "reference_fact_coverage": 1.0,
+            "citation_reference_precision": 1.0,
+            "error": null,
+            "latency_ms": 0.29
+          }
+        },
+        {
+          "id": "vf8-starting_key-1",
+          "query": "Khởi động VF8 cần chìa khóa ở đâu?",
+          "answerable": true,
+          "retrieved_source_ids": [
+            "vf-3329b85b8636f8da4ef8",
+            "vf-3fe52f84629d654250ef",
+            "vf-cc00646b02cd07fddada",
+            "vf-ea99922759b65f6114d3",
+            "vf-ac009a7c7ac05a967686"
+          ],
+          "semantic_similarities": [
+            0.8744,
+            0.869,
+            0.8663,
+            0.8638,
+            0.8633
+          ],
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "latency_ms": 6.71,
+          "error": null,
+          "answer": {
+            "abstained": false,
+            "answer": "Theo mục Lái xe > Khởi động/dừng > Khởi động xe: Xe được trang bị công nghệ cho phép khởi động/tắt không cần chìa khóa. Phải có chìa khóa điều khiển từ xa hợp lệ bên trong xe để khởi động xe. Theo mục Lái xe > Khởi động/dừng > Pin của chìa khoá điều khiển từ xa gần hết điện: Nếu pin của chìa khóa điều khiển từ xa quá thấp, xe vẫn có thể khởi động được. Để khởi động xe: Đặt chìa khóa vào vị trí được hiển thị Nhấn phanh và ấn nút D hoặc R Đặt chìa khóa vào vị trí được hiển thị Nhấn phanh và ấn nút D hoặc R",
+            "citation_valid": true,
+            "citations": [
+              {
+                "source_id": "vf-3329b85b8636f8da4ef8",
+                "title": "Khởi động/dừng",
+                "section_path": [
+                  "Lái xe",
+                  "Khởi động/dừng",
+                  "Khởi động xe"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266348"
+              },
+              {
+                "source_id": "vf-3fe52f84629d654250ef",
+                "title": "Khởi động/dừng",
+                "section_path": [
+                  "Lái xe",
+                  "Khởi động/dừng",
+                  "Pin của chìa khoá điều khiển từ xa gần hết điện"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266348"
+              }
+            ],
+            "reference_fact_coverage": 1.0,
+            "citation_reference_precision": 0.5,
+            "error": null,
+            "latency_ms": 0.22
+          }
+        },
+        {
+          "id": "vf8-starting_key-2",
+          "query": "Xe VF8 có thể khởi động khi chìa khóa hợp lệ ở ngoài xe không?",
+          "answerable": true,
+          "retrieved_source_ids": [
+            "vf-3329b85b8636f8da4ef8",
+            "vf-3fe52f84629d654250ef",
+            "vf-c44bc9708a8f15862d71",
+            "vf-b534426b05d3d89ea8f3-p2",
+            "vf-ea99922759b65f6114d3"
+          ],
+          "semantic_similarities": [
+            0.8813,
+            0.8756,
+            0.8711,
+            0.8686,
+            0.8678
+          ],
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "latency_ms": 8.53,
+          "error": null,
+          "answer": {
+            "abstained": false,
+            "answer": "Theo mục Lái xe > Khởi động/dừng > Khởi động xe: Xe được trang bị công nghệ cho phép khởi động/tắt không cần chìa khóa. Phải có chìa khóa điều khiển từ xa hợp lệ bên trong xe để khởi động xe. Theo mục Lái xe > Khởi động/dừng > Pin của chìa khoá điều khiển từ xa gần hết điện: Nếu pin của chìa khóa điều khiển từ xa quá thấp, xe vẫn có thể khởi động được. Để khởi động xe: Đặt chìa khóa vào vị trí được hiển thị Nhấn phanh và ấn nút D hoặc R Đặt chìa khóa vào vị trí được hiển thị Nhấn phanh và ấn nút D hoặc R",
+            "citation_valid": true,
+            "citations": [
+              {
+                "source_id": "vf-3329b85b8636f8da4ef8",
+                "title": "Khởi động/dừng",
+                "section_path": [
+                  "Lái xe",
+                  "Khởi động/dừng",
+                  "Khởi động xe"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266348"
+              },
+              {
+                "source_id": "vf-3fe52f84629d654250ef",
+                "title": "Khởi động/dừng",
+                "section_path": [
+                  "Lái xe",
+                  "Khởi động/dừng",
+                  "Pin của chìa khoá điều khiển từ xa gần hết điện"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266348"
+              }
+            ],
+            "reference_fact_coverage": 1.0,
+            "citation_reference_precision": 0.5,
+            "error": null,
+            "latency_ms": 0.26
+          }
+        },
+        {
+          "id": "vf8-battery_12v-1",
+          "query": "Ắc quy 12V của VF8 có định mức bao nhiêu Ah?",
+          "answerable": true,
+          "retrieved_source_ids": [
+            "vf-a8b4f0d68e85b84ce58f",
+            "vf-d019aa3793272e5e2009",
+            "vf-02135603b28de932287d",
+            "vf-f33e809040d50370b3d1-p1",
+            "vf-a05c3b553b1a5f49e75d"
+          ],
+          "semantic_similarities": [
+            0.887,
+            0.8735,
+            0.8646,
+            0.859,
+            0.8566
+          ],
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "latency_ms": 9.26,
+          "error": null,
+          "answer": {
+            "abstained": false,
+            "answer": "Theo mục Thông số kỹ thuật > Thông số kỹ thuật > Ắc quy - 12V: Mô tả Chi tiết Định mức 45Ah Điện áp 12V Mô tả Chi tiết Định mức 45Ah Điện áp 12V Theo mục Bảo dưỡng > Hệ thống điện > Ắc quy 12V: Xe được trang bị ắc quy 12V được sử dụng để cấp điện cho xe và các thành phần điện của xe. Ngay cả khi tắt thiết bị điện, ắc quy 12V vẫn có thể cạn nếu không sử dụng xe trong một thời gian dài. Liên hệ với Xưởng dịch vụ của VinFast hoặc cơ sở dịch vụ được VinFast ủy quyền để biết thêm thông tin. LƯU Ý Nếu xe không phản ứng và không mở khóa, mở cửa hoặc sạc, ắc quy 12V có thể bị đã bị cạn. Liên hệ với xưởng dịch vụ ủy quyền của VinFast.",
+            "citation_valid": true,
+            "citations": [
+              {
+                "source_id": "vf-a8b4f0d68e85b84ce58f",
+                "title": "Thông số kỹ thuật",
+                "section_path": [
+                  "Thông số kỹ thuật",
+                  "Thông số kỹ thuật",
+                  "Ắc quy - 12V"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266381"
+              },
+              {
+                "source_id": "vf-d019aa3793272e5e2009",
+                "title": "Hệ thống điện",
+                "section_path": [
+                  "Bảo dưỡng",
+                  "Hệ thống điện",
+                  "Ắc quy 12V"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266374"
+              }
+            ],
+            "reference_fact_coverage": 1.0,
+            "citation_reference_precision": 0.5,
+            "error": null,
+            "latency_ms": 0.43
+          }
+        },
+        {
+          "id": "vf8-battery_12v-2",
+          "query": "Thông số định mức ắc quy thấp áp là gì?",
+          "answerable": true,
+          "retrieved_source_ids": [],
+          "semantic_similarities": [],
+          "recall_at_k": 0.0,
+          "reciprocal_rank": 0.0,
+          "latency_ms": 0.03,
+          "error": null,
+          "answer": {
+            "abstained": true,
+            "answer": "Không đủ bằng chứng.",
+            "citation_valid": true,
+            "reference_fact_coverage": 0.0,
+            "citation_reference_precision": null,
+            "latency_ms": 0.0,
+            "error": null
+          }
+        },
+        {
+          "id": "vf8-boundary-17",
+          "query": "Mã nguồn firmware điều khiển pin VF8 là gì?",
+          "answerable": false,
+          "retrieved_source_ids": [
+            "vf-9de08f4ecd7afd3b0386",
+            "vf-8da1b4d0ad899a7071d1",
+            "vf-28aea83cabff1b2f3ef0",
+            "vf-b18db172999a6fc309c2",
+            "vf-ae3164ed374a2f3b6284"
+          ],
+          "semantic_similarities": [
+            0.8644,
+            0.8508,
+            0.8497,
+            0.8469,
+            0.8406
+          ],
+          "recall_at_k": null,
+          "reciprocal_rank": null,
+          "latency_ms": 7.11,
+          "error": null,
+          "answer": {
+            "abstained": false,
+            "answer": "Theo mục Giới thiệu > Hướng dẫn sử dụng > Lưu ý quan trọng liên quan đến Pin: VinFast VF 8 nên được vận hành bằng pin chính hãng của VinFast hoặc pin được cung cấp bởi nhà cung cấp được VinFast ủy quyền. VinFast, các nhà cung cấp pin được ủy quyền, chủ sở hữu pin (nếu thích hợp) và đại diện của họ sẽ không chịu trách nhiệm về bất kỳ thiệt hại hoặc tổn thất nào đối với khách hàng do việc sử dụng bất kỳ loại pin nào không phải là pin VinFast chính hãng trên xe hoặc do không tuân theo các quy định và hướng dẫn sử dụng pin nêu trong Hướng dẫn sử dụng xe. Theo mục Giới thiệu > Hướng dẫn sử dụng > Nội dung & Hình ảnh áp dụng: Thông tin và thông số kỹ thuật có trong hướng dẫn sử dụng VF 8 là chính",
+            "citation_valid": true,
+            "citations": [
+              {
+                "source_id": "vf-9de08f4ecd7afd3b0386",
+                "title": "Hướng dẫn sử dụng",
+                "section_path": [
+                  "Giới thiệu",
+                  "Hướng dẫn sử dụng",
+                  "Lưu ý quan trọng liên quan đến Pin"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266332"
+              },
+              {
+                "source_id": "vf-8da1b4d0ad899a7071d1",
+                "title": "Hướng dẫn sử dụng",
+                "section_path": [
+                  "Giới thiệu",
+                  "Hướng dẫn sử dụng",
+                  "Nội dung & Hình ảnh áp dụng"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266332"
+              }
+            ],
+            "reference_fact_coverage": null,
+            "citation_reference_precision": null,
+            "error": null,
+            "latency_ms": 0.15
+          }
+        }
+      ]
+    },
+    "hybrid": {
+      "recall_at_k": 0.8571,
+      "mrr_at_k": 0.6488,
+      "latency": {
+        "n": 15,
+        "p50_ms": 14.84,
+        "p95_ms": 68.03
+      },
+      "answer_with_retrieved_evidence": {
+        "reference_fact_coverage": 0.6429,
+        "citation_reference_precision": 0.4615,
+        "unanswerable_abstention_rate": 0,
+        "latency": {
+          "n": 15,
+          "p50_ms": 0.38,
+          "p95_ms": 0.63
+        }
+      },
+      "errors": 0,
+      "cases": [
+        {
+          "id": "vf8-window_control-1",
+          "query": "Cách điều khiển cửa sổ điện VF8 như thế nào?",
+          "answerable": true,
+          "retrieved_source_ids": [
+            "vf-b18db172999a6fc309c2",
+            "vf-0d6263708252d33da182",
+            "vf-59affa7f02a931fe08c4",
+            "vf-33802bc119b3216ddd39",
+            "vf-286bd74f224936f643ac"
+          ],
+          "semantic_similarities": [
+            0.8673,
+            0.8593,
+            0.8332,
+            0.8619,
+            0.8282
+          ],
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 0.5,
+          "latency_ms": 68.03,
+          "error": null,
+          "answer": {
+            "abstained": false,
+            "answer": "Theo mục Giới thiệu > Hướng dẫn sử dụng > Giới thiệu: Xin chúc mừng và cảm ơn bạn đã chọn VF 8. Hướng dẫn sử dụng này mô tả tất cả các tính năng và cách vận hành chiếc xe VinFast, đồng thời chứa các thông tin và cảnh báo quan trọng để giúp cho bạn an toàn và được cập nhật trong suốt quá trình sở hữu. Thông tin trong Hướng dẫn sử dụng này dành riêng cho xe của bạn, tuy nhiên, một số mô tả về các tính năng, chức năng và hiển thị có thể không có sẵn, tùy thuộc vào cấu hình xe bạn chọn, thị trường bán hoặc phiên bản phần mềm. Làm quen kỹ với các nội dung trong Hướng dẫn sử dụng này trước khi vận hành xe của bạn. Phiên bản hướng dẫn sử dụng: VF8_22-26_VN_VI_ 3.5.1 [NewUI]",
+            "citation_valid": true,
+            "citations": [
+              {
+                "source_id": "vf-b18db172999a6fc309c2",
+                "title": "Hướng dẫn sử dụng",
+                "section_path": [
+                  "Giới thiệu",
+                  "Hướng dẫn sử dụng",
+                  "Giới thiệu"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266332"
+              }
+            ],
+            "reference_fact_coverage": 0.5,
+            "citation_reference_precision": 0.0,
+            "error": null,
+            "latency_ms": 0.63
+          }
+        },
+        {
+          "id": "vf8-window_control-2",
+          "query": "Các nút chỉnh kính xe nằm ở đâu?",
+          "answerable": true,
+          "retrieved_source_ids": [
+            "vf-16707134e027ebd06841",
+            "vf-9c44b6d5d79cc7eefc02",
+            "vf-f6f33c48831109a6e7f9",
+            "vf-585e83fcf6ee0e520726",
+            "vf-0a57a555e140a8b05263"
+          ],
+          "semantic_similarities": [
+            0.8547,
+            0.8275,
+            0.8634,
+            0.816,
+            0.8024
+          ],
+          "recall_at_k": 0.0,
+          "reciprocal_rank": 0.0,
+          "latency_ms": 14.38,
+          "error": null,
+          "answer": {
+            "abstained": false,
+            "answer": "Theo mục Đóng Mở và Khoang chứa đồ > Chìa khóa > Nút khóa trung tâm bên trong: Nút khóa trung tâm nằm ở bệ tỳ tay trung tâm. Nút khóa trung tâm khóa hoặc mở khóa tất cả các cửa và cửa hậu điện. Nút này sẽ sáng lên để cho biết xe đã bị khóa. Theo mục Đóng Mở và Khoang chứa đồ > Khoang chứa đồ > Khoang chứa đồ phía trước: Khoang chứa đồ phía trước nằm ở đầu xe phía dưới nắp ca pô. Khoang hàng phía trước cung cấp chỗ để các kiện hành lý nhỏ hơn và cung cấp khả năng tiếp cận các vật dụng bảo dưỡng. Để mở Khoang chứa đồ phía trước: Xem > Khoang phía trước và phía sau > ; Nắp ca pô.",
+            "citation_valid": true,
+            "citations": [
+              {
+                "source_id": "vf-16707134e027ebd06841",
+                "title": "Chìa khóa",
+                "section_path": [
+                  "Đóng Mở và Khoang chứa đồ",
+                  "Chìa khóa",
+                  "Nút khóa trung tâm bên trong"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266334"
+              },
+              {
+                "source_id": "vf-9c44b6d5d79cc7eefc02",
+                "title": "Khoang chứa đồ",
+                "section_path": [
+                  "Đóng Mở và Khoang chứa đồ",
+                  "Khoang chứa đồ",
+                  "Khoang chứa đồ phía trước"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266338"
+              }
+            ],
+            "reference_fact_coverage": 0.5,
+            "citation_reference_precision": 0.0,
+            "error": null,
+            "latency_ms": 0.35
+          }
+        },
+        {
+          "id": "vf8-rear_window_lock-1",
+          "query": "Công tắc khóa cửa sổ điện dùng để làm gì?",
+          "answerable": true,
+          "retrieved_source_ids": [
+            "vf-7a84e0e5cf48aa936d9f",
+            "vf-286bd74f224936f643ac",
+            "vf-0d6263708252d33da182",
+            "vf-5ef8b1e7120149d8fc2c-p1",
+            "vf-f97517daedbece4bc77c"
+          ],
+          "semantic_similarities": [
+            0.9098,
+            0.8973,
+            0.8787,
+            0.8226,
+            0.8773
+          ],
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 0.5,
+          "latency_ms": 16.97,
+          "error": null,
+          "answer": {
+            "abstained": false,
+            "answer": "Theo mục Đóng Mở và Khoang chứa đồ > Cửa sổ điện > Công tắc khóa cửa sổ điện: CẢNH BÁO Khóa cửa sổ trẻ em phải luôn được sử dụng để tránh trẻ em vô tình mở cửa sổ phía sau và có khả năng rơi ra khi xe đang di chuyển. Để kích hoạt/hủy kích hoạt công tắc khóa cửa sổ điện: Nhấn nút để kích hoạt khóa cửa sổ điện phía sau. Đèn chỉ báo sẽ sáng. Để hủy kích hoạt, nhấn nút một lần nữa. Đèn chỉ báo sẽ tắt. LƯU Ý Đảm bảo đã bật công tắc khóa cửa sổ điện bằng cách kiểm tra chức năng thông qua công tắc cửa sổ điện phía sau. Theo mục Đóng Mở và Khoang chứa đồ > Cửa sổ điện > Công tắc khóa cửa sổ điện: Nút công tắc khóa cửa sổ điện ngăn không cho hành khách ngồi phía sau điều khiển cửa sổ bằng cách tắt ch",
+            "citation_valid": true,
+            "citations": [
+              {
+                "source_id": "vf-7a84e0e5cf48aa936d9f",
+                "title": "Cửa sổ điện",
+                "section_path": [
+                  "Đóng Mở và Khoang chứa đồ",
+                  "Cửa sổ điện",
+                  "Công tắc khóa cửa sổ điện"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266337"
+              },
+              {
+                "source_id": "vf-286bd74f224936f643ac",
+                "title": "Cửa sổ điện",
+                "section_path": [
+                  "Đóng Mở và Khoang chứa đồ",
+                  "Cửa sổ điện",
+                  "Công tắc khóa cửa sổ điện"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266337"
+              }
+            ],
+            "reference_fact_coverage": 0.5,
+            "citation_reference_precision": 0.5,
+            "error": null,
+            "latency_ms": 0.58
+          }
+        },
+        {
+          "id": "vf8-rear_window_lock-2",
+          "query": "Làm sao ngăn hành khách phía sau tự điều khiển cửa kính?",
+          "answerable": true,
+          "retrieved_source_ids": [
+            "vf-9cba27562d52106eee12",
+            "vf-286bd74f224936f643ac",
+            "vf-b67b4bfab1dbb537cf3b",
+            "vf-49dac3e981c4881ff266",
+            "vf-2bb9bf2c6f3a3fb39bcf"
+          ],
+          "semantic_similarities": [
+            0.8656,
+            0.8646,
+            0.8564,
+            0.8586,
+            0.8505
+          ],
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 0.5,
+          "latency_ms": 18.32,
+          "error": null,
+          "answer": {
+            "abstained": false,
+            "answer": "Theo mục Lái xe > Gạt nước rửa kính > Điều khiển gạt nước rửa kính phía sau: THẬN TRỌNG Trước khi sử dụng gạt nước rửa kính phía sau, hãy dọn sạch băng hoặc tuyết ra khỏi cửa sổ phía sau, nếu không, sẽ ngăn không cho lưỡi gạt nước rửa kính di chuyển. Việc này cũng có thể gây hỏng mô-tơ gạt nước rửa kính. Không sử dụng chất chống đông của bộ tản nhiệt trong ngăn chứa nước rửa kính chắn gió. Việc này có thể ảnh hưởng nghiêm trọng đến tầm nhìn khi xịt trên cửa sổ phía sau và có thể làm hỏng lớp sơn của xe. Theo mục Đóng Mở và Khoang chứa đồ > Cửa sổ điện > Công tắc khóa cửa sổ điện: Nút công tắc khóa cửa sổ điện ngăn không cho hành khách ngồi phía sau điều khiển cửa sổ bằng cách tắt chức năng đ",
+            "citation_valid": true,
+            "citations": [
+              {
+                "source_id": "vf-9cba27562d52106eee12",
+                "title": "Gạt nước rửa kính",
+                "section_path": [
+                  "Lái xe",
+                  "Gạt nước rửa kính",
+                  "Điều khiển gạt nước rửa kính phía sau"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266354"
+              },
+              {
+                "source_id": "vf-286bd74f224936f643ac",
+                "title": "Cửa sổ điện",
+                "section_path": [
+                  "Đóng Mở và Khoang chứa đồ",
+                  "Cửa sổ điện",
+                  "Công tắc khóa cửa sổ điện"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266337"
+              }
+            ],
+            "reference_fact_coverage": 0.5,
+            "citation_reference_precision": 0.5,
+            "error": null,
+            "latency_ms": 0.51
+          }
+        },
+        {
+          "id": "vf8-charge_adapter_warning-1",
+          "query": "Dùng bộ chuyển đổi sạc cần lưu ý gì?",
+          "answerable": true,
+          "retrieved_source_ids": [
+            "vf-f8ea25c8cf40b2765f3a",
+            "vf-45e650baa1af51ca3fce",
+            "vf-24a9fb188d036e4527e0",
+            "vf-f4476fb5ba607af7ed27",
+            "vf-594eab14a2b54eecec16"
+          ],
+          "semantic_similarities": [
+            0.8906,
+            0.8894,
+            0.8915,
+            0.8753,
+            0.8733
+          ],
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 0.3333333333333333,
+          "latency_ms": 14.84,
+          "error": null,
+          "answer": {
+            "abstained": false,
+            "answer": "Theo mục Pin và Sạc > Hướng dẫn sạc > Cổng sạc trên xe: Xe này hỗ trợ Hệ thống Sạc Kết hợp (CCS). Tùy theo phiên bản xe, chuẩn CCS1 hoặc CCS2 sẽ được trang bị. Tay cầm sạc CCS1 Tay cầm sạc CCS2 LƯU Ý Nếu xe của bạn có cổng kết nối sạc không giống với loại đầu nối của thiết bị sạc hiện có, cần sử dụng bộ chuyển đổi như CCS1 sang CCS2 (hoặc ngược lại). Để đảm bảo an toàn, chỉ sử dụng bộ chuyển đổi chính hãng. Vui lòng liên hệ VinFast để được tư vấn và hỗ trợ lựa chọn bộ chuyển đổi phù hợp. Theo mục Pin và Sạc > Hướng dẫn sạc > Các vấn đề an toàn quan trọng liên quan đến sạc: WARNING Tiếp xúc với nguồn điện áp cao có thể dẫn đến thương tích nghiêm trọng hoặc tử vong.",
+            "citation_valid": true,
+            "citations": [
+              {
+                "source_id": "vf-f8ea25c8cf40b2765f3a",
+                "title": "Hướng dẫn sạc",
+                "section_path": [
+                  "Pin và Sạc",
+                  "Hướng dẫn sạc",
+                  "Cổng sạc trên xe"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266370"
+              },
+              {
+                "source_id": "vf-45e650baa1af51ca3fce",
+                "title": "Hướng dẫn sạc",
+                "section_path": [
+                  "Pin và Sạc",
+                  "Hướng dẫn sạc",
+                  "Các vấn đề an toàn quan trọng liên quan đến sạc"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266370"
+              }
+            ],
+            "reference_fact_coverage": 0.0,
+            "citation_reference_precision": 0.0,
+            "error": null,
+            "latency_ms": 0.57
+          }
+        },
+        {
+          "id": "vf8-charge_adapter_warning-2",
+          "query": "Có được rút súng sạc khi đang sạc qua bộ chuyển đổi không?",
+          "answerable": true,
+          "retrieved_source_ids": [
+            "vf-24a9fb188d036e4527e0",
+            "vf-731761599bc8a01e7fa8",
+            "vf-594eab14a2b54eecec16",
+            "vf-45e650baa1af51ca3fce",
+            "vf-7aa25a675ad751831940-p1"
+          ],
+          "semantic_similarities": [
+            0.8985,
+            0.8768,
+            0.8773,
+            0.8762,
+            0.8589
+          ],
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "latency_ms": 21.09,
+          "error": null,
+          "answer": {
+            "abstained": false,
+            "answer": "Theo mục Pin và Sạc > Hướng dẫn sạc > Cổng sạc trên xe: CẢNH BÁO Khi sử dụng bộ chuyển đổi, xe sẽ không thể khóa tay cầm sạc (súng sạc). Do đó, tuyệt đối không được rút tay cầm sạc ra trong suốt quá trình sạc để đảm bảo an toàn. Theo mục Pin và Sạc > Hướng dẫn sạc > Để cắm bộ sạc:: Để cắm súng sạc, hãy nắm chặt cáp hoặc cắm chặt và đẩy đầu súng vào cổng sạc cho đến khi bạn nghe thấy tiếng tách. Đảm bảo đầu nối đã được lắp vào hoàn toàn và thẳng hàng với cổng sạc. Đầu nối được lắp vào không đúng cách có thể gây ra phiên sạc kéo dài hoặc bị lỗi. Nếu bạn đang sử dụng Bộ sạc di động, hãy cắm vào ổ điện trước khi cắm vào cổng sạc trên xe.",
+            "citation_valid": true,
+            "citations": [
+              {
+                "source_id": "vf-24a9fb188d036e4527e0",
+                "title": "Hướng dẫn sạc",
+                "section_path": [
+                  "Pin và Sạc",
+                  "Hướng dẫn sạc",
+                  "Cổng sạc trên xe"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266370"
+              },
+              {
+                "source_id": "vf-731761599bc8a01e7fa8",
+                "title": "Hướng dẫn sạc",
+                "section_path": [
+                  "Pin và Sạc",
+                  "Hướng dẫn sạc",
+                  "Để cắm bộ sạc:"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266370"
+              }
+            ],
+            "reference_fact_coverage": 1.0,
+            "citation_reference_precision": 0.5,
+            "error": null,
+            "latency_ms": 0.55
+          }
+        },
+        {
+          "id": "vf8-child_seat-1",
+          "query": "Trẻ sơ sinh trên VF8 cần dùng loại ghế nào?",
+          "answerable": true,
+          "retrieved_source_ids": [
+            "vf-71737ffbe2c9e4c4b18a",
+            "vf-5f4d797dc83fad763874-p1",
+            "vf-7af9dc709655bc2e2754-p1",
+            "vf-763fd456597dbe5382d6-p1",
+            "vf-d317db5982bda3d288fc"
+          ],
+          "semantic_similarities": [
+            0.8811,
+            0.876,
+            0.8683,
+            0.8631,
+            0.8662
+          ],
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "latency_ms": 17.69,
+          "error": null,
+          "answer": {
+            "abstained": false,
+            "answer": "Theo mục Ghế và hệ thống an toàn > Ghế trẻ em > Tổng quan về ghế trẻ em (CRS): Dây đai an toàn được lắp trong xe được thiết kế phù hợp với người lớn và trẻ lớn. Trẻ nhỏ và trẻ sơ sinh phải được đảm bảo trong một Ghế An toàn Trẻ em (CRS) được chứng nhận phù hợp với độ tuổi, chiều cao và cân nặng của trẻ, và cho vị trí ghế mà trẻ lựa chọn. Không phải tất cả CRS đều an toàn để sử dụng ở tất cả các vị trí ghế (chi tiết hơn được cung cấp thêm dưới đây) Sử dụng theo thứ tự ưu tiên ghế ngoài của hàng ghế thứ hai, ghế trung tâm của hàng ghế thứ hai, và chỉ trong trường hợp cần thiết ghế hành khách phía trước để lắp CRS để chứa trẻ nhỏ và trẻ sơ sinh.",
+            "citation_valid": true,
+            "citations": [
+              {
+                "source_id": "vf-71737ffbe2c9e4c4b18a",
+                "title": "Ghế trẻ em",
+                "section_path": [
+                  "Ghế và hệ thống an toàn",
+                  "Ghế trẻ em",
+                  "Tổng quan về ghế trẻ em (CRS)"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266342"
+              }
+            ],
+            "reference_fact_coverage": 1.0,
+            "citation_reference_precision": 1.0,
+            "error": null,
+            "latency_ms": 0.43
+          }
+        },
+        {
+          "id": "vf8-child_seat-2",
+          "query": "Dây đai của người lớn có đủ để bảo vệ trẻ nhỏ không?",
+          "answerable": true,
+          "retrieved_source_ids": [
+            "vf-a66756e787e7a82cebbf",
+            "vf-d38ac9e5cf4ed4684d72-p2",
+            "vf-9bab90bed69acca52e3c",
+            "vf-71737ffbe2c9e4c4b18a",
+            "vf-ae5b0c3d34ad9ac31064"
+          ],
+          "semantic_similarities": [
+            0.8707,
+            0.887,
+            0.8649,
+            0.8541,
+            0.8593
+          ],
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 0.25,
+          "latency_ms": 16.41,
+          "error": null,
+          "answer": {
+            "abstained": false,
+            "answer": "Theo mục Ghế và hệ thống an toàn > Dây đai an toàn > Chỉ báo cảnh báo dây đai an toàn: t chặt một cách an toàn. Không tuân theo cảnh báo này có thể dẫn đến thương tích cá nhân nghiêm trọng hoặc tử vong. Trẻ em dưới 13 tuổi phải được ngồi ở ghế trẻ em và lắp đặt ở hàng ghế sau.Không tuân theo cảnh báo này có thể dẫn đến thương tích cá nhân nghiêm trọng hoặc tử vong. Không bao giờ cho phép trẻ em ngồi ở ghế hành khách phía trước, trừ khi túi khí đã bị vô hiệu hóa. Nếu trẻ em ngồi ở ghế hành khách phía trước, hãy di chuyển ghế càng xa về phía sau càng tốt và cho chúng ngồi trên ghế trẻ em. Theo mục Ghế và hệ thống an toàn > Dây đai an toàn > Chỉ báo cảnh báo dây đai an toàn: sử dụng được cho nh",
+            "citation_valid": true,
+            "citations": [
+              {
+                "source_id": "vf-a66756e787e7a82cebbf",
+                "title": "Dây đai an toàn",
+                "section_path": [
+                  "Ghế và hệ thống an toàn",
+                  "Dây đai an toàn",
+                  "Chỉ báo cảnh báo dây đai an toàn"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266341"
+              },
+              {
+                "source_id": "vf-d38ac9e5cf4ed4684d72-p2",
+                "title": "Dây đai an toàn",
+                "section_path": [
+                  "Ghế và hệ thống an toàn",
+                  "Dây đai an toàn",
+                  "Chỉ báo cảnh báo dây đai an toàn"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266341"
+              }
+            ],
+            "reference_fact_coverage": 0.0,
+            "citation_reference_precision": 0.0,
+            "error": null,
+            "latency_ms": 0.47
+          }
+        },
+        {
+          "id": "vf8-mirror_control-1",
+          "query": "Cách điều chỉnh gương chiếu hậu bên ngoài VF8 như thế nào?",
+          "answerable": true,
+          "retrieved_source_ids": [
+            "vf-ac6117205fa59dcdd10f",
+            "vf-14aac35d9364a7b21abb",
+            "vf-efa7b60022ff893451b1",
+            "vf-54dd7e2cff519d3e44d0",
+            "vf-90bf58f81e262d67728a"
+          ],
+          "semantic_similarities": [
+            0.9128,
+            0.9016,
+            0.8789,
+            0.876,
+            0.8781
+          ],
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "latency_ms": 16.05,
+          "error": null,
+          "answer": {
+            "abstained": false,
+            "answer": "Theo mục Lái xe > Gương > Điều chỉnh gương: Gương bên có thể được điều chỉnh bằng cách sử dụng các nút điều khiển trong Khu vực điều khiển xe trên màn hình trung tâm Chạm vào biểu tượng để mở bảng điều khiển công thái học. Chạm vào gương chiếu hậu bên ngoài . Chọn gương bên nào để điều chỉnh. Sử dụng cụm nút điều khiển bên trái trên vô lăng để điều chỉnh gương. Chạm vào Gập để gập các gương vào bên trong. LƯU Ý Các gương chiếu hậu bên ngoài chỉ có thể gập lại nếu tốc độ của xe dưới 16km/h (10 mph). Khi vị trí gương được thay đổi, một thông báo sẽ xuất hiện trên màn cho biết có lưu vị trí mới hay không. Chạm vào Lưu, và vị trí gương sẽ được lưu vào hồ sơ người dùng hiện tại.",
+            "citation_valid": true,
+            "citations": [
+              {
+                "source_id": "vf-ac6117205fa59dcdd10f",
+                "title": "Gương",
+                "section_path": [
+                  "Lái xe",
+                  "Gương",
+                  "Điều chỉnh gương"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266351"
+              }
+            ],
+            "reference_fact_coverage": 1.0,
+            "citation_reference_precision": 1.0,
+            "error": null,
+            "latency_ms": 0.38
+          }
+        },
+        {
+          "id": "vf8-mirror_control-2",
+          "query": "Muốn chỉnh gương bên thì dùng màn hình và nút nào?",
+          "answerable": true,
+          "retrieved_source_ids": [
+            "vf-ac6117205fa59dcdd10f",
+            "vf-efa7b60022ff893451b1",
+            "vf-14aac35d9364a7b21abb",
+            "vf-31fdb93dbebe8f06841c-p2",
+            "vf-ae1c18c9f6d48103e13e"
+          ],
+          "semantic_similarities": [
+            0.876,
+            0.8561,
+            0.8646,
+            0.8526,
+            0.8551
+          ],
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "latency_ms": 11.86,
+          "error": null,
+          "answer": {
+            "abstained": false,
+            "answer": "Theo mục Lái xe > Gương > Điều chỉnh gương: Gương bên có thể được điều chỉnh bằng cách sử dụng các nút điều khiển trong Khu vực điều khiển xe trên màn hình trung tâm Chạm vào biểu tượng để mở bảng điều khiển công thái học. Chạm vào gương chiếu hậu bên ngoài . Chọn gương bên nào để điều chỉnh. Sử dụng cụm nút điều khiển bên trái trên vô lăng để điều chỉnh gương. Chạm vào Gập để gập các gương vào bên trong. LƯU Ý Các gương chiếu hậu bên ngoài chỉ có thể gập lại nếu tốc độ của xe dưới 16km/h (10 mph). Khi vị trí gương được thay đổi, một thông báo sẽ xuất hiện trên màn cho biết có lưu vị trí mới hay không. Chạm vào Lưu, và vị trí gương sẽ được lưu vào hồ sơ người dùng hiện tại.",
+            "citation_valid": true,
+            "citations": [
+              {
+                "source_id": "vf-ac6117205fa59dcdd10f",
+                "title": "Gương",
+                "section_path": [
+                  "Lái xe",
+                  "Gương",
+                  "Điều chỉnh gương"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266351"
+              }
+            ],
+            "reference_fact_coverage": 1.0,
+            "citation_reference_precision": 1.0,
+            "error": null,
+            "latency_ms": 0.3
+          }
+        },
+        {
+          "id": "vf8-starting_key-1",
+          "query": "Khởi động VF8 cần chìa khóa ở đâu?",
+          "answerable": true,
+          "retrieved_source_ids": [
+            "vf-3329b85b8636f8da4ef8",
+            "vf-3fe52f84629d654250ef",
+            "vf-b534426b05d3d89ea8f3-p2",
+            "vf-0f0f86155b8abafe1c0b",
+            "vf-c44bc9708a8f15862d71"
+          ],
+          "semantic_similarities": [
+            0.8744,
+            0.869,
+            0.861,
+            0.8614,
+            0.8626
+          ],
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "latency_ms": 9.48,
+          "error": null,
+          "answer": {
+            "abstained": false,
+            "answer": "Theo mục Lái xe > Khởi động/dừng > Khởi động xe: Xe được trang bị công nghệ cho phép khởi động/tắt không cần chìa khóa. Phải có chìa khóa điều khiển từ xa hợp lệ bên trong xe để khởi động xe. Theo mục Lái xe > Khởi động/dừng > Pin của chìa khoá điều khiển từ xa gần hết điện: Nếu pin của chìa khóa điều khiển từ xa quá thấp, xe vẫn có thể khởi động được. Để khởi động xe: Đặt chìa khóa vào vị trí được hiển thị Nhấn phanh và ấn nút D hoặc R Đặt chìa khóa vào vị trí được hiển thị Nhấn phanh và ấn nút D hoặc R",
+            "citation_valid": true,
+            "citations": [
+              {
+                "source_id": "vf-3329b85b8636f8da4ef8",
+                "title": "Khởi động/dừng",
+                "section_path": [
+                  "Lái xe",
+                  "Khởi động/dừng",
+                  "Khởi động xe"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266348"
+              },
+              {
+                "source_id": "vf-3fe52f84629d654250ef",
+                "title": "Khởi động/dừng",
+                "section_path": [
+                  "Lái xe",
+                  "Khởi động/dừng",
+                  "Pin của chìa khoá điều khiển từ xa gần hết điện"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266348"
+              }
+            ],
+            "reference_fact_coverage": 1.0,
+            "citation_reference_precision": 0.5,
+            "error": null,
+            "latency_ms": 0.24
+          }
+        },
+        {
+          "id": "vf8-starting_key-2",
+          "query": "Xe VF8 có thể khởi động khi chìa khóa hợp lệ ở ngoài xe không?",
+          "answerable": true,
+          "retrieved_source_ids": [
+            "vf-3329b85b8636f8da4ef8",
+            "vf-cc00646b02cd07fddada",
+            "vf-b534426b05d3d89ea8f3-p2",
+            "vf-3fe52f84629d654250ef",
+            "vf-0f0f86155b8abafe1c0b"
+          ],
+          "semantic_similarities": [
+            0.8813,
+            0.8672,
+            0.8686,
+            0.8756,
+            0.8636
+          ],
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "latency_ms": 12.39,
+          "error": null,
+          "answer": {
+            "abstained": false,
+            "answer": "Theo mục Lái xe > Khởi động/dừng > Khởi động xe: Xe được trang bị công nghệ cho phép khởi động/tắt không cần chìa khóa. Phải có chìa khóa điều khiển từ xa hợp lệ bên trong xe để khởi động xe. Theo mục Đóng Mở và Khoang chứa đồ > Hệ thống bảo vệ xe > Vận hành hệ thống mã hóa động cơ của xe: Hệ thống mã hóa động cơ sẽ tự động bật khi xe ở trạng thái khóa. Đèn báo hệ thống mã hóa động cơ sẽ được hiển thị ngắn gọn trên màn hình cảm ứng. Khi hệ thống mã hóa động cơ phát hiện chìa khoá điều khiển từ xa hợp lệ, đèn báo sẽ tự động tắt. Nếu hệ thống không nhận diện được chìa khoá điều khiển từ xa hợp lệ đèn báo sẽ nhấp nháy và ngăn không cho xe khởi động.",
+            "citation_valid": true,
+            "citations": [
+              {
+                "source_id": "vf-3329b85b8636f8da4ef8",
+                "title": "Khởi động/dừng",
+                "section_path": [
+                  "Lái xe",
+                  "Khởi động/dừng",
+                  "Khởi động xe"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266348"
+              },
+              {
+                "source_id": "vf-cc00646b02cd07fddada",
+                "title": "Hệ thống bảo vệ xe",
+                "section_path": [
+                  "Đóng Mở và Khoang chứa đồ",
+                  "Hệ thống bảo vệ xe",
+                  "Vận hành hệ thống mã hóa động cơ của xe"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266339"
+              }
+            ],
+            "reference_fact_coverage": 1.0,
+            "citation_reference_precision": 0.5,
+            "error": null,
+            "latency_ms": 0.28
+          }
+        },
+        {
+          "id": "vf8-battery_12v-1",
+          "query": "Ắc quy 12V của VF8 có định mức bao nhiêu Ah?",
+          "answerable": true,
+          "retrieved_source_ids": [
+            "vf-a8b4f0d68e85b84ce58f",
+            "vf-d019aa3793272e5e2009",
+            "vf-02135603b28de932287d",
+            "vf-2681a20c11de3074f27f",
+            "vf-184dab0f331cb17a40bc"
+          ],
+          "semantic_similarities": [
+            0.887,
+            0.8735,
+            0.8646,
+            0.853,
+            0.8483
+          ],
+          "recall_at_k": 1.0,
+          "reciprocal_rank": 1.0,
+          "latency_ms": 10.62,
+          "error": null,
+          "answer": {
+            "abstained": false,
+            "answer": "Theo mục Thông số kỹ thuật > Thông số kỹ thuật > Ắc quy - 12V: Mô tả Chi tiết Định mức 45Ah Điện áp 12V Mô tả Chi tiết Định mức 45Ah Điện áp 12V Theo mục Bảo dưỡng > Hệ thống điện > Ắc quy 12V: Xe được trang bị ắc quy 12V được sử dụng để cấp điện cho xe và các thành phần điện của xe. Ngay cả khi tắt thiết bị điện, ắc quy 12V vẫn có thể cạn nếu không sử dụng xe trong một thời gian dài. Liên hệ với Xưởng dịch vụ của VinFast hoặc cơ sở dịch vụ được VinFast ủy quyền để biết thêm thông tin. LƯU Ý Nếu xe không phản ứng và không mở khóa, mở cửa hoặc sạc, ắc quy 12V có thể bị đã bị cạn. Liên hệ với xưởng dịch vụ ủy quyền của VinFast.",
+            "citation_valid": true,
+            "citations": [
+              {
+                "source_id": "vf-a8b4f0d68e85b84ce58f",
+                "title": "Thông số kỹ thuật",
+                "section_path": [
+                  "Thông số kỹ thuật",
+                  "Thông số kỹ thuật",
+                  "Ắc quy - 12V"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266381"
+              },
+              {
+                "source_id": "vf-d019aa3793272e5e2009",
+                "title": "Hệ thống điện",
+                "section_path": [
+                  "Bảo dưỡng",
+                  "Hệ thống điện",
+                  "Ắc quy 12V"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266374"
+              }
+            ],
+            "reference_fact_coverage": 1.0,
+            "citation_reference_precision": 0.5,
+            "error": null,
+            "latency_ms": 0.25
+          }
+        },
+        {
+          "id": "vf8-battery_12v-2",
+          "query": "Thông số định mức ắc quy thấp áp là gì?",
+          "answerable": true,
+          "retrieved_source_ids": [],
+          "semantic_similarities": [],
+          "recall_at_k": 0.0,
+          "reciprocal_rank": 0.0,
+          "latency_ms": 0.02,
+          "error": null,
+          "answer": {
+            "abstained": true,
+            "answer": "Không đủ bằng chứng.",
+            "citation_valid": true,
+            "reference_fact_coverage": 0.0,
+            "citation_reference_precision": null,
+            "latency_ms": 0.0,
+            "error": null
+          }
+        },
+        {
+          "id": "vf8-boundary-17",
+          "query": "Mã nguồn firmware điều khiển pin VF8 là gì?",
+          "answerable": false,
+          "retrieved_source_ids": [
+            "vf-ae3164ed374a2f3b6284",
+            "vf-286a448e844d19e2f0f5",
+            "vf-9de08f4ecd7afd3b0386",
+            "vf-8da1b4d0ad899a7071d1",
+            "vf-28aea83cabff1b2f3ef0"
+          ],
+          "semantic_similarities": [
+            0.8406,
+            0.8233,
+            0.8644,
+            0.8508,
+            0.8497
+          ],
+          "recall_at_k": null,
+          "reciprocal_rank": null,
+          "latency_ms": 10.74,
+          "error": null,
+          "answer": {
+            "abstained": false,
+            "answer": "Theo mục Màn hình, Kết nối và Điều hòa > Màn hình cảm ứng > Xác thực: Trang này cung cấp quyền truy cập vào các cài đặt sau: PIN Liên kết chìa khóa điều khiển từ xa (nếu được trang bị) Để cài đặt PIN: Chạm vào Cài đặt . Nhập Mã PIN 6 chữ số. Để đặt lại/xóa mã PIN: Chạm vào Đặt lại/xóa mã PIN . Nhập mã PIN để xác nhận. Để liên kết chìa khóa điều khiển từ xa: Chạm vào Liên kết chìa khóa điều khiển từ xa . Đặt Chìa khóa điều khiển từ xa vào giá để cốc Xem > Khởi động và tắt xe > Khởi động xe - Pin của chìa khóa điều khiển từ xa yếu. Chạm vào Liên kết chìa khóa điều khiển từ xa . Để sửa/hủy liên kết chìa khóa điều khiển từ xa: Mở cài đặt hồ sơ > Xác nhận .",
+            "citation_valid": true,
+            "citations": [
+              {
+                "source_id": "vf-ae3164ed374a2f3b6284",
+                "title": "Màn hình cảm ứng",
+                "section_path": [
+                  "Màn hình, Kết nối và Điều hòa",
+                  "Màn hình cảm ứng",
+                  "Xác thực"
+                ],
+                "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266359"
+              }
+            ],
+            "reference_fact_coverage": null,
+            "citation_reference_precision": null,
+            "error": null,
+            "latency_ms": 0.1
+          }
+        }
+      ]
+    }
+  },
+  "limitations": [
+    "Draft labels await human review",
+    "Keyword fact coverage is a proxy, not semantic entailment",
+    "Timing is this host, not AGX Xavier",
+    "Single pass; no confidence intervals",
+    "Source relevance is at original chunk granularity",
+    "No action is executed by this benchmark"
+  ]
+}

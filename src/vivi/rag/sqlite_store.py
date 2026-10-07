@@ -122,6 +122,11 @@ class SQLiteHandbookStore:
         vehicle_model, model_year, locale = next(iter(scopes))
         current_ids = {item.source_id for item in chunks}
         with self._connect() as connection:
+            if connection.execute("SELECT 1 FROM sqlite_master WHERE name = 'vector_manifest'").fetchone():
+                raise RuntimeError(
+                    "Cannot import into a vector artifact; import into handbook-source.sqlite3 "
+                    "then run python -m src.vivi.cli.build_index"
+                )
             existing = {
                 row["source_id"]
                 for row in connection.execute(

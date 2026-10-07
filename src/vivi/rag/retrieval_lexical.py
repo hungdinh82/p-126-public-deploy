@@ -1,16 +1,23 @@
 from __future__ import annotations
 
+import re
+import unicodedata
 from pathlib import Path
 
 from rank_bm25 import BM25Okapi
 
 from src.vivi.ingestion.crawler import CrawlTarget
-from src.vivi.rag.rerankers.hybrid import _tokens
 from src.vivi.rag.schemas import HandbookChunk, RetrievedChunk
 
 
+def _tokens(text: str) -> list[str]:
+    normalized = unicodedata.normalize("NFD", text.lower())
+    ascii_text = "".join(char for char in normalized if unicodedata.category(char) != "Mn").replace("đ", "d")
+    return re.findall(r"[a-z0-9]+", ascii_text)
+
+
 class LexicalHandbookRetriever:
-    """Local full-corpus fallback when remote embeddings are unavailable."""
+    """Local full-corpus BM25 baseline."""
 
     def __init__(self, data_dir: Path, *, final_k: int = 5) -> None:
         self.data_dir = Path(data_dir)
@@ -57,7 +64,7 @@ class LexicalHandbookRetriever:
         target = CrawlTarget(*key)
         path = self.data_dir / "parsed" / target.slug / "chunks.jsonl"
         if not path.exists():
-            raise FileNotFoundError(f"parsed handbook not found: {path}; run build_index first")
+            raise FileNotFoundError(f"parsed handbook not found: {path}; crawl and parse the handbook first")
         self._chunks = [
             HandbookChunk.model_validate_json(line)
             for line in path.read_text(encoding="utf-8").splitlines()

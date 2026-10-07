@@ -63,12 +63,13 @@ async def health():
             "graph_providers": sorted(runtime.orchestrator.graph_providers),
             "retrieval": {
                 "sqlite": "sqlite_fts5",
+                "sqlite_local": "sqlite_fts5_local_e5",
                 "lexical": "lexical_bm25",
-                "hybrid": "chroma_hybrid",
             }[config.rag_retrieval_mode],
             "retrieval_mode": config.rag_retrieval_mode,
             "handbook_available": config.rag_handbook_db.is_file(),
             "handbook_path": str(config.rag_handbook_db),
+            "local_only": config.rag_local_only,
         },
         "llm": {
             "provider": active_provider,

@@ -82,7 +82,7 @@ class Settings(BaseSettings):
     soniox_timeout_seconds: float = 30
     soniox_stream_max_seconds: float = 60
 
-    llm_provider: Literal["rules", "openai", "google", "local", "openrouter"] = "rules"
+    llm_provider: Literal["rules", "openai", "local", "openrouter"] = "rules"
     llm_timeout_seconds: float = 30
     openai_api_key: str = ""
     openai_base_url: str = "https://api.openai.com/v1"
@@ -94,8 +94,6 @@ class Settings(BaseSettings):
     openrouter_reasoning: bool = False
     # Vietnamese answers with citations exceed the 512-token local default.
     openrouter_max_tokens: int = Field(default=1536, ge=64, le=8192)
-    google_api_key: str = ""
-    google_model: str = "gemini-2.5-flash"
     local_llm_base_url: str = "http://127.0.0.1:1234/v1"
     local_llm_api_key: str = "local"
     local_llm_model: str = ""
@@ -108,22 +106,21 @@ class Settings(BaseSettings):
     zerotts_preload: bool = False
 
     database_url: str = "sqlite:///./data/app.db"
-    chroma_persist_dir: str = "./data/chroma"
-    rag_generation_model: str = "gemini-2.5-flash"
-    rag_embedding_model: str = "gemini-embedding-001"
-    rag_embedding_dimensions: int = Field(default=768, ge=128, le=3072)
     rag_data_dir: Path = Path("./data/handbooks")
     rag_history_db: Path = Path("./data/vivi_rag.sqlite3")
     rag_handbook_db: Path = Path("./data/handbooks/handbook.sqlite3")
-    rag_collection_name: str = "vivi_handbook"
-    rag_retrieval_mode: Literal["sqlite", "lexical", "hybrid"] = "sqlite"
+    rag_retrieval_mode: Literal["sqlite", "sqlite_local", "lexical"] = "sqlite_local"
+    rag_local_only: bool = Field(default=True, validation_alias="VIVI_RAG_LOCAL_ONLY")
+    rag_local_embedding_dir: Path = Path("./models/multilingual-e5-small-int8")
+    rag_embedding_threads: int = Field(default=2, ge=1, le=8)
+    rag_embedding_batch_size: int = Field(default=4, ge=1, le=32)
+    rag_local_min_similarity: float = Field(default=0.0, ge=0, le=1)
     rag_default_vehicle_model: str = "VF8"
     rag_default_model_year: int = 2026
     rag_default_locale: str = "vi_vn"
     rag_retrieval_k: int = Field(default=12, ge=1, le=50)
     rag_final_k: int = Field(default=5, ge=1, le=12)
     rag_prompt_max_characters: int = Field(default=6000, ge=1000, le=30000)
-    rag_max_cosine_distance: float = Field(default=0.62, ge=0, le=2)
     rag_history_turns: int = Field(default=6, ge=0, le=20)
 
     @property
