@@ -8,6 +8,7 @@ def llm_models(config: Settings) -> dict[str, str]:
     models = {
         "rules": "Kịch bản + LangGraph",
         "openai": config.openai_model,
+        "google": config.google_model,
         "local": config.local_llm_model,
         "openrouter": config.openrouter_model,
     }
@@ -19,6 +20,8 @@ def configured_llm_providers(config: Settings) -> list[str]:
     providers = ["rules"]
     if config.openai_api_key:
         providers.append("openai")
+    if config.google_api_key:
+        providers.append("google")
     if config.local_llm_model:
         providers.append("local")
     if config.openrouter_api_key:

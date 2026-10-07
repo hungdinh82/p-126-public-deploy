@@ -47,6 +47,16 @@ def handle_memory_request(
 ) -> IntentDecision | None:
     """Only explicit memory operations write; dialogue/logs never get mined automatically."""
     raw, normalized = _text(text)
+    # Personal memory operations are never handbook queries. Broad deletion is
+    # a typed pending task; an affirmative next turn, not prose matching, commits it.
+    if re.fullmatch(r"(?:hay |ban )?(?:xoa|quen) (?:tri|tri nho|ghi nho|bo nho|thong tin)(?: cua ban)? ve (?:toi|minh)", normalized):
+        from src.vivi.memory.tools import reset_offer
+        return reset_offer() if store else _reply("Mình chưa truy cập được bộ nhớ đã lưu.")
+    if re.fullmatch(r"(?:ban |vivi )?(?:co )?(?:biet|nho) (?:toi|minh) thich (?:gi|nhung gi)(?: khong)?", normalized):
+        from src.vivi.memory.tools import execute_memory_tool
+        return execute_memory_tool(store, profile_id, IntentDecision(
+            route="conversation", intent="memory.recall", arguments={"memory_key": "preferences"}
+        ), session_id=session_id, turn_id=turn_id)
     if re.match(r"^(?:dung|khong|thoi dung) (?:ghi nho|nho rang|luu vao bo nho)\b", normalized):
         return _reply("Được nhé, mình không lưu thông tin này.")
     remember = re.match(r"^(?:(?:hay |ban hay |giup toi )?(?:ghi nho|nho rang|luu vao bo nho)\s*[:,-]?\s*|tu nay )", normalized)

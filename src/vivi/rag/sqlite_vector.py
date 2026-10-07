@@ -6,8 +6,9 @@ import threading
 from pathlib import Path
 
 from src.vivi.rag.embeddings.base import EmbeddingProvider
+from src.vivi.rag.knowledge import analyze_question
 from src.vivi.rag.query import expand_query, lexical_query
-from src.vivi.rag.relevance import variant_filter
+from src.vivi.rag.relevance import matches_topic, normalize_text, rerank_score, variant_filter
 from src.vivi.rag.schemas import RetrievedChunk
 from src.vivi.rag.sqlite_store import SQLiteHandbookStore
 
@@ -81,7 +82,7 @@ class SQLiteVectorRetriever:
         # Avoid activating a large BLAS thread pool for this small matrix.
         scores = np.einsum("ij,j->i", matrix, vector, optimize=False)
         accept_variant = variant_filter(query)
-        eligible = np.asarray([accept_variant(chunk) for chunk in chunks])
+        eligible = np.asarray([accept_variant(chunk) and matches_topic(query, chunk) for chunk in chunks])
         order = [int(index) for index in np.argsort(-scores, kind="stable") if eligible[index]][:self.retrieval_k]
         candidates: dict[str, RetrievedChunk] = {}
         for rank, index in enumerate(order, 1):
@@ -94,7 +95,7 @@ class SQLiteVectorRetriever:
         if self.mode == "hybrid":
             lexical = self.store.search(lexical_query(expand_query(query)), vehicle_model=scope[0], model_year=scope[1], locale=scope[2],
                                         limit=self.retrieval_k * 4)
-            lexical = [chunk for chunk in lexical if accept_variant(chunk)][:self.retrieval_k]
+            lexical = [chunk for chunk in lexical if accept_variant(chunk) and matches_topic(query, chunk)][:self.retrieval_k]
             by_id = {chunk.source_id: i for i, chunk in enumerate(chunks)}
             for rank, chunk in enumerate(lexical, 1):
                 index = by_id.get(chunk.source_id)
@@ -107,7 +108,24 @@ class SQLiteVectorRetriever:
                 item = candidates[chunk.source_id]
                 item.lexical_score = chunk.lexical_score
                 item.fused_score += 1 / (60 + rank)
-        return sorted(candidates.values(), key=lambda chunk: (-chunk.fused_score, chunk.source_id))[:self.final_k]
+        ranked = sorted(candidates.values(), key=lambda chunk: (-rerank_score(query, chunk), chunk.source_id))
+        result = ranked[:self.final_k]
+        question = analyze_question(query)
+        # An overview and its limitation are complementary evidence roles.
+        # Reserve one slot for a directly scoped safety statement, rather than
+        # returning five near-duplicate control tables from the same section.
+        if question.topic and question.topic.umbrella and question.kind != "procedure" and self.final_k > 1:
+            for index in np.argsort(-scores, kind="stable"):
+                source = chunks[int(index)]
+                leaf = normalize_text(source.section_path[-1] if source.section_path else source.chapter)
+                if eligible[index] and float(scores[index]) >= self.min_similarity and question.topic.matches(leaf):
+                    if "khong the thay the" in normalize_text(source.content):
+                        if source.source_id not in {item.source_id for item in result}:
+                            warning = source.model_copy(deep=True)
+                            warning.semantic_distance = 1 - float(scores[index])
+                            result = result[:self.final_k - 1] + [warning]
+                        break
+        return result
 
 
 def write_vectors(connection: sqlite3.Connection, source_ids: list[str], vectors: list[list[float]], dimensions: int):

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import re
 import time
 from typing import Any, Literal
 from uuid import uuid4
@@ -12,32 +11,29 @@ from pydantic import ValidationError
 
 from src.vivi.agents.action_validation import validate_action_arguments as _validate_action
 from src.vivi.agents.classifier import RulesIntentClassifier
+from src.vivi.agents.context import resolve_request
 from src.vivi.agents.contracts import ActionProposal, AssistantOutput, IntentDecision
 from src.vivi.agents.state import AgentState
+from src.vivi.agents.tasks import pending_for_turn, resume_task
 from src.vivi.agents.voice import verified_action_reply
 from src.vivi.memory.conversation import handle_memory_request, memory_action_decision
+from src.vivi.memory.tools import execute_memory_tool
 from src.vivi.rag.generator import (
     ExtractiveHandbookGenerator,
     normalize_answer,
     validate_grounding,
 )
+from src.vivi.rag.knowledge import analyze_question
+from src.vivi.rag.relevance import matches_topic, matches_variant
 from src.vivi.rag.runtime import HandbookServices, create_services
 from src.vivi.rag.schemas import ModelDecision
 from src.vivi.rag.scope import scope_rejection_reason
 from src.vivi.vehicle.zones import zoned_noun
 
 ABSTAIN_MESSAGE = "Mình chưa có thông tin chắc chắn để trả lời câu này."
-_FOLLOW_UP_RE = re.compile(r"\b(vậy|thế|nó|cái đó|việc đó|còn|như vậy)\b", re.IGNORECASE)
-
-
 def _retrieval_query(state: AgentState) -> str:
-    query = state["query"]
-    history = state.get("conversation_history", [])
-    if history and history[-1].get("route") == "handbook" and (
-        _FOLLOW_UP_RE.search(query) or re.search(r"tính năng.*khác", query, re.I)
-    ):
-        return f"{history[-1]['query']}\n{query}"
-    return query
+    query = state.get("decision", {}).get("arguments", {}).get("query") or state["query"]
+    return resolve_request(query, state.get("conversation_history", [])).text
 
 
 class CompiledAssistantGraph:
@@ -178,6 +174,8 @@ def build_graph(services: HandbookServices | None = None):
             }
         return {
             "conversation_history": history,
+            **(resume_task(state["input_text"], history) if not state.get("confirmation_id")
+               and not state.get("metadata", {}).get("preclassified_decision") else {}),
             "timings": _merge_timing(state, "load_history", started),
         }
 
@@ -212,7 +210,14 @@ def build_graph(services: HandbookServices | None = None):
             available_memory = None
         try:
             # A preclassified request/confirmation is not a memory write request.
-            if not state.get("confirmation_id") and not state.get("metadata", {}).get("preclassified_decision"):
+            if state.get("memory_reset_accepted"):
+                if available_memory is None:
+                    raise RuntimeError("Memory unavailable")
+                available_memory.reset(runtime.memory_profile_id)
+                context = []
+                decision = IntentDecision(route="conversation", intent="conversation.respond",
+                                          response_text="Mình đã xoá thông tin đã ghi nhớ về bạn.")
+            elif not state.get("task_decision") and not state.get("confirmation_id") and not state.get("metadata", {}).get("preclassified_decision"):
                 decision = handle_memory_request(
                     available_memory, runtime.memory_profile_id, state["input_text"],
                     session_id=state["session_id"], turn_id=state["turn_id"],
@@ -231,6 +236,7 @@ def build_graph(services: HandbookServices | None = None):
                    "errors": errors, "timings": _merge_timing(state, "load_memory", started)}
         if decision is not None:
             updates.update(decision=decision.model_dump(mode="json"), route=decision.route, intent=decision.intent)
+            updates["memory_reset_requested"] = bool(decision.follow_up and decision.follow_up.intent == "memory.reset")
         return updates
 
     def memory_decision(state: AgentState) -> IntentDecision | None:
@@ -267,7 +273,8 @@ def build_graph(services: HandbookServices | None = None):
             decision = (
                 IntentDecision.model_validate(preclassified)
                 if preclassified is not None
-                else memory_decision(state) or classifier.classify_with_memory(
+                else (IntentDecision.model_validate(state["task_decision"]) if state.get("task_decision") else None)
+                or memory_decision(state) or classifier.classify_with_memory(
                     state["input_text"],
                     state.get("conversation_history", []),
                     state.get("vehicle_state"),
@@ -318,7 +325,8 @@ def build_graph(services: HandbookServices | None = None):
             decision = (
                 IntentDecision.model_validate(preclassified)
                 if preclassified is not None
-                else (await asyncio.to_thread(memory_decision, state)) or await classifier.aclassify_with_memory(
+                else (IntentDecision.model_validate(state["task_decision"]) if state.get("task_decision") else None)
+                or (await asyncio.to_thread(memory_decision, state)) or await classifier.aclassify_with_memory(
                     state["input_text"],
                     state.get("conversation_history", []),
                     state.get("vehicle_state"),
@@ -417,7 +425,9 @@ def build_graph(services: HandbookServices | None = None):
 
     def scope_guard(state: AgentState) -> dict[str, Any]:
         started = time.perf_counter()
-        reason = scope_rejection_reason(_retrieval_query(state))
+        raw_reason = scope_rejection_reason(state["query"])
+        reason = (raw_reason if raw_reason and not raw_reason.startswith("Bạn muốn tìm hiểu")
+                  else scope_rejection_reason(_retrieval_query(state)))
         if reason:
             return {
                 "answer": reason,
@@ -442,10 +452,12 @@ def build_graph(services: HandbookServices | None = None):
                 retrieval_query, state["vehicle_model"], state["model_year"], state["locale"]
             )
             values = [chunk.model_dump(mode="json") for chunk in chunks]
+            accepted = [chunk.model_dump(mode="json") for chunk in chunks
+                        if matches_topic(retrieval_query, chunk) and matches_variant(retrieval_query, chunk)]
             return {
                 "retrieval_query": retrieval_query,
                 "retrieved_chunks": values,
-                "accepted_chunks": values,
+                "accepted_chunks": accepted,
                 "timings": _merge_timing(state, "retrieve", started),
             }
         except Exception as exc:
@@ -761,6 +773,21 @@ def build_graph(services: HandbookServices | None = None):
     def compose_decision_response(state: AgentState) -> dict[str, Any]:
         started = time.perf_counter()
         decision = IntentDecision.model_validate(state["decision"])
+        updates = {}
+        if decision.intent.startswith("memory."):
+            updates["tool_record"] = {"name": decision.intent,
+                                      "arguments": decision.arguments.model_dump(exclude_none=True),
+                                      "status": "completed"}
+            try:
+                decision = execute_memory_tool(runtime.memory, runtime.memory_profile_id, decision,
+                                               session_id=state["session_id"], turn_id=state["turn_id"])
+                updates["memory_reset_requested"] = bool(decision.follow_up and decision.follow_up.intent == "memory.reset")
+            except Exception as exc:
+                updates["tool_record"]["status"] = "failed"
+                decision = IntentDecision(route="conversation", intent="conversation.respond",
+                                          response_text="Mình chưa xử lý được bộ nhớ lúc này. Bạn thử lại nhé.")
+                updates["errors"] = [*state.get("errors", []), {"stage": "memory_tool", "message": str(exc)}]
+            updates.update(decision=decision.model_dump(mode="json"), route=decision.route)
         text = decision.clarification_question or decision.response_text
         if not text:
             text = "Mình chưa hỗ trợ yêu cầu này."
@@ -770,6 +797,7 @@ def build_graph(services: HandbookServices | None = None):
             "unsupported": "unsupported",
         }
         return {
+            **updates,
             "answer": text,
             "response": text,
             "response_text": text,
@@ -813,7 +841,21 @@ def build_graph(services: HandbookServices | None = None):
     def persist(state: AgentState) -> dict[str, Any]:
         started = time.perf_counter()
         try:
-            runtime.history.save({**state, "session_id": history_session(state)})
+            diagnostics = {
+                "pending_task": pending_for_turn(state),
+                "task_resolution": state.get("task_resolution"),
+                "generation_provider": runtime.generation_provider,
+                "request": {**resolve_request(state["query"], state.get("conversation_history", [])).as_dict(),
+                            **analyze_question(state.get("retrieval_query") or state["query"]).as_dict()},
+                "tool": state.get("tool_record") or {"name": state.get("intent"),
+                         "arguments": state.get("decision", {}).get("arguments", {}),
+                         "status": state.get("status")},
+                "retrieval_query": state.get("retrieval_query"),
+                "retrieved_source_ids": [chunk["source_id"] for chunk in state.get("retrieved_chunks", [])],
+                "accepted_source_ids": [chunk["source_id"] for chunk in state.get("accepted_chunks", [])],
+                "errors": state.get("errors", []),
+            }
+            runtime.history.save({**state, "session_id": history_session(state), "diagnostics": diagnostics})
         except Exception as exc:
             return {
                 "errors": [*state.get("errors", []), {"stage": "persist", "message": str(exc)}],

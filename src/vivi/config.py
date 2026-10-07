@@ -4,7 +4,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict, TomlConfigSettingsSource
 
 
@@ -92,11 +92,16 @@ class Settings(BaseSettings):
     soniox_timeout_seconds: float = 30
     soniox_stream_max_seconds: float = 60
 
-    llm_provider: Literal["rules", "openai", "local", "openrouter"] = "rules"
+    llm_provider: Literal["rules", "openai", "google", "local", "openrouter"] = "google"
     llm_timeout_seconds: float = 30
     openai_api_key: str = ""
     openai_base_url: str = "https://api.openai.com/v1"
     openai_model: str = "gpt-4o-mini"
+    google_api_key: str = Field(default="", validation_alias=AliasChoices("GOOGLE_API_KEY", "GEMINI_API_KEY"))
+    google_base_url: str = "https://generativelanguage.googleapis.com/v1beta/openai"
+    google_model: str = "gemini-3.5-flash-lite"
+    google_max_tokens: int = Field(default=4096, ge=64, le=8192)
+    google_reasoning_effort: Literal["minimal", "low", "medium", "high"] = "low"
     openrouter_api_key: str = ""
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
     openrouter_model: str = "qwen/qwen3.7-flash"

@@ -145,7 +145,8 @@ def test_follow_up_query_uses_previous_question_for_retrieval():
         graph.invoke(
             {"session_id": "follow", "turn_id": "t2", "model_input": _input("Vậy tắt nó thế nào?")}
         )
-        assert retriever.queries[-1] == "Bật chế độ cắm trại thế nào?\nVậy tắt nó thế nào?"
+        assert "cắm trại" in retriever.queries[-1] and "tắt" in retriever.queries[-1]
+        assert "Bật chế độ" not in retriever.queries[-1]
 
 
 def test_raw_stt_text_routes_to_handbook_and_returns_tts_envelope():
@@ -286,7 +287,7 @@ async def test_relative_temperature_uses_authoritative_state_across_async_turns(
         assert absolute["output"]["vehicle_state"]["temperature_celsius"] == 26
 
 
-def test_rules_routes_common_vehicle_question_to_handbook():
+def test_rules_routes_vehicle_question_to_handbook_and_rejects_wrong_topic():
     with tempfile.TemporaryDirectory() as directory:
         services = HandbookServices(
             FakeRetriever(),
@@ -298,7 +299,10 @@ def test_rules_routes_common_vehicle_question_to_handbook():
         )
 
         assert result["output"]["route"] == "handbook"
-        assert result["output"]["status"] == "answered"
+        # The fixture is about charging, not ADAS. A valid source ID does not
+        # make this answer relevant to the question.
+        assert result["output"]["status"] == "insufficient_evidence"
+        assert result["output"]["citations"] == []
         assert result["output"]["tts_text"] == result["output"]["response_text"]
 
 

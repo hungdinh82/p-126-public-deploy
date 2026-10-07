@@ -82,7 +82,11 @@ flowchart LR
     Safety --> Execute[Thực thi và xác minh]
 ```
 
-Những yêu cầu về memory được xử lý deterministic trước model. Gọi lại một lệnh
+Các cú pháp memory tường minh được xử lý deterministic trước model. Local planner
+còn có các tool memory.recall/remember/forget/reset; executor kiểm tra tham số rồi
+đọc/ghi SQLite. Reset do model đề nghị chờ xác nhận qua task có hạn dùng; câu trả
+lời không tự nhận đã ghi/xoá trước transaction. Xem [dialogue tasks](dialogue_tasks.md).
+Gọi lại một lệnh
 có tên dùng rules để tạo action rồi vào cùng safety graph với lệnh trực tiếp.
 Lệnh tương đối như “tăng điều hoà 2 độ” dùng nhiệt độ mới đọc khi gọi lại, không
 dùng nhiệt độ ở lúc ghi nhớ. Qua hội thoại, thiếu thông tin, nhiều thao tác, phủ định, điều kiện,

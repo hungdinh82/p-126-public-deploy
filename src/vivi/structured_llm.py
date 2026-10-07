@@ -23,6 +23,7 @@ class StructuredChatClient:
         extra_body: dict[str, Any] | None = None,
         extra_headers: dict[str, str] | None = None,
         schema_in_prompt: bool = False,
+        max_attempts: int = 3,
     ) -> None:
         if not model:
             raise RuntimeError("A model name is required for structured generation")
@@ -37,6 +38,7 @@ class StructuredChatClient:
         # Some routed models accept response_format without enforcing the
         # schema, so the schema is also spelled out in the system prompt.
         self.schema_in_prompt = schema_in_prompt
+        self.max_attempts = max(1, min(3, max_attempts))
 
     def generate_json(
         self,
@@ -47,8 +49,11 @@ class StructuredChatClient:
         schema_name: str,
     ) -> str:
         payload = self._request_payload(system, user, schema, schema_name)
+        return self._response_content(self._complete(payload))
+
+    def _complete(self, payload: dict) -> httpx.Response:
         headers = self._headers()
-        for attempt in range(3):
+        for attempt in range(self.max_attempts):
             try:
                 with httpx.Client(
                     timeout=self.timeout_seconds,
@@ -56,9 +61,9 @@ class StructuredChatClient:
                 ) as client:
                     response = client.post(self.url, json=payload, headers=headers)
                     response.raise_for_status()
-                return self._response_content(response)
+                return response
             except (httpx.TimeoutException, httpx.NetworkError, httpx.HTTPStatusError) as exc:
-                if not self._retryable(exc) or attempt == 2:
+                if not self._retryable(exc) or attempt == self.max_attempts - 1:
                     raise
                 time.sleep(0.25 * (2**attempt))
         raise RuntimeError("structured generation failed")
@@ -72,8 +77,11 @@ class StructuredChatClient:
         schema_name: str,
     ) -> str:
         payload = self._request_payload(system, user, schema, schema_name)
+        return self._response_content(await self._acomplete(payload))
+
+    async def _acomplete(self, payload: dict) -> httpx.Response:
         headers = self._headers()
-        for attempt in range(3):
+        for attempt in range(self.max_attempts):
             try:
                 async with httpx.AsyncClient(
                     timeout=self.timeout_seconds,
@@ -81,12 +89,36 @@ class StructuredChatClient:
                 ) as client:
                     response = await client.post(self.url, json=payload, headers=headers)
                     response.raise_for_status()
-                return self._response_content(response)
+                return response
             except (httpx.TimeoutException, httpx.NetworkError, httpx.HTTPStatusError) as exc:
-                if not self._retryable(exc) or attempt == 2:
+                if not self._retryable(exc) or attempt == self.max_attempts - 1:
                     raise
                 await asyncio.sleep(0.25 * (2**attempt))
         raise RuntimeError("structured generation failed")
+
+    def _tool_payload(self, system: str, user: str, tools: list[dict]) -> dict:
+        return {**self.extra_body, "model": self.model,
+                "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+                "tools": tools, "tool_choice": "required", "parallel_tool_calls": False,
+                "temperature": 0, "max_tokens": self.max_tokens}
+
+    @staticmethod
+    def _tool_result(response: httpx.Response) -> tuple[str, dict]:
+        message = response.json()["choices"][0]["message"]
+        calls = message.get("tool_calls") or []
+        if len(calls) != 1:
+            raise ValueError("Planner must return exactly one tool call")
+        call = calls[0]["function"]
+        arguments = json.loads(call["arguments"])
+        if not isinstance(arguments, dict):
+            raise ValueError("Tool arguments must be an object")
+        return call["name"], arguments
+
+    def generate_tool(self, *, system: str, user: str, tools: list[dict]) -> tuple[str, dict]:
+        return self._tool_result(self._complete(self._tool_payload(system, user, tools)))
+
+    async def agenerate_tool(self, *, system: str, user: str, tools: list[dict]) -> tuple[str, dict]:
+        return self._tool_result(await self._acomplete(self._tool_payload(system, user, tools)))
 
     def _request_payload(
         self,
@@ -152,6 +184,20 @@ class StructuredChatClient:
         # Validate here so failures are attributed to the inference boundary.
         json.loads(value)
         return value
+
+
+def google_client(config: Any) -> StructuredChatClient:
+    """Gemini's OpenAI-compatible endpoint, with independent credentials/budget."""
+    return StructuredChatClient(
+        base_url=config.google_base_url,
+        api_key=config.google_api_key,
+        model=config.google_model,
+        timeout_seconds=config.llm_timeout_seconds,
+        max_tokens=config.google_max_tokens,
+        extra_body={"reasoning_effort": config.google_reasoning_effort},
+        schema_in_prompt=True,
+        max_attempts=1,
+    )
 
 
 def openrouter_client(config: Any) -> StructuredChatClient:

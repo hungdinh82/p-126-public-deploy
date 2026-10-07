@@ -25,7 +25,7 @@ def _turn(client: httpx.Client, base_url: str, session_id: str, provider: str, t
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-url", default="http://127.0.0.1:8787")
-    parser.add_argument("--provider", choices=("rules", "local", "openai", "openrouter"), default="rules")
+    parser.add_argument("--provider", choices=("rules", "local", "openai", "google", "openrouter"), default="rules")
     parser.add_argument("--timeout", type=float, default=120)
     args = parser.parse_args()
     base_url = args.base_url.rstrip("/")

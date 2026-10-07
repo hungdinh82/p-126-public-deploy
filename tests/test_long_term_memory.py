@@ -213,10 +213,12 @@ async def test_async_memory_path_and_disabled_memory(services):
     assert "đang tắt" in invoke(disabled, "Bạn nhớ gì về tôi?")["output"]["response_text"]
 
 
-def test_model_receives_memory_as_bounded_user_data_and_status_bypasses_model():
+def test_model_receives_memory_as_bounded_user_data_and_interprets_status():
     class Client:
         def generate_json(self, **kwargs):
             self.request = kwargs
+            if "Transcript hiện tại: Pin hiện tại" in kwargs["user"]:
+                return '{"route":"action","intent":"vehicle.get_status"}'
             return '{"route":"conversation","intent":"conversation.respond","response_text":"Mình đây, Nam nhé."}'
     client = Client()
     classifier = StructuredAPIIntentClassifier(client)

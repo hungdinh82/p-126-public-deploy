@@ -12,7 +12,7 @@ _UNSAFE_REPAIR = re.compile(
     r"can thiep dien cao ap|tat tui khi|tat he thong an toan)\b"
 )
 _TECHNICAL = re.compile(
-    r"\b(vf\s*8|xe|pin|sac|cong sac|cua|khoa|ghe|den|lai|phanh|lop|banh|"
+    r"\b(vf\s*8|xe|pin|sac|cong sac|cua (?:so|xe|kinh)|khoa|ghe|den|lai|phanh|lop|banh|"
     r"guong|dieu hoa|man hinh|che do|canh bao|bao duong|dau|gat nuoc|vo lang|"
     r"tui khi|day dai|adas|camera|cop|dong co|cong suat|ap suat|am thanh|"
     r"bluetooth|wifi|ung dung|carplay|android auto|hud|hanh trinh|do xe|"
@@ -34,6 +34,8 @@ def scope_rejection_reason(query: str) -> str | None:
         return "Mình không thể hướng dẫn can thiệp hệ thống an toàn hoặc điện cao áp."
     if _NON_TECHNICAL.search(normalized):
         return "Mình có thể giúp bạn dùng các tính năng trên xe; phần này mình chưa có thông tin."
-    if not _TECHNICAL.search(normalized):
+    from src.vivi.rag.knowledge import find_topic
+
+    if not _TECHNICAL.search(normalized) and find_topic(query) is None:
         return "Bạn muốn tìm hiểu tính năng nào trên chiếc VF8 của mình?"
     return None

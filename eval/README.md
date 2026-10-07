@@ -115,6 +115,14 @@ length checks against an in-memory car. See [voice behavior](../docs/voice_assis
 The original reports are historical; their extractive oracle coverage is not the
 current selector's score. No held-out labels were edited for this change.
 
+The October 7 audit adds 17 development cases from conversational failures and
+temperature semantics, for 57 voice cases in total. `voice_benchmark.py` checks
+optional `required_answer_terms`, `forbidden_answer_terms` and
+`expected_value_celsius` in addition to route/intent. Reports are saved separately
+as `results/voice-oct07.json`, `results/rag-oct07-dev.*` and
+`results/rag-oct07-test.*`; historical results are preserved. The new test-split
+report still has failures, detailed in [the conversation audit](../docs/voice_assistant.md).
+
 ## Memory regressions
 
 `memory_cases.jsonl` has 29 authored development turns in ordered episodes.
@@ -126,3 +134,41 @@ disabled, and user memory is never modified. Reports include per-turn checks and
 full-graph p50/p95 latency, excluding graph construction. These measurements are
 from the development host, not AGX Xavier or a real speech/SLM workload.
 See [memory design](../docs/memory.md) and `results/memory-dev.json`.
+
+## Agents/RAG refactor regressions
+
+`conversation_cases.jsonl` adds 12 situations / 18 turns including the latest log
+failures, resolved referents, topic changes, pending slots and fresh observations.
+The voice runner accepts `turns` arrays and checks route/intent at every turn, plus
+optional `expected_status`, answer terms and temperature arguments.
+
+```bash
+.venv/bin/python -m eval.voice_benchmark --dataset eval/conversation_cases.jsonl \
+  --output eval/results/conversation-refactor-dev.json
+```
+
+Reports `voice-refactor-dev.json`, `conversation-refactor-dev.json` and
+`rag-refactor-{dev,test}.*` are the current snapshot. Earlier reports remain
+baselines. The test split was inspected while fixing implementation regressions;
+it has not been relabelled, but current results are **not an unseen evaluation**.
+Create a new independent cohort before making a generalization claim.
+See [architecture, diagnosis and remaining limits](../docs/agent_rag_architecture.md).
+# Dialogue tasks and native local tools
+
+`task_cases.jsonl` adds six development episodes (14 turns): offers and consent,
+slot completion, vehicle confirmation, personal memory and corrections. The voice
+runner checks actual execution, exact arguments, memory counts and per-turn p50/p95.
+Each run uses temporary history/memory and a simulated vehicle; external networking
+is blocked. These are regression cases, not an unseen accuracy estimate.
+
+```bash
+.venv/bin/python -m eval.voice_benchmark --dataset eval/task_cases.jsonl \
+  --output eval/results/tasks-rules-dev.json
+# Requires an already running localhost inference server:
+LOCAL_LLM_MODEL=vivi-qwen3-1.7b LLM_TIMEOUT_SECONDS=90 \
+  .venv/bin/python -m eval.voice_benchmark --provider local \
+  --dataset eval/task_cases.jsonl --output eval/results/tasks-local-native-dev.json
+```
+
+See `docs/dialogue_tasks.md` for architecture, pinned artifacts, measured limitations
+and why the small experimental SLM is not the default runtime.

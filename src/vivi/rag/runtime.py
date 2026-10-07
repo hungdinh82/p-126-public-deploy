@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Protocol
 
 from src.vivi.agents.classifier import (
+    GoogleIntentClassifier,
     IntentClassifier,
     LocalIntentClassifier,
     OpenAIIntentClassifier,
@@ -17,6 +18,7 @@ from src.vivi.history.sqlite import SQLiteConversationHistory
 from src.vivi.memory.sqlite import SQLiteLongTermMemory
 from src.vivi.rag.generator import (
     ExtractiveHandbookGenerator,
+    GoogleHandbookGenerator,
     HandbookGenerator,
     LocalHandbookGenerator,
     OpenAIHandbookGenerator,
@@ -46,6 +48,7 @@ class HandbookServices:
     memory_profile_id: str = "default"
     memory_context_limit: int = 8
     memory_context_max_characters: int = 2000
+    generation_provider: str = "unknown"
 
 
 @lru_cache(maxsize=2)
@@ -65,9 +68,7 @@ def create_services(
     retrieval_mode = retrieval_mode or config.rag_retrieval_mode
     selected = provider
     if selected == "auto":
-        selected = "local" if config.local_llm_model else "rules"
-    if selected == "google":
-        raise ValueError("Gemini RAG has been removed; use rules or a local LLM")
+        selected = config.llm_provider
     if config.rag_local_only and selected not in {"rules", "local"}:
         raise RuntimeError("Offline RAG permits only rules or a self-hosted local LLM")
     if retrieval_mode == "sqlite":
@@ -96,6 +97,11 @@ def create_services(
             raise RuntimeError("OPENROUTER_API_KEY is required for the openrouter handbook graph")
         generator = OpenRouterHandbookGenerator(config)
         classifier = OpenRouterIntentClassifier(config)
+    elif selected == "google":
+        if not config.google_api_key:
+            raise RuntimeError("GOOGLE_API_KEY (or GEMINI_API_KEY) is required for the google handbook graph")
+        generator = GoogleHandbookGenerator(config)
+        classifier = GoogleIntentClassifier(config)
     elif selected == "rules":
         generator = ExtractiveHandbookGenerator()
         classifier = RulesIntentClassifier()
@@ -114,4 +120,5 @@ def create_services(
         memory_profile_id=config.memory_profile_id,
         memory_context_limit=config.memory_context_limit,
         memory_context_max_characters=config.memory_context_max_characters,
+        generation_provider=selected,
     )

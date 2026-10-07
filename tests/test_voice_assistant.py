@@ -98,12 +98,8 @@ def test_status_tool_reads_vehicle_and_speaks_only_requested_values(tmp_path, qu
     assert output["vehicle_state"]["state_version"] == 1
 
 
-def test_tool_read_and_negation_do_not_depend_on_model_json():
-    class FailingClient:
-        def generate_json(self, **kwargs):
-            raise AssertionError("These requests should bypass generation")
-
-    classifier = StructuredAPIIntentClassifier(FailingClient())
+def test_rule_fallback_preserves_tool_reads_and_negation():
+    classifier = RulesIntentClassifier()
     assert classifier.classify("tình trạng pin hiện tại", []).intent == "vehicle.get_status"
     assert classifier.classify("Đừng mở cửa", []).route == "conversation"
     assert classifier.classify("Bạn có thể mở cửa sổ bên tài giúp tôi không?", []).intent == "window.set_position"
@@ -111,11 +107,12 @@ def test_tool_read_and_negation_do_not_depend_on_model_json():
 
 @pytest.mark.asyncio
 async def test_async_model_router_preserves_live_tool_boundary():
-    class FailingClient:
+    class ModelClient:
         async def agenerate_json(self, **kwargs):
-            raise AssertionError("No model needed for a clear state read")
+            assert "điều hoà đang là bao nhiêu độ" in kwargs["user"]
+            return '{"route":"action","intent":"vehicle.get_status"}'
 
-    decision = await StructuredAPIIntentClassifier(FailingClient()).aclassify("điều hoà đang là bao nhiêu độ", [])
+    decision = await StructuredAPIIntentClassifier(ModelClient()).aclassify("điều hoà đang là bao nhiêu độ", [])
     assert decision.intent == "vehicle.get_status"
 
 

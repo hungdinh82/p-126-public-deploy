@@ -8,12 +8,9 @@ _FUNCTION_WORDS = set("ban minh toi xe vf8 cua co la gi nao the nhu sao bao nhie
 
 
 def expand_query(query: str) -> str:
-    normalized = normalize_text(query)
-    if "cruise control" in normalized:
-        query += " kiểm soát hành trình thích ứng ACC"
-    if re.search(r"\badas\b", normalized):
-        query += " hệ thống hỗ trợ người lái"
-    return query
+    from src.vivi.rag.knowledge import analyze_question
+
+    return analyze_question(query).retrieval_query
 
 
 def lexical_query(query: str) -> str:

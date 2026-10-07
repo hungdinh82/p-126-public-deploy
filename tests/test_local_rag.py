@@ -53,7 +53,9 @@ def vector_database(tmp_path):
 def test_hybrid_unions_independent_fts_and_vector_candidates_and_filters_scope(tmp_path):
     path = vector_database(tmp_path)
     retriever = SQLiteVectorRetriever(path, FakeEmbeddings(), retrieval_k=1, final_k=2)
-    result = retriever.retrieve("áp suất lốp", "VF8", 2026, "vi_vn")
+    # No topic filter here: this test isolates independent vector/FTS union.
+    # Topic filtering is separately tested with domain-specific questions.
+    result = retriever.retrieve("kiểm tra khi nguội", "VF8", 2026, "vi_vn")
     assert {item.source_id for item in result} == {"semantic", "lexical"}
     assert all(item.vehicle_model == "VF8" for item in result)
     assert retriever.retrieve("áp suất lốp", "VF8", 2025, "vi_vn") == []
@@ -136,14 +138,14 @@ def test_services_use_canonical_local_index_and_reject_cloud_before_initializing
 
     config = Settings(rag_retrieval_mode="sqlite_local", rag_handbook_db=vector_database(tmp_path),
                       rag_history_db=tmp_path / "history.sqlite3", rag_local_only=True,
-                      openai_api_key="configured-but-disabled", local_llm_model="")
+                      openai_api_key="configured-but-disabled", local_llm_model="", llm_provider="rules")
     monkeypatch.setattr(runtime, "local_embeddings", lambda *args: FakeEmbeddings())
     services = runtime.create_services(config)
     assert isinstance(services.retriever, SQLiteVectorRetriever)
     assert services.retriever.retrieve("áp suất lốp", "VF8", 2026, "vi_vn")
     assert set(llm_models(config)) == {"rules", "local"}
     assert configured_llm_providers(config) == ["rules"]
-    with pytest.raises(ValueError, match="removed"):
+    with pytest.raises(RuntimeError, match="Offline RAG"):
         runtime.create_services(config, provider="google")
     with pytest.raises(RuntimeError, match="Offline RAG"):
         runtime.create_services(config, provider="openai")

@@ -10,6 +10,8 @@ from src.vivi.vehicle.zones import zoned_noun
 def status_reply(query: str, state: dict) -> str:
     text = normalize_text(query)
     pieces = []
+    if re.search(r"gap van de|co loi|bao loi|tinh trang loi|loi hien tai", text):
+        return "Mình chưa đọc được danh sách lỗi hoặc cảnh báo hiện tại của xe."
     if "pin" in text and "nhiet do" in text:
         return "Mình chưa đọc được nhiệt độ pin."
     if "pin" in text or not re.search(r"dieu hoa|nhiet do|ap suat|cua|ghe|nhac|quang duong|bao xa|di duoc", text):
@@ -17,7 +19,10 @@ def status_reply(query: str, state: dict) -> str:
         pieces.append(f"Pin của mình còn {value:g} phần trăm." if value is not None else "Mình chưa đọc được mức pin.")
     if re.search(r"quang duong|bao xa|di duoc|di them", text):
         value = state.get("range_km")
-        pieces.append(f"Quãng đường còn lại ước tính là {value:g} km." if value is not None else "Mình chưa đọc được quãng đường còn lại.")
+        if "bao lau" in text:
+            pieces.append(f"Mình chưa ước tính được số giờ; quãng đường còn lại khoảng {value:g} km." if value is not None else "Mình chưa đọc được thời gian hay quãng đường còn lại.")
+        else:
+            pieces.append(f"Quãng đường còn lại ước tính là {value:g} km." if value is not None else "Mình chưa đọc được quãng đường còn lại.")
     if re.search(r"dieu hoa|nhiet do", text):
         if re.search(r"\b(bat|tat)\b", text):
             return "Mình chưa đọc được trạng thái bật hay tắt điều hoà."
@@ -30,9 +35,9 @@ def status_reply(query: str, state: dict) -> str:
         pieces.append("Áp suất lốp: " + ", ".join(values) + " kPa." if values else "Mình chưa đọc được áp suất lốp.")
     if re.search(r"cua|ghe", text):
         # A requested side limits the readout; an unspecified side must not be silently assumed.
-        from src.vivi.agents.classifier import RulesIntentClassifier
+        from src.vivi.agents.slots import cabin_zone
 
-        zone = RulesIntentClassifier._cabin_zone(text)
+        zone = cabin_zone(text)
         zones = [zone] if zone and zone != "all" else ["driver", "front_passenger", "rear_left", "rear_right"]
         labels = {"driver": "bên tài", "front_passenger": "bên phụ", "rear_left": "sau trái", "rear_right": "sau phải"}
         for key in zones:

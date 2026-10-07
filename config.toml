@@ -24,10 +24,15 @@ mqtt_host = "127.0.0.1"
 mqtt_port = 1883
 mqtt_timeout_seconds = 3
 
-# Language model: rules, local (cloud providers require rag_local_only = false)
-llm_provider = "rules"
+# Language model: rules, local, openai, google, openrouter
+# Cloud providers require rag_local_only = false.
+llm_provider = "google"
 llm_timeout_seconds = 30
 openai_model = "gpt-4o-mini"
+google_model = "gemini-3.5-flash-lite"
+google_base_url = "https://generativelanguage.googleapis.com/v1beta/openai"
+google_max_tokens = 4096
+google_reasoning_effort = "low"
 openrouter_model = "qwen/qwen3.7-flash"
 openrouter_reasoning = false
 openrouter_max_tokens = 1536
@@ -65,7 +70,7 @@ rag_history_db = "./data/vivi_rag.sqlite3"
 rag_handbook_db = "./data/handbooks/handbook.sqlite3"
 rag_retrieval_mode = "sqlite_local"
 rag_local_embedding_dir = "./models/multilingual-e5-small-int8"
-rag_local_only = true
+rag_local_only = false
 rag_embedding_threads = 2
 rag_embedding_batch_size = 4
 # No calibrated rejection threshold yet; do not infer answerability from cosine alone.

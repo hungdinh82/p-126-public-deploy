@@ -101,6 +101,7 @@ def test_openai_compatible_local_graph_routes_retrieves_and_cites(tmp_path):
         }
     )
 
+    # Model-backed mode interprets the turn before grounded answer generation.
     assert requests == ["vivi_intent_decision", "vivi_grounded_answer"]
     assert result["output"]["route"] == "handbook"
     assert result["output"]["status"] == "answered"
