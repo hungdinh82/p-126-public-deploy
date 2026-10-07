@@ -5,19 +5,19 @@ on:
     branches: [main]
   workflow_dispatch:
 
-# The image is private by default. The workflow token can publish only the
-# package associated with this repository; no personal access token is needed.
+# This public mirror uses GitHub-hosted runners, so it is independent of the
+# AI20K organization's exhausted Actions quota. The workflow token can publish
+# only the package associated with this repository; no personal token is needed.
 permissions:
   contents: read
   packages: write
 
 env:
-  IMAGE_NAME: ghcr.io/ai20k-build-phase-cohort-4/p-126
+  IMAGE_NAME: ghcr.io/hungdinh82/p-126-public-deploy
 
 jobs:
   publish-and-deploy:
-    # The program's shared runner avoids the exhausted GitHub-hosted quota.
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     # Do not let a manually dispatched run from a feature branch publish the
     # production image or use the production deploy hook.
     if: github.ref == 'refs/heads/main'
