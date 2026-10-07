@@ -1,0 +1,60 @@
+name: Publish image and deploy to Render
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# The image is private by default. The workflow token can publish only the
+# package associated with this repository; no personal access token is needed.
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE_NAME: ghcr.io/ai20k-build-phase-cohort-4/p-126
+
+jobs:
+  publish-and-deploy:
+    # The program's shared runner avoids the exhausted GitHub-hosted quota.
+    runs-on: self-hosted
+    # Do not let a manually dispatched run from a feature branch publish the
+    # production image or use the production deploy hook.
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Sign in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish the production image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64
+          tags: |
+            ${{ env.IMAGE_NAME }}:${{ github.sha }}
+            ${{ env.IMAGE_NAME }}:latest
+
+      - name: Deploy the immutable image on Render
+        env:
+          RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
+          IMAGE_URL: ${{ env.IMAGE_NAME }}:${{ github.sha }}
+        run: |
+          if [ -z "$RENDER_DEPLOY_HOOK" ]; then
+            echo "Image published; add RENDER_DEPLOY_HOOK to enable Render deploys."
+            exit 0
+          fi
+          encoded_image="$(python -c 'import os, urllib.parse; print(urllib.parse.quote(os.environ["IMAGE_URL"], safe=""))')"
+          curl --fail --silent --show-error --request POST \
+            "${RENDER_DEPLOY_HOOK}?imgURL=${encoded_image}"
