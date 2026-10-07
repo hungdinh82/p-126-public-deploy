@@ -33,6 +33,6 @@ USER appuser
 EXPOSE 8787
 
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8787/api/v1/health')" || exit 1
+    CMD python -c "import os, urllib.request; urllib.request.urlopen('http://localhost:' + os.getenv('VIVI_PORT', '8787') + '/api/v1/health')" || exit 1
 
 CMD ["uvicorn", "src.vivi.api.app:app", "--host", "0.0.0.0", "--port", "8787"]
