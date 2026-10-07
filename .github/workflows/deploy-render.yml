@@ -51,7 +51,10 @@ jobs:
           RENDER_DEPLOY_HOOK: ${{ secrets.RENDER_DEPLOY_HOOK }}
           IMAGE_URL: ${{ env.IMAGE_NAME }}:${{ github.sha }}
         run: |
-          test -n "$RENDER_DEPLOY_HOOK"
+          if [ -z "$RENDER_DEPLOY_HOOK" ]; then
+            echo "Image published; add RENDER_DEPLOY_HOOK to enable Render deploys."
+            exit 0
+          fi
           encoded_image="$(python -c 'import os, urllib.parse; print(urllib.parse.quote(os.environ["IMAGE_URL"], safe=""))')"
           curl --fail --silent --show-error --request POST \
             "${RENDER_DEPLOY_HOOK}?imgURL=${encoded_image}"
