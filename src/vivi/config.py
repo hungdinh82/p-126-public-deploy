@@ -4,7 +4,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict, TomlConfigSettingsSource
 
 
@@ -51,6 +51,16 @@ class Settings(BaseSettings):
     data_dir: Path = Field(default=Path("./data"), validation_alias="VIVI_DATA_DIR")
     store_audio: bool = Field(default=False, validation_alias="VIVI_STORE_AUDIO")
     store_transcripts: bool = Field(default=False, validation_alias="VIVI_STORE_TRANSCRIPTS")
+    memory_enabled: bool = Field(default=True, validation_alias="VIVI_MEMORY_ENABLED")
+    memory_db: Path | None = Field(default=None, validation_alias="VIVI_MEMORY_DB")
+    memory_profile_id: str = Field(default="default", pattern=r"^[a-zA-Z0-9_-]{1,64}$",
+                                   validation_alias="VIVI_MEMORY_PROFILE_ID")
+    memory_context_limit: int = Field(default=8, ge=1, le=20)
+    memory_context_max_characters: int = Field(default=2000, ge=200, le=6000)
+
+    @property
+    def memory_path(self) -> Path:
+        return self.memory_db or self.data_dir / "memory" / "long_term.sqlite3"
 
     vehicle_provider: Literal["memory", "mqtt"] = Field(
         default="memory", validation_alias="VIVI_VEHICLE_PROVIDER"
@@ -82,11 +92,16 @@ class Settings(BaseSettings):
     soniox_timeout_seconds: float = 30
     soniox_stream_max_seconds: float = 60
 
-    llm_provider: Literal["rules", "openai", "google", "local", "openrouter"] = "rules"
+    llm_provider: Literal["rules", "openai", "google", "local", "openrouter"] = "google"
     llm_timeout_seconds: float = 30
     openai_api_key: str = ""
     openai_base_url: str = "https://api.openai.com/v1"
     openai_model: str = "gpt-4o-mini"
+    google_api_key: str = Field(default="", validation_alias=AliasChoices("GOOGLE_API_KEY", "GEMINI_API_KEY"))
+    google_base_url: str = "https://generativelanguage.googleapis.com/v1beta/openai"
+    google_model: str = "gemini-3.5-flash-lite"
+    google_max_tokens: int = Field(default=4096, ge=64, le=8192)
+    google_reasoning_effort: Literal["minimal", "low", "medium", "high"] = "low"
     openrouter_api_key: str = ""
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
     openrouter_model: str = "qwen/qwen3.7-flash"
@@ -94,8 +109,6 @@ class Settings(BaseSettings):
     openrouter_reasoning: bool = False
     # Vietnamese answers with citations exceed the 512-token local default.
     openrouter_max_tokens: int = Field(default=1536, ge=64, le=8192)
-    google_api_key: str = ""
-    google_model: str = "gemini-2.5-flash"
     local_llm_base_url: str = "http://127.0.0.1:1234/v1"
     local_llm_api_key: str = "local"
     local_llm_model: str = ""
@@ -108,22 +121,21 @@ class Settings(BaseSettings):
     zerotts_preload: bool = False
 
     database_url: str = "sqlite:///./data/app.db"
-    chroma_persist_dir: str = "./data/chroma"
-    rag_generation_model: str = "gemini-2.5-flash"
-    rag_embedding_model: str = "gemini-embedding-001"
-    rag_embedding_dimensions: int = Field(default=768, ge=128, le=3072)
     rag_data_dir: Path = Path("./data/handbooks")
     rag_history_db: Path = Path("./data/vivi_rag.sqlite3")
     rag_handbook_db: Path = Path("./data/handbooks/handbook.sqlite3")
-    rag_collection_name: str = "vivi_handbook"
-    rag_retrieval_mode: Literal["sqlite", "lexical", "hybrid"] = "sqlite"
+    rag_retrieval_mode: Literal["sqlite", "sqlite_local", "lexical"] = "sqlite_local"
+    rag_local_only: bool = Field(default=True, validation_alias="VIVI_RAG_LOCAL_ONLY")
+    rag_local_embedding_dir: Path = Path("./models/multilingual-e5-small-int8")
+    rag_embedding_threads: int = Field(default=2, ge=1, le=8)
+    rag_embedding_batch_size: int = Field(default=4, ge=1, le=32)
+    rag_local_min_similarity: float = Field(default=0.0, ge=0, le=1)
     rag_default_vehicle_model: str = "VF8"
     rag_default_model_year: int = 2026
     rag_default_locale: str = "vi_vn"
     rag_retrieval_k: int = Field(default=12, ge=1, le=50)
     rag_final_k: int = Field(default=5, ge=1, le=12)
     rag_prompt_max_characters: int = Field(default=6000, ge=1000, le=30000)
-    rag_max_cosine_distance: float = Field(default=0.62, ge=0, le=2)
     rag_history_turns: int = Field(default=6, ge=0, le=20)
 
     @property

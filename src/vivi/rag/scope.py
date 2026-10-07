@@ -12,11 +12,13 @@ _UNSAFE_REPAIR = re.compile(
     r"can thiep dien cao ap|tat tui khi|tat he thong an toan)\b"
 )
 _TECHNICAL = re.compile(
-    r"\b(vf\s*8|xe|pin|sac|cong sac|cua|khoa|ghe|den|lai|phanh|lop|banh|"
+    r"\b(vf\s*8|xe|pin|sac|cong sac|cua (?:so|xe|kinh)|khoa|ghe|den|lai|phanh|lop|banh|"
     r"guong|dieu hoa|man hinh|che do|canh bao|bao duong|dau|gat nuoc|vo lang|"
     r"tui khi|day dai|adas|camera|cop|dong co|cong suat|ap suat|am thanh|"
-    r"bluetooth|wifi|ung dung|carplay|android auto|hud|hanh trinh|do xe)\b"
+    r"bluetooth|wifi|ung dung|carplay|android auto|hud|hanh trinh|do xe|"
+    r"kinh|tcs|abs|srs|luc keo|moi chat|cruise|cabin|cam nang|tu lai|quang duong|con di duoc|di them)\b"
 )
+_OTHER_VEHICLE = re.compile(r"\b(vf\s*(?:3|5|6|7|9)|tesla|toyota|hyundai|kia)\b")
 
 
 def _normalize(text: str) -> str:
@@ -26,10 +28,14 @@ def _normalize(text: str) -> str:
 
 def scope_rejection_reason(query: str) -> str | None:
     normalized = _normalize(query)
+    if _OTHER_VEHICLE.search(normalized):
+        return "Mình có thông tin về VF8 2026, chưa có thông tin chắc chắn về mẫu xe bạn hỏi."
     if _UNSAFE_REPAIR.search(normalized):
-        return "Yêu cầu sửa đổi hoặc can thiệp hệ thống an toàn/điện cao áp nằm ngoài phạm vi hỗ trợ."
+        return "Mình không thể hướng dẫn can thiệp hệ thống an toàn hoặc điện cao áp."
     if _NON_TECHNICAL.search(normalized):
-        return "Mình chỉ trả lời câu hỏi vận hành và kỹ thuật thông thường từ cẩm nang VF8 2026."
-    if not _TECHNICAL.search(normalized):
-        return "Câu hỏi chưa thuộc phạm vi vận hành hoặc kỹ thuật thông thường của VF8 2026."
+        return "Mình có thể giúp bạn dùng các tính năng trên xe; phần này mình chưa có thông tin."
+    from src.vivi.rag.knowledge import find_topic
+
+    if not _TECHNICAL.search(normalized) and find_topic(query) is None:
+        return "Bạn muốn tìm hiểu tính năng nào trên chiếc VF8 của mình?"
     return None

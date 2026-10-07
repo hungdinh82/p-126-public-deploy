@@ -29,6 +29,13 @@ class AgentState(TypedDict, total=False):
     risk_class: str
 
     conversation_history: list[dict[str, Any]]
+    memory_context: list[dict[str, Any]]
+    memory_handled: bool
+    task_decision: dict[str, Any]
+    task_resolution: str
+    tool_record: dict[str, Any]
+    memory_reset_accepted: bool
+    memory_reset_requested: bool
     retrieved_chunks: list[dict[str, Any]]
     accepted_chunks: list[dict[str, Any]]
     citations: list[dict[str, Any]]

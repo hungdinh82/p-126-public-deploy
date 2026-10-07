@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, model_validator
 
 Intent = Literal[
     "manual.search",
@@ -14,6 +14,10 @@ Intent = Literal[
     "media.play",
     "media.pause",
     "vehicle.get_status",
+    "memory.recall",
+    "memory.remember",
+    "memory.forget",
+    "memory.reset",
     "conversation.respond",
     "conversation.clarify",
     "unsupported.request",
@@ -29,12 +33,23 @@ class DecisionArguments(BaseModel):
 
     query: str | None = None
     value_celsius: float | None = None
-    position_percent: int | None = None
-    open: bool | None = None
-    locked: bool | None = None
-    level: int | None = None
+    position_percent: StrictInt | None = None
+    open: StrictBool | None = None
+    locked: StrictBool | None = None
+    level: StrictInt | None = None
     zone: Literal["driver", "front_passenger", "rear_left", "rear_right", "all"] | None = None
     media_query: str | None = None
+    memory_key: str | None = None
+    memory_value: str | None = None
+
+
+class FollowUp(BaseModel):
+    """A proposed next step, never permission to execute it in this turn."""
+
+    model_config = ConfigDict(extra="forbid")
+    intent: Intent
+    arguments: DecisionArguments = Field(default_factory=DecisionArguments)
+    missing_slot: Literal["zone", "value_celsius", "level"] | None = None
 
 
 class IntentDecision(BaseModel):
@@ -47,6 +62,7 @@ class IntentDecision(BaseModel):
     needs_clarification: bool = False
     clarification_question: str | None = None
     confidence: float = Field(default=1.0, ge=0, le=1)
+    follow_up: FollowUp | None = None
 
     @model_validator(mode="after")
     def validate_route_intent_pair(self) -> IntentDecision:
@@ -56,6 +72,10 @@ class IntentDecision(BaseModel):
             "conversation.clarify": "clarify",
             "unsupported.request": "unsupported",
             "vehicle.prohibited": "unsupported",
+            "memory.recall": "conversation",
+            "memory.remember": "conversation",
+            "memory.forget": "conversation",
+            "memory.reset": "conversation",
         }
         expected = expected_routes.get(self.intent, "action")
         if self.route != expected:

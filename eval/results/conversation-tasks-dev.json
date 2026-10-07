@@ -1,0 +1,1056 @@
+{
+  "provider": "rules",
+  "cases": 12,
+  "route_and_intent_accuracy": 1.0,
+  "turns": 18,
+  "latency_p50_ms": 70.18,
+  "latency_p95_ms": 3191.47,
+  "error_count": 0,
+  "over_360_characters": 0,
+  "answer_or_argument_failures": 0,
+  "limitations": [
+    "Development cases include recent user utterances; not a held-out accuracy estimate.",
+    "Length and routing checks do not measure factual correctness or SLM voice quality.",
+    "Actions run only against an in-memory simulator; external TCP is blocked."
+  ],
+  "results": [
+    {
+      "id": "context-adas-overview",
+      "review_status": "draft",
+      "turns": [
+        {
+          "query": "hệ thống ADAS thì sao?",
+          "expected_route": "handbook",
+          "expected_intent": "manual.search",
+          "expected_status": "answered",
+          "required_answer_terms": [
+            "ADAS",
+            "hành trình",
+            "không thay thế"
+          ],
+          "forbidden_answer_terms": [
+            "Nhấn nút"
+          ]
+        },
+        {
+          "query": "tôi cần bạn giới thiệu về tính năng đấy ấy",
+          "expected_route": "handbook",
+          "expected_intent": "manual.search",
+          "expected_status": "answered",
+          "required_answer_terms": [
+            "ADAS",
+            "hành trình"
+          ],
+          "forbidden_answer_terms": [
+            "Bạn muốn mình hỗ trợ"
+          ]
+        },
+        {
+          "query": "Còn dung lượng pin SDI?",
+          "expected_route": "handbook",
+          "expected_intent": "manual.search",
+          "expected_status": "answered",
+          "required_answer_terms": [
+            "82",
+            "kWh"
+          ],
+          "forbidden_answer_terms": [
+            "ADAS"
+          ]
+        }
+      ],
+      "query": "Còn dung lượng pin SDI?",
+      "expected_route": "handbook",
+      "expected_intent": "manual.search",
+      "expected_status": "answered",
+      "required_answer_terms": [
+        "82",
+        "kWh"
+      ],
+      "forbidden_answer_terms": [
+        "ADAS"
+      ],
+      "route": "handbook",
+      "intent": "manual.search",
+      "status": "answered",
+      "answer": "Dung lượng sử dụng 82 kWh.",
+      "characters": 26,
+      "citations": [
+        {
+          "source_id": "vf-e7d64702ac5cdc4642bf",
+          "title": "Thông số kỹ thuật",
+          "section_path": [
+            "Thông số kỹ thuật",
+            "Thông số kỹ thuật",
+            "Pin điện áp cao -SDI"
+          ],
+          "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266381"
+        }
+      ],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 3478.75,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "query": "hệ thống ADAS thì sao?",
+          "expected_route": "handbook",
+          "expected_intent": "manual.search",
+          "expected_status": "answered",
+          "required_answer_terms": [
+            "ADAS",
+            "hành trình",
+            "không thay thế"
+          ],
+          "forbidden_answer_terms": [
+            "Nhấn nút"
+          ],
+          "route": "handbook",
+          "intent": "manual.search",
+          "status": "answered",
+          "answer": "Tuỳ phiên bản, hỗ trợ lái nâng cao (ADAS) gồm các tính năng như kiểm soát hành trình thích ứng (ACC), điều chỉnh tốc độ thông minh. Các hỗ trợ này không thay thế sự chú ý và kiểm soát của người lái.",
+          "characters": 198,
+          "citations": [
+            {
+              "source_id": "vf-194eb4244c4d74b1e66d-p2",
+              "title": "Vô lăng",
+              "section_path": [
+                "Lái xe",
+                "Vô lăng",
+                "Chức năng ADAS"
+              ],
+              "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266350"
+            },
+            {
+              "source_id": "vf-5b0f09015f4d19a2be98",
+              "title": "Vô lăng",
+              "section_path": [
+                "Lái xe",
+                "Vô lăng",
+                "Chức năng ADAS"
+              ],
+              "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266350"
+            }
+          ],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 3191.47,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        },
+        {
+          "query": "tôi cần bạn giới thiệu về tính năng đấy ấy",
+          "expected_route": "handbook",
+          "expected_intent": "manual.search",
+          "expected_status": "answered",
+          "required_answer_terms": [
+            "ADAS",
+            "hành trình"
+          ],
+          "forbidden_answer_terms": [
+            "Bạn muốn mình hỗ trợ"
+          ],
+          "route": "handbook",
+          "intent": "manual.search",
+          "status": "answered",
+          "answer": "Tuỳ phiên bản, hỗ trợ lái nâng cao (ADAS) gồm các tính năng như kiểm soát hành trình thích ứng (ACC), điều chỉnh tốc độ thông minh. Các hỗ trợ này không thay thế sự chú ý và kiểm soát của người lái.",
+          "characters": 198,
+          "citations": [
+            {
+              "source_id": "vf-194eb4244c4d74b1e66d-p2",
+              "title": "Vô lăng",
+              "section_path": [
+                "Lái xe",
+                "Vô lăng",
+                "Chức năng ADAS"
+              ],
+              "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266350"
+            },
+            {
+              "source_id": "vf-5b0f09015f4d19a2be98",
+              "title": "Vô lăng",
+              "section_path": [
+                "Lái xe",
+                "Vô lăng",
+                "Chức năng ADAS"
+              ],
+              "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266350"
+            }
+          ],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 147.96,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        },
+        {
+          "query": "Còn dung lượng pin SDI?",
+          "expected_route": "handbook",
+          "expected_intent": "manual.search",
+          "expected_status": "answered",
+          "required_answer_terms": [
+            "82",
+            "kWh"
+          ],
+          "forbidden_answer_terms": [
+            "ADAS"
+          ],
+          "route": "handbook",
+          "intent": "manual.search",
+          "status": "answered",
+          "answer": "Dung lượng sử dụng 82 kWh.",
+          "characters": 26,
+          "citations": [
+            {
+              "source_id": "vf-e7d64702ac5cdc4642bf",
+              "title": "Thông số kỹ thuật",
+              "section_path": [
+                "Thông số kỹ thuật",
+                "Thông số kỹ thuật",
+                "Pin điện áp cao -SDI"
+              ],
+              "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266381"
+            }
+          ],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 139.27,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "context-charge-slot",
+      "review_status": "draft",
+      "turns": [
+        {
+          "query": "Cần bao lâu để sạc đầy?",
+          "expected_route": "clarify",
+          "expected_intent": "conversation.clarify",
+          "required_answer_terms": [
+            "AC",
+            "DC"
+          ]
+        },
+        {
+          "query": "DC",
+          "expected_route": "handbook",
+          "expected_intent": "manual.search",
+          "forbidden_answer_terms": [
+            "không dây",
+            "điện thoại",
+            "Nhấn nút"
+          ]
+        }
+      ],
+      "query": "DC",
+      "expected_route": "handbook",
+      "expected_intent": "manual.search",
+      "forbidden_answer_terms": [
+        "không dây",
+        "điện thoại",
+        "Nhấn nút"
+      ],
+      "route": "handbook",
+      "intent": "manual.search",
+      "status": "insufficient_evidence",
+      "answer": "Mình chưa có thông tin đủ rõ để trả lời đúng câu này.",
+      "characters": 53,
+      "citations": [],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 236.56,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "query": "Cần bao lâu để sạc đầy?",
+          "expected_route": "clarify",
+          "expected_intent": "conversation.clarify",
+          "required_answer_terms": [
+            "AC",
+            "DC"
+          ],
+          "route": "clarify",
+          "intent": "conversation.clarify",
+          "status": "clarify",
+          "answer": "Bạn muốn biết thời gian sạc AC hay sạc nhanh DC?",
+          "characters": 48,
+          "citations": [],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 70.18,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        },
+        {
+          "query": "DC",
+          "expected_route": "handbook",
+          "expected_intent": "manual.search",
+          "forbidden_answer_terms": [
+            "không dây",
+            "điện thoại",
+            "Nhấn nút"
+          ],
+          "route": "handbook",
+          "intent": "manual.search",
+          "status": "insufficient_evidence",
+          "answer": "Mình chưa có thông tin đủ rõ để trả lời đúng câu này.",
+          "characters": 53,
+          "citations": [],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 166.34,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "context-zone-slot",
+      "review_status": "draft",
+      "turns": [
+        {
+          "query": "mở cửa sổ",
+          "expected_route": "clarify",
+          "expected_intent": "conversation.clarify",
+          "required_answer_terms": [
+            "bên nào"
+          ]
+        },
+        {
+          "query": "bên phụ",
+          "expected_route": "action",
+          "expected_intent": "window.set_position",
+          "expected_status": "confirmation_required"
+        }
+      ],
+      "query": "bên phụ",
+      "expected_route": "action",
+      "expected_intent": "window.set_position",
+      "expected_status": "confirmation_required",
+      "route": "action",
+      "intent": "window.set_position",
+      "status": "confirmation_required",
+      "answer": "Xác nhận đặt cửa sổ bên phụ ở mức 100 phần trăm?",
+      "characters": 48,
+      "citations": [],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 130.54,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "query": "mở cửa sổ",
+          "expected_route": "clarify",
+          "expected_intent": "conversation.clarify",
+          "required_answer_terms": [
+            "bên nào"
+          ],
+          "route": "clarify",
+          "intent": "conversation.clarify",
+          "status": "clarify",
+          "answer": "Bạn muốn mở cửa sổ bên nào?",
+          "characters": 27,
+          "citations": [],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 57.27,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        },
+        {
+          "query": "bên phụ",
+          "expected_route": "action",
+          "expected_intent": "window.set_position",
+          "expected_status": "confirmation_required",
+          "route": "action",
+          "intent": "window.set_position",
+          "status": "confirmation_required",
+          "answer": "Xác nhận đặt cửa sổ bên phụ ở mức 100 phần trăm?",
+          "characters": 48,
+          "citations": [],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 73.24,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "context-fresh-temperature",
+      "review_status": "draft",
+      "turns": [
+        {
+          "query": "đặt nhiệt độ 25 độ",
+          "expected_route": "action",
+          "expected_intent": "climate.set_temperature",
+          "expected_value_celsius": 25,
+          "required_answer_terms": [
+            "25"
+          ]
+        },
+        {
+          "query": "điều hoà đang là bao nhiêu độ",
+          "expected_route": "action",
+          "expected_intent": "vehicle.get_status",
+          "required_answer_terms": [
+            "25"
+          ]
+        },
+        {
+          "query": "tăng thêm 1",
+          "expected_route": "action",
+          "expected_intent": "climate.set_temperature",
+          "expected_value_celsius": 26,
+          "required_answer_terms": [
+            "26"
+          ]
+        }
+      ],
+      "query": "tăng thêm 1",
+      "expected_route": "action",
+      "expected_intent": "climate.set_temperature",
+      "expected_value_celsius": 26,
+      "required_answer_terms": [
+        "26"
+      ],
+      "route": "action",
+      "intent": "climate.set_temperature",
+      "status": "action_verified",
+      "answer": "Mình đã đặt điều hoà ở 26 độ nhé.",
+      "characters": 33,
+      "citations": [],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 181.84,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "query": "đặt nhiệt độ 25 độ",
+          "expected_route": "action",
+          "expected_intent": "climate.set_temperature",
+          "expected_value_celsius": 25,
+          "required_answer_terms": [
+            "25"
+          ],
+          "route": "action",
+          "intent": "climate.set_temperature",
+          "status": "action_verified",
+          "answer": "Mình đã đặt điều hoà ở 25 độ nhé.",
+          "characters": 33,
+          "citations": [],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 70.18,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        },
+        {
+          "query": "điều hoà đang là bao nhiêu độ",
+          "expected_route": "action",
+          "expected_intent": "vehicle.get_status",
+          "required_answer_terms": [
+            "25"
+          ],
+          "route": "action",
+          "intent": "vehicle.get_status",
+          "status": "action_verified",
+          "answer": "Điều hoà đang đặt ở 25 độ.",
+          "characters": 26,
+          "citations": [],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 54.37,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        },
+        {
+          "query": "tăng thêm 1",
+          "expected_route": "action",
+          "expected_intent": "climate.set_temperature",
+          "expected_value_celsius": 26,
+          "required_answer_terms": [
+            "26"
+          ],
+          "route": "action",
+          "intent": "climate.set_temperature",
+          "status": "action_verified",
+          "answer": "Mình đã đặt điều hoà ở 26 độ nhé.",
+          "characters": 33,
+          "citations": [],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 57.25,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "latest-log-ack",
+      "query": "không có gì, bạn chạy tiếp đi",
+      "expected_route": "conversation",
+      "expected_intent": "conversation.respond",
+      "forbidden_answer_terms": [
+        "Bạn muốn",
+        "?"
+      ],
+      "review_status": "draft",
+      "route": "conversation",
+      "intent": "conversation.respond",
+      "status": "answered",
+      "answer": "Được nhé, mình vẫn ở đây khi bạn cần.",
+      "characters": 37,
+      "citations": [],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 54.74,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "latest-log-ack",
+          "query": "không có gì, bạn chạy tiếp đi",
+          "expected_route": "conversation",
+          "expected_intent": "conversation.respond",
+          "forbidden_answer_terms": [
+            "Bạn muốn",
+            "?"
+          ],
+          "review_status": "draft",
+          "route": "conversation",
+          "intent": "conversation.respond",
+          "status": "answered",
+          "answer": "Được nhé, mình vẫn ở đây khi bạn cần.",
+          "characters": 37,
+          "citations": [],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 54.72,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "latest-log-broad",
+      "query": "bạn biết gì về con xe này",
+      "expected_route": "clarify",
+      "expected_intent": "conversation.clarify",
+      "required_answer_terms": [
+        "pin",
+        "hỗ trợ lái"
+      ],
+      "forbidden_answer_terms": [
+        "gai lốp"
+      ],
+      "review_status": "draft",
+      "route": "clarify",
+      "intent": "conversation.clarify",
+      "status": "clarify",
+      "answer": "Bạn muốn tìm hiểu về pin và sạc, các tiện ích trong xe hay hỗ trợ lái?",
+      "characters": 70,
+      "citations": [],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 49.64,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "latest-log-broad",
+          "query": "bạn biết gì về con xe này",
+          "expected_route": "clarify",
+          "expected_intent": "conversation.clarify",
+          "required_answer_terms": [
+            "pin",
+            "hỗ trợ lái"
+          ],
+          "forbidden_answer_terms": [
+            "gai lốp"
+          ],
+          "review_status": "draft",
+          "route": "clarify",
+          "intent": "conversation.clarify",
+          "status": "clarify",
+          "answer": "Bạn muốn tìm hiểu về pin và sạc, các tiện ích trong xe hay hỗ trợ lái?",
+          "characters": 70,
+          "citations": [],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 49.62,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "latest-log-screen",
+      "query": "màn hình đang báo cái gì kia",
+      "expected_route": "clarify",
+      "expected_intent": "conversation.clarify",
+      "required_answer_terms": [
+        "thông báo",
+        "biểu tượng"
+      ],
+      "forbidden_answer_terms": [
+        "Bạn muốn mình hỗ trợ"
+      ],
+      "review_status": "draft",
+      "route": "clarify",
+      "intent": "conversation.clarify",
+      "status": "clarify",
+      "answer": "Bạn đọc giúp mình thông báo hoặc mô tả biểu tượng trên màn hình nhé.",
+      "characters": 68,
+      "citations": [],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 40.39,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "latest-log-screen",
+          "query": "màn hình đang báo cái gì kia",
+          "expected_route": "clarify",
+          "expected_intent": "conversation.clarify",
+          "required_answer_terms": [
+            "thông báo",
+            "biểu tượng"
+          ],
+          "forbidden_answer_terms": [
+            "Bạn muốn mình hỗ trợ"
+          ],
+          "review_status": "draft",
+          "route": "clarify",
+          "intent": "conversation.clarify",
+          "status": "clarify",
+          "answer": "Bạn đọc giúp mình thông báo hoặc mô tả biểu tượng trên màn hình nhé.",
+          "characters": 68,
+          "citations": [],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 40.36,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "latest-log-lane",
+      "query": "tính năng hỗ trợ giữ làn là gì",
+      "expected_route": "handbook",
+      "expected_intent": "manual.search",
+      "expected_status": "answered",
+      "required_answer_terms": [
+        "LKA",
+        "duy trì"
+      ],
+      "forbidden_answer_terms": [
+        "Nhấn",
+        "Bạn muốn mình hỗ trợ"
+      ],
+      "review_status": "draft",
+      "route": "handbook",
+      "intent": "manual.search",
+      "status": "answered",
+      "answer": "Hỗ trợ giữ làn đường (LKA) là hệ thống hỗ trợ chủ động cho người lái trong việc duy trì xe trên làn đường hiện tại.",
+      "characters": 115,
+      "citations": [
+        {
+          "source_id": "vf-dd0bd86b2dea49a72133",
+          "title": "Trợ giúp lái xe",
+          "section_path": [
+            "Hỗ trợ người lái nâng cao",
+            "Trợ giúp lái xe",
+            "Tổng quan"
+          ],
+          "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266345"
+        }
+      ],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 162.44,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "latest-log-lane",
+          "query": "tính năng hỗ trợ giữ làn là gì",
+          "expected_route": "handbook",
+          "expected_intent": "manual.search",
+          "expected_status": "answered",
+          "required_answer_terms": [
+            "LKA",
+            "duy trì"
+          ],
+          "forbidden_answer_terms": [
+            "Nhấn",
+            "Bạn muốn mình hỗ trợ"
+          ],
+          "review_status": "draft",
+          "route": "handbook",
+          "intent": "manual.search",
+          "status": "answered",
+          "answer": "Hỗ trợ giữ làn đường (LKA) là hệ thống hỗ trợ chủ động cho người lái trong việc duy trì xe trên làn đường hiện tại.",
+          "characters": 115,
+          "citations": [
+            {
+              "source_id": "vf-dd0bd86b2dea49a72133",
+              "title": "Trợ giúp lái xe",
+              "section_path": [
+                "Hỗ trợ người lái nâng cao",
+                "Trợ giúp lái xe",
+                "Tổng quan"
+              ],
+              "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266345"
+            }
+          ],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 162.42,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "latest-log-equipment",
+      "query": "vf8 có cruise control không",
+      "expected_route": "handbook",
+      "expected_intent": "manual.search",
+      "expected_status": "answered",
+      "required_answer_terms": [
+        "tuỳ phiên bản",
+        "khoảng cách"
+      ],
+      "forbidden_answer_terms": [
+        "chỉ kiểm soát vô lăng",
+        "Nhấn"
+      ],
+      "review_status": "draft",
+      "route": "handbook",
+      "intent": "manual.search",
+      "status": "answered",
+      "answer": "Trang bị kiểm soát hành trình thích ứng (ACC) tuỳ phiên bản. Hệ thống kiểm soát hành trình thích ứng (ACC) là một hệ thống hỗ trợ người lái xe tiên tiến, tự động điều chỉnh tốc độ xe để duy trì khoảng cách an toàn với các xe khác phía trước.",
+      "characters": 241,
+      "citations": [
+        {
+          "source_id": "vf-7642695d1ae837b025cc",
+          "title": "Kiểm soát hành trình",
+          "section_path": [
+            "Hỗ trợ người lái nâng cao",
+            "Kiểm soát hành trình",
+            "Hệ thống kiểm soát hành trình thích ứng (nếu được trang bị)"
+          ],
+          "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266344"
+        }
+      ],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 143.4,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "latest-log-equipment",
+          "query": "vf8 có cruise control không",
+          "expected_route": "handbook",
+          "expected_intent": "manual.search",
+          "expected_status": "answered",
+          "required_answer_terms": [
+            "tuỳ phiên bản",
+            "khoảng cách"
+          ],
+          "forbidden_answer_terms": [
+            "chỉ kiểm soát vô lăng",
+            "Nhấn"
+          ],
+          "review_status": "draft",
+          "route": "handbook",
+          "intent": "manual.search",
+          "status": "answered",
+          "answer": "Trang bị kiểm soát hành trình thích ứng (ACC) tuỳ phiên bản. Hệ thống kiểm soát hành trình thích ứng (ACC) là một hệ thống hỗ trợ người lái xe tiên tiến, tự động điều chỉnh tốc độ xe để duy trì khoảng cách an toàn với các xe khác phía trước.",
+          "characters": 241,
+          "citations": [
+            {
+              "source_id": "vf-7642695d1ae837b025cc",
+              "title": "Kiểm soát hành trình",
+              "section_path": [
+                "Hỗ trợ người lái nâng cao",
+                "Kiểm soát hành trình",
+                "Hệ thống kiểm soát hành trình thích ứng (nếu được trang bị)"
+              ],
+              "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266344"
+            }
+          ],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 143.38,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "paraphrase-lane",
+      "query": "giải thích giúp mình chức năng LKA",
+      "expected_route": "handbook",
+      "expected_intent": "manual.search",
+      "expected_status": "answered",
+      "required_answer_terms": [
+        "duy trì"
+      ],
+      "forbidden_answer_terms": [
+        "Nhấn"
+      ],
+      "review_status": "draft",
+      "route": "handbook",
+      "intent": "manual.search",
+      "status": "answered",
+      "answer": "Hỗ trợ giữ làn đường (LKA) là hệ thống hỗ trợ chủ động cho người lái trong việc duy trì xe trên làn đường hiện tại.",
+      "characters": 115,
+      "citations": [
+        {
+          "source_id": "vf-dd0bd86b2dea49a72133",
+          "title": "Trợ giúp lái xe",
+          "section_path": [
+            "Hỗ trợ người lái nâng cao",
+            "Trợ giúp lái xe",
+            "Tổng quan"
+          ],
+          "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266345"
+        }
+      ],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 132.93,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "paraphrase-lane",
+          "query": "giải thích giúp mình chức năng LKA",
+          "expected_route": "handbook",
+          "expected_intent": "manual.search",
+          "expected_status": "answered",
+          "required_answer_terms": [
+            "duy trì"
+          ],
+          "forbidden_answer_terms": [
+            "Nhấn"
+          ],
+          "review_status": "draft",
+          "route": "handbook",
+          "intent": "manual.search",
+          "status": "answered",
+          "answer": "Hỗ trợ giữ làn đường (LKA) là hệ thống hỗ trợ chủ động cho người lái trong việc duy trì xe trên làn đường hiện tại.",
+          "characters": 115,
+          "citations": [
+            {
+              "source_id": "vf-dd0bd86b2dea49a72133",
+              "title": "Trợ giúp lái xe",
+              "section_path": [
+                "Hỗ trợ người lái nâng cao",
+                "Trợ giúp lái xe",
+                "Tổng quan"
+              ],
+              "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266345"
+            }
+          ],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 132.92,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "paraphrase-overview",
+      "query": "giới thiệu giúp tôi về chiếc VF8",
+      "expected_route": "clarify",
+      "expected_intent": "conversation.clarify",
+      "forbidden_answer_terms": [
+        "gai lốp",
+        "cáp điện"
+      ],
+      "review_status": "draft",
+      "route": "clarify",
+      "intent": "conversation.clarify",
+      "status": "clarify",
+      "answer": "Bạn muốn tìm hiểu về pin và sạc, các tiện ích trong xe hay hỗ trợ lái?",
+      "characters": 70,
+      "citations": [],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 49.72,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "paraphrase-overview",
+          "query": "giới thiệu giúp tôi về chiếc VF8",
+          "expected_route": "clarify",
+          "expected_intent": "conversation.clarify",
+          "forbidden_answer_terms": [
+            "gai lốp",
+            "cáp điện"
+          ],
+          "review_status": "draft",
+          "route": "clarify",
+          "intent": "conversation.clarify",
+          "status": "clarify",
+          "answer": "Bạn muốn tìm hiểu về pin và sạc, các tiện ích trong xe hay hỗ trợ lái?",
+          "characters": 70,
+          "citations": [],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 49.7,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "paraphrase-negated",
+      "query": "đừng mở cửa sổ bên phụ",
+      "expected_route": "conversation",
+      "expected_intent": "conversation.respond",
+      "forbidden_answer_terms": [
+        "đã mở"
+      ],
+      "review_status": "draft",
+      "route": "conversation",
+      "intent": "conversation.respond",
+      "status": "answered",
+      "answer": "Được nhé, mình sẽ không thực hiện thao tác đó.",
+      "characters": 46,
+      "citations": [],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 39.12,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "paraphrase-negated",
+          "query": "đừng mở cửa sổ bên phụ",
+          "expected_route": "conversation",
+          "expected_intent": "conversation.respond",
+          "forbidden_answer_terms": [
+            "đã mở"
+          ],
+          "review_status": "draft",
+          "route": "conversation",
+          "intent": "conversation.respond",
+          "status": "answered",
+          "answer": "Được nhé, mình sẽ không thực hiện thao tác đó.",
+          "characters": 46,
+          "citations": [],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 39.1,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    }
+  ]
+}

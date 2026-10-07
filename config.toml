@@ -10,6 +10,13 @@ data_dir = "./data"
 store_audio = false
 store_transcripts = false
 
+# Long-term memory: explicit user requests, shared across sessions of this driver.
+# Database defaults to <data_dir>/memory/long_term.sqlite3; optional memory_db override.
+memory_enabled = true
+memory_profile_id = "default"
+memory_context_limit = 8
+memory_context_max_characters = 2000
+
 # Vehicle simulator: memory or mqtt
 vehicle_provider = "memory"
 vehicle_id = "demo-car-1"
@@ -17,11 +24,15 @@ mqtt_host = "127.0.0.1"
 mqtt_port = 1883
 mqtt_timeout_seconds = 3
 
-# Language model: rules, google, openai, openrouter, or local
-llm_provider = "rules"
+# Language model: rules, local, openai, google, openrouter
+# Cloud providers require rag_local_only = false.
+llm_provider = "google"
 llm_timeout_seconds = 30
-google_model = "gemini-3.1-flash-lite"
 openai_model = "gpt-4o-mini"
+google_model = "gemini-3.5-flash-lite"
+google_base_url = "https://generativelanguage.googleapis.com/v1beta/openai"
+google_max_tokens = 4096
+google_reasoning_effort = "low"
 openrouter_model = "qwen/qwen3.7-flash"
 openrouter_reasoning = false
 openrouter_max_tokens = 1536
@@ -54,14 +65,16 @@ zerotts_device = "auto"
 zerotts_preload = false
 
 # Handbook retrieval
-rag_generation_model = "gemini-3.1-flash-lite"
-rag_embedding_model = "gemini-embedding-001"
-rag_embedding_dimensions = 768
 rag_data_dir = "./data/handbooks"
 rag_history_db = "./data/vivi_rag.sqlite3"
 rag_handbook_db = "./data/handbooks/handbook.sqlite3"
-rag_collection_name = "vivi_handbook"
-rag_retrieval_mode = "sqlite"
+rag_retrieval_mode = "sqlite_local"
+rag_local_embedding_dir = "./models/multilingual-e5-small-int8"
+rag_local_only = false
+rag_embedding_threads = 2
+rag_embedding_batch_size = 4
+# No calibrated rejection threshold yet; do not infer answerability from cosine alone.
+rag_local_min_similarity = 0.0
 rag_default_vehicle_model = "VF8"
 rag_default_model_year = 2026
 rag_default_locale = "vi_vn"
@@ -69,4 +82,3 @@ rag_retrieval_k = 12
 rag_final_k = 5
 rag_history_turns = 6
 rag_prompt_max_characters = 6000
-rag_max_cosine_distance = 0.62

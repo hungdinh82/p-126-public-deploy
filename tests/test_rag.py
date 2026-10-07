@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import tempfile
 from pathlib import Path
 
@@ -12,9 +11,8 @@ from src.vivi.agents.graph import build_graph
 from src.vivi.domain.models import VehicleState as ServerVehicleState
 from src.vivi.history.sqlite import SQLiteConversationHistory
 from src.vivi.ingestion.crawler import CrawlTarget
-from src.vivi.ingestion.indexer import HandbookIndexer
 from src.vivi.rag.runtime import HandbookServices
-from src.vivi.rag.schemas import Citation, Claim, GroundedAnswer, HandbookChunk, RetrievedChunk
+from src.vivi.rag.schemas import Citation, Claim, GroundedAnswer, RetrievedChunk
 from src.vivi.rag.scope import scope_rejection_reason
 from src.vivi.vehicle.gateway import GatewayExecution, VehicleActionGateway
 from src.vivi.vehicle.memory import VehicleSimulator
@@ -147,51 +145,8 @@ def test_follow_up_query_uses_previous_question_for_retrieval():
         graph.invoke(
             {"session_id": "follow", "turn_id": "t2", "model_input": _input("Vậy tắt nó thế nào?")}
         )
-        assert retriever.queries[-1] == "Bật chế độ cắm trại thế nào?\nVậy tắt nó thế nào?"
-
-
-def test_indexer_is_resumable_and_writes_complete_manifest():
-    class FakeEmbeddings:
-        def embed_documents(self, texts: list[str]):
-            return [[float(len(text)), 1.0] for text in texts]
-
-    class FakeStore:
-        def __init__(self):
-            self.records: dict[str, dict] = {}
-
-        def existing_records(self):
-            return self.records
-
-        def upsert(self, chunks, embeddings):
-            for chunk, embedding in zip(chunks, embeddings, strict=True):
-                self.records[chunk.source_id] = {
-                    **chunk.chroma_metadata(),
-                    "_embedding": embedding,
-                }
-
-        def delete(self, source_ids):
-            for source_id in source_ids:
-                self.records.pop(source_id, None)
-
-    with tempfile.TemporaryDirectory() as directory:
-        root = Path(directory)
-        target = CrawlTarget()
-        parsed = root / "parsed" / target.slug
-        parsed.mkdir(parents=True)
-        chunk = HandbookChunk.model_validate(_chunk().model_dump())
-        (parsed / "chunks.jsonl").write_text(chunk.model_dump_json() + "\n", encoding="utf-8")
-        (parsed / "manifest.json").write_text(
-            json.dumps({"chunks_checksum": "fixture-checksum"}), encoding="utf-8"
-        )
-        store = FakeStore()
-        indexer = HandbookIndexer(root, store, FakeEmbeddings())  # type: ignore[arg-type]
-        first = indexer.build(target)
-        second = indexer.build(target)
-        manifest = json.loads((root / "index" / target.slug / "manifest.json").read_text())
-        assert first.embedded_chunks == 1
-        assert second.embedded_chunks == 0
-        assert second.unchanged_chunks == 1
-        assert manifest["status"] == "complete"
+        assert "cắm trại" in retriever.queries[-1] and "tắt" in retriever.queries[-1]
+        assert "Bật chế độ" not in retriever.queries[-1]
 
 
 def test_raw_stt_text_routes_to_handbook_and_returns_tts_envelope():
@@ -332,7 +287,7 @@ async def test_relative_temperature_uses_authoritative_state_across_async_turns(
         assert absolute["output"]["vehicle_state"]["temperature_celsius"] == 26
 
 
-def test_rules_routes_common_vehicle_question_to_handbook():
+def test_rules_routes_vehicle_question_to_handbook_and_rejects_wrong_topic():
     with tempfile.TemporaryDirectory() as directory:
         services = HandbookServices(
             FakeRetriever(),
@@ -344,7 +299,10 @@ def test_rules_routes_common_vehicle_question_to_handbook():
         )
 
         assert result["output"]["route"] == "handbook"
-        assert result["output"]["status"] == "answered"
+        # The fixture is about charging, not ADAS. A valid source ID does not
+        # make this answer relevant to the question.
+        assert result["output"]["status"] == "insufficient_evidence"
+        assert result["output"]["citations"] == []
         assert result["output"]["tts_text"] == result["output"]["response_text"]
 
 

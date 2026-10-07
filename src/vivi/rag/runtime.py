@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
+from functools import lru_cache
+from pathlib import Path
 from typing import Protocol
 
 from src.vivi.agents.classifier import (
@@ -14,6 +15,7 @@ from src.vivi.agents.classifier import (
 )
 from src.vivi.config import Settings, get_settings
 from src.vivi.history.sqlite import SQLiteConversationHistory
+from src.vivi.memory.sqlite import SQLiteLongTermMemory
 from src.vivi.rag.generator import (
     ExtractiveHandbookGenerator,
     GoogleHandbookGenerator,
@@ -42,63 +44,47 @@ class HandbookServices:
     history_turns: int = 6
     classifier: IntentClassifier | None = None
     action_gateway: VehicleActionGateway | None = None
+    memory: SQLiteLongTermMemory | None = None
+    memory_profile_id: str = "default"
+    memory_context_limit: int = 8
+    memory_context_max_characters: int = 2000
+    generation_provider: str = "unknown"
+
+
+@lru_cache(maxsize=2)
+def local_embeddings(directory: Path, threads: int, batch_size: int):
+    from src.vivi.rag.embeddings.local import LocalE5EmbeddingProvider
+
+    return LocalE5EmbeddingProvider(directory, threads=threads, batch_size=batch_size)
 
 
 def create_services(
     settings: Settings | None = None,
     *,
-    retrieval_mode: str = "sqlite",
+    retrieval_mode: str | None = None,
     provider: str = "auto",
 ) -> HandbookServices:
     config = settings or get_settings()
-    if retrieval_mode == "sqlite":
-        retriever = SQLiteHandbookRetriever(config.rag_handbook_db, final_k=config.rag_final_k)
-    elif retrieval_mode == "lexical":
-        retriever = LexicalHandbookRetriever(config.rag_data_dir, final_k=config.rag_final_k)
-    elif retrieval_mode == "hybrid":
-        from src.vivi.rag.embeddings.google import GoogleEmbeddingProvider
-        from src.vivi.rag.rerankers.hybrid import HybridReranker
-        from src.vivi.rag.retrieval import HandbookRetriever
-        from src.vivi.rag.vectorstores.chroma import ChromaHandbookStore
-
-        manifest_path = (
-            config.rag_data_dir
-            / "index"
-            / config.rag_default_vehicle_model.lower()
-            / str(config.rag_default_model_year)
-            / config.rag_default_locale.lower()
-            / "manifest.json"
-        )
-        if not manifest_path.exists():
-            raise RuntimeError("Chroma index is not complete; run build_index or use --retrieval lexical")
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        if manifest.get("status") != "complete":
-            raise RuntimeError("Chroma index is incomplete; resume build_index or use --retrieval lexical")
-        embeddings = GoogleEmbeddingProvider(
-            config.google_api_key,
-            config.rag_embedding_model,
-            config.rag_embedding_dimensions,
-        )
-        store = ChromaHandbookStore(config.chroma_persist_dir, config.rag_collection_name)
-        retriever = HandbookRetriever(
-            store,
-            embeddings,
-            HybridReranker(),
-            retrieval_k=config.rag_retrieval_k,
-            final_k=config.rag_final_k,
-            max_cosine_distance=config.rag_max_cosine_distance,
-        )
-    else:
-        raise ValueError(f"unsupported retrieval mode: {retrieval_mode}")
+    retrieval_mode = retrieval_mode or config.rag_retrieval_mode
     selected = provider
     if selected == "auto":
-        selected = "google" if config.google_api_key else "rules"
-    if selected == "google":
-        if not config.google_api_key:
-            raise RuntimeError("GOOGLE_API_KEY is required for the google handbook graph")
-        generator = GoogleHandbookGenerator(config.google_api_key, config.rag_generation_model)
-        classifier = GoogleIntentClassifier(config.google_api_key, config.google_model)
-    elif selected == "local":
+        selected = config.llm_provider
+    if config.rag_local_only and selected not in {"rules", "local"}:
+        raise RuntimeError("Offline RAG permits only rules or a self-hosted local LLM")
+    if retrieval_mode == "sqlite":
+        retriever = SQLiteHandbookRetriever(config.rag_handbook_db, final_k=config.rag_final_k)
+    elif retrieval_mode == "sqlite_local":
+        from src.vivi.rag.sqlite_vector import SQLiteVectorRetriever
+
+        embeddings = local_embeddings(config.rag_local_embedding_dir, config.rag_embedding_threads,
+                                      config.rag_embedding_batch_size)
+        retriever = SQLiteVectorRetriever(config.rag_handbook_db, embeddings, retrieval_k=config.rag_retrieval_k,
+                                         final_k=config.rag_final_k, min_similarity=config.rag_local_min_similarity)
+    elif retrieval_mode == "lexical":
+        retriever = LexicalHandbookRetriever(config.rag_data_dir, final_k=config.rag_final_k)
+    else:
+        raise ValueError(f"unsupported retrieval mode: {retrieval_mode}")
+    if selected == "local":
         generator = LocalHandbookGenerator(config)
         classifier = LocalIntentClassifier(config)
     elif selected == "openai":
@@ -111,6 +97,11 @@ def create_services(
             raise RuntimeError("OPENROUTER_API_KEY is required for the openrouter handbook graph")
         generator = OpenRouterHandbookGenerator(config)
         classifier = OpenRouterIntentClassifier(config)
+    elif selected == "google":
+        if not config.google_api_key:
+            raise RuntimeError("GOOGLE_API_KEY (or GEMINI_API_KEY) is required for the google handbook graph")
+        generator = GoogleHandbookGenerator(config)
+        classifier = GoogleIntentClassifier(config)
     elif selected == "rules":
         generator = ExtractiveHandbookGenerator()
         classifier = RulesIntentClassifier()
@@ -125,4 +116,9 @@ def create_services(
         history_turns=config.rag_history_turns,
         classifier=classifier,
         action_gateway=action_gateway,
+        memory=SQLiteLongTermMemory(config.memory_path) if config.memory_enabled else None,
+        memory_profile_id=config.memory_profile_id,
+        memory_context_limit=config.memory_context_limit,
+        memory_context_max_characters=config.memory_context_max_characters,
+        generation_provider=selected,
     )

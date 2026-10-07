@@ -10,7 +10,12 @@ data/*
 !data/handbooks/
 data/handbooks/*
 !data/handbooks/handbook.sqlite3
-models/
+models/*
+!models/multilingual-e5-small-int8/
+models/multilingual-e5-small-int8/*
+!models/multilingual-e5-small-int8/manifest.json
+!models/multilingual-e5-small-int8/tokenizer.json
+!models/multilingual-e5-small-int8/model_quantized.onnx
 outputs/
 .ai-log/
 docs/

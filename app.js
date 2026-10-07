@@ -654,6 +654,15 @@ async function startRecording() {
   } catch (error) { sttSocket?.close(); sttSocket = null; setPhase('blocked', `Không mở được microphone: ${error.message}`); }
 }
 
+function resolveLlmProvider(options, backendDefault, savedProvider, savedDefault) {
+  const available = provider => options.some(item => item.provider === provider && item.available);
+  const defaultProvider = available(backendDefault) ? backendDefault
+    : options.find(item => item.available)?.provider || 'rules';
+  // A saved override belongs to the configuration in which it was selected.
+  // Old selections without that context must not mask a new backend default.
+  return savedDefault === backendDefault && available(savedProvider) ? savedProvider : defaultProvider;
+}
+
 async function checkBackend() {
   try {
     const response = await fetch(`${API_BASE}/api/v1/health`); if (!response.ok) throw new Error();
@@ -662,9 +671,11 @@ async function checkBackend() {
     if (!state.storeTranscripts) localStorage.removeItem(edgeCommandHistoryKey);
     state.llmOptions = health.llm.options || [];
     const saved = localStorage.getItem('vivi-llm-provider');
-    const defaultProvider = state.llmOptions.find(item => item.provider === health.llm.provider && item.available)?.provider
-      || state.llmOptions.find(item => item.available)?.provider || 'rules';
-    state.llmProvider = state.llmOptions.some(item => item.provider === saved && item.available) ? saved : defaultProvider;
+    state.llmProvider = resolveLlmProvider(state.llmOptions, health.llm.provider, saved,
+      localStorage.getItem('vivi-llm-default-provider'));
+    state.llmDefaultProvider = health.llm.provider;
+    localStorage.setItem('vivi-llm-provider', state.llmProvider);
+    localStorage.setItem('vivi-llm-default-provider', state.llmDefaultProvider);
     updateModelStatus();
     $('#backend-status').classList.remove('offline'); $('#backend-status').innerHTML = '<i></i> Local · <span id="backend-model"></span>';
     $('#backend-model').textContent = state.llmProvider;
@@ -732,7 +743,7 @@ $('#sound-toggle').addEventListener('click', () => {
 });
 
 const dialog = $('#info-dialog');
-const modelLabels = { rules: 'Kịch bản', openai: 'OpenAI', google: 'Google', local: 'Local API', openrouter: 'OpenRouter' };
+const modelLabels = { rules: 'Kịch bản', openai: 'OpenAI', google: 'Google Gemini', local: 'Local API', openrouter: 'OpenRouter' };
 const modelModes = { rules: 'Phản hồi định sẵn', openai: 'Cloud · cần Internet', google: 'Cloud · cần Internet', local: 'On-device · riêng tư', openrouter: 'Cloud · cần Internet' };
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>'"]/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character]);
@@ -764,6 +775,7 @@ function selectLlmProvider(provider) {
   if (!selected) return;
   state.llmProvider = provider;
   localStorage.setItem('vivi-llm-provider', provider);
+  localStorage.setItem('vivi-llm-default-provider', state.llmDefaultProvider);
   document.querySelectorAll('[data-llm-provider]').forEach(button => {
     const active = button.dataset.llmProvider === provider;
     button.classList.toggle('selected', active);

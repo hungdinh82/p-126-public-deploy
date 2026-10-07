@@ -1,0 +1,4 @@
+# Standalone CPU RAG environment. For existing GPU speech environments use
+# requirements-rag-base.txt and keep their working ONNX Runtime installation.
+-r requirements-rag-base.txt
+onnxruntime>=1.23.2,<2

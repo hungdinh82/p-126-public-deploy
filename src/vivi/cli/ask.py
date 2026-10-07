@@ -78,9 +78,9 @@ def main() -> None:
     parser.add_argument("--interactive", action="store_true")
     parser.add_argument(
         "--retrieval",
-        choices=("sqlite", "hybrid", "lexical"),
-        default="sqlite",
-        help="Use SQLite FTS5 by default, or optional Chroma/lexical development modes",
+        choices=("sqlite", "sqlite_local", "lexical"),
+        default=None,
+        help="Use the configured local SQLite vector pipeline; sqlite selects the FTS5-only baseline",
     )
     args = parser.parse_args()
     if not args.text and not args.input and not args.interactive:

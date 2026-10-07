@@ -1,0 +1,6 @@
+# Add these to an existing speech environment with a working ONNX Runtime.
+-r requirements.txt
+numpy>=1.26,<3
+tokenizers>=0.21,<0.23
+# Only prepare_embeddings needs this package/network access.
+huggingface-hub>=0.27,<1

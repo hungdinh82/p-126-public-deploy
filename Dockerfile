@@ -3,7 +3,7 @@ FROM python:3.11-slim AS builder
 
 WORKDIR /app
 
-ARG REQUIREMENTS_FILE=requirements.txt
+ARG REQUIREMENTS_FILE=requirements-rag.txt
 COPY requirements*.txt ./
 RUN python -m venv /opt/venv \
     && /opt/venv/bin/pip install --no-cache-dir -r ${REQUIREMENTS_FILE}
@@ -24,6 +24,9 @@ RUN useradd -m appuser
 
 # Copy application code
 COPY . .
+RUN test -f models/multilingual-e5-small-int8/manifest.json \
+    && test -f models/multilingual-e5-small-int8/tokenizer.json \
+    && test -f models/multilingual-e5-small-int8/model_quantized.onnx
 
 # Create data directory with correct ownership
 RUN mkdir -p /app/data && chown -R appuser:appuser /app

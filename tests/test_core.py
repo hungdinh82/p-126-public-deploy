@@ -108,9 +108,9 @@ class RulesTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.intent, "climate.set_temperature")
         self.assertEqual(result.arguments.value_celsius, 25)
 
-    async def test_negation_clarifies(self):
+    async def test_negation_acknowledges_without_execution(self):
         result = self.classify("Đừng mở cửa sổ", VehicleState())
-        self.assertEqual(result.intent, "conversation.clarify")
+        self.assertEqual(result.intent, "conversation.respond")
 
     async def test_door_and_seat_intents(self):
         state = VehicleState()
@@ -308,7 +308,7 @@ class APITests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["status"], "ok")
         options = response.json()["llm"]["options"]
-        self.assertEqual({item["provider"] for item in options}, {"rules", "openai", "google", "local", "openrouter"})
+        self.assertEqual({item["provider"] for item in options}, {"rules", "local"})
         self.assertTrue(next(item for item in options if item["provider"] == "rules")["available"])
 
     def test_turn_uses_selected_provider_without_changing_default(self):
