@@ -12,7 +12,7 @@ const API_BASE = '';
 const makeId = () => globalThis.crypto?.randomUUID?.() || `vivi-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 const sessionId = localStorage.getItem('vivi-session-id') || makeId();
 localStorage.setItem('vivi-session-id', sessionId);
-const state = { phase: 'idle', temp: 23, window: false, music: false, driving: false, powerState: 'off', battery: 82, range: 328, powertrainTemp: 45, tirePressures: {}, windows: {}, doors: {}, seatHeatLevels: {}, doorLocked: false, doorOpen: false, hoodOpen: false, trunkOpen: false, seatHeat: 0, alerts: [], alertSequence: 0, reduced: motionPreference.matches, sound: false, busy: false, backendAvailable: false, vehicleProvider: '', sttAvailable: false, sttProvider: '', sttStreaming: false, sttDevice: '', ttsAvailable: false, ttsProvider: '', ttsVoice: '', ttsDevice: '', ttsOptions: [], storeAudio: false, storeTranscripts: false, llmProvider: '', llmOptions: [], lastCommand: '', manualAnswer: '', manualEvidence: [], progress: 0 };
+const state = { phase: 'idle', temp: 23, window: false, music: false, driving: false, powerState: 'off', battery: 82, range: 328, powertrainTemp: 45, tirePressures: {}, windows: {}, doors: {}, seatHeatLevels: {}, doorLocked: false, doorOpen: false, hoodOpen: false, trunkOpen: false, seatHeat: 0, alerts: [], alertSequence: 0, reduced: motionPreference.matches, sound: true, busy: false, backendAvailable: false, vehicleProvider: '', sttAvailable: false, sttProvider: '', sttStreaming: false, sttDevice: '', ttsAvailable: false, ttsProvider: '', ttsVoice: '', ttsDevice: '', ttsOptions: [], storeAudio: false, storeTranscripts: false, llmProvider: '', llmOptions: [], lastCommand: '', manualAnswer: '', manualEvidence: [], progress: 0 };
 const edgeCommandHistoryKey = 'vivi-command-history';
 function readEdgeCommandHistory() {
   try {
@@ -491,6 +491,7 @@ function applyBackendState(vehicle) {
 
 async function runBackendCommand(command, turnId = makeId(), { autoConfirm = false } = {}) {
   if (state.busy || !command.trim()) return;
+  if (handleSpeakerCommand(command)) return;
   rememberEdgeCommand(command);
   state.busy = true; state.lastCommand = command; lockControls(true); $('#command-input').value = '';
   try {
@@ -608,6 +609,7 @@ async function runBackendCommand(command, turnId = makeId(), { autoConfirm = fal
 }
 
 function runCommand(command, options = {}) {
+  if (handleSpeakerCommand(command)) return Promise.resolve();
   if (state.backendAvailable) return runBackendCommand(command, makeId(), options);
   setPhase('unverified', 'ViVi local chưa kết nối. Xe mô phỏng không nhận lệnh nào.');
   return Promise.resolve();
@@ -826,13 +828,27 @@ $('#drive-toggle').addEventListener('click', async () => {
   }
   setPhase('idle', state.driving ? 'Chuyển động đã dịu lại. Mình đồng hành cùng bạn.' : 'Đã về chế độ đỗ xe. Không gian ViVi được mở rộng.');
 });
-$('#sound-toggle').addEventListener('click', () => {
-  state.sound = !state.sound;
-  $('#sound-toggle').setAttribute('aria-pressed', String(state.sound));
-  $('#sound-toggle').setAttribute('aria-label', state.sound ? 'Tắt giọng Mai Chi' : 'Bật giọng Mai Chi');
-  // Enabling sound must not inject a synthetic greeting into the conversation.
-  if (!state.sound) { stopPlayback(); if ('speechSynthesis' in window) speechSynthesis.cancel(); }
-});
+function setSound(on) {
+  state.sound = on;
+  $('#sound-toggle').setAttribute('aria-pressed', String(on));
+  $('#sound-toggle').setAttribute('aria-label', on ? 'Tắt loa' : 'Bật loa');
+  $('#sound-toggle use').setAttribute('href', on ? '#i-volume' : '#i-volume-off');
+  if (!on) { stopPlayback(); if ('speechSynthesis' in window) speechSynthesis.cancel(); }
+}
+// "Tắt loa" / "bật loa" is a cabin UI setting, so it never reaches the vehicle backend.
+function handleSpeakerCommand(command) {
+  const text = normalize(command);
+  const off = /\b(tat|dong)\s+(loa|tieng noi|giong noi|giong doc)\b|\b(im lang|tat tieng|dung noi)\b/.test(text);
+  const on = /\b(bat|mo)\s+(loa|tieng noi|giong noi|giong doc)\b|\bbat tieng\b/.test(text);
+  if (off === on) return false;
+  $('#command-input').value = '';
+  setSound(on);
+  const message = on ? 'Đã bật loa. Mình sẽ trả lời bằng giọng nói.' : 'Đã tắt loa. Mình sẽ chỉ trả lời bằng chữ.';
+  setPhase('idle', message);
+  if (on) speak(message).catch(() => say(message));
+  return true;
+}
+$('#sound-toggle').addEventListener('click', () => setSound(!state.sound));
 
 const dialog = $('#info-dialog');
 const modelLabels = { rules: 'Kịch bản', openai: 'OpenAI', google: 'Google Gemini', local: 'Local API', openrouter: 'OpenRouter' };
