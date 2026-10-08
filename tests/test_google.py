@@ -17,6 +17,7 @@ from tests.test_local_llm_graph import _Retriever
 
 def configuration(tmp_path, **overrides):
     defaults = dict(llm_provider="google", google_api_key="google-test",
+                    google_model="gemini-3.5-flash-lite",
                     rag_local_only=False, rag_retrieval_mode="sqlite",
                     rag_handbook_db=tmp_path / "book.sqlite3",
                     rag_history_db=tmp_path / "history.sqlite3", memory_enabled=False)
@@ -95,4 +96,3 @@ async def test_google_graph_calls_intent_and_grounded_answer(tmp_path):
     assert output["route"] == "handbook" and output["grounding_status"] == "supported"
     assert output["citations"][0]["source_id"] == "vf-local-charge"
     assert not output["errors"]
-
