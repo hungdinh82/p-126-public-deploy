@@ -53,6 +53,12 @@ zerotts_voice = "VIVI"
 zerotts_device = "auto"
 zerotts_preload = false
 
+# Navigation (VietMap). Key goes in .env as VIETMAP_API_KEY.
+# Map style: tm = street, lm = light, dm = dark
+vietmap_map_style = "dm"
+navigation_default_lat = 21.0285
+navigation_default_lng = 105.8522
+
 # Handbook retrieval
 rag_generation_model = "gemini-3.1-flash-lite"
 rag_embedding_model = "gemini-embedding-001"
