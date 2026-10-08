@@ -23,15 +23,25 @@ let selectedTurnId = null;
 let listSignature = '';
 let detailSignature = '';
 let pollInFlight = false;
+let metric = 'memory';
 
 const bytes = value => value == null ? '—' : `${(value / 1048576).toFixed(0)} MB`;
 const esc = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
 const turnKey = turn => `${turn.session_id || ''}:${turn.turn_id || ''}`;
 const percent = value => value == null ? '—' : `${Number(value).toFixed(1)}%`;
+const setMeter = (id, value) => {
+  const level = Number.isFinite(value) ? Math.max(0, Math.min(100, value)) : 0;
+  $(id).style.width = `${level}%`;
+  $(id).parentElement.classList.toggle('high', level >= 85);
+};
+const setConnection = online => {
+  $('#connection').classList.toggle('offline', !online);
+  $('#connection').lastChild.textContent = online ? ' Trực tuyến' : ' Ngoại tuyến';
+};
 
 function drawChart() {
   const width = canvas.clientWidth;
-  const height = 280;
+  const height = 260;
   const ratio = window.devicePixelRatio || 1;
   const pixelWidth = Math.round(width * ratio);
   const pixelHeight = Math.round(height * ratio);
@@ -42,7 +52,6 @@ function drawChart() {
   context.setTransform(ratio, 0, 0, ratio, 0, 0);
   context.clearRect(0, 0, width, height);
 
-  const metric = $('#metric').value;
   const getValue = sample => {
     if (metric === 'memory') return sample.memory?.percent;
     if (metric === 'cpu') return sample.host?.load_1m;
@@ -54,11 +63,12 @@ function drawChart() {
   const valid = samples.map(sample => ({ sample, value: getValue(sample) })).filter(point => Number.isFinite(point.value));
   const maximum = metric === 'cpu' ? Math.max(1, ...valid.map(point => point.value)) : 100;
 
-  context.strokeStyle = '#a3d5fc20';
-  context.fillStyle = '#7893aa';
-  context.font = '10px sans-serif';
+  const top = 14, bottom = height - 22, plot = bottom - top;
+  context.strokeStyle = 'rgba(196,206,230,.07)';
+  context.fillStyle = '#6f747f';
+  context.font = "300 10px 'Be Vietnam Pro', system-ui, sans-serif";
   for (let index = 0; index < 5; index += 1) {
-    const y = 20 + index * 60;
+    const y = top + index * plot / 4;
     context.beginPath();
     context.moveTo(42, y);
     context.lineTo(width - 8, y);
@@ -66,17 +76,39 @@ function drawChart() {
     const label = metric === 'cpu' ? (maximum * (1 - index / 4)).toFixed(1) : `${100 - index * 25}%`;
     context.fillText(label, 5, y + 4);
   }
-  if (valid.length < 2) return;
-  context.strokeStyle = '#9bdcff';
-  context.lineWidth = 2;
+  if (valid.length < 2) {
+    context.textAlign = 'center';
+    context.fillText(samples.length < 2 ? 'Đang thu thập dữ liệu…' : 'Thiết bị không cung cấp chỉ số này', width / 2, top + plot / 2);
+    context.textAlign = 'start';
+    return;
+  }
+  const points = valid.map((point, index) => [
+    42 + index * (width - 50) / (valid.length - 1),
+    bottom - Math.min(point.value, maximum) / maximum * plot,
+  ]);
+  const fill = context.createLinearGradient(0, top, 0, bottom);
+  fill.addColorStop(0, 'rgba(180,192,216,.22)');
+  fill.addColorStop(1, 'rgba(180,192,216,0)');
   context.beginPath();
-  valid.forEach((point, index) => {
-    const x = 42 + index * (width - 50) / Math.max(1, valid.length - 1);
-    const y = 260 - point.value / maximum * 240;
-    if (index === 0) context.moveTo(x, y);
-    else context.lineTo(x, y);
-  });
+  points.forEach(([x, y], index) => (index ? context.lineTo(x, y) : context.moveTo(x, y)));
+  context.lineTo(points[points.length - 1][0], bottom);
+  context.lineTo(points[0][0], bottom);
+  context.fillStyle = fill;
+  context.fill();
+  context.beginPath();
+  points.forEach(([x, y], index) => (index ? context.lineTo(x, y) : context.moveTo(x, y)));
+  context.strokeStyle = '#d6dcea';
+  context.lineWidth = 1.5;
+  context.lineJoin = 'round';
   context.stroke();
+  const [lastX, lastY] = points[points.length - 1];
+  context.beginPath();
+  context.arc(lastX, lastY, 3, 0, Math.PI * 2);
+  context.fillStyle = '#eef1f7';
+  context.shadowColor = '#b4c0d8';
+  context.shadowBlur = 12;
+  context.fill();
+  context.shadowBlur = 0;
 }
 
 function updateHardware(item) {
@@ -95,6 +127,10 @@ function updateHardware(item) {
     : 'Không có GPU telemetry; đang dùng CPU';
   $('#disk-value').textContent = percent(item.disk?.percent);
   $('#disk-detail').textContent = `${bytes(item.disk?.free_bytes)} còn trống`;
+  setMeter('#ram-meter', item.memory?.percent);
+  setMeter('#cpu-meter', item.host?.cpu_count ? item.host.load_1m / item.host.cpu_count * 100 : null);
+  setMeter('#gpu-meter', gpu?.usage_percent);
+  setMeter('#disk-meter', item.disk?.percent);
   const device = item.device || {};
   const kinds = { jetson: 'NVIDIA Jetson', nvidia_rtx: 'NVIDIA RTX', nvidia_gpu: 'NVIDIA GPU', cpu: 'CPU' };
   $('#device-info').textContent = `Thiết bị: ${kinds[device.kind] || device.kind || 'chưa xác định'}${device.name ? ` · ${device.name}` : ''}${device.gpu_backend ? ` · ${device.gpu_backend}` : ''}`;
@@ -108,7 +144,7 @@ function updateComponents(components) {
   $('#components').innerHTML = entries.length
     ? entries.map(([name, item]) => {
       const status = item.status === 'ready' ? 'ready' : 'offline';
-      return `<div class="component"><span>${esc(labels[name] || name)}</span><strong class="${status}">${status === 'ready' ? 'Sẵn sàng' : 'Ngoại tuyến'}</strong><small>${esc(item.detail)}</small></div>`;
+      return `<div class="component" title="${status === 'ready' ? 'Sẵn sàng' : 'Ngoại tuyến'}"><i class="${status}" aria-label="${status === 'ready' ? 'Sẵn sàng' : 'Ngoại tuyến'}"></i><span>${esc(labels[name] || name)}</span><small>${esc(item.detail)}</small></div>`;
     }).join('')
     : '<div class="empty">Không có trạng thái component.</div>';
 }
@@ -183,11 +219,14 @@ function updateTurnDetail() {
   detailSignature = signature;
   const modelMs = pipeline.generate ?? null;
   const classifierMs = pipeline.classify_intent ?? null;
-  const stages = Object.entries(pipeline).filter(([name]) => name !== 'total')
-    .map(([name, value]) => `<div class="row"><span>Pipeline · ${esc(name)}</span><strong>${Number(value).toFixed(1)} ms</strong></div>`).join('');
+  // Stage bars share one scale so the slow step stands out at a glance.
+  const stageEntries = Object.entries(pipeline).filter(([name]) => name !== 'total');
+  const slowest = Math.max(1, ...stageEntries.map(([, value]) => Number(value) || 0));
+  const stages = stageEntries
+    .map(([name, value]) => `<div class="row stage"><span>${esc(name)}</span><b><i style="width:${(Number(value) || 0) / slowest * 100}%"></i></b><strong>${Number(value).toFixed(1)} ms</strong></div>`).join('');
   const ttsRows = tts.length ? tts.map((part, index) => `<div class="row"><span>TTS ${index + 1} · first chunk</span><strong>${part.time_to_first_chunk_ms ?? '—'} ms</strong></div><div class="row"><span>TTS ${index + 1} · synthesis</span><strong>${part.synthesis_ms ?? '—'} ms</strong></div><div class="row"><span>TTS ${index + 1} · audio duration</span><strong>${part.audio_duration_ms ?? '—'} ms</strong></div>`).join('') : '<div class="row"><span>TTS</span><strong>Không phát TTS trong lượt này</strong></div>';
   $('#turn-status').textContent = `${turn.status} · ${turn.end_to_end_ms == null ? 'đang xử lý' : `${turn.end_to_end_ms} ms`}`;
-  $('#turn-detail').innerHTML = `<div class="row"><span>Lệnh</span><strong>${esc(turn.command)}</strong></div><div class="row"><span>Thời điểm nhận</span><strong>${turn.received_at ? new Date(turn.received_at * 1000).toLocaleTimeString('vi-VN') : '—'}</strong></div><div class="row"><span>Input → output</span><strong>${turn.input_to_output_ms != null ? `${turn.input_to_output_ms} ms (STT + pipeline)` : turn.end_to_end_ms == null ? '—' : `${turn.end_to_end_ms} ms (pipeline API)`}</strong></div><div class="row"><span>Input → TTS audio sẵn sàng</span><strong>${turn.input_to_audio_ready_ms == null ? 'TTS chưa phát/hoàn tất' : `${turn.input_to_audio_ready_ms} ms`}</strong></div><div class="row"><span>STT</span><strong>${turn.stt_ms == null ? 'Không có audio STT' : `${turn.stt_ms} ms`}</strong></div><div class="row"><span>Pipeline tổng</span><strong>${pipeline.total == null ? '—' : `${pipeline.total} ms`}</strong></div><div class="row"><span>Model generate</span><strong>${modelMs == null ? 'Không gọi generate' : `${modelMs} ms`}</strong></div><div class="row"><span>Model classify</span><strong>${classifierMs == null ? '—' : `${classifierMs} ms`}</strong></div>${stages}${ttsRows}`;
+  $('#turn-detail').innerHTML = `<div class="row headline"><span>Lệnh</span><strong>${esc(turn.command)}</strong></div><div class="row"><span>Thời điểm nhận</span><strong>${turn.received_at ? new Date(turn.received_at * 1000).toLocaleTimeString('vi-VN') : '—'}</strong></div><div class="row"><span>Input → output</span><strong>${turn.input_to_output_ms != null ? `${turn.input_to_output_ms} ms (STT + pipeline)` : turn.end_to_end_ms == null ? '—' : `${turn.end_to_end_ms} ms (pipeline API)`}</strong></div><div class="row"><span>Input → TTS audio sẵn sàng</span><strong>${turn.input_to_audio_ready_ms == null ? 'TTS chưa phát/hoàn tất' : `${turn.input_to_audio_ready_ms} ms`}</strong></div><div class="row"><span>STT</span><strong>${turn.stt_ms == null ? 'Không có audio STT' : `${turn.stt_ms} ms`}</strong></div><div class="row"><span>Pipeline tổng</span><strong>${pipeline.total == null ? '—' : `${pipeline.total} ms`}</strong></div><div class="row"><span>Model generate</span><strong>${modelMs == null ? 'Không gọi generate' : `${modelMs} ms`}</strong></div><div class="row"><span>Model classify</span><strong>${classifierMs == null ? '—' : `${classifierMs} ms`}</strong></div>${stages ? `<div class="detail-group">PIPELINE</div>${stages}` : ''}<div class="detail-group">GIỌNG NÓI</div>${ttsRows}`;
 }
 
 function updateTurns(item) {
@@ -211,11 +250,13 @@ async function poll() {
     samples.push(compactSample(item));
     samples.splice(0, Math.max(0, samples.length - MAX_SAMPLES));
     localStorage.setItem(STORAGE_KEY, JSON.stringify(samples));
+    setConnection(true);
     updateHardware(item);
     updateRetainedCommands(Boolean(item.storage?.transcripts));
     updateTurns(item);
     drawChart();
   } catch {
+    setConnection(false);
     $('#updated').textContent = 'Backend offline';
   } finally {
     pollInFlight = false;
@@ -237,7 +278,13 @@ $('#reset').addEventListener('click', () => {
   updateTurnDetail();
   drawChart();
 });
-$('#metric').addEventListener('change', drawChart);
+$('#metric').addEventListener('click', event => {
+  const button = event.target.closest('[data-metric]');
+  if (!button) return;
+  metric = button.dataset.metric;
+  $('#metric').querySelectorAll('[data-metric]').forEach(item => item.setAttribute('aria-pressed', String(item === button)));
+  drawChart();
+});
 window.addEventListener('resize', drawChart);
 poll();
 window.setInterval(poll, 1000);

@@ -3,36 +3,111 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>ViVi Edge Monitor</title>
-  <link rel="stylesheet" href="/style.css">
+  <meta name="theme-color" content="#04050a">
+  <title>ViVi — Edge Monitor</title>
+  <link rel="stylesheet" href="/style.css?v=9">
   <style>
-    body{min-height:100vh}.monitor{max-width:1180px;margin:auto;padding:42px 5%}.monitor h1{font-size:42px;font-weight:300;margin:14px 0 8px}.monitor p,.muted{color:#8395aa;font-size:12px}.monitor-head{display:flex;justify-content:space-between;align-items:end;margin-bottom:28px}.runtime-meta{display:grid;gap:6px;text-align:right}.back,.reset{color:#9bdcff;text-decoration:none;font-size:11px}.reset{border:1px solid #8cc8ef33;border-radius:6px;padding:8px 11px;background:#102031;cursor:pointer}.top-actions{display:flex;align-items:center;gap:14px}.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}.card,.panel{background:linear-gradient(125deg,#111d2a,#0c1520);border:1px solid #a3d5fc18;border-radius:13px;padding:18px}.card span{font-size:9px;letter-spacing:1px;color:#7893aa}.card strong{display:block;font-size:27px;font-weight:300;color:#d8efff;margin:7px 0}.card small{color:#7893aa;font-size:10px}.panel{margin-bottom:16px}.panel-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}.panel h2{font-size:14px;font-weight:400;margin:0}.panel select{background:#132538;color:#d8efff;border:1px solid #8cc8ef33;border-radius:5px;padding:7px}.chart{width:100%;height:280px;display:block}.columns{display:grid;grid-template-columns:1fr 1.3fr;gap:16px}.row{display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid #a3d5fc12;padding:10px 0;color:#8ea9bf;font-size:11px}.row strong{color:#d8efff;font-weight:400;text-align:right}.command-list{display:grid;gap:4px;max-height:270px;overflow:auto}.command-item{width:100%;text-align:left;background:transparent;color:#8ea9bf;border:1px solid transparent;border-radius:6px;padding:9px;cursor:pointer}.command-item:hover,.command-item.selected{color:#d8efff;background:#a4dfff0b;border-color:#a4dfff1c}.command-item strong,.command-item small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.command-item small{margin-top:5px;color:#7893aa;font-size:9px}.details{margin-top:14px;border-top:1px solid #a3d5fc18;padding-top:8px;min-height:60px}.empty{padding:12px;color:#7893aa;font-size:11px}@media(max-width:700px){.cards{grid-template-columns:repeat(2,1fr)}.columns{grid-template-columns:1fr}.monitor-head{align-items:start;gap:20px;flex-direction:column}.runtime-meta{text-align:left}}
-    .components{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}.component{display:grid;grid-template-columns:1fr auto;gap:5px 9px;align-items:center;padding:11px;border:1px solid #a3d5fc18;border-radius:8px;background:#a3d5fc08;color:#c4d7e8;font-size:11px}.component strong{font-size:9px;font-weight:400;text-transform:uppercase}.component small{grid-column:1/-1;color:#7893aa;font-size:10px;overflow-wrap:anywhere}.component .ready{color:#83d8bd}.component .offline{color:#f0a19a}
+    body{background:radial-gradient(ellipse 70% 45% at 50% 0,#141722 0,#04050a00 70%),var(--bg);background-attachment:fixed}
+    .panel,.stat{background:#111216b3;border:1px solid #c1c8d81a;border-radius:22px;backdrop-filter:blur(18px) saturate(1.3);-webkit-backdrop-filter:blur(18px) saturate(1.3)}
+
+    /* Top bar mirrors the main HUD */
+    .monitor-top{position:sticky;top:0;z-index:3;display:flex;align-items:center;gap:22px;padding:22px 34px;background:linear-gradient(#04050ae6,#04050a00)}
+    .monitor-actions{margin-left:auto;display:flex;align-items:center;gap:8px}
+    .pill{height:40px;display:flex;align-items:center;gap:8px;padding:0 16px;border-radius:14px;font-size:12px;color:#9a9fa9;text-decoration:none;background:#0f1114b8;border:1px solid #c1c8d814;transition:color .2s,background .2s}
+    .pill:hover{color:#e2e6ee;background:#c1c8d80d}.pill svg{width:16px;height:16px}
+
+    .monitor{max-width:1180px;margin:0 auto;padding:18px 34px 56px;display:grid;gap:14px}
+    .monitor-head{display:flex;justify-content:space-between;align-items:flex-end;gap:24px;margin:18px 0 14px}
+    .monitor-head h1{margin:14px 0 8px;font-size:44px;font-weight:200;letter-spacing:-1.5px;color:#f4f6f9}
+    .monitor-head p{margin:0;font-size:13px;font-weight:300;color:var(--muted)}
+    .runtime-meta{display:grid;gap:6px;text-align:right;font-size:11px;color:#7f848f;font-variant-numeric:tabular-nums}
+
+    /* Stat cards: large thin figures like the battery readout */
+    .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+    .stat{padding:20px 22px;display:flex;flex-direction:column;gap:10px;min-width:0}
+    .stat>span{font-size:9px;letter-spacing:2.4px;color:#7a7f8a}
+    .stat strong{font-size:40px;line-height:1;font-weight:200;letter-spacing:-1.5px;color:#f4f6f9;font-variant-numeric:tabular-nums}
+    .stat small{font-size:11px;color:#858b99;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .meter{height:3px;border-radius:2px;background:#c1c8d814;overflow:hidden}.meter i{display:block;height:100%;width:0;border-radius:inherit;background:linear-gradient(90deg,#76829f,var(--cyan));box-shadow:0 0 10px #b4c0d855;transition:width .6s cubic-bezier(.2,.8,.2,1)}.meter.high i{background:linear-gradient(90deg,#a2707a,#e0a0aa)}
+
+    .panel{padding:20px 22px;min-width:0}
+    .panel-head{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:16px}
+    .panel-head>span{font-size:8px;letter-spacing:1.8px;color:#7a7f8a;text-transform:uppercase}#turn-status,#turn-count{font-size:11px;letter-spacing:0;text-transform:none;font-variant-numeric:tabular-nums}
+    .panel h2{margin:0;font-size:9px;font-weight:500;letter-spacing:2.2px;color:#a7adba;text-transform:uppercase}
+    .muted{font-size:11px;color:#7f848f}
+
+    .components{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px}
+    .component{display:grid;grid-template-columns:auto 1fr;gap:6px 10px;align-items:center;padding:14px;border:1px solid #b9c0d11c;border-radius:14px;background:linear-gradient(135deg,#1a1c23,#131519)}
+    .component i{width:6px;height:6px;border-radius:50%;background:#a6d9c2;box-shadow:0 0 10px #a6d9c288}.component i.offline{background:#ca818e;box-shadow:0 0 10px #ca818e88}
+    .component span{font-size:12px;color:#dfe3ea}
+    .component small{grid-column:2;font-size:10px;color:#7f848f;overflow-wrap:anywhere}
+
+    .segmented{display:flex;gap:2px;padding:4px;border-radius:14px;background:#0f1114b8;border:1px solid #c1c8d814}
+    .segmented button{flex:none;white-space:nowrap;height:30px;padding:0 12px;border-radius:10px;font-size:11px;color:#7f838c;transition:color .2s,background .2s}
+    .segmented button:hover{color:#dbdfe7}.segmented button[aria-pressed=true]{color:var(--teal);background:#76829f24}
+    .chart{width:100%;height:260px;display:block}
+
+    .columns{display:grid;grid-template-columns:1fr 1.3fr;gap:14px;align-items:start}
+    .command-list{display:grid;gap:4px;max-height:520px;overflow:auto;margin:0 -8px;padding:0 8px}
+    .command-item{position:relative;width:100%;text-align:left;padding:12px 14px;border-radius:14px;color:#a1a6b2;border:1px solid transparent;transition:color .2s,background .2s,border-color .2s}
+    .command-item:hover{color:#e2e6ee;background:#c1c8d80a}
+    .command-item.selected{color:#f4f6f9;border-color:#c0c9dc3d;background:radial-gradient(circle at 92% 10%,#a2aeca1c,transparent 45%),linear-gradient(135deg,#22252e,#181a20)}
+    .command-item strong,.command-item small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .command-item strong{font-size:13px;font-weight:400}
+    .command-item small{margin-top:5px;font-size:10px;color:#7f848f;font-variant-numeric:tabular-nums}
+
+    .details{min-height:60px}
+    .row{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:10px 0;border-bottom:1px solid var(--line);font-size:11px;color:#8e939e}
+    .row:last-child{border-bottom:0}
+    .row strong{font-weight:400;color:#e5e7ed;text-align:right;font-variant-numeric:tabular-nums}
+    .row.headline strong{font-size:13px}
+    .detail-group{margin:18px 0 4px;font-size:8px;letter-spacing:1.8px;color:#7a7f8a}
+    .stage span{flex:0 0 38%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .stage b{flex:1;height:3px;border-radius:2px;background:#c1c8d80f;overflow:hidden}.stage b i{display:block;height:100%;min-width:2px;border-radius:inherit;background:linear-gradient(90deg,#76829f,var(--cyan))}
+    .stage strong{flex:0 0 72px}
+    .empty{padding:14px 0;font-size:12px;font-weight:300;color:#7f848f}
+
+    @media(max-width:900px){.stats{grid-template-columns:repeat(2,1fr)}.columns{grid-template-columns:1fr}}
+    @media(max-width:600px){.monitor-top{padding:16px}.monitor{padding:8px 16px 40px}.monitor-head{flex-direction:column;align-items:flex-start}.runtime-meta{text-align:left}.monitor-head h1{font-size:34px}.stat strong{font-size:32px}.pill span{display:none}.panel-head{flex-wrap:wrap}.segmented{width:100%;overflow-x:auto}.connection{display:none}}
   </style>
 </head>
 <body>
-<main>
-  <header class="topbar">
-    <div class="wordmark">ViVi <span>/</span> <small>EDGE HARDWARE MONITOR</small></div>
-    <div class="top-actions"><button id="reset" class="reset" type="button">Reset history</button><a class="back" href="/">← Về giao diện chính</a></div>
-  </header>
-  <section class="monitor">
-    <div class="monitor-head"><div><div class="eyebrow"><span></span> EDGE RUNTIME</div><h1>Hardware Monitor</h1><p>Biến động tài nguyên và thời gian xử lý của từng lượt.</p></div><div class="runtime-meta"><span id="device-info" class="muted">Đang nhận diện thiết bị…</span><span id="updated" class="muted">Đang kết nối…</span></div></div>
-    <div class="cards">
-      <div class="card"><span>RAM</span><strong id="ram-value">—</strong><small id="ram-detail">—</small></div>
-      <div class="card"><span>CPU LOAD</span><strong id="cpu-value">—</strong><small id="cpu-detail">—</small></div>
-      <div class="card"><span>GPU</span><strong id="gpu-value">—</strong><small id="gpu-detail">—</small></div>
-      <div class="card"><span>DISK</span><strong id="disk-value">—</strong><small id="disk-detail">—</small></div>
+<svg class="icon-library" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M19 12H5m6-6-6 6 6 6"/></symbol>
+  <symbol id="i-reset" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8m0-5v5h5"/></symbol>
+</defs></svg>
+<header class="monitor-top">
+  <a class="brand" href="/" aria-label="ViVi trang chủ">v<span>ı</span>v<span>ı</span><i></i></a>
+  <span class="connection offline" id="connection"><i></i> Đang kết nối</span>
+  <div class="monitor-actions">
+    <button id="reset" class="pill" type="button" title="Xoá biểu đồ và các lượt đã ghi"><svg><use href="#i-reset"/></svg><span>Reset lịch sử</span></button>
+    <a class="pill" href="/" title="Về không gian chính"><svg><use href="#i-back"/></svg><span>Không gian</span></a>
+  </div>
+</header>
+<main class="monitor">
+  <div class="monitor-head">
+    <div><div class="eyebrow"><span></span> EDGE RUNTIME</div><h1>Edge Monitor</h1><p>Biến động tài nguyên và thời gian xử lý của từng lượt.</p></div>
+    <div class="runtime-meta"><span id="device-info">Đang nhận diện thiết bị…</span><span id="updated">Đang kết nối…</span></div>
+  </div>
+  <div class="stats">
+    <div class="stat"><span>RAM</span><strong id="ram-value">—</strong><div class="meter"><i id="ram-meter"></i></div><small id="ram-detail">—</small></div>
+    <div class="stat"><span>CPU LOAD</span><strong id="cpu-value">—</strong><div class="meter"><i id="cpu-meter"></i></div><small id="cpu-detail">—</small></div>
+    <div class="stat"><span>GPU</span><strong id="gpu-value">—</strong><div class="meter"><i id="gpu-meter"></i></div><small id="gpu-detail">—</small></div>
+    <div class="stat"><span>DISK</span><strong id="disk-value">—</strong><div class="meter"><i id="disk-meter"></i></div><small id="disk-detail">—</small></div>
+  </div>
+  <section class="panel"><div class="panel-head"><h2>Trạng thái pipeline</h2><span>Thành phần runtime</span></div><div id="components" class="components"><div class="empty">Đang kiểm tra…</div></div></section>
+  <section class="panel">
+    <div class="panel-head"><h2>Tài nguyên theo thời gian</h2>
+      <div id="metric" class="segmented" role="group" aria-label="Chỉ số hiển thị"><button type="button" data-metric="memory" aria-pressed="true">RAM</button><button type="button" data-metric="cpu" aria-pressed="false">CPU load</button><button type="button" data-metric="gpu" aria-pressed="false">GPU peak 20s</button><button type="button" data-metric="gpu_memory" aria-pressed="false">GPU memory</button><button type="button" data-metric="disk" aria-pressed="false">Disk</button></div>
     </div>
-    <section class="panel"><div class="panel-head"><h2>Trạng thái pipeline</h2><span class="muted">Thành phần runtime</span></div><div id="components" class="components"><div class="empty">Đang kiểm tra…</div></div></section>
-    <section class="panel"><div class="panel-head"><div><h2>Tài nguyên theo thời gian</h2></div><select id="metric"><option value="memory">RAM %</option><option value="cpu">CPU load</option><option value="gpu">GPU peak · 20 giây</option><option value="gpu_memory">GPU memory %</option><option value="disk">Disk %</option></select></div><canvas id="chart" class="chart"></canvas></section>
-    <div class="columns">
-      <section class="panel"><div class="panel-head"><h2>Các lượt gần đây</h2><span id="turn-count" class="muted">0</span></div><div id="command-list" class="command-list"><div class="empty">Chưa có lượt chạy.</div></div></section>
-      <section class="panel"><div class="panel-head"><h2>Chi tiết lượt</h2><span id="turn-status" class="muted">Chọn một lượt</span></div><div id="turn-detail" class="details"><div class="empty">Thời gian STT, pipeline, model và TTS sẽ hiện tại đây.</div></div></section>
-    </div>
-    <section id="retained-command-panel" class="panel" hidden><div class="panel-head"><h2>Lịch sử lệnh đã lưu trên trình duyệt</h2><span class="muted">Bật VIVI_STORE_TRANSCRIPTS</span></div><div id="retained-command-list" class="command-list"><div class="empty">Chưa có lệnh được lưu.</div></div></section>
+    <canvas id="chart" class="chart" aria-label="Biểu đồ tài nguyên"></canvas>
   </section>
+  <div class="columns">
+    <section class="panel"><div class="panel-head"><h2>Các lượt gần đây</h2><span id="turn-count">0</span></div><div id="command-list" class="command-list"><div class="empty">Chưa có lượt chạy.</div></div></section>
+    <section class="panel"><div class="panel-head"><h2>Chi tiết lượt</h2><span id="turn-status">Chọn một lượt</span></div><div id="turn-detail" class="details"><div class="empty">Thời gian STT, pipeline, model và TTS sẽ hiện tại đây.</div></div></section>
+  </div>
+  <section id="retained-command-panel" class="panel" hidden><div class="panel-head"><h2>Lịch sử lệnh trên trình duyệt</h2><span>VIVI_STORE_TRANSCRIPTS</span></div><div id="retained-command-list" class="command-list"><div class="empty">Chưa có lệnh được lưu.</div></div></section>
 </main>
-<script src="/monitor.js?v=3"></script>
+<script src="/monitor.js?v=4"></script>
 </body>
 </html>
