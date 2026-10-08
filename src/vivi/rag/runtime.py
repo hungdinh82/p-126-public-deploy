@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import lru_cache
+import logging
 from pathlib import Path
 from typing import Protocol
 
@@ -29,11 +30,28 @@ from src.vivi.rag.schemas import RetrievedChunk
 from src.vivi.rag.sqlite_store import SQLiteHandbookRetriever
 from src.vivi.vehicle.gateway import VehicleActionGateway
 
+logger = logging.getLogger(__name__)
+
 
 class RetrieverPort(Protocol):
     def retrieve(
         self, query: str, vehicle_model: str, model_year: int, locale: str
     ) -> list[RetrievedChunk]: ...
+
+
+class EmbeddingFallbackRetriever:
+    """Use the same handbook's FTS5 index when query embedding cannot run."""
+
+    def __init__(self, primary: RetrieverPort, fallback: RetrieverPort):
+        self.primary = primary
+        self.fallback = fallback
+
+    def retrieve(self, query: str, vehicle_model: str, model_year: int, locale: str) -> list[RetrievedChunk]:
+        try:
+            return self.primary.retrieve(query, vehicle_model, model_year, locale)
+        except (ImportError, OSError, RuntimeError) as exc:
+            logger.warning("Embedding unavailable; using handbook FTS5: %s", exc)
+            return self.fallback.retrieve(query, vehicle_model, model_year, locale)
 
 
 @dataclass
@@ -69,17 +87,26 @@ def create_services(
     selected = provider
     if selected == "auto":
         selected = config.llm_provider
-    if config.rag_local_only and selected not in {"rules", "local"}:
+    if (config.rag_local_only or config.jetson_ai_policy == "offline_only") and selected not in {"rules", "local"}:
         raise RuntimeError("Offline RAG permits only rules or a self-hosted local LLM")
     if retrieval_mode == "sqlite":
         retriever = SQLiteHandbookRetriever(config.rag_handbook_db, final_k=config.rag_final_k)
     elif retrieval_mode == "sqlite_local":
         from src.vivi.rag.sqlite_vector import SQLiteVectorRetriever
 
-        embeddings = local_embeddings(config.rag_local_embedding_dir, config.rag_embedding_threads,
-                                      config.rag_embedding_batch_size)
-        retriever = SQLiteVectorRetriever(config.rag_handbook_db, embeddings, retrieval_k=config.rag_retrieval_k,
-                                         final_k=config.rag_final_k, min_similarity=config.rag_local_min_similarity)
+        lexical = SQLiteHandbookRetriever(config.rag_handbook_db, final_k=config.rag_final_k)
+        try:
+            embeddings = local_embeddings(config.rag_local_embedding_dir, config.rag_embedding_threads,
+                                          config.rag_embedding_batch_size)
+        except (FileNotFoundError, ImportError) as exc:
+            logger.warning("Embedding unavailable at startup; using handbook FTS5: %s", exc)
+            retriever = lexical
+        else:
+            semantic = SQLiteVectorRetriever(config.rag_handbook_db, embeddings,
+                                             retrieval_k=config.rag_retrieval_k,
+                                             final_k=config.rag_final_k,
+                                             min_similarity=config.rag_local_min_similarity)
+            retriever = EmbeddingFallbackRetriever(semantic, lexical)
     elif retrieval_mode == "lexical":
         retriever = LexicalHandbookRetriever(config.rag_data_dir, final_k=config.rag_final_k)
     else:

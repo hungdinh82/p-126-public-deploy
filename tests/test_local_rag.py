@@ -141,7 +141,8 @@ def test_services_use_canonical_local_index_and_reject_cloud_before_initializing
                       openai_api_key="configured-but-disabled", local_llm_model="", llm_provider="rules")
     monkeypatch.setattr(runtime, "local_embeddings", lambda *args: FakeEmbeddings())
     services = runtime.create_services(config)
-    assert isinstance(services.retriever, SQLiteVectorRetriever)
+    assert isinstance(services.retriever, runtime.EmbeddingFallbackRetriever)
+    assert isinstance(services.retriever.primary, SQLiteVectorRetriever)
     assert services.retriever.retrieve("áp suất lốp", "VF8", 2026, "vi_vn")
     assert set(llm_models(config)) == {"rules", "local"}
     assert configured_llm_providers(config) == ["rules"]
@@ -149,3 +150,32 @@ def test_services_use_canonical_local_index_and_reject_cloud_before_initializing
         runtime.create_services(config, provider="google")
     with pytest.raises(RuntimeError, match="Offline RAG"):
         runtime.create_services(config, provider="openai")
+
+
+def test_missing_embedding_uses_same_handbook_fts5(tmp_path, monkeypatch):
+    from src.vivi.config import Settings
+    from src.vivi.rag import runtime
+
+    path = vector_database(tmp_path)
+    config = Settings(rag_retrieval_mode="sqlite_local", rag_handbook_db=path,
+                      rag_history_db=tmp_path / "history.sqlite3", llm_provider="rules")
+    def missing(*args):
+        raise FileNotFoundError("embedding missing")
+    monkeypatch.setattr(runtime, "local_embeddings", missing)
+    services = runtime.create_services(config, provider="rules")
+    assert services.retriever.retrieve("áp suất lốp", "VF8", 2026, "vi_vn")[0].source_id == "lexical"
+
+
+def test_runtime_embedding_failure_uses_same_handbook_fts5(tmp_path, monkeypatch):
+    from src.vivi.config import Settings
+    from src.vivi.rag import runtime
+
+    class FailingEmbeddings(FakeEmbeddings):
+        def embed_query(self, text):
+            raise RuntimeError("ONNX session unavailable")
+
+    config = Settings(rag_retrieval_mode="sqlite_local", rag_handbook_db=vector_database(tmp_path),
+                      rag_history_db=tmp_path / "history.sqlite3", llm_provider="rules")
+    monkeypatch.setattr(runtime, "local_embeddings", lambda *args: FailingEmbeddings())
+    services = runtime.create_services(config, provider="rules")
+    assert services.retriever.retrieve("áp suất lốp", "VF8", 2026, "vi_vn")[0].source_id == "lexical"
