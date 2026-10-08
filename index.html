@@ -3,9 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="theme-color" content="#050b14" />
-  <title>ViVi — Một tinh tú đồng hành</title>
-  <link rel="stylesheet" href="./style.css?v=3" />
+  <meta name="theme-color" content="#04050a" />
+  <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"}}</script>
+  <title>ViVi — Không gian của bạn</title>
+  <link rel="stylesheet" href="./style.css?v=7" />
 </head>
 <body>
   <svg class="icon-library" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
@@ -17,77 +18,105 @@
     <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M5 3v5m0 5v8m7-18v11m0 5v2m7-18v3m0 5v10"/><circle cx="5" cy="10.5" r="2.5"/><circle cx="12" cy="16.5" r="2.5"/><circle cx="19" cy="8.5" r="2.5"/></symbol>
     <symbol id="i-climate" viewBox="0 0 24 24"><path d="M12 2v20M3.3 7l17.4 10M3.3 17 20.7 7M9 4l3 3 3-3M9 20l3-3 3 3M3 10l4-1-1-4m12 14-1-4 4-1M3 14l4 1-1 4M18 5l-1 4 4 1"/></symbol>
     <symbol id="i-window" viewBox="0 0 24 24"><path d="M3 18V7a2 2 0 0 1 2-2h10l6 7v6H3Zm0-5h18M7 8h6"/></symbol>
+    <symbol id="i-door" viewBox="0 0 24 24"><path d="M6 21V5.5L11 3h7v18H6Zm-3 0h18M14 12h1.5"/></symbol>
     <symbol id="i-music" viewBox="0 0 24 24"><path d="M9 17V5l11-2v12M9 9l11-2"/><ellipse cx="6" cy="18" rx="3" ry="3"/><ellipse cx="17" cy="16" rx="3" ry="3"/></symbol>
     <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="13" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3m-4 0h8"/></symbol>
     <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14m-6-6 6 6-6 6"/></symbol>
     <symbol id="i-volume" viewBox="0 0 24 24"><path d="m11 4-6 5H2v6h3l6 5V4Zm4 4a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14"/></symbol>
     <symbol id="i-battery" viewBox="0 0 24 24"><rect x="2" y="6" width="18" height="12" rx="3"/><path d="M23 10v4M6 10v4m4-4v4m4-4v4"/></symbol>
     <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+    <symbol id="i-locate" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3"/></symbol>
+    <symbol id="i-keyboard" viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="3"/><path d="M6 9h.01M10 9h.01M14 9h.01M18 9h.01M6 13h.01M18 13h.01M10 13h4M7 16h10"/></symbol>
+    <symbol id="i-expand" viewBox="0 0 24 24"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></symbol>
   </defs></svg>
 
-  <aside class="rail" aria-label="Điều hướng">
+  <canvas id="space" class="space" aria-label="Mô hình 3D chiếc VF8 của bạn"></canvas>
+  <div class="space-fallback" aria-hidden="true"></div>
+  <div class="space-vignette" aria-hidden="true"></div>
+
+  <header class="hud-top">
     <a class="brand" href="./" aria-label="ViVi trang chủ">v<span>ı</span>v<span>ı</span><i></i></a>
-    <div class="rail-main">
-      <button class="rail-button active" data-view="home" aria-label="Trợ lý ViVi" title="Trợ lý ViVi"><svg><use href="#i-star"/></svg></button>
-      <button class="rail-button" data-view="vehicle" aria-label="Trạng thái xe" title="Trạng thái xe"><svg><use href="#i-car"/></svg></button>
-      <button class="rail-button" data-view="journey" aria-label="Hành trình" title="Hành trình"><svg><use href="#i-compass"/></svg></button>
-      <button class="rail-button" data-view="manual" aria-label="Cẩm nang xe" title="Cẩm nang xe"><svg><use href="#i-book"/></svg></button>
-      <a class="rail-button" href="/monitor" aria-label="Giám sát phần cứng edge" title="Giám sát phần cứng edge"><svg><use href="#i-gauge"/></svg></a>
+    <span class="connection" id="backend-status"><i></i> Đang kết nối</span>
+    <div class="hud-top-right"><span class="weather">24° <span>☀</span></span><time id="clock">09:41</time></div>
+  </header>
+
+  <section class="hud-status" aria-label="Thông số xe" aria-live="polite">
+    <span class="mode-label"><b id="gear-letter">P</b><span id="mode-label">ĐỖ XE</span></span>
+    <strong id="hud-primary">82<small>%</small></strong>
+    <span id="hud-primary-label" class="hud-caption">PIN</span>
+    <div class="hud-meta"><span id="hud-range">328 km</span><span id="hud-cabin">Cabin 23°</span></div>
+  </section>
+
+  <section id="maneuver" class="maneuver" aria-live="polite" hidden>
+    <b id="maneuver-icon">↑</b>
+    <div><strong id="maneuver-distance"></strong><span id="maneuver-text"></span></div>
+    <small id="maneuver-eta"></small>
+  </section>
+
+  <section id="alert-panel" class="alert-panel" aria-label="Cảnh báo xe" aria-live="polite" hidden>
+    <div class="alert-panel-heading"><span>CẢNH BÁO CHỦ ĐỘNG</span><strong id="alert-count"></strong></div>
+    <div id="alert-list" class="alert-list"></div>
+  </section>
+
+  <section class="assistant" aria-label="Trò chuyện với ViVi">
+    <div class="response" id="response" role="status" aria-live="polite"><span id="orb-state" class="assistant-state">ViVi đang ở đây</span><p id="response-text">Chạm vào sóng và nói điều bạn cần.</p></div>
+    <form id="command-form" class="voice">
+      <button type="button" id="demo-mic" class="voice-capsule" aria-label="Nói với ViVi" title="Chạm để nói, chạm lần nữa để dừng"><canvas id="wave" aria-hidden="true"></canvas></button>
+      <label class="voice-input"><input id="command-input" aria-label="Yêu cầu dành cho ViVi" placeholder="Nhập điều bạn cần…" autocomplete="off" maxlength="240" /><button type="submit" class="send-button" aria-label="Gửi yêu cầu"><svg><use href="#i-arrow"/></svg></button></label>
+      <button type="button" id="keyboard-toggle" class="voice-keyboard" aria-label="Nhập bằng bàn phím" aria-pressed="false" title="Nhập bằng bàn phím"><svg><use href="#i-keyboard"/></svg></button>
+    </form>
+  </section>
+
+  <nav class="dock" aria-label="Điều khiển nhanh">
+    <button id="climate-button" class="dock-button" aria-label="Điều hoà" aria-expanded="false" aria-controls="climate-pop" title="Điều hoà"><svg><use href="#i-climate"/></svg><span id="dock-temp">23°</span></button>
+    <button id="window-toggle" class="dock-button" aria-label="Mở cửa sổ bên tài" aria-pressed="false" title="Cửa sổ bên tài"><svg><use href="#i-window"/></svg></button>
+    <button id="door-toggle" class="dock-button" aria-label="Mở cửa bên tài" aria-pressed="false" title="Cửa bên tài"><svg><use href="#i-door"/></svg></button>
+    <button id="music-toggle" class="dock-button" aria-label="Phát nhạc" aria-pressed="false" title="Âm nhạc"><svg><use href="#i-music"/></svg></button>
+    <span class="dock-divider"></span>
+    <button class="dock-button" data-view="journey" aria-label="Hành trình" title="Hành trình"><svg><use href="#i-compass"/></svg></button>
+    <button class="dock-button" data-view="vehicle" aria-label="Trạng thái xe" title="Trạng thái xe"><svg><use href="#i-car"/></svg></button>
+    <button class="dock-button" data-view="manual" aria-label="Cẩm nang xe" title="Cẩm nang xe"><svg><use href="#i-book"/></svg></button>
+    <span class="dock-divider"></span>
+    <button id="sound-toggle" class="dock-button" aria-label="Bật giọng Mai Chi" aria-pressed="false" title="Giọng Mai Chi"><svg><use href="#i-volume"/></svg></button>
+    <button id="drive-toggle" class="dock-button gear" aria-label="Chuyển sang lái xe" aria-pressed="false" title="Đỗ xe / lái xe (demo)"><span>P</span></button>
+    <a class="dock-button" href="/monitor" aria-label="Giám sát phần cứng edge" title="Giám sát phần cứng edge"><svg><use href="#i-gauge"/></svg></a>
+    <button id="settings-button" class="dock-button" aria-label="Cấu hình ViVi" title="Cấu hình ViVi"><svg><use href="#i-sliders"/></svg></button>
+  </nav>
+  <div id="climate-pop" class="climate-pop" role="group" aria-label="Nhiệt độ cabin" hidden>
+    <button data-temp="-1" aria-label="Giảm nhiệt độ">−</button>
+    <div><strong id="temperature">23°</strong><span>CABIN · AUTO</span></div>
+    <button data-temp="1" aria-label="Tăng nhiệt độ">+</button>
+  </div>
+
+  <section id="journey" class="journey" aria-label="Hành trình" hidden>
+    <div id="journey-map" class="journey-map"></div>
+    <p id="journey-notice" class="journey-notice" role="status" hidden></p>
+    <div class="journey-panel">
+      <div class="journey-head"><div class="eyebrow"><span></span> HÀNH TRÌNH · VIETMAP</div><button id="journey-close" class="journey-close" aria-label="Đóng hành trình">×</button></div>
+      <h2>Hôm nay, mình đi đâu?</h2>
+      <div class="journey-points">
+        <div class="journey-point origin"><i></i><div><span>XUẤT PHÁT</span><strong id="journey-origin">Đang xác định vị trí…</strong></div><button id="journey-locate" class="journey-icon-button" aria-label="Lấy lại vị trí hiện tại" title="Lấy lại vị trí hiện tại"><svg><use href="#i-locate"/></svg></button></div>
+        <div class="journey-point destination"><i></i><div class="journey-search"><span>ĐIỂM ĐẾN</span><label><svg><use href="#i-search"/></svg><input id="journey-search" placeholder="Tìm địa điểm, địa chỉ…" autocomplete="off" maxlength="200" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="journey-results"></label><ul id="journey-results" class="journey-results" role="listbox" hidden></ul></div></div>
+      </div>
+      <p id="journey-message" class="journey-message" role="status" aria-live="polite" hidden></p>
+      <div id="journey-summary" class="journey-summary" hidden>
+        <div><strong id="journey-duration">—</strong><span>THỜI GIAN</span></div>
+        <div><strong id="journey-distance">—</strong><span>QUÃNG ĐƯỜNG</span></div>
+        <div><strong id="journey-arrival">—</strong><span>DỰ KIẾN ĐẾN</span></div>
+      </div>
+      <div id="journey-next" class="journey-next" aria-live="polite" hidden><b id="journey-next-icon">↑</b><div><strong id="journey-next-text"></strong><span id="journey-next-distance"></span></div></div>
+      <div id="journey-controls" class="journey-controls" hidden>
+        <button id="journey-start" class="journey-start"><svg><use href="#i-car"/></svg><span>Bắt đầu mô phỏng</span></button>
+        <div class="journey-speed" role="group" aria-label="Tốc độ mô phỏng"><button data-speed="1" aria-pressed="false">1×</button><button data-speed="5" aria-pressed="true">5×</button><button data-speed="15" aria-pressed="false">15×</button></div>
+      </div>
+      <ol id="journey-steps" class="journey-steps"></ol>
     </div>
-    <button class="rail-button settings-button" aria-label="Cấu hình ViVi" title="Cấu hình ViVi"><svg><use href="#i-sliders"/></svg></button>
-    <div class="profile" title="Người lái">P</div>
-  </aside>
-
-  <main>
-    <header class="topbar">
-      <div class="wordmark">ViVi <span>/</span> <small>YOUR SPACE. YOUR COMPANION.</small></div>
-      <div class="topbar-right"><span class="connection" id="backend-status"><i></i> Đang kết nối local</span><span class="divider"></span><time id="clock">09:41</time><span class="weather">24° <span>☀</span></span></div>
-    </header>
-
-    <section class="universe" aria-label="Không gian trợ lý ViVi">
-      <canvas id="universe-canvas" aria-hidden="true"></canvas>
-      <div class="universe-grain"></div>
-      <div class="intro"><div class="eyebrow"><span></span> MỘT TINH TÚ ĐỒNG HÀNH</div><h1>Chào bạn.<br>Hôm nay, mình đi đâu?</h1><p>Mọi hành trình đều bắt đầu bằng một câu nói.</p></div>
-      <div class="scene-tools"><button id="drive-toggle" class="mode-button" aria-pressed="false"><svg><use href="#i-car"/></svg><span>Đang đỗ xe</span><i></i></button><span class="scene-caption">KHÔNG GIAN CỦA BẠN</span></div>
-
-      <div class="orb-label"><span class="orb-dot"></span><span id="orb-state">ViVi đang ở đây</span></div>
-      <div class="coordinates" aria-hidden="true">21° 01′ N <span>·</span> 105° 50′ E <span class="coordinate-line"></span> VIVI / 01</div>
-      <div class="scene-bottom"><span><i></i> KẾT NỐI VỚI CHIẾC XE CỦA BẠN</span><span>LOCAL EXPERIENCE <span class="tiny-star">✧</span></span></div>
-    </section>
-
-    <section class="interaction" aria-label="Trò chuyện với ViVi">
-      <div class="response" id="response" role="status" aria-live="polite"><span class="response-star">✧</span><p id="response-text">Mình ở đây, sẵn sàng cùng bạn.</p></div>
-      <div class="suggestions" aria-label="Thử một câu nói">
-        <button data-command="Tôi hơi lạnh"><svg><use href="#i-climate"/></svg>Tôi hơi lạnh<span>↗</span></button>
-        <button data-command="Mở cửa sổ bên tài"><svg><use href="#i-window"/></svg>Mở cửa sổ bên tài<span>↗</span></button>
-        <button data-command="Phát nhạc thư giãn"><svg><use href="#i-music"/></svg>Phát nhạc thư giãn<span>↗</span></button>
-        <button data-command="Hướng dẫn sử dụng xe"><svg><use href="#i-book"/></svg>Hướng dẫn sử dụng xe<span>↗</span></button>
-      </div>
-      <form id="command-form" class="command-bar">
-        <button type="button" id="demo-mic" class="mic-button" aria-label="Bắt đầu thu âm" title="Nhấn để nói, nhấn lần nữa để dừng"><svg><use href="#i-mic"/></svg></button>
-        <input id="command-input" aria-label="Yêu cầu dành cho ViVi" placeholder="Nói với ViVi điều bạn cần…" autocomplete="off" maxlength="240" />
-        <span class="keyboard-hint">↵</span><button type="submit" class="send-button" aria-label="Gửi yêu cầu"><svg><use href="#i-arrow"/></svg></button>
-      </form>
-      <div class="interaction-footer"><span id="runtime-note"><span class="mini-dot"></span> Local runtime · đang kiểm tra dịch vụ</span><button id="sound-toggle" aria-pressed="false"><svg><use href="#i-volume"/></svg><span>Mai Chi: tắt</span></button></div>
-    </section>
-
-    <section id="alert-panel" class="alert-panel" aria-label="Cảnh báo xe" aria-live="polite" hidden>
-      <div class="alert-panel-heading"><span>CẢNH BÁO CHỦ ĐỘNG</span><strong id="alert-count"></strong></div>
-      <div id="alert-list" class="alert-list"></div>
-    </section>
-
-    <section class="vehicle-section" aria-label="Trạng thái xe mô phỏng">
-      <div class="section-label"><h2>Một chút chăm sóc cho hành trình</h2><span>XE MÔ PHỎNG <i></i></span></div>
-      <div class="vehicle-grid">
-        <article class="vehicle-card climate-card" id="climate-card"><div class="card-heading"><span><svg><use href="#i-climate"/></svg>KHÔNG GIAN CABIN</span><span class="card-status">AUTO</span></div><div class="climate-value"><strong id="temperature">23<span>°</span></strong><div class="stepper"><button data-temp="-1" aria-label="Giảm nhiệt độ">−</button><button data-temp="1" aria-label="Tăng nhiệt độ">+</button></div></div><div class="card-footer"><span>Nhiệt độ cài đặt</span><span class="soft-cyan" id="climate-note">Thoải mái theo cách của bạn</span></div></article>
-        <article class="vehicle-card window-card" id="window-card"><div class="card-heading"><span><svg><use href="#i-window"/></svg>CỬA SỔ BÊN TÀI</span><span class="status-dot"></span></div><div class="window-value"><strong id="window-label">Đang đóng</strong><button id="window-toggle" class="window-switch" aria-label="Mở cửa sổ bên tài" aria-pressed="false"><span></span></button></div><div class="card-footer"><span id="window-note">Một khoảng yên tĩnh riêng</span><span id="window-percent">0%</span></div></article>
-        <article class="vehicle-card music-card" id="music-card"><div class="card-heading"><span><svg><use href="#i-music"/></svg>ÂM THANH HÀNH TRÌNH</span><span class="card-status">DEMO</span></div><div class="music-content"><div class="album-art"><span></span><i></i></div><div class="track"><strong>A little more calm</strong><span>Không gian thư giãn · Mô phỏng</span></div><button id="music-toggle" class="play-button" aria-label="Phát nhạc mô phỏng">▶</button></div><div class="card-footer"><div class="equalizer" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><span id="music-note">Để tâm trí được thảnh thơi</span></div></article>
-      </div>
-    </section>
-    <footer class="page-footer"><span>DESIGNED TO FEEL ALIVE.</span><span>ViVi Space Concept <span>·</span> 2026</span><span><svg><use href="#i-battery"/></svg>82% <span class="footer-range">· 328 km</span></span></footer>
-  </main>
+    <button id="journey-expand" class="journey-expand" aria-label="Mở rộng bản đồ hành trình" title="Mở rộng bản đồ"><svg><use href="#i-expand"/></svg></button>
+    <button id="journey-recenter" class="journey-recenter" aria-label="Về vị trí xe" title="Về vị trí xe"><svg><use href="#i-locate"/></svg></button>
+  </section>
 
   <dialog id="info-dialog"><div class="dialog-top"><span class="eyebrow">VIVI / SPACE CONCEPT</span><button id="close-dialog" aria-label="Đóng">×</button></div><div id="dialog-content"></div></dialog>
-  <script type="module" src="./app.js?v=11"></script>
+  <script type="module" src="./app.js?v=39"></script>
 </body>
 </html>

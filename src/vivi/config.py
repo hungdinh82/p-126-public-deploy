@@ -120,6 +120,20 @@ class Settings(BaseSettings):
     zerotts_device: str = "auto"
     zerotts_preload: bool = False
 
+    vietmap_api_key: str = ""
+    # VietMap issues separate consumers: the API key (search/route) stays on the
+    # backend, the Tilemap key is embedded in the browser to draw the base map.
+    vietmap_tile_key: str = Field(
+        default="", validation_alias=AliasChoices("VIETMAP_TILE_KEY", "TILEMAP_API_KEY")
+    )
+    vietmap_base_url: str = "https://maps.vietmap.vn"
+    # tm = street, lm = light, dm = dark (matches the ViVi night theme).
+    vietmap_map_style: str = "dm"
+    vietmap_timeout_seconds: float = 10
+    # Fallback origin when the browser denies geolocation (Hồ Gươm, Hà Nội).
+    navigation_default_lat: float = 21.0285
+    navigation_default_lng: float = 105.8522
+
     database_url: str = "sqlite:///./data/app.db"
     rag_data_dir: Path = Path("./data/handbooks")
     rag_history_db: Path = Path("./data/vivi_rag.sqlite3")

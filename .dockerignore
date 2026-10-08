@@ -26,3 +26,4 @@ eval/
 .dockerignore
 Dockerfile
 docker-compose.yml
+ModelVF8/
