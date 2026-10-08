@@ -234,12 +234,16 @@ async function loadCar() {
   car.add(model);
   car.scale.setScalar(scale);
   car.updateMatrixWorld(true);
-  // The door is lifted out before the rear repaint splits bodyshell materials.
-  const driverDoor = rigDriverDoor(car);
+  // Moving panels are lifted out before the rear repaint splits bodyshell
+  // materials. The driver's glass slides on its own, so that door leaves the
+  // shared glass mesh alone; the other doors carry their glass with them.
+  const doors = { driver: rigDoor(car, 'driver', DOOR_MESHES) };
+  const driverWindow = rigDriverWindow(car, doors.driver);
+  for (const zone of ['front_passenger', 'rear_left', 'rear_right']) doors[zone] = rigDoor(car, zone, DOOR_GLASS_MESHES);
+  const hood = rigHood(car), tailgate = rigTailgate(car);
   paintRear(car);
-  const driverWindow = rigDriverWindow(car, driverDoor);
   wheels.radius *= scale;
-  return { car, wheels, glow, driverDoor, driverWindow };
+  return { car, wheels, glow, doors, driverWindow, hood, tailgate };
 }
 
 // Split a mesh into its connected pieces (vertices welded by position) and
@@ -305,36 +309,73 @@ function detachPieces(mesh, pick, parent, material = mesh.material) {
   return part;
 }
 
-// The driver's (front left) door: skin, frame, trim, handle, mirror and
-// chrome, swung about a hinge at its front edge. The source model has no
-// separate door, so its pieces are picked by where they sit (car frame).
+// Each cabin door: skin, frame, trim, handle, mirror and chrome, swung about
+// a hinge at its front edge. The source model has no separate doors, so their
+// pieces are picked by where they sit (car frame). Left is -X, front is -Z.
 const DOOR_MESHES = /^(bodyshell|interior|betaparts|Object016|Object018|Object021|indicator_lf)$/;
+const DOOR_GLASS_MESHES = /^(bodyshell|interior|betaparts|Object016|Object018|Object021|indicator_lf|windscreen)$/;
 const DOOR_ANGLE = THREE.MathUtils.degToRad(62);
-function inDriverDoor(center, box) {
-  return center.x < -.6 && box.min.x > -1.12 && box.min.z > -.97 && box.max.z < .3 && center.z < .14 && box.max.y > .3;
+const DOOR_SIDE = { driver: -1, front_passenger: 1, rear_left: -1, rear_right: 1 };
+function inDoor(zone, center, box) {
+  const side = DOOR_SIDE[zone], outer = side < 0 ? -box.min.x : box.max.x;
+  if (side * center.x < .6 || outer > 1.12 || box.max.y <= .3) return false;
+  // The rear door stops short of the fixed quarter glass and C-pillar.
+  return zone.startsWith('rear')
+    ? box.min.z > .1 && box.max.z < 1.36 && center.z > .3
+    : box.min.z > -.97 && box.max.z < .3 && center.z < .14;
 }
-function rigDriverDoor(car) {
+// Lift the pieces `pick` accepts out of the meshes `names` matches into a new
+// group, re-centred on the hinge `pivotOf` places within their bounds.
+function rigPanel(car, names, pick, pivotOf) {
   car.updateMatrixWorld(true);
   const meshes = [];
-  car.traverse(node => { if (node.isMesh && DOOR_MESHES.test(node.name) && !Array.isArray(node.material)) meshes.push(node); });
+  car.traverse(node => { if (node.isMesh && names.test(node.name) && !Array.isArray(node.material)) meshes.push(node); });
   const hinge = new THREE.Group();
   car.add(hinge);
-  // The hinge sits on the door's front edge, just inside its outer skin; the
-  // mirror sticks out further, so only the panel below it sets the skin line.
   const bounds = new THREE.Box3();
-  const pick = (center, box) => {
-    if (!inDriverDoor(center, box)) return false;
-    if (box.max.y < 1.05) bounds.union(box);
-    return true;
-  };
-  const parts = meshes.map(mesh => detachPieces(mesh, pick, hinge)).filter(Boolean);
+  const parts = meshes.map(mesh => detachPieces(mesh, (center, box) => pick(center, box, bounds), hinge)).filter(Boolean);
   if (!parts.length) { car.remove(hinge); return null; }
-  const pivot = new THREE.Vector3(bounds.min.x + .06, 0, bounds.min.z + .04);
-  car.worldToLocal(pivot);
+  const pivot = car.worldToLocal(pivotOf(bounds));
   hinge.position.copy(pivot);
   for (const part of parts) part.position.sub(pivot);
   hinge.updateMatrixWorld(true);
   return hinge;
+}
+function rigDoor(car, zone, names) {
+  // The hinge sits on the door's front edge, just inside its outer skin; the
+  // mirror sticks out further, so only the panel below it sets the skin line.
+  const pick = (center, box, bounds) => {
+    if (!inDoor(zone, center, box)) return false;
+    if (box.max.y < 1.05) bounds.union(box);
+    return true;
+  };
+  const side = DOOR_SIDE[zone];
+  return rigPanel(car, names, pick, bounds => new THREE.Vector3(side < 0 ? bounds.min.x + .06 : bounds.max.x - .06, 0, bounds.min.z + .04));
+}
+
+// The hood is one bodyshell panel over the front compartment, hinged at its
+// rear edge below the windscreen.
+const HOOD_ANGLE = THREE.MathUtils.degToRad(48);
+function rigHood(car) {
+  const pick = (center, box, bounds) => {
+    const hood = box.min.z < -2.2 && box.max.z > -1.2 && box.min.y > .8 && box.max.y < 1.15;
+    if (hood) bounds.union(box);
+    return hood;
+  };
+  return rigPanel(car, /^bodyshell$/, pick, bounds => new THREE.Vector3(0, bounds.max.y - .02, bounds.max.z - .02));
+}
+
+// The tailgate carries the rear glass, spoiler, high brake light, the centre
+// of the light bar and the V badge; the outer lamp clusters stay on the body.
+const TAILGATE_ANGLE = THREE.MathUtils.degToRad(72);
+const TAILGATE_MESHES = /^(bodyshell|windscreen|tailight_l|brakelight_m003|misc_f_1|interior|Object019)$/;
+function rigTailgate(car) {
+  const pick = (center, box, bounds) => {
+    const tailgate = Math.abs(center.x) < .66 && box.min.z > 1.44 && box.min.y > .6;
+    if (tailgate) bounds.union(box);
+    return tailgate;
+  };
+  return rigPanel(car, TAILGATE_MESHES, pick, bounds => new THREE.Vector3(0, bounds.max.y - .02, bounds.min.z + .02));
 }
 
 // The driver's (front left) side window, lifted out of the shared glass mesh
@@ -368,8 +409,9 @@ function paintRear(car) {
   const black = new THREE.MeshPhysicalMaterial({ color: 0x040506, roughness: .18, metalness: 0, clearcoat: 1, clearcoatRoughness: .25, envMapIntensity: 1.2 });
   const chrome = new THREE.MeshStandardMaterial({ color: 0xf4f6fa, metalness: 1, roughness: .22, envMapIntensity: 3, emissive: 0x9aa3b8, emissiveIntensity: .35, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
   car.traverse(node => {
-    if (node.name === 'bodyshell') repaint(node, c => REAR_BLACK.some(([x, y, z]) => Math.hypot(c.x - x, c.y - y, c.z - z) < .03), black);
-    if (node.name === REAR_BADGE) repaint(node, c => c.y > .95, chrome);
+    // The tailgate's pieces were lifted out into "_moving" copies.
+    if (/^bodyshell(_moving)?$/.test(node.name)) repaint(node, c => REAR_BLACK.some(([x, y, z]) => Math.hypot(c.x - x, c.y - y, c.z - z) < .03), black);
+    if (node.name === REAR_BADGE || node.name === `${REAR_BADGE}_moving`) repaint(node, c => c.y > .95, chrome);
   });
 }
 
@@ -791,7 +833,7 @@ export function createScene(canvas, options = {}) {
     mode: 'parked', drive: 0, speed: 0, displaySpeed: 0, distance: 0,
     orbit: -2.35, orbitVelocity: 0, dragging: false, lastX: 0,
     voice: 0, turn: null, turnStrength: 0, yaw: 0, reveal: 0,
-    route: null, routeDistance: 0, routeLive: false, onRoute: false, straight: null, carHeading: 0, camHeading: 0, chevronTurn: 0, lane: 0, laneOffset: 0, laneVelocity: 0, laneHold: 0, lastDistance: 0, forward: 0, laneYaw: 0, camLane: 0, guideLane: 0, window: 0, windowOpen: 0, door: 0, doorOpen: 0,
+    route: null, routeDistance: 0, routeLive: false, onRoute: false, straight: null, carHeading: 0, camHeading: 0, chevronTurn: 0, lane: 0, laneOffset: 0, laneVelocity: 0, laneHold: 0, lastDistance: 0, forward: 0, laneYaw: 0, camLane: 0, guideLane: 0, window: 0, windowOpen: 0, doors: {}, doorsOpen: {}, hood: 0, hoodOpen: 0, trunk: 0, trunkOpen: 0,
     reduced: Boolean(options.reduced), paused: false, time: 0, last: performance.now(), frame: 0
   };
 
@@ -989,8 +1031,16 @@ export function createScene(canvas, options = {}) {
       // About 1.5 s from closed to fully open, like a real window motor.
       state.windowOpen = state.reduced ? state.window : ease(state.windowOpen, state.window, 2.4, dt);
       vehicle.driverWindow?.(state.windowOpen);
-      state.doorOpen = state.reduced ? state.door : ease(state.doorOpen, state.door, 2.6, dt);
-      if (vehicle.driverDoor) vehicle.driverDoor.rotation.y = -DOOR_ANGLE * state.doorOpen;
+      for (const [zone, door] of Object.entries(vehicle.doors)) {
+        const target = state.doors[zone] || 0, current = state.doorsOpen[zone] || 0;
+        state.doorsOpen[zone] = state.reduced ? target : ease(current, target, 2.6, dt);
+        if (door) door.rotation.y = DOOR_SIDE[zone] * DOOR_ANGLE * state.doorsOpen[zone];
+      }
+      // Gas struts: the hood and tailgate rise a little slower than a door swings.
+      state.hoodOpen = state.reduced ? state.hood : ease(state.hoodOpen, state.hood, 2, dt);
+      if (vehicle.hood) vehicle.hood.rotation.x = HOOD_ANGLE * state.hoodOpen;
+      state.trunkOpen = state.reduced ? state.trunk : ease(state.trunkOpen, state.trunk, 1.8, dt);
+      if (vehicle.tailgate) vehicle.tailgate.rotation.x = -TAILGATE_ANGLE * state.trunkOpen;
     }
     for (const [light, intensity] of lights) light.intensity = intensity * (.15 + reveal * .85);
     const twinkle = state.reduced ? 0 : state.time;
@@ -1085,7 +1135,10 @@ export function createScene(canvas, options = {}) {
     },
     // Driver's window opening, 0 (closed) to 100 (fully open).
     setWindow(percent) { state.window = Math.max(0, Math.min(100, Number(percent) || 0)) / 100; },
-    setDoor(open) { state.door = open ? 1 : 0; },
+    // Open flags per cabin zone: { driver, front_passenger, rear_left, rear_right }.
+    setDoors(open) { for (const zone of Object.keys(DOOR_SIDE)) state.doors[zone] = open?.[zone] ? 1 : 0; },
+    setHood(open) { state.hood = open ? 1 : 0; },
+    setTrunk(open) { state.trunk = open ? 1 : 0; },
     setVoiceLevel(level) { state.voice = Math.max(0, Math.min(1, level)); },
     setPaused(paused) { if (state.paused && !paused) state.last = performance.now(); state.paused = paused; },
     setReduced(reduced) { state.reduced = reduced; }

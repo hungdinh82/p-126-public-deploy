@@ -14,7 +14,8 @@ class Reply(Parameters):
 
 class ProposedAction(Parameters):
     intent: Literal["media.play", "media.pause", "climate.set_temperature", "window.set_position",
-                    "door.set_open", "door.set_lock", "seat.set_heat_level", "vehicle.get_status"]
+                    "door.set_open", "door.set_lock", "hood.set_open", "trunk.set_open", "body.set_open",
+                    "seat.set_heat_level", "vehicle.get_status"]
     # The actual function's schema is validated after decoding. Repeating all
     # tool schemas inside each dialogue schema wastes the small model's context.
     arguments: dict[str, Any] = Field(default_factory=dict)

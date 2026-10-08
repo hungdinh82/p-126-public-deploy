@@ -10,6 +10,9 @@ Intent = Literal[
     "window.set_position",
     "door.set_lock",
     "door.set_open",
+    "hood.set_open",
+    "trunk.set_open",
+    "body.set_open",
     "seat.set_heat_level",
     "media.play",
     "media.pause",
@@ -149,6 +152,8 @@ class VehicleState(BaseModel):
     powertrain_temperature_celsius: float = Field(default=45, ge=-50, le=250)
     window_positions: WindowPositions = Field(default_factory=WindowPositions)
     door_states: DoorStates = Field(default_factory=DoorStates)
+    hood_open: bool = False
+    trunk_open: bool = False
     seat_heat_levels: SeatHeatLevels = Field(default_factory=SeatHeatLevels)
 
     @model_validator(mode="before")

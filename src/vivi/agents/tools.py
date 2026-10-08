@@ -34,6 +34,10 @@ class DoorOpen(Parameters):
     zone: Zone
 
 
+class PanelOpen(Parameters):
+    open: StrictBool
+
+
 class DoorLock(Parameters):
     locked: StrictBool
     zone: Zone
@@ -134,6 +138,24 @@ TOOLS = (
         "Khoá hoặc mở khoá cửa tại vị trí được yêu cầu. Mở khoá không có nghĩa mở cánh cửa.",
         DoorLock,
         "Bạn muốn điều chỉnh khoá cửa ở vị trí nào?",
+    ),
+    ToolSpec(
+        "hood.set_open",
+        "Mở hoặc đóng nắp capo (khoang phía trước). Chỉ khi xe đang đỗ.",
+        PanelOpen,
+        "Bạn muốn mở hay đóng nắp capo?",
+    ),
+    ToolSpec(
+        "trunk.set_open",
+        "Mở hoặc đóng cốp sau (cửa hậu). Chỉ khi xe đang đỗ.",
+        PanelOpen,
+        "Bạn muốn mở hay đóng cốp sau?",
+    ),
+    ToolSpec(
+        "body.set_open",
+        "Mở hoặc đóng cùng lúc cả bốn cửa, nắp capo và cốp sau, chỉ khi người dùng yêu cầu tất cả. Chỉ mở khi xe đang đỗ.",
+        PanelOpen,
+        "Bạn muốn mở hay đóng tất cả cửa, capo và cốp?",
     ),
     ToolSpec(
         "seat.set_heat_level",

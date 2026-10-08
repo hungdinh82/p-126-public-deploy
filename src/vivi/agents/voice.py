@@ -4,7 +4,7 @@ import re
 
 from src.vivi.agents.contracts import ActionProposal
 from src.vivi.text import normalize_text
-from src.vivi.vehicle.zones import zoned_noun
+from src.vivi.vehicle.zones import ALL_PANELS_LABEL, BODY_PANELS, zoned_noun
 
 
 def status_reply(query: str, state: dict) -> str:
@@ -14,7 +14,14 @@ def status_reply(query: str, state: dict) -> str:
         return "Mình chưa đọc được danh sách lỗi hoặc cảnh báo hiện tại của xe."
     if "pin" in text and "nhiet do" in text:
         return "Mình chưa đọc được nhiệt độ pin."
-    if "pin" in text or not re.search(r"dieu hoa|nhiet do|ap suat|cua|ghe|nhac|quang duong|bao xa|di duoc", text):
+    from src.vivi.agents.slots import HOOD_WORDS, TRUNK_WORDS
+
+    panels = [(field, label) for field, label, words in (
+        ("hood_open", "Nắp capo", HOOD_WORDS), ("trunk_open", "Cốp sau", TRUNK_WORDS)
+    ) if re.search(words, text)]
+    # "Cửa cốp" is the tailgate, not a cabin door.
+    text = re.sub(f"{HOOD_WORDS}|{TRUNK_WORDS}", " ", text)
+    if "pin" in text or not panels and not re.search(r"dieu hoa|nhiet do|ap suat|cua|ghe|nhac|quang duong|bao xa|di duoc", text):
         value = state.get("battery_percent")
         pieces.append(f"Pin của mình còn {value:g} phần trăm." if value is not None else "Mình chưa đọc được mức pin.")
     if re.search(r"quang duong|bao xa|di duoc|di them", text):
@@ -56,6 +63,9 @@ def status_reply(query: str, state: dict) -> str:
                 value = (state.get("seat_heat_levels") or {}).get(key)
                 if value is not None:
                     pieces.append(f"Sưởi ghế {labels[key]} đang ở mức {value:g}.")
+    for field, label in panels:
+        if field in state:
+            pieces.append(f"{label} {'đang mở' if state[field] else 'đang đóng'}.")
     if "nhac" in text and "media_playing" in state:
         pieces.append("Nhạc đang bật." if state["media_playing"] else "Nhạc đang dừng.")
         if re.search(r"bai|nhac gi", text):
@@ -79,6 +89,10 @@ def verified_action_reply(proposal: ActionProposal, query: str, state: dict, fal
         return f"Mình đã {'khoá' if args['locked'] else 'mở khoá'} {zoned_noun('cửa', args)} nhé."
     if proposal.intent == "door.set_open":
         return f"Mình đã {'mở' if args['open'] else 'đóng'} {zoned_noun('cửa', args)} nhé."
+    if proposal.intent in BODY_PANELS:
+        return f"Mình đã {'mở' if args['open'] else 'đóng'} {BODY_PANELS[proposal.intent][1]} nhé."
+    if proposal.intent == "body.set_open":
+        return f"Mình đã {'mở' if args['open'] else 'đóng'} {ALL_PANELS_LABEL} nhé."
     if proposal.intent == "seat.set_heat_level":
         return f"Mình đã đặt {zoned_noun('sưởi ghế', args)} ở mức {int(args['level'])}."
     if proposal.intent == "media.play":

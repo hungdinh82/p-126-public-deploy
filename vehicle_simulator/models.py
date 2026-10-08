@@ -77,6 +77,8 @@ class VehicleState(BaseModel):
     seat_driver_heat_level: int = Field(default=0, ge=0, le=3)
     window_positions: WindowPositions = Field(default_factory=WindowPositions)
     door_states: DoorStates = Field(default_factory=DoorStates)
+    hood_open: bool = False
+    trunk_open: bool = False
     seat_heat_levels: SeatHeatLevels = Field(default_factory=SeatHeatLevels)
 
     @model_validator(mode="before")
@@ -185,6 +187,8 @@ class VehicleFixture(BaseModel):
     door_driver_open: bool | None = None
     window_positions: WindowPositions | None = None
     door_states: DoorStates | None = None
+    hood_open: bool | None = None
+    trunk_open: bool | None = None
     seat_heat_levels: SeatHeatLevels | None = None
 
     @model_validator(mode="after")

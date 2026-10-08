@@ -205,6 +205,10 @@ class AlertEngine:
                         "critical",
                         f"Cửa {ZONE_LABELS[zone]} đang mở khi xe sẵn sàng di chuyển.",
                     )
+            if state.hood_open:
+                add("HOOD_OPEN_WHEN_READY", "hood", "critical", "Nắp capo đang mở khi xe sẵn sàng di chuyển.")
+            if state.trunk_open:
+                add("TRUNK_OPEN_WHEN_READY", "trunk", "critical", "Cốp sau đang mở khi xe sẵn sàng di chuyển.")
         return alerts
 
 

@@ -28,7 +28,7 @@ from src.vivi.rag.relevance import matches_topic, matches_variant
 from src.vivi.rag.runtime import HandbookServices, create_services
 from src.vivi.rag.schemas import ModelDecision
 from src.vivi.rag.scope import scope_rejection_reason
-from src.vivi.vehicle.zones import zoned_noun
+from src.vivi.vehicle.zones import ALL_PANELS_LABEL, BODY_PANELS, zoned_noun
 
 ABSTAIN_MESSAGE = "Mình chưa có thông tin chắc chắn để trả lời câu này."
 def _retrieval_query(state: AgentState) -> str:
@@ -81,6 +81,10 @@ def _action_preview_text(proposal: ActionProposal) -> str:
         request = f"điều chỉnh {zoned_noun('cửa sổ', arguments)} đến {position:g}%"
     elif proposal.intent == "door.set_open":
         request = f"{'mở' if arguments['open'] else 'đóng'} {zoned_noun('cửa', arguments)}"
+    elif proposal.intent in BODY_PANELS:
+        request = f"{'mở' if arguments['open'] else 'đóng'} {BODY_PANELS[proposal.intent][1]}"
+    elif proposal.intent == "body.set_open":
+        request = f"{'mở' if arguments['open'] else 'đóng'} {ALL_PANELS_LABEL}"
     elif proposal.intent == "door.set_lock":
         request = f"{'khóa' if arguments['locked'] else 'mở khóa'} {zoned_noun('cửa', arguments)}"
     elif proposal.intent == "seat.set_heat_level":

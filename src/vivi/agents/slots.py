@@ -17,6 +17,21 @@ def cabin_zone(text: str) -> str | None:
     return None
 
 
+# Normalised wording for the hood and the tailgate. "Cốp trước" is the front
+# compartment under the hood, so the hood is matched first.
+HOOD_WORDS = r"\b(?:nap\s+)?(?:ca\s?-?\s?po|capo|capot)\b|\bnap may\b|\bkhoang (?:dong co|may)\b|\bcop truoc\b"
+TRUNK_WORDS = r"\b(?:cua\s+)?cop(?:\s+(?:sau|xe))?\b|\bcua hau\b|\bkhoang hanh ly\b"
+
+
+def body_panel(text: str) -> str | None:
+    """The body panel intent a normalised utterance refers to, if any."""
+    if re.search(HOOD_WORDS, text):
+        return "hood.set_open"
+    if re.search(TRUNK_WORDS, text):
+        return "trunk.set_open"
+    return None
+
+
 def is_cabin_zone_reply(text: str) -> bool:
     """Accept a location-only clarification reply, not a new sentence mentioning one."""
     zone = (

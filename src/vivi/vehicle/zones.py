@@ -11,6 +11,15 @@ ZONE_LABELS = {
     "all": "tất cả",
 }
 
+# Body panels opened as a whole, keyed by intent: (state field, spoken name).
+BODY_PANELS = {
+    "hood.set_open": ("hood_open", "nắp capo"),
+    "trunk.set_open": ("trunk_open", "cốp sau"),
+}
+
+# Every door, the hood and the tailgate in one action.
+ALL_PANELS_LABEL = "tất cả cửa, nắp capo và cốp sau"
+
 
 def selected_zones(arguments: Mapping[str, object]) -> tuple[str, ...]:
     zone = arguments.get("zone", "driver")
