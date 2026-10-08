@@ -19,6 +19,10 @@ os.environ.update(
         "ZEROTTS_PRELOAD": "false",
         "OPENAI_API_KEY": "",
         "OPENROUTER_API_KEY": "",
+        "GOOGLE_API_KEY": "",
+        "GEMINI_API_KEY": "",
+        # Keep in step with Settings.google_model; tests assert the default.
+        "GOOGLE_MODEL": "gemini-3.5-flash-lite",
         "LOCAL_LLM_MODEL": "",
         "VIVI_MEMORY_ENABLED": "false",
     }
