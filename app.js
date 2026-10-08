@@ -627,7 +627,10 @@ function listenSttStream(socket) {
       if (message.type === 'partial') {
         $('#command-input').value = message.final + message.interim;
         renderLiveCaption(message.final, message.interim);
-      } else if (message.type === 'done') resolve(message.transcript);
+      } else if (message.type === 'done') {
+        // Soniox may close the utterance at a pause before the local silence timer.
+        resolve(message.transcript); stopRecording();
+      }
       else if (message.type === 'error') { reject(new Error(message.detail)); stopRecording(); }
     };
     socket.onclose = () => { reject(new Error('STT streaming bị ngắt')); stopRecording(); };
