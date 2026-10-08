@@ -23,6 +23,8 @@ vehicle_id = "demo-car-1"
 mqtt_host = "127.0.0.1"
 mqtt_port = 1883
 mqtt_timeout_seconds = 3
+# Local-only HTTP control used by Engineer Dashboard only when vehicle_provider = "mqtt".
+vehicle_simulator_url = "http://127.0.0.1:8788"
 
 # Language model: rules, local, openai, google, openrouter
 # Cloud providers require rag_local_only = false.
