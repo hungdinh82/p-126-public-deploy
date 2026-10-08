@@ -1,7 +1,6 @@
 # Optional PC profile for cloud/local LLM, PhoWhisper and ZeroTTS.
--r requirements.txt
+-r requirements-rag-base.txt
 accelerate>=1.2,<2
-google-genai>=1.0,<2
 numpy>=2.0
 openai>=2.0
 soundfile>=0.13

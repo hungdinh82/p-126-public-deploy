@@ -10,7 +10,7 @@ Prototype giao diện trợ lý ô tô: bầu trời đêm, lõi sáng, hai dả
 
 ## Chạy ViVi local
 
-Baseline chạy ngay không cần tải model, GPU hay API key:
+Mặc định dùng RAG local: SQLite FTS5 + multilingual-e5-small INT8. Setup tải trọng số embedding một lần; runtime không cần GPU hay API key:
 
 ```bash
 bash scripts/setup.sh
@@ -61,9 +61,9 @@ Thiết lập provider/model trong `config.toml`; khóa API và ghi đè riêng 
 | --- | --- | --- |
 | Text input | luôn bật | gửi thẳng transcript tới `/api/v1/turn` |
 | STT | `stt_provider` trong `config.toml` | `off`, `phowhisper`, `whisper_cpp`, `soniox` |
-| LLM/router | `llm_provider` trong `config.toml` | `rules`, `local`, `openai`, `google`, `openrouter` |
+| LLM/router | `llm_provider` trong `config.toml` | `rules`, `local` (mặc định local-only) |
 | TTS | `tts_provider` trong `config.toml` | `off`, `zerotts` |
-| Handbook retrieval | `rag_retrieval_mode` trong `config.toml` | `sqlite`, `lexical`, `hybrid` |
+| Handbook retrieval | `rag_retrieval_mode` trong `config.toml` | `sqlite_local` (mặc định), `sqlite`, `lexical` |
 | Vehicle | `vehicle_provider` trong `config.toml` | `memory`, `mqtt` |
 
 Profile text-only nhẹ nhất cho dev/test:
@@ -150,36 +150,39 @@ Yêu cầu đang chờ chỉ lưu trong RAM backend, nên hết hiệu lực khi
 ## Phạm vi
 
 Đây là concept độc lập, chưa phải sản phẩm VinFast chính thức. Xe vẫn là simulator; policy
-chặn mở cửa khi lái chỉ là quy tắc demo. Audio và transcript mặc định không được lưu
+chặn mở cửa khi lái chỉ là quy tắc demo. Audio và transcript của EventStore mặc định không được lưu
 (`VIVI_STORE_AUDIO=false`, `VIVI_STORE_TRANSCRIPTS=false`). Khi chủ động bật retention,
 dữ liệu nằm trong `data/` cho đến khi người vận hành xóa; thư mục này không được commit.
 Lịch sử lệnh của monitor cũng chỉ được lưu trong localStorage của trình duyệt khi
 `VIVI_STORE_TRANSCRIPTS=true`; nút **Reset history** trên trang `/monitor` xóa bản local này.
 
+Bộ nhớ hội thoại: short-term đọc các lượt gần nhất theo session từ SQLite;
+long-term lưu tên, sở thích, ghi chú và lệnh có tên khi người dùng yêu cầu rõ.
+Dữ liệu nằm trong `data/memory/long_term.sqlite3`, dùng được qua nhiều phiên và
+có API xem/sửa/xoá/reset. Xem [thiết kế và cách dùng memory](docs/memory.md).
+SQLite history vẫn ghi ngữ cảnh kể cả khi `store_transcripts=false`; reset trên
+monitor không xoá SQLite history hay long-term memory.
+
 ## Provider LLM
 
-Đặt provider mặc định trong `config.toml`, sau đó có thể đổi model hội thoại ngay trên giao diện mà không cần khởi động lại backend. Danh sách UI chỉ cho chọn các provider đã cấu hình; model ID ở `config.toml`, khóa API ở `.env`.
+Đặt `llm_provider` trong `config.toml`, sau đó restart backend:
 
-- `llm_provider = "rules"`: mặc định, chạy offline ngay và hữu ích cho test.
-- `llm_provider = "local"`: API local tương thích OpenAI Chat Completions; cấu hình `local_llm_base_url` và `local_llm_model`.
-- `llm_provider = "openai"`: OpenAI Responses API; cấu hình `OPENAI_API_KEY` trong `.env` và `openai_model` trong `config.toml`.
-- `llm_provider = "google"`: Gemini API; cấu hình `GOOGLE_API_KEY` trong `.env` và `google_model` trong `config.toml`.
+- `rules`: router deterministic và trả lời bằng trích đoạn handbook, chạy offline.
+- `local`: SLM tự host, cấu hình `local_llm_base_url` và `local_llm_model`.
 
-Với Google, `GOOGLE_MODEL` phân loại intent/hội thoại; `RAG_GENERATION_MODEL` sinh câu
-trả lời handbook sau retrieval. Structured routing cố định ở temperature 0 để kết quả
-JSON và action ổn định, không dùng temperature như một tham số runtime chung.
+Cả hai đi qua LangGraph, SQLite FTS5 + embedding E5 local, grounding và safety graph.
+`rag_local_only = true` là mặc định; UI chỉ hiển thị hai provider này. Gemini RAG và
+Chroma đã được gỡ. OpenAI/OpenRouter chỉ có thể dùng khi chủ động tắt local-only.
 
-OpenAI/Google cần mạng. Chỉ `rules` và `local` đáp ứng runtime offline. Nếu provider được chọn nhưng cấu hình thiếu, server khởi động an toàn bằng `rules` và báo chi tiết ở `/api/v1/health`.
-
-`rules`, `google`, `openai` và `local` đều đi qua LangGraph thống nhất. `rules` dùng bộ định
-tuyến deterministic và câu trả lời handbook extractive; ba provider model dùng structured
-classification, SQLite retrieval và grounded generation với cùng safety graph. Sau khi thay
-đổi model trong `config.toml` hoặc khóa trong `.env`, cần khởi động lại backend. Nếu giao diện báo backend
-offline thì nó không gửi lệnh vehicle và chỉ hiển thị fallback an toàn.
+Embedding và database đã có trên máy hiện tại. Máy mới cần chạy setup hoặc chép
+`models/multilingual-e5-small-int8/` trước khi chạy `run.py`; runtime không tự tải model.
+Xem [RAG local](docs/rag_local.md) và [benchmark](eval/README.md).
 
 ## API local
 
 - `GET /api/v1/health`
+- `GET/DELETE /api/v1/memory` — xem/reset long-term memory
+- `PUT/DELETE /api/v1/memory/{key}` — ghi/sửa/xoá một mục memory
 - `POST /api/v1/stt` — multipart audio, `session_id`, `turn_id`
 - `POST /api/v1/turn` — transcript → LangGraph/RAG hoặc action → response thống nhất
 - `POST /api/v1/confirmations/{confirmation_id}` — approve/deny đúng một action R2 đang chờ
@@ -190,6 +193,11 @@ offline thì nó không gửi lệnh vehicle và chỉ hiển thị fallback an 
 Frontend giữ khoảng 1 giây audio trong bộ đệm trước khi phát để tránh hụt tiếng giữa các chunk đầu của ZeroTTS. Câu trả lời ngắn hơn được phát ngay khi tổng hợp xong; tắt giọng vẫn hủy luồng và playback.
 
 ## Kiểm thử
+
+Pipeline RAG offline mới cho VF8: [SQLite vector + E5 local](docs/rag_local.md).
+Golden dataset và benchmark riêng intent/retrieval/answer nằm trong [eval](eval/README.md).
+Persona, câu trả lời ngắn và quy tắc gọi tool: [trải nghiệm thoại ViVi](docs/voice_assistant.md).
+Sau khi chuẩn bị model, `run.py` và `scripts/run_rag_local.sh` đều dùng profile này mặc định.
 
 ```sh
 .venv/bin/python -m pytest -q
@@ -264,20 +272,19 @@ thành công sau khi simulator xác minh trạng thái.
 ## Chuẩn bị handbook VF8 2026
 
 ```sh
-.venv-ai/bin/python -m src.vivi.cli.crawl_manual
-
-# Tạo chunks cho BM25 local; đây là bước đủ để backend/UI dùng handbook.
-.venv-ai/bin/python -m src.vivi.cli.parse_manual
-
-# Tạo artifact SQLite FTS5 dùng chung cho PC và Jetson.
-.venv-ai/bin/python -m src.vivi.cli.import_handbook_sqlite
-
-# Tùy chọn: tạo Chroma hybrid khi quota Google embedding sẵn sàng.
-.venv-ai/bin/python -m src.vivi.cli.build_index
+.venv/bin/python -m src.vivi.cli.crawl_manual
+.venv/bin/python -m src.vivi.cli.parse_manual
+# Import corpus nguồn, chưa có vector.
+.venv/bin/python -m src.vivi.cli.import_handbook_sqlite
+# Chuẩn bị trọng số một lần, rồi embedding toàn bộ handbook trên máy.
+.venv/bin/python -m src.vivi.cli.prepare_embeddings
+.venv/bin/python -m src.vivi.cli.build_index
 ```
 
-Server/UI mặc định dùng SQLite FTS5 trên corpus đã import để không phụ thuộc quota embedding.
-Snapshot handbook, Chroma và SQLite history đều nằm trong `data/` và không được commit.
+Corpus nguồn là `data/handbooks/handbook-source.sqlite3`; index runtime là
+`data/handbooks/handbook.sqlite3` (931 chunk/embedding VF8 hiện tại), cả hai được chia sẻ
+qua Git. Trọng số embedding, crawl snapshot và SQLite history nằm ngoài Git.
+Restart backend sau khi build index mới.
 
 Output handbook được ánh xạ vào `TurnResponse.evidence`; UI hiển thị câu trả lời cùng link
 nguồn trong panel Cẩm nang. `/api/v1/turn/stream` chỉ phát câu trả lời sau khi grounding,

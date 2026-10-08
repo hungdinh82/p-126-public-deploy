@@ -63,12 +63,13 @@ async def health():
             "graph_providers": sorted(runtime.orchestrator.graph_providers),
             "retrieval": {
                 "sqlite": "sqlite_fts5",
+                "sqlite_local": "sqlite_fts5_local_e5",
                 "lexical": "lexical_bm25",
-                "hybrid": "chroma_hybrid",
             }[config.rag_retrieval_mode],
             "retrieval_mode": config.rag_retrieval_mode,
             "handbook_available": config.rag_handbook_db.is_file(),
             "handbook_path": str(config.rag_handbook_db),
+            "local_only": config.rag_local_only,
         },
         "llm": {
             "provider": active_provider,
@@ -97,6 +98,12 @@ async def health():
             "audio": config.store_audio,
             "transcripts": config.store_transcripts,
             "path": str(config.data_dir),
+        },
+        "memory": {
+            "short_term_turns": config.rag_history_turns,
+            "long_term_enabled": config.memory_enabled,
+            "profile_id": config.memory_profile_id,
+            "path": str(config.memory_path),
         },
         "vehicle": {
             "provider": runtime.vehicle.name,

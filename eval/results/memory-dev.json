@@ -1,0 +1,545 @@
+{
+  "created_at": "2026-10-07T06:58:07.525547+00:00",
+  "provider": "rules",
+  "dataset_sha256": "28998ed66744b3ee8979334b427224cde07215c1ee1e13dbcbe0c80f1688d4f5",
+  "host": {
+    "platform": "Linux-6.6.87.2-microsoft-standard-WSL2-x86_64-with-glibc2.43",
+    "machine": "x86_64"
+  },
+  "cases": 29,
+  "passed": 29,
+  "latency_ms": {
+    "p50": 17.82,
+    "p95": 28.26
+  },
+  "limitations": [
+    "Authored development cases; labels await user review, not held-out accuracy.",
+    "Rules provider and simulated car; does not validate real SLM or speech quality.",
+    "Latency is from this host with SQLite persistence; not measured on AGX Xavier."
+  ],
+  "results": [
+    {
+      "id": "identity-1",
+      "query": "Từ nay gọi tôi là Nam",
+      "checks": {
+        "route": true,
+        "status": true,
+        "memory": true,
+        "vehicle_state": true,
+        "answer": true
+      },
+      "passed": true,
+      "answer": "Mình đã nhớ: tên bạn là Nam.",
+      "status": "answered",
+      "memory": {
+        "display_name": "Nam"
+      },
+      "errors": [],
+      "latency_ms": 20.26
+    },
+    {
+      "id": "identity-2",
+      "query": "Tên tôi là gì?",
+      "checks": {
+        "route": true,
+        "status": true,
+        "memory": true,
+        "vehicle_state": true,
+        "answer": true
+      },
+      "passed": true,
+      "answer": "Tên bạn là Nam.",
+      "status": "answered",
+      "memory": {
+        "display_name": "Nam"
+      },
+      "errors": [],
+      "latency_ms": 11.37
+    },
+    {
+      "id": "identity-3",
+      "query": "Từ nay gọi tôi là Dương",
+      "checks": {
+        "route": true,
+        "status": true,
+        "memory": true,
+        "vehicle_state": true,
+        "answer": true
+      },
+      "passed": true,
+      "answer": "Mình đã nhớ: tên bạn là Dương.",
+      "status": "answered",
+      "memory": {
+        "display_name": "Dương"
+      },
+      "errors": [],
+      "latency_ms": 15.3
+    },
+    {
+      "id": "identity-4",
+      "query": "Tên tôi là gì?",
+      "checks": {
+        "route": true,
+        "status": true,
+        "memory": true,
+        "vehicle_state": true,
+        "answer": true
+      },
+      "passed": true,
+      "answer": "Mình chưa được bạn dặn ghi nhớ thông tin này.",
+      "status": "answered",
+      "memory": {},
+      "errors": [],
+      "latency_ms": 16.49
+    },
+    {
+      "id": "identity-5",
+      "query": "Quên tên tôi",
+      "checks": {
+        "route": true,
+        "status": true,
+        "memory": true,
+        "vehicle_state": true,
+        "answer": true
+      },
+      "passed": true,
+      "answer": "Mình đã quên thông tin đó.",
+      "status": "answered",
+      "memory": {},
+      "errors": [],
+      "latency_ms": 16.94
+    },
+    {
+      "id": "identity-6",
+      "query": "Tên tôi là gì?",
+      "checks": {
+        "route": true,
+        "status": true,
+        "memory": true,
+        "vehicle_state": true,
+        "answer": true
+      },
+      "passed": true,
+      "answer": "Mình chưa được bạn dặn ghi nhớ thông tin này.",
+      "status": "answered",
+      "memory": {},
+      "errors": [],
+      "latency_ms": 12.12
+    },
+    {
+      "id": "preference-1",
+      "query": "Đặt điều hoà 26 độ",
+      "checks": {
+        "route": true,
+        "status": true,
+        "memory": true,
+        "vehicle_state": true,
+        "answer": true
+      },
+      "passed": true,
+      "answer": "Mình đã đặt điều hoà ở 26 độ nhé.",
+      "status": "action_verified",
+      "memory": {},
+      "errors": [],
+      "latency_ms": 37.16
+    },
+    {
+      "id": "preference-2",
+      "query": "Ghi nhớ nhiệt độ tôi thích là 24 độ",
+      "checks": {
+        "route": true,
+        "status": true,
+        "memory": true,
+        "vehicle_state": true,
+        "answer": true
+      },
+      "passed": true,
+      "answer": "Mình đã nhớ: nhiệt độ bạn thích là 24 độ C.",
+      "status": "answered",
+      "memory": {
+        "preferred_temperature": 24.0
+      },
+      "errors": [],
+      "latency_ms": 19.35
+    },
+    {
+      "id": "preference-3",
+      "query": "Đặt điều hoà theo sở thích của tôi",
+      "checks": {
+        "route": true,
+        "status": true,
+        "memory": true,
+        "vehicle_state": true,
+        "answer": true
+      },
+      "passed": true,
+      "answer": "Mình đã đặt điều hoà ở 24 độ nhé.",
+      "status": "action_verified",
+      "memory": {
+        "preferred_temperature": 24.0
+      },
+      "errors": [],
+      "latency_ms": 19.55
+    },
+    {
+      "id": "preference-4",
+      "query": "Ghi nhớ nhiệt độ tôi thích là 25 độ",
+      "checks": {
+        "route": true,
+        "status": true,
+        "memory": true,
+        "vehicle_state": true,
+        "answer": true
+      },
+      "passed": true,
+      "answer": "Mình đã nhớ: nhiệt độ bạn thích là 25 độ C.",
+      "status": "answered",
+      "memory": {
+        "preferred_temperature": 25.0
+      },
+      "errors": [],
+      "latency_ms": 23.8
+    },
+    {
+      "id": "preference-5",
+      "query": "Quên nhiệt độ tôi thích",
+      "checks": {
+        "route": true,
+        "status": true,
+        "memory": true,
+        "vehicle_state": true,
+        "answer": true
+      },
+      "passed": true,
+      "answer": "Mình đã quên thông tin đó.",
+      "status": "answered",
+      "memory": {},
+      "errors": [],
+      "latency_ms": 28.26
+    },
+    {
+      "id": "preference-6",
+      "query": "Đặt điều hoà theo sở thích của tôi",
+      "checks": {
+        "route": true,
+        "status": true,
+        "memory": true,
+        "vehicle_state": true,
+        "answer": true
+      },
+      "passed": true,
+      "answer": "Mình chưa nhớ thông tin này. Bạn cho mình biết trước nhé.",
+      "status": "clarify",
+      "memory": {},
+      "errors": [],
+      "latency_ms": 20.82
+    },
+    {
+      "id": "notes-1",
+      "query": "Ghi nhớ ghi chú địa chỉ nhà: nhà tôi ở Đà Nẵng",
+      "checks": {
+        "route": true,
+        "status": true,
+        "memory": true,
+        "vehicle_state": true,
+        "answer": true
+      },
+      "passed": true,
+      "answer": "Mình đã nhớ: địa chỉ nhà là nhà tôi ở Đà Nẵng.",
+      "status": "answered",
+      "memory": {
+        "note.dia-chi-nha": "nhà tôi ở Đà Nẵng"
+      },
+      "errors": [],
+      "latency_ms": 17.82
+    },
+    {
+      "id": "notes-2",
+      "query": "Ghi nhớ ghi chú địa chỉ nhà: nhà tôi ở Huế",
+      "checks": {
+        "route": true,
+        "status": true,
+        "memory": true,
+        "vehicle_state": true,
+        "answer": true
+      },
+      "passed": true,
+      "answer": "Mình đã nhớ: địa chỉ nhà là nhà tôi ở Huế.",
+      "status": "answered",
+      "memory": {
+        "note.dia-chi-nha": "nhà tôi ở Huế"
+      },
+      "errors": [],
+      "latency_ms": 24.43
+    },
+    {
+      "id": "notes-3",
+      "query": "Bạn nhớ gì về địa chỉ nhà?",
+      "checks": {
+        "route": true,
+        "status": true,
+        "memory": true,
+        "vehicle_state": true,
+        "answer": true
+      },
+      "passed": true,
+      "answer": "Mình đang nhớ: nhà tôi ở Huế.",
+      "status": "answered",
+      "memory": {
+        "note.dia-chi-nha": "nhà tôi ở Huế"
+      },
+      "errors": [],
+      "latency_ms": 13.61
+    },
+    {
+      "id": "notes-4",
+      "query": "Quên ghi chú địa chỉ nhà",
+      "checks": {
+        "route": true,
+        "status": true,
+        "memory": true,
+        "vehicle_state": true,
+        "answer": true
+      },
+      "passed": true,
+      "answer": "Mình đã quên thông tin đó.",
+      "status": "answered",
+      "memory": {},
+      "errors": [],
+      "latency_ms": 17.87
+    },
+    {
+      "id": "command-1",
+      "query": "Ghi nhớ lệnh thư giãn: mở cửa sổ bên tài 50%",
+      "checks": {
+        "route": true,
+        "status": true,
+        "memory": true,
+        "vehicle_state": true,
+        "answer": true
+      },
+      "passed": true,
+      "answer": "Mình đã nhớ lệnh thư giãn. Khi cần, bạn nói “thực hiện lệnh thư giãn” nhé.",
+      "status": "answered",
+      "memory": {
+        "command.thu-gian": "mở cửa sổ bên tài 50%"
+      },
+      "errors": [],
+      "latency_ms": 21.91
+    },
+    {
+      "id": "command-2",
+      "query": "Xin chào",
+      "checks": {
+        "route": true,
+        "status": true,
+        "memory": true,
+        "vehicle_state": true,
+        "answer": true
+      },
+      "passed": true,
+      "answer": "Mình đây, bạn cần gì nhé?",
+      "status": "answered",
+      "memory": {
+        "command.thu-gian": "mở cửa sổ bên tài 50%"
+      },
+      "errors": [],
+      "latency_ms": 15.94
+    },
+    {
+      "id": "command-3",
+      "query": "Thực hiện lệnh thư giãn",
+      "checks": {
+        "route": true,
+        "status": true,
+        "memory": true,
+        "vehicle_state": true,
+        "answer": true
+      },
+      "passed": true,
+      "answer": "Xác nhận đặt cửa sổ bên tài ở mức 50 phần trăm?",
+      "status": "confirmation_required",
+      "memory": {
+        "command.thu-gian": "mở cửa sổ bên tài 50%"
+      },
+      "errors": [],
+      "latency_ms": 15.7
+    },
+    {
+      "id": "command-4",
+      "query": "Thực hiện lệnh thư giãn",
+      "checks": {
+        "route": true,
+        "status": true,
+        "memory": true,
+        "vehicle_state": true,
+        "answer": true
+      },
+      "passed": true,
+      "answer": "Mình giữ nguyên cửa sổ vì xe đang ở chế độ lái.",
+      "status": "blocked",
+      "memory": {
+        "command.thu-gian": "mở cửa sổ bên tài 50%"
+      },
+      "errors": [],
+      "latency_ms": 16.45
+    },
+    {
+      "id": "command-5",
+      "query": "Quên lệnh thư giãn",
+      "checks": {
+        "route": true,
+        "status": true,
+        "memory": true,
+        "vehicle_state": true,
+        "answer": true
+      },
+      "passed": true,
+      "answer": "Mình đã quên thông tin đó.",
+      "status": "answered",
+      "memory": {},
+      "errors": [],
+      "latency_ms": 19.6
+    },
+    {
+      "id": "command-6",
+      "query": "Thực hiện lệnh thư giãn",
+      "checks": {
+        "route": true,
+        "status": true,
+        "memory": true,
+        "vehicle_state": true,
+        "answer": true
+      },
+      "passed": true,
+      "answer": "Mình chưa nhớ thông tin này. Bạn cho mình biết trước nhé.",
+      "status": "clarify",
+      "memory": {},
+      "errors": [],
+      "latency_ms": 12.33
+    },
+    {
+      "id": "safety-1",
+      "query": "Ghi nhớ lệnh sai: tắt túi khí",
+      "checks": {
+        "route": true,
+        "status": true,
+        "memory": true,
+        "vehicle_state": true,
+        "answer": true
+      },
+      "passed": true,
+      "answer": "Mình chỉ lưu lệnh có tên cho một thao tác đã hỗ trợ và đủ thông tin. Bạn nói rõ thao tác nhé.",
+      "status": "clarify",
+      "memory": {},
+      "errors": [],
+      "latency_ms": 13.17
+    },
+    {
+      "id": "safety-2",
+      "query": "Ghi nhớ lệnh sai: nếu nóng thì mở cửa sổ bên tài",
+      "checks": {
+        "route": true,
+        "status": true,
+        "memory": true,
+        "vehicle_state": true,
+        "answer": true
+      },
+      "passed": true,
+      "answer": "Mình chỉ lưu lệnh có tên cho một thao tác đã hỗ trợ và đủ thông tin. Bạn nói rõ thao tác nhé.",
+      "status": "clarify",
+      "memory": {},
+      "errors": [],
+      "latency_ms": 12.43
+    },
+    {
+      "id": "safety-3",
+      "query": "Ghi nhớ lệnh sai: mở cửa sổ bên tài và phát nhạc",
+      "checks": {
+        "route": true,
+        "status": true,
+        "memory": true,
+        "vehicle_state": true,
+        "answer": true
+      },
+      "passed": true,
+      "answer": "Mình chỉ lưu lệnh có tên cho một thao tác đã hỗ trợ và đủ thông tin. Bạn nói rõ thao tác nhé.",
+      "status": "clarify",
+      "memory": {},
+      "errors": [],
+      "latency_ms": 13.98
+    },
+    {
+      "id": "music-1",
+      "query": "Ghi nhớ tôi thích nhạc jazz",
+      "checks": {
+        "route": true,
+        "status": true,
+        "memory": true,
+        "vehicle_state": true,
+        "answer": true
+      },
+      "passed": true,
+      "answer": "Mình đã nhớ: nhạc bạn thích là jazz.",
+      "status": "answered",
+      "memory": {
+        "preferred_music": "jazz"
+      },
+      "errors": [],
+      "latency_ms": 26.07
+    },
+    {
+      "id": "music-2",
+      "query": "Phát nhạc tôi thích",
+      "checks": {
+        "route": true,
+        "status": true,
+        "memory": true,
+        "vehicle_state": true,
+        "answer": true
+      },
+      "passed": true,
+      "answer": "Mình đã bật nhạc nhé.",
+      "status": "action_verified",
+      "memory": {
+        "preferred_music": "jazz"
+      },
+      "errors": [],
+      "latency_ms": 20.68
+    },
+    {
+      "id": "music-3",
+      "query": "Xoá toàn bộ bộ nhớ của tôi",
+      "checks": {
+        "route": true,
+        "status": true,
+        "memory": true,
+        "vehicle_state": true,
+        "answer": true
+      },
+      "passed": true,
+      "answer": "Mình đã xoá toàn bộ thông tin đã ghi nhớ của bạn.",
+      "status": "answered",
+      "memory": {},
+      "errors": [],
+      "latency_ms": 19.36
+    },
+    {
+      "id": "music-4",
+      "query": "Bạn nhớ gì về tôi?",
+      "checks": {
+        "route": true,
+        "status": true,
+        "memory": true,
+        "vehicle_state": true,
+        "answer": true
+      },
+      "passed": true,
+      "answer": "Mình chưa ghi nhớ thông tin nào về bạn.",
+      "status": "answered",
+      "memory": {},
+      "errors": [],
+      "latency_ms": 15.41
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import re
+import asyncio
 import time
 from typing import Any, Literal
 from uuid import uuid4
@@ -9,21 +9,31 @@ from langchain_core.runnables import RunnableLambda
 from langgraph.graph import END, StateGraph
 from pydantic import ValidationError
 
+from src.vivi.agents.action_validation import validate_action_arguments as _validate_action
 from src.vivi.agents.classifier import RulesIntentClassifier
+from src.vivi.agents.context import resolve_request
 from src.vivi.agents.contracts import ActionProposal, AssistantOutput, IntentDecision
 from src.vivi.agents.state import AgentState
+from src.vivi.agents.tasks import pending_for_turn, resume_task
+from src.vivi.agents.voice import verified_action_reply
+from src.vivi.memory.conversation import handle_memory_request, memory_action_decision
+from src.vivi.memory.tools import execute_memory_tool
 from src.vivi.rag.generator import (
     ExtractiveHandbookGenerator,
     normalize_answer,
     validate_grounding,
 )
+from src.vivi.rag.knowledge import analyze_question
+from src.vivi.rag.relevance import matches_topic, matches_variant
 from src.vivi.rag.runtime import HandbookServices, create_services
 from src.vivi.rag.schemas import ModelDecision
 from src.vivi.rag.scope import scope_rejection_reason
-from src.vivi.vehicle.zones import selected_zones, zoned_noun
+from src.vivi.vehicle.zones import zoned_noun
 
-ABSTAIN_MESSAGE = "Mình chưa tìm thấy đủ bằng chứng trong cẩm nang VF8 2026 để trả lời câu hỏi này."
-_FOLLOW_UP_RE = re.compile(r"\b(vậy|thế|nó|cái đó|việc đó|còn|như vậy)\b", re.IGNORECASE)
+ABSTAIN_MESSAGE = "Mình chưa có thông tin chắc chắn để trả lời câu này."
+def _retrieval_query(state: AgentState) -> str:
+    query = state.get("decision", {}).get("arguments", {}).get("query") or state["query"]
+    return resolve_request(query, state.get("conversation_history", [])).text
 
 
 class CompiledAssistantGraph:
@@ -61,42 +71,6 @@ def _legacy_manual_decision(raw: dict[str, Any]) -> tuple[str, IntentDecision]:
     )
 
 
-def _validate_action(decision: IntentDecision) -> tuple[ActionProposal | None, str | None]:
-    arguments = decision.arguments.model_dump(exclude_none=True)
-    if decision.intent in {"window.set_position", "door.set_open", "door.set_lock", "seat.set_heat_level"}:
-        try:
-            selected_zones(arguments)
-        except ValueError as exc:
-            return None, str(exc)
-    if decision.intent == "climate.set_temperature":
-        value = arguments.get("value_celsius")
-        if not isinstance(value, (int, float)):
-            return None, "Bạn muốn đặt nhiệt độ bao nhiêu?"
-        if not 16 <= float(value) <= 30:
-            return None, "Nhiệt độ hỗ trợ nằm trong khoảng 16 đến 30 độ C."
-    elif decision.intent == "window.set_position":
-        position = arguments.get("position_percent")
-        if not isinstance(position, (int, float)):
-            return None, "Bạn muốn mở hoặc đóng cửa sổ đến mức nào?"
-        if not 0 <= float(position) <= 100:
-            return None, "Vị trí cửa sổ phải nằm trong khoảng 0 đến 100 phần trăm."
-    elif decision.intent == "door.set_open":
-        if not isinstance(arguments.get("open"), bool):
-            return None, "Bạn muốn mở hay đóng cửa?"
-    elif decision.intent == "door.set_lock":
-        if not isinstance(arguments.get("locked"), bool):
-            return None, "Bạn muốn khóa hay mở khóa cửa?"
-    elif decision.intent == "seat.set_heat_level":
-        level = arguments.get("level")
-        if not isinstance(level, int) or isinstance(level, bool) or not 0 <= level <= 3:
-            return None, "Mức sưởi ghế hợp lệ nằm trong khoảng 0 đến 3."
-    return ActionProposal(
-        intent=decision.intent,
-        arguments=arguments,
-        confidence=decision.confidence,
-    ), None
-
-
 def _action_preview_text(proposal: ActionProposal) -> str:
     arguments = proposal.arguments
     if proposal.intent == "climate.set_temperature":
@@ -124,6 +98,11 @@ def build_graph(services: HandbookServices | None = None):
     runtime = services or create_services()
     classifier = runtime.classifier or RulesIntentClassifier()
     action_gateway = runtime.action_gateway
+
+    def history_session(state: AgentState) -> str:
+        session = state["session_id"]
+        # Preserve existing default-driver logs; other profiles have separate dialogue context.
+        return session if runtime.memory_profile_id == "default" else f"profile:{runtime.memory_profile_id}:{session}"
 
     def validate_input(state: AgentState) -> dict[str, Any]:
         started = time.perf_counter()
@@ -186,7 +165,7 @@ def build_graph(services: HandbookServices | None = None):
     def load_history(state: AgentState) -> dict[str, Any]:
         started = time.perf_counter()
         try:
-            history = runtime.history.recent(state["session_id"], runtime.history_turns)
+            history = runtime.history.recent(history_session(state), runtime.history_turns)
         except Exception as exc:
             return {
                 "conversation_history": [],
@@ -195,6 +174,8 @@ def build_graph(services: HandbookServices | None = None):
             }
         return {
             "conversation_history": history,
+            **(resume_task(state["input_text"], history) if not state.get("confirmation_id")
+               and not state.get("metadata", {}).get("preclassified_decision") else {}),
             "timings": _merge_timing(state, "load_history", started),
         }
 
@@ -210,12 +191,61 @@ def build_graph(services: HandbookServices | None = None):
             }
         except Exception as exc:
             return {
-                "errors": [
-                    *state.get("errors", []),
-                    {"stage": "observe_vehicle_state", "message": str(exc)},
-                ],
+                "errors": [*state.get("errors", []), {"stage": "observe_vehicle_state", "message": str(exc)}],
                 "timings": _merge_timing(state, "observe_vehicle_state", started),
             }
+
+    def load_memory(state: AgentState) -> dict[str, Any]:
+        started = time.perf_counter()
+        context, decision, errors = [], None, list(state.get("errors", []))
+        available_memory = runtime.memory
+        try:
+            if runtime.memory is not None:
+                context = runtime.memory.context(
+                    runtime.memory_profile_id, state["input_text"], limit=runtime.memory_context_limit,
+                    max_characters=runtime.memory_context_max_characters,
+                )
+        except Exception as exc:
+            errors.append({"stage": "load_memory", "message": str(exc)})
+            available_memory = None
+        try:
+            # A preclassified request/confirmation is not a memory write request.
+            if state.get("memory_reset_accepted"):
+                if available_memory is None:
+                    raise RuntimeError("Memory unavailable")
+                available_memory.reset(runtime.memory_profile_id)
+                context = []
+                decision = IntentDecision(route="conversation", intent="conversation.respond",
+                                          response_text="Mình đã xoá thông tin đã ghi nhớ về bạn.")
+            elif not state.get("task_decision") and not state.get("confirmation_id") and not state.get("metadata", {}).get("preclassified_decision"):
+                decision = handle_memory_request(
+                    available_memory, runtime.memory_profile_id, state["input_text"],
+                    session_id=state["session_id"], turn_id=state["turn_id"],
+                    vehicle_state=state.get("vehicle_state"),
+                )
+        except Exception as exc:
+            errors.append({"stage": "load_memory", "message": str(exc)})
+            # Never claim a failed write succeeded or reinterpret it as a vehicle action.
+            message = "Mình chưa xử lý được bộ nhớ lúc này. Bạn kiểm tra lại thông tin muốn lưu nhé."
+            if isinstance(exc, ValidationError):
+                message = str(exc.errors()[0]["msg"]).removeprefix("Value error, ")
+            decision = IntentDecision(route="clarify", intent="conversation.clarify", needs_clarification=True,
+                                      clarification_question=message)
+            context = []
+        updates = {"memory_context": context, "memory_handled": decision is not None,
+                   "errors": errors, "timings": _merge_timing(state, "load_memory", started)}
+        if decision is not None:
+            updates.update(decision=decision.model_dump(mode="json"), route=decision.route, intent=decision.intent)
+            updates["memory_reset_requested"] = bool(decision.follow_up and decision.follow_up.intent == "memory.reset")
+        return updates
+
+    def memory_decision(state: AgentState) -> IntentDecision | None:
+        try:
+            return memory_action_decision(runtime.memory, runtime.memory_profile_id, state["input_text"],
+                                          state.get("conversation_history", []), state.get("vehicle_state"))
+        except Exception:
+            return IntentDecision(route="clarify", intent="conversation.clarify", needs_clarification=True,
+                                  clarification_question="Mình chưa đọc được lệnh đã nhớ. Bạn nói trực tiếp thao tác nhé.")
 
     async def observe_vehicle_state_async(state: AgentState) -> dict[str, Any]:
         started = time.perf_counter()
@@ -243,10 +273,12 @@ def build_graph(services: HandbookServices | None = None):
             decision = (
                 IntentDecision.model_validate(preclassified)
                 if preclassified is not None
-                else classifier.classify_with_context(
+                else (IntentDecision.model_validate(state["task_decision"]) if state.get("task_decision") else None)
+                or memory_decision(state) or classifier.classify_with_memory(
                     state["input_text"],
                     state.get("conversation_history", []),
                     state.get("vehicle_state"),
+                    state.get("memory_context", []),
                 )
             )
         except Exception as exc:
@@ -293,10 +325,12 @@ def build_graph(services: HandbookServices | None = None):
             decision = (
                 IntentDecision.model_validate(preclassified)
                 if preclassified is not None
-                else await classifier.aclassify_with_context(
+                else (IntentDecision.model_validate(state["task_decision"]) if state.get("task_decision") else None)
+                or (await asyncio.to_thread(memory_decision, state)) or await classifier.aclassify_with_memory(
                     state["input_text"],
                     state.get("conversation_history", []),
                     state.get("vehicle_state"),
+                    state.get("memory_context", []),
                 )
             )
         except Exception as exc:
@@ -391,9 +425,9 @@ def build_graph(services: HandbookServices | None = None):
 
     def scope_guard(state: AgentState) -> dict[str, Any]:
         started = time.perf_counter()
-        reason = scope_rejection_reason(state["query"])
-        if reason and state.get("conversation_history") and _FOLLOW_UP_RE.search(state["query"]):
-            reason = None
+        raw_reason = scope_rejection_reason(state["query"])
+        reason = (raw_reason if raw_reason and not raw_reason.startswith("Bạn muốn tìm hiểu")
+                  else scope_rejection_reason(_retrieval_query(state)))
         if reason:
             return {
                 "answer": reason,
@@ -412,19 +446,18 @@ def build_graph(services: HandbookServices | None = None):
 
     def retrieve(state: AgentState) -> dict[str, Any]:
         started = time.perf_counter()
-        retrieval_query = state["query"]
-        history = state.get("conversation_history", [])
-        if history and _FOLLOW_UP_RE.search(state["query"]):
-            retrieval_query = f"{history[-1]['query']}\n{state['query']}"
+        retrieval_query = _retrieval_query(state)
         try:
             chunks = runtime.retriever.retrieve(
                 retrieval_query, state["vehicle_model"], state["model_year"], state["locale"]
             )
             values = [chunk.model_dump(mode="json") for chunk in chunks]
+            accepted = [chunk.model_dump(mode="json") for chunk in chunks
+                        if matches_topic(retrieval_query, chunk) and matches_variant(retrieval_query, chunk)]
             return {
                 "retrieval_query": retrieval_query,
                 "retrieved_chunks": values,
-                "accepted_chunks": values,
+                "accepted_chunks": accepted,
                 "timings": _merge_timing(state, "retrieve", started),
             }
         except Exception as exc:
@@ -464,7 +497,7 @@ def build_graph(services: HandbookServices | None = None):
         chunks = [RetrievedChunk.model_validate(value) for value in state["accepted_chunks"]]
         try:
             result = runtime.generator.generate(
-                state["query"], chunks, state.get("conversation_history", [])
+                state.get("retrieval_query", state["query"]), chunks, state.get("conversation_history", [])
             )
         except Exception as exc:
             if isinstance(runtime.generator, ExtractiveHandbookGenerator):
@@ -483,7 +516,7 @@ def build_graph(services: HandbookServices | None = None):
                     "timings": _merge_timing(state, "generate", started),
                 }
             result = ExtractiveHandbookGenerator().generate(
-                state["query"], chunks, state.get("conversation_history", [])
+                state.get("retrieval_query", state["query"]), chunks, state.get("conversation_history", [])
             )
             errors = [
                 *state.get("errors", []),
@@ -506,11 +539,11 @@ def build_graph(services: HandbookServices | None = None):
             async_generate = getattr(runtime.generator, "agenerate", None)
             result = (
                 await async_generate(
-                    state["query"], chunks, state.get("conversation_history", [])
+                    state.get("retrieval_query", state["query"]), chunks, state.get("conversation_history", [])
                 )
                 if async_generate is not None
                 else runtime.generator.generate(
-                    state["query"], chunks, state.get("conversation_history", [])
+                    state.get("retrieval_query", state["query"]), chunks, state.get("conversation_history", [])
                 )
             )
         except Exception as exc:
@@ -530,7 +563,7 @@ def build_graph(services: HandbookServices | None = None):
                     "timings": _merge_timing(state, "generate", started),
                 }
             result = ExtractiveHandbookGenerator().generate(
-                state["query"], chunks, state.get("conversation_history", [])
+                state.get("retrieval_query", state["query"]), chunks, state.get("conversation_history", [])
             )
             errors = [
                 *state.get("errors", []),
@@ -707,7 +740,10 @@ def build_graph(services: HandbookServices | None = None):
         started = time.perf_counter()
         result = state.get("metadata", {}).get("gateway_execution") or {}
         verified = bool(result.get("executed") and result.get("verified"))
-        message = result.get("message") or "Chưa thể xác minh thao tác."
+        message = result.get("message") or "Mình chưa xác minh được thao tác này."
+        if verified:
+            message = verified_action_reply(ActionProposal.model_validate(state["action_proposal"]),
+                                            state["query"], result.get("vehicle_state") or {}, message)
         execution = {
             "allowed": True,
             "executed": bool(result.get("executed")),
@@ -737,6 +773,21 @@ def build_graph(services: HandbookServices | None = None):
     def compose_decision_response(state: AgentState) -> dict[str, Any]:
         started = time.perf_counter()
         decision = IntentDecision.model_validate(state["decision"])
+        updates = {}
+        if decision.intent.startswith("memory."):
+            updates["tool_record"] = {"name": decision.intent,
+                                      "arguments": decision.arguments.model_dump(exclude_none=True),
+                                      "status": "completed"}
+            try:
+                decision = execute_memory_tool(runtime.memory, runtime.memory_profile_id, decision,
+                                               session_id=state["session_id"], turn_id=state["turn_id"])
+                updates["memory_reset_requested"] = bool(decision.follow_up and decision.follow_up.intent == "memory.reset")
+            except Exception as exc:
+                updates["tool_record"]["status"] = "failed"
+                decision = IntentDecision(route="conversation", intent="conversation.respond",
+                                          response_text="Mình chưa xử lý được bộ nhớ lúc này. Bạn thử lại nhé.")
+                updates["errors"] = [*state.get("errors", []), {"stage": "memory_tool", "message": str(exc)}]
+            updates.update(decision=decision.model_dump(mode="json"), route=decision.route)
         text = decision.clarification_question or decision.response_text
         if not text:
             text = "Mình chưa hỗ trợ yêu cầu này."
@@ -746,6 +797,7 @@ def build_graph(services: HandbookServices | None = None):
             "unsupported": "unsupported",
         }
         return {
+            **updates,
             "answer": text,
             "response": text,
             "response_text": text,
@@ -789,7 +841,21 @@ def build_graph(services: HandbookServices | None = None):
     def persist(state: AgentState) -> dict[str, Any]:
         started = time.perf_counter()
         try:
-            runtime.history.save(state)
+            diagnostics = {
+                "pending_task": pending_for_turn(state),
+                "task_resolution": state.get("task_resolution"),
+                "generation_provider": runtime.generation_provider,
+                "request": {**resolve_request(state["query"], state.get("conversation_history", [])).as_dict(),
+                            **analyze_question(state.get("retrieval_query") or state["query"]).as_dict()},
+                "tool": state.get("tool_record") or {"name": state.get("intent"),
+                         "arguments": state.get("decision", {}).get("arguments", {}),
+                         "status": state.get("status")},
+                "retrieval_query": state.get("retrieval_query"),
+                "retrieved_source_ids": [chunk["source_id"] for chunk in state.get("retrieved_chunks", [])],
+                "accepted_source_ids": [chunk["source_id"] for chunk in state.get("accepted_chunks", [])],
+                "errors": state.get("errors", []),
+            }
+            runtime.history.save({**state, "session_id": history_session(state), "diagnostics": diagnostics})
         except Exception as exc:
             return {
                 "errors": [*state.get("errors", []), {"stage": "persist", "message": str(exc)}],
@@ -831,10 +897,9 @@ def build_graph(services: HandbookServices | None = None):
 
     def runnable(func, afunc=None):
         async def default_async_func(state: AgentState) -> Any:
-            # SQLite connections and the in-memory vehicle gateway are short,
-            # synchronous critical sections. Running them through the default
-            # executor can strand LangGraph's async runner during loop wake-up;
-            # providing an explicit coroutine keeps the async graph deterministic.
+            if func in {retrieve, load_memory, load_history, persist}:
+                # ONNX and SQLite I/O must not block speech/API processing.
+                return await asyncio.to_thread(func, state)
             return func(state)
 
         return RunnableLambda(func, afunc=afunc or default_async_func, name=func.__name__)
@@ -842,6 +907,7 @@ def build_graph(services: HandbookServices | None = None):
     graph = StateGraph(AgentState)
     graph.add_node("validate_input", runnable(validate_input))
     graph.add_node("load_history", runnable(load_history))
+    graph.add_node("load_memory", runnable(load_memory))
     graph.add_node(
         "observe_vehicle_state",
         runnable(observe_vehicle_state, observe_vehicle_state_async),
@@ -873,7 +939,10 @@ def build_graph(services: HandbookServices | None = None):
             else "observe_vehicle_state"
         ),
     )
-    graph.add_edge("observe_vehicle_state", "classify_intent")
+    graph.add_edge("observe_vehicle_state", "load_memory")
+    graph.add_conditional_edges("load_memory", runnable(
+        lambda state: "compose_decision_response" if state.get("memory_handled") else "classify_intent"
+    ))
     graph.add_conditional_edges("resolve_confirmation", runnable(after_confirmation))
     graph.add_conditional_edges("classify_intent", runnable(after_classification))
     graph.add_conditional_edges("scope_guard", runnable(after_scope))

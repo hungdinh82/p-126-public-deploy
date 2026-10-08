@@ -126,9 +126,7 @@ class LangGraphOrchestrator:
                 arguments=output.action_proposal.arguments,
                 confidence=output.action_proposal.confidence,
             )
-        vehicle_state = self.gateway.vehicle.state_for(request.session_id)
-        if output.vehicle_state:
-            vehicle_state = VehicleState.model_validate(output.vehicle_state)
+        vehicle_state = VehicleState.model_validate(output.vehicle_state) if output.vehicle_state else VehicleState()
         route_map = {
             "action": "vehicle",
             "handbook": "handbook",

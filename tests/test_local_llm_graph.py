@@ -101,6 +101,7 @@ def test_openai_compatible_local_graph_routes_retrieves_and_cites(tmp_path):
         }
     )
 
+    # Model-backed mode interprets the turn before grounded answer generation.
     assert requests == ["vivi_intent_decision", "vivi_grounded_answer"]
     assert result["output"]["route"] == "handbook"
     assert result["output"]["status"] == "answered"
@@ -112,7 +113,6 @@ def test_configured_local_provider_is_registered_in_canonical_graph(tmp_path):
     config = Settings(
         llm_provider="local",
         local_llm_model="qwen-test.gguf",
-        google_api_key="",
         openai_api_key="",
         data_dir=tmp_path / "data",
         rag_handbook_db=tmp_path / "handbook.sqlite3",

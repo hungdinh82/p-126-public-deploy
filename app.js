@@ -1,6 +1,8 @@
+import { closeJourney, initJourney, openJourney } from './journey.js?v=5';
+import { neonBorder } from './neon.js?v=2';
+import { createWave } from './wave.js?v=2';
+
 const $ = (selector) => document.querySelector(selector);
-const canvas = $('#universe-canvas');
-const ctx = canvas.getContext('2d');
 const motionPreference = matchMedia('(prefers-reduced-motion: reduce)');
 // The FastAPI backend serves this UI, so API calls follow the configured
 // VIVI_PORT automatically instead of being tied to a hard-coded port.
@@ -33,147 +35,110 @@ const ALERT_TTS_COOLDOWN_MS = 30000;
 const MAX_SEEN_ALERT_IDS = 1024;
 const phaseLabels = { idle: 'ViVi đang ở đây', listening: 'Mình đang nghe bạn', transcribing: 'Mình đang nhận diện lời nói', thinking: 'Để mình xem nhé', validating: 'Đang kiểm tra an toàn', acting: 'Đang chăm sóc không gian của bạn', synthesizing: 'Đang chuẩn bị giọng Mai Chi', speaking: 'Một chút dễ chịu, dành cho bạn', clarify: 'Mình chờ bạn nói thêm', blocked: 'Mình giữ nguyên trạng thái xe' };
 const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
-let width = 1, height = 1, tick = 0, previous = 0;
-let pointer = { x: 0, y: 0 };
-let stars = [];
+let plannedRoute = null;    // route shape for the 3D road, kept until the scene loads
+let nav = null;             // live journey progress while a route simulation runs
+let cruise = { speed: 0, at: 0 };
+let scene = null;           // 3D view; stays null when WebGL or three.js is unavailable
 
-function resize() {
-  const box = canvas.getBoundingClientRect();
-  width = box.width; height = box.height;
-  const ratio = Math.min(devicePixelRatio || 1, 2);
-  canvas.width = Math.round(width * ratio); canvas.height = Math.round(height * ratio);
-  ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
-  let seed = 713;
-  const rand = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
-  stars = Array.from({ length: Math.round(width / 7) }, () => ({ x: rand(), y: rand(), r: rand() * .8 + .25, alpha: rand() * .45 + .08, phase: rand() * 6.28 }));
+// Voice levels feed the wave: microphone RMS while listening, ViVi's own
+// audio while speaking.
+const voiceLevel = { mic: 0, analyser: null, samples: null };
+function ttsLevel() {
+  if (!voiceLevel.analyser) return .35 + Math.sin(performance.now() / 140) * .25; // browser speech has no audio tap
+  voiceLevel.analyser.getFloatTimeDomainData(voiceLevel.samples);
+  let sum = 0;
+  for (const sample of voiceLevel.samples) sum += sample * sample;
+  return Math.min(1, Math.sqrt(sum / voiceLevel.samples.length) * 5);
 }
-new ResizeObserver(resize).observe(canvas);
-canvas.addEventListener('pointermove', e => { const box = canvas.getBoundingClientRect(); pointer.x = (e.clientX - box.left) / width - .5; pointer.y = (e.clientY - box.top) / height - .5; });
-canvas.addEventListener('pointerleave', () => { pointer.x = 0; pointer.y = 0; });
+const wave = createWave($('#wave'), {
+  level: phase => phase === 'listening' ? Math.min(1, voiceLevel.mic * 7) : ttsLevel(),
+  onLevel: level => scene?.setVoiceLevel(level)
+});
+const capsuleNeon = neonBorder($('#demo-mic'), { speed: 2, borderSize: 30, glow: 35, thickness: 1.2 });
+const maneuverNeon = neonBorder($('#maneuver'), { speed: 4, borderSize: 40, glow: 30, thickness: 1.2 });
+const NEON_BY_PHASE = {
+  idle: { speed: 2, borderSize: 30, color: '#6E7894' },
+  listening: { speed: 12, borderSize: 64, color: '#D6DEEE' },
+  thinking: { speed: 14, borderSize: 44, color: '#9F94C6', movement: 'step' },
+  speaking: { speed: 8, borderSize: 56, color: '#C3CDE2' },
+  blocked: { speed: 4, borderSize: 50, color: '#D6AE78' }
+};
 
-function glow(x, y, radius, stops) {
-  const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
-  stops.forEach(([position, color]) => gradient.addColorStop(position, color));
-  ctx.fillStyle = gradient; ctx.beginPath(); ctx.arc(x, y, radius, 0, Math.PI * 2); ctx.fill();
-}
-
-function draw(now) {
-  if (document.hidden) { previous = now; requestAnimationFrame(draw); return; }
-  const delta = Math.min((now - previous) / 1000 || 0, .05); previous = now;
-  const quiet = state.reduced || state.driving;
-  tick += delta * (state.reduced ? 0 : state.driving ? .2 : 1);
-  const t = tick;
-  ctx.clearRect(0, 0, width, height);
-  const mobile = width < 700;
-  const cx = width * (mobile ? .5 : .66) + (quiet ? 0 : pointer.x * 12);
-  const cy = height * (mobile ? .65 : .49) + (quiet ? 0 : Math.sin(t * .62) * 7 + pointer.y * 7);
-  const size = mobile ? Math.min(width * .235, 94) : Math.min(width * .117, 149);
-  const energetic = ['listening', 'speaking'].includes(state.phase);
-  const think = state.phase === 'thinking';
-  const breath = 1 + Math.sin(t * 1.15) * .02 + (energetic && !quiet ? Math.sin(t * 7.2) * .022 : 0);
-
-  for (const star of stars) {
-    const opacity = star.alpha * (.75 + Math.sin(t * .3 + star.phase) * .25);
-    ctx.fillStyle = `rgba(176,214,246,${opacity})`;
-    ctx.beginPath(); ctx.arc(star.x * width, star.y * height * .89, star.r, 0, Math.PI * 2); ctx.fill();
-    if (star.r > .96) { ctx.strokeStyle = `rgba(176,214,246,${opacity * .4})`; ctx.lineWidth = .4; ctx.beginPath(); ctx.moveTo(star.x * width - 3, star.y * height * .89); ctx.lineTo(star.x * width + 3, star.y * height * .89); ctx.moveTo(star.x * width, star.y * height * .89 - 3); ctx.lineTo(star.x * width, star.y * height * .89 + 3); ctx.stroke(); }
-  }
-
-  // A distant horizon anchors the floating character in a spacious scene.
-  const horizonY = height * 1.5, rx = width * .8, ry = height * .73;
-  ctx.save(); ctx.translate(width * .57, horizonY); ctx.scale(1, ry / rx);
-  const haze = ctx.createRadialGradient(0, 0, rx * .94, 0, 0, rx * 1.03);
-  haze.addColorStop(0, '#09152100'); haze.addColorStop(.64, '#639ac614'); haze.addColorStop(.72, '#9bdef92b'); haze.addColorStop(.78, '#5089b50b'); haze.addColorStop(1, '#050c1500');
-  ctx.fillStyle = haze; ctx.beginPath(); ctx.arc(0, 0, rx * 1.03, 0, Math.PI * 2); ctx.fill();
-  ctx.strokeStyle = '#8fc8e527'; ctx.lineWidth = .6; ctx.beginPath(); ctx.arc(0, 0, rx, Math.PI, Math.PI * 2); ctx.stroke(); ctx.restore();
-
-  glow(cx, cy, size * 2.35, [[0, '#82d0ff13'], [.4, '#4389c311'], [1, '#16325300']]);
-  ctx.save(); ctx.translate(cx, cy); ctx.scale(breath, breath);
-
-  // Project two gently twisted ribbons in 3D; depth controls light and width.
-  const segments = [];
-  const rotation = t * (think ? .55 : .14);
-  for (let ribbon = 0; ribbon < 2; ribbon++) {
-    let last;
-    for (let i = 0; i <= 220; i++) {
-      const a = i / 220 * Math.PI * 2;
-      const shape = 1 + .055 * Math.sin(a * 3 + t * .5);
-      let x = Math.cos(a) * size * shape;
-      let y = Math.sin(a) * size * .80 * shape;
-      let z = Math.sin(a * 2 + ribbon * Math.PI + t * .22) * size * .25;
-      const tilt = ribbon === 0 ? -.57 : .7;
-      const x1 = x * Math.cos(tilt) - y * Math.sin(tilt);
-      const y1 = x * Math.sin(tilt) + y * Math.cos(tilt);
-      const depthAngle = (ribbon === 0 ? .86 : -.91) + Math.sin(rotation) * .25;
-      x = x1 * Math.cos(depthAngle) + z * Math.sin(depthAngle);
-      z = -x1 * Math.sin(depthAngle) + z * Math.cos(depthAngle);
-      y = y1;
-      const perspective = 480 / (480 + z);
-      const point = { x: x * perspective, y: y * perspective, z, a };
-      if (last) segments.push({ from: last, to: point, z: (last.z + z) / 2, ribbon });
-      last = point;
-    }
-  }
-  segments.sort((a, b) => b.z - a.z);
-  const drawSegments = (front) => {
-    for (const seg of segments) {
-      if ((seg.z < 0) !== front) continue;
-      const luminosity = (1 - seg.z / (size * 1.5)) * .5;
-      ctx.beginPath(); ctx.moveTo(seg.from.x, seg.from.y); ctx.lineTo(seg.to.x, seg.to.y);
-      ctx.lineCap = 'round';
-      ctx.strokeStyle = `rgba(${think ? '181,177,255' : '111,198,250'},${luminosity * .13})`; ctx.lineWidth = 15; ctx.stroke();
-      ctx.strokeStyle = `rgba(109,194,249,${luminosity * .28})`; ctx.lineWidth = 6; ctx.stroke();
-      ctx.strokeStyle = `rgba(${seg.ribbon ? '169,223,255' : '201,240,255'},${Math.min(.95, luminosity + .15)})`; ctx.lineWidth = 1.5 + luminosity * 1.4; ctx.stroke();
-    }
-  };
-  drawSegments(false);
-  const coreSize = size * .51;
-  glow(0, 0, coreSize * 1.7, [[0, '#b8eaff26'], [.45, '#76bbf12b'], [1, '#3a81ba00']]);
-  const core = ctx.createRadialGradient(-coreSize * .3, -coreSize * .4, 1, 0, 0, coreSize);
-  core.addColorStop(0, '#ddf7ffb0'); core.addColorStop(.25, '#8dd4f978'); core.addColorStop(.62, '#3e7dad45'); core.addColorStop(.9, '#1839564a'); core.addColorStop(1, '#8bc8ec74');
-  ctx.fillStyle = core; ctx.beginPath(); ctx.arc(0, 0, coreSize, 0, Math.PI * 2); ctx.fill();
-  // A subtle V-shaped light signature gives the companion its own identity.
-  ctx.beginPath(); ctx.moveTo(-size * .23, -size * .1); ctx.bezierCurveTo(-size * .13, -size * .06, -size * .06, size * .16, 0, size * .2); ctx.bezierCurveTo(size * .06, size * .16, size * .13, -size * .06, size * .23, -size * .1);
-  ctx.strokeStyle = '#c7f1ff'; ctx.lineWidth = 2.8; ctx.shadowColor = '#9cdfff'; ctx.shadowBlur = 15; ctx.stroke(); ctx.shadowBlur = 0;
-  drawSegments(true);
-
-  // A fine orbital plane and a few moving satellites establish spatial depth.
-  ctx.save(); ctx.rotate(-.15); ctx.strokeStyle = '#91ccf021'; ctx.lineWidth = .7;
-  ctx.beginPath(); ctx.ellipse(0, 12, size * 1.56, size * .32, 0, 0, Math.PI * 2); ctx.stroke();
-  for (let i = 0; i < 3; i++) {
-    const a = t * .22 + i * 2.09;
-    const x = Math.cos(a) * size * 1.56, y = Math.sin(a) * size * .32 + 12;
-    glow(x, y, 7, [[0, '#cff2ffd0'], [.2, '#9bd9ff6a'], [1, '#9bd9ff00']]);
-  }
-  ctx.restore();
-  if (state.phase === 'acting') {
-    const progress = state.reduced ? .5 : (t * .65) % 1;
-    ctx.strokeStyle = `rgba(152,221,255,${(1 - progress) * .5})`; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.ellipse(0, 0, size * (1.1 + progress), size * (.8 + progress * .6), -.2, 0, Math.PI * 2); ctx.stroke();
-  }
-  ctx.restore();
-  requestAnimationFrame(draw);
-}
-requestAnimationFrame(draw);
+import('./scene3d.js?v=31')
+  .then(module => {
+    scene = module.createScene($('#space'), { reduced: state.reduced });
+    scene.setRoute(plannedRoute);
+    document.body.classList.add('space-ready');
+    updateDriveUI();
+    updateVehicle();
+  })
+  .catch(error => console.warn('3D scene unavailable:', error));
 
 function setPhase(phase, text) {
   state.phase = phase;
-  $('#orb-state').textContent = phaseLabels[phase];
+  $('#orb-state').textContent = phaseLabels[phase] || phaseLabels.idle;
+  wave.setPhase(phase);
+  const thinking = ['thinking', 'transcribing', 'validating', 'acting', 'synthesizing'].includes(phase);
+  const neon = NEON_BY_PHASE[thinking ? 'thinking' : phase] || (['clarify', 'unverified'].includes(phase) ? NEON_BY_PHASE.blocked : NEON_BY_PHASE.idle);
+  capsuleNeon.set({ movement: 'continuous', ...neon });
+  document.body.dataset.phase = phase;
   if (text) $('#response-text').textContent = text;
   document.body.classList.toggle('busy', !['idle', 'confirm', 'clarify', 'blocked', 'unverified'].includes(phase));
 }
 function updateVehicle() {
-  $('#temperature').innerHTML = `${state.temp}<span>°</span>`;
-  $('#window-label').textContent = state.window ? 'Đang mở' : 'Đang đóng';
+  $('#temperature').textContent = `${state.temp}°`;
+  $('#dock-temp').textContent = `${state.temp}°`;
   $('#window-toggle').setAttribute('aria-pressed', String(state.window));
   $('#window-toggle').setAttribute('aria-label', state.window ? 'Đóng cửa sổ bên tài' : 'Mở cửa sổ bên tài');
-  $('#window-percent').textContent = state.window ? '100%' : '0%';
-  $('#window-note').textContent = state.window ? 'Đón một chút không khí mới' : 'Một khoảng yên tĩnh riêng';
-  $('#music-card').classList.toggle('playing', state.music);
-  $('#music-toggle').textContent = state.music ? 'Ⅱ' : '▶';
-  $('#music-toggle').setAttribute('aria-label', state.music ? 'Dừng nhạc mô phỏng' : 'Phát nhạc mô phỏng');
-  $('#music-note').textContent = state.music ? 'Đang phát · trạng thái mô phỏng' : 'Để tâm trí được thảnh thơi';
+  // Backend reports the opening in percent; the offline demo only knows open or closed.
+  scene?.setWindow(state.window ? (state.windows.driver > 0 ? state.windows.driver : 100) : 0);
+  $('#door-toggle').setAttribute('aria-pressed', String(state.doorOpen));
+  $('#door-toggle').setAttribute('aria-label', state.doorOpen ? 'Đóng cửa bên tài' : 'Mở cửa bên tài');
+  scene?.setDoor(state.doorOpen);
+  $('#music-toggle').setAttribute('aria-pressed', String(state.music));
+  $('#music-toggle').setAttribute('aria-label', state.music ? 'Dừng nhạc' : 'Phát nhạc');
+  updateHud();
 }
+const formatKm = (meters) => meters < 1000 ? `${Math.round(meters / 10) * 10} m` : `${(meters / 1000).toLocaleString('vi-VN', { maximumFractionDigits: 1 })} km`;
+// Left HUD: battery while parked, speed while driving; nothing else competes for attention.
+function updateHud() {
+  const driving = state.driving;
+  const speed = Math.round(nav?.speedKmh ?? cruise.speed);
+  $('#gear-letter').textContent = driving ? 'D' : 'P';
+  $('#mode-label').textContent = driving ? (nav ? `ĐẾN ${nav.destination.toUpperCase()}` : 'ĐANG DI CHUYỂN') : 'ĐỖ XE';
+  $('#hud-primary').innerHTML = driving ? `${speed}<small>km/h</small>` : `${state.battery}<small>%</small>`;
+  $('#hud-primary-label').textContent = driving ? 'TỐC ĐỘ' : 'PIN';
+  $('#hud-range').textContent = driving ? `Pin ${state.battery}% · ${state.range} km` : `${state.range} km`;
+  $('#hud-cabin').textContent = `Cabin ${state.temp}°`;
+  const card = $('#maneuver');
+  const next = driving && nav?.next;
+  card.hidden = !next;
+  if (next) {
+    $('#maneuver-icon').textContent = next.icon;
+    $('#maneuver-distance').textContent = `Sau ${formatKm(next.distance)}`;
+    $('#maneuver-text').textContent = next.text;
+    $('#maneuver-eta').textContent = `Còn ${formatKm(nav.remaining)} · đến ${new Intl.DateTimeFormat('vi-VN', { hour: '2-digit', minute: '2-digit' }).format(nav.arrival)}`;
+  }
+  scene?.setSpeed(speed);
+  // VietMap signs: negative turns left, positive right; only near turns get a cue.
+  const turning = next && next.distance < 220 && next.sign !== 4 && next.sign !== 5;
+  scene?.setTurn(turning ? Math.sign(next.sign) : null);
+}
+function updateDriveUI() {
+  $('#drive-toggle').setAttribute('aria-pressed', String(state.driving));
+  $('#drive-toggle').setAttribute('aria-label', state.driving ? 'Chuyển về đỗ xe' : 'Chuyển sang lái xe');
+  $('#drive-toggle span').textContent = state.driving ? 'D' : 'P';
+  document.body.classList.toggle('driving', state.driving);
+  scene?.setMode(state.driving ? 'driving' : 'parked');
+  updateHud();
+}
+// Without a route the demo cruises at a gently varying city speed.
+setInterval(() => {
+  if (!state.driving || nav) { cruise.speed = 0; return; }
+  cruise.at += .5;
+  cruise.speed = 38 + Math.sin(cruise.at / 4) * 6 + Math.sin(cruise.at / 1.7) * 2;
+  updateHud();
+}, 500);
 const alertCodeLabels = {
   LOW_BATTERY: 'Pin yếu',
   TIRE_PRESSURE_LOW: 'Áp suất lốp thấp',
@@ -222,6 +187,7 @@ async function pollVehicleAlerts() {
   } catch { /* Polling resumes automatically after a temporary disconnect. */ }
 }
 function highlight(id) { $(id).classList.add('highlight'); setTimeout(() => $(id).classList.remove('highlight'), 2600); }
+const DOCK_BY_INTENT = { climate: '#climate-button', window: '#window-toggle', door: '#door-toggle', media: '#music-toggle' };
 function say(text) {
   if (!state.sound || !('speechSynthesis' in window)) return;
   speechSynthesis.cancel();
@@ -233,8 +199,17 @@ function say(text) {
 let ttsAudioContext = null;
 let currentPlayback = null;
 const TTS_START_BUFFER_SECONDS = 1;
+let ttsOutput = null;
 async function ensureTtsAudioContext() {
-  ttsAudioContext ||= new AudioContext();
+  if (!ttsAudioContext) {
+    ttsAudioContext = new AudioContext();
+    // All TTS chunks pass through one analyser so the wave can follow ViVi's voice.
+    ttsOutput = ttsAudioContext.createAnalyser();
+    ttsOutput.fftSize = 512;
+    ttsOutput.connect(ttsAudioContext.destination);
+    voiceLevel.analyser = ttsOutput;
+    voiceLevel.samples = new Float32Array(ttsOutput.fftSize);
+  }
   if (ttsAudioContext.state === 'suspended') await ttsAudioContext.resume();
   return ttsAudioContext;
 }
@@ -288,7 +263,7 @@ async function speak(text, turnId = makeId(), sequencePlayback = null) {
         const buffer = context.createBuffer(1, samples.length, sampleRate);
         buffer.copyToChannel(samples, 0);
         const source = context.createBufferSource();
-        source.buffer = buffer; source.connect(context.destination);
+        source.buffer = buffer; source.connect(ttsOutput);
         source.onended = () => {
           playback.sources.delete(source);
           source.disconnect();
@@ -359,6 +334,11 @@ function resolveCommand(command) {
     if (opening && state.driving) return { type: 'blocked', message: 'Demo đang ở chế độ lái xe. Theo policy minh họa, mình chỉ mở cửa sổ khi xe đang đỗ.' };
     return { type: 'window', value: opening };
   }
+  if (/\b(mo|dong)\s+cua\b/.test(text)) {
+    const opening = /\bmo\b/.test(text);
+    if (opening && state.driving) return { type: 'blocked', message: 'Demo đang ở chế độ lái xe. Theo policy minh họa, mình chỉ mở cửa xe khi xe đang đỗ.' };
+    return { type: 'door', value: opening };
+  }
   if (/nhac|bai hat|am thanh|play|pause/.test(text)) return { type: 'music', value: !/dung|tat|pause/.test(text) };
   if (/lanh|am hon|nong|nhiet do|dieu hoa|mat hon/.test(text)) {
     if (/\b(bat|tat)\b/.test(text)) return { type: 'clarify', message: 'Bản demo hiện hỗ trợ đặt nhiệt độ từ 16 đến 30 độ. Bạn muốn đặt bao nhiêu độ?' };
@@ -373,7 +353,9 @@ function resolveCommand(command) {
   return { type: 'clarify', message: 'Mình có thể chỉnh nhiệt độ, mở hoặc đóng cửa sổ bên tài, điều khiển nhạc và mở cẩm nang minh họa. Bạn muốn thử việc nào?' };
 }
 function lockControls(locked) {
-  document.querySelectorAll('.suggestions button, .stepper button, #window-toggle, #music-toggle, #drive-toggle, #demo-mic, .send-button').forEach(button => { button.disabled = locked; });
+  document.querySelectorAll('#climate-pop button, #window-toggle, #door-toggle, #music-toggle, #drive-toggle, .send-button').forEach(button => { button.disabled = locked; });
+  // The mic stays enabled while recording so a second tap can stop it.
+  $('#demo-mic').disabled = locked && recorder?.state !== 'recording';
   if (state.backendAvailable && state.vehicleProvider !== 'memory') $('#drive-toggle').disabled = true;
   $('#command-form').setAttribute('aria-busy', String(locked));
 }
@@ -394,9 +376,10 @@ async function runLocalCommand(command, voiceDemo = false) {
     await wait(1000);
     let message = '';
     switch (action.type) {
-      case 'climate': state.temp = action.value; message = `Mình đã đặt nhiệt độ xe mô phỏng ở ${state.temp} độ. Hy vọng bạn thấy dễ chịu hơn.`; highlight('#climate-card'); $('#climate-note').textContent = 'ViVi vừa điều chỉnh cho bạn'; break;
-      case 'window': state.window = action.value; message = `Mình đã ${state.window ? 'mở' : 'đóng'} cửa sổ bên tài trên xe mô phỏng.`; highlight('#window-card'); break;
-      case 'music': state.music = action.value; message = state.music ? 'Đã chuyển nhạc sang trạng thái phát trong demo. Một chút bình yên cho hành trình.' : 'Mình đã dừng nhạc mô phỏng.'; highlight('#music-card'); break;
+      case 'climate': state.temp = action.value; message = `Mình đã đặt nhiệt độ xe mô phỏng ở ${state.temp} độ. Hy vọng bạn thấy dễ chịu hơn.`; highlight('#climate-button'); break;
+      case 'window': state.window = action.value; message = `Mình đã ${state.window ? 'mở' : 'đóng'} cửa sổ bên tài trên xe mô phỏng.`; highlight('#window-toggle'); break;
+      case 'door': state.doorOpen = action.value; state.doors = { ...state.doors, driver: { ...state.doors.driver, open: action.value } }; message = `Mình đã ${state.doorOpen ? 'mở' : 'đóng'} cửa bên tài trên xe mô phỏng.`; highlight('#door-toggle'); break;
+      case 'music': state.music = action.value; message = state.music ? 'Đã chuyển nhạc sang trạng thái phát trong demo. Một chút bình yên cho hành trình.' : 'Mình đã dừng nhạc mô phỏng.'; highlight('#music-toggle'); break;
       case 'manual': openPanel('manual'); message = 'Mình đã mở cẩm nang minh họa. Bản demo chưa kết nối tài liệu hướng dẫn chính thức.'; break;
       case 'status': openPanel('vehicle'); message = `Xe mô phỏng còn 82% pin, nhiệt độ cài đặt ${state.temp} độ và cửa sổ bên tài ${state.window ? 'đang mở' : 'đang đóng'}.`; break;
     }
@@ -423,9 +406,7 @@ function applyBackendState(vehicle) {
   state.doorLocked = state.doors.driver?.locked ?? vehicle.door_driver_locked;
   state.doorOpen = state.doors.driver?.open ?? vehicle.door_driver_open;
   state.seatHeat = state.seatHeatLevels.driver ?? vehicle.seat_driver_heat_level;
-  $('#drive-toggle').setAttribute('aria-pressed', String(state.driving));
-  $('#drive-toggle span').textContent = state.driving ? 'Đang lái xe · Demo' : 'Đang đỗ xe';
-  document.body.classList.toggle('driving', state.driving);
+  updateDriveUI();
   updateVehicle();
   if (activePanelView === 'vehicle' && $('#info-dialog').open) {
     $('#dialog-content').innerHTML = vehicleDetailsMarkup();
@@ -525,7 +506,7 @@ async function runBackendCommand(command, turnId = makeId()) {
     setPhase(phase, payload.message);
     if (payload.status === 'verified') {
       const intent = payload.action?.intent || '';
-      const card = intent.startsWith('climate.') ? '#climate-card' : intent.startsWith('window.') ? '#window-card' : intent.startsWith('media.') ? '#music-card' : null;
+      const card = DOCK_BY_INTENT[intent.split('.')[0]] || null;
       if (card) highlight(card);
     }
     if (voiceStreamed) {
@@ -630,7 +611,7 @@ async function startRecording() {
     };
     recorder.onstop = async () => {
       $('#demo-mic').classList.remove('recording'); $('#demo-mic').setAttribute('aria-label', 'Bắt đầu thu âm');
-      cancelAnimationFrame(silenceFrame); recorderStream?.getTracks().forEach(track => track.stop()); await audioContext?.close(); audioContext = null;
+      cancelAnimationFrame(silenceFrame); voiceLevel.mic = 0; recorderStream?.getTracks().forEach(track => track.stop()); await audioContext?.close(); audioContext = null;
       const blob = new Blob(recorderChunks, { type: recorder.mimeType || 'audio/webm' }); recorder = null;
       const socket = sttSocket, result = sttResult; sttSocket = null; sttResult = null;
       if (socket) await finishStreaming(socket, result, blob, turnId);
@@ -645,6 +626,7 @@ async function startRecording() {
     const monitor = () => {
       analyser.getByteTimeDomainData(samples);
       const rms = Math.sqrt(samples.reduce((sum, value) => sum + ((value - 128) / 128) ** 2, 0) / samples.length);
+      voiceLevel.mic = rms;
       if (rms > .035) { heardSpeech = true; silentSince = 0; }
       else if (heardSpeech && !silentSince) silentSince = performance.now();
       if ((silentSince && performance.now() - silentSince > 1400) || performance.now() - startedAt > 15000) stopRecording();
@@ -652,6 +634,15 @@ async function startRecording() {
     };
     monitor();
   } catch (error) { sttSocket?.close(); sttSocket = null; setPhase('blocked', `Không mở được microphone: ${error.message}`); }
+}
+
+function resolveLlmProvider(options, backendDefault, savedProvider, savedDefault) {
+  const available = provider => options.some(item => item.provider === provider && item.available);
+  const defaultProvider = available(backendDefault) ? backendDefault
+    : options.find(item => item.available)?.provider || 'rules';
+  // A saved override belongs to the configuration in which it was selected.
+  // Old selections without that context must not mask a new backend default.
+  return savedDefault === backendDefault && available(savedProvider) ? savedProvider : defaultProvider;
 }
 
 async function checkBackend() {
@@ -662,77 +653,77 @@ async function checkBackend() {
     if (!state.storeTranscripts) localStorage.removeItem(edgeCommandHistoryKey);
     state.llmOptions = health.llm.options || [];
     const saved = localStorage.getItem('vivi-llm-provider');
-    const defaultProvider = state.llmOptions.find(item => item.provider === health.llm.provider && item.available)?.provider
-      || state.llmOptions.find(item => item.available)?.provider || 'rules';
-    state.llmProvider = state.llmOptions.some(item => item.provider === saved && item.available) ? saved : defaultProvider;
+    state.llmProvider = resolveLlmProvider(state.llmOptions, health.llm.provider, saved,
+      localStorage.getItem('vivi-llm-default-provider'));
+    state.llmDefaultProvider = health.llm.provider;
+    localStorage.setItem('vivi-llm-provider', state.llmProvider);
+    localStorage.setItem('vivi-llm-default-provider', state.llmDefaultProvider);
     updateModelStatus();
     $('#backend-status').classList.remove('offline'); $('#backend-status').innerHTML = '<i></i> Local · <span id="backend-model"></span>';
     $('#backend-model').textContent = state.llmProvider;
-    $('#runtime-note').innerHTML = `<span class="mini-dot"></span> STT ${health.stt.available ? 'sẵn sàng' : 'chưa cài'} · TTS ${health.tts.available ? 'Mai Chi' : 'chưa cài'} · LLM <span id="runtime-model"></span>`;
-    $('#runtime-model').textContent = state.llmProvider;
+    $('#backend-status').title = `STT ${health.stt.available ? 'sẵn sàng' : 'chưa cài'} · TTS ${health.tts.available ? 'Mai Chi' : 'chưa cài'} · LLM ${state.llmProvider}`;
     $('#drive-toggle').disabled = state.vehicleProvider !== 'memory';
     try {
       const vehicleResponse = await fetch(`${API_BASE}/api/v1/vehicle/state?session_id=${encodeURIComponent(sessionId)}`);
       if (vehicleResponse.ok) applyBackendState(await vehicleResponse.json());
     } catch { /* An external simulator may be temporarily offline. */ }
   } catch {
-    state.backendAvailable = false; $('#backend-status').classList.add('offline'); $('#backend-status').innerHTML = '<i></i> Local backend offline';
-    $('#runtime-note').innerHTML = '<span class="mini-dot"></span> Chế độ prototype · hãy chạy python run.py';
+    state.backendAvailable = false; $('#backend-status').classList.add('offline'); $('#backend-status').innerHTML = '<i></i> Backend offline';
+    $('#backend-status').title = 'Chế độ prototype · hãy chạy python run.py';
   }
 }
 
 function updateModelStatus() {
   if ($('#backend-model')) $('#backend-model').textContent = state.llmProvider;
-  if ($('#runtime-model')) $('#runtime-model').textContent = state.llmProvider;
 }
 
 $('#command-form').addEventListener('submit', event => { event.preventDefault(); runCommand($('#command-input').value); });
-document.querySelectorAll('[data-command]').forEach(button => button.addEventListener('click', () => runCommand(button.dataset.command)));
 $('#demo-mic').addEventListener('click', startRecording);
 document.querySelectorAll('[data-temp]').forEach(button => button.addEventListener('click', () => runCommand(`Đặt nhiệt độ ${state.temp + Number(button.dataset.temp)} độ`)));
 $('#window-toggle').addEventListener('click', () => runCommand(state.window ? 'Đóng cửa sổ bên tài' : 'Mở cửa sổ bên tài'));
+$('#door-toggle').addEventListener('click', () => runCommand(state.doorOpen ? 'Đóng cửa bên tài' : 'Mở cửa bên tài'));
 $('#music-toggle').addEventListener('click', () => runCommand(state.music ? 'Dừng nhạc' : 'Phát nhạc thư giãn'));
+async function setDemoDriving(driving) {
+  if (!state.backendAvailable) {
+    // Same rule as the memory simulator: no driving off with a door open.
+    if (driving && state.doorOpen) throw new Error('Không thể chuyển sang chế độ lái khi cửa xe đang mở.');
+    state.driving = driving;
+    updateDriveUI();
+    updateVehicle();
+    return;
+  }
+  if (state.vehicleProvider !== 'memory') throw new Error('Chế độ lái chỉ được đổi bằng fixture của memory simulator.');
+  const response = await fetch(`${API_BASE}/api/v1/demo/vehicle/driving`, {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ session_id: sessionId, driving })
+  });
+  const payload = await response.json();
+  if (!response.ok) throw new Error(payload.detail || 'Không đổi được trạng thái lái');
+  applyBackendState(payload);
+}
 $('#drive-toggle').addEventListener('click', async () => {
   if (state.busy) return;
-  const driving = !state.driving;
-  if (state.backendAvailable) {
-    if (state.vehicleProvider !== 'memory') {
-      setPhase('blocked', 'Chế độ lái chỉ được đổi bằng fixture của memory simulator.');
-      return;
-    }
-    lockControls(true);
-    try {
-      const response = await fetch(`${API_BASE}/api/v1/demo/vehicle/driving`, {
-        method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: sessionId, driving })
-      });
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload.detail || 'Không đổi được trạng thái lái');
-      applyBackendState(payload);
-    } catch (error) {
-      setPhase('blocked', error.message);
-      return;
-    } finally {
-      lockControls(false);
-    }
-  } else {
-    state.driving = driving;
-    $('#drive-toggle').setAttribute('aria-pressed', String(state.driving));
-    $('#drive-toggle span').textContent = state.driving ? 'Đang lái xe · Demo' : 'Đang đỗ xe';
-    document.body.classList.toggle('driving', state.driving);
+  lockControls(true);
+  try {
+    await setDemoDriving(!state.driving);
+  } catch (error) {
+    setPhase('blocked', error.message);
+    return;
+  } finally {
+    lockControls(false);
   }
   setPhase('idle', state.driving ? 'Chuyển động đã dịu lại. Mình đồng hành cùng bạn.' : 'Đã về chế độ đỗ xe. Không gian ViVi được mở rộng.');
 });
 $('#sound-toggle').addEventListener('click', () => {
   state.sound = !state.sound;
   $('#sound-toggle').setAttribute('aria-pressed', String(state.sound));
-  $('#sound-toggle span').textContent = `Mai Chi: ${state.sound ? 'bật' : 'tắt'}`;
+  $('#sound-toggle').setAttribute('aria-label', state.sound ? 'Tắt giọng Mai Chi' : 'Bật giọng Mai Chi');
   // Enabling sound must not inject a synthetic greeting into the conversation.
   if (!state.sound) { stopPlayback(); if ('speechSynthesis' in window) speechSynthesis.cancel(); }
 });
 
 const dialog = $('#info-dialog');
-const modelLabels = { rules: 'Kịch bản', openai: 'OpenAI', google: 'Google', local: 'Local API', openrouter: 'OpenRouter' };
+const modelLabels = { rules: 'Kịch bản', openai: 'OpenAI', google: 'Google Gemini', local: 'Local API', openrouter: 'OpenRouter' };
 const modelModes = { rules: 'Phản hồi định sẵn', openai: 'Cloud · cần Internet', google: 'Cloud · cần Internet', local: 'On-device · riêng tư', openrouter: 'Cloud · cần Internet' };
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>'"]/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character]);
@@ -764,6 +755,7 @@ function selectLlmProvider(provider) {
   if (!selected) return;
   state.llmProvider = provider;
   localStorage.setItem('vivi-llm-provider', provider);
+  localStorage.setItem('vivi-llm-default-provider', state.llmDefaultProvider);
   document.querySelectorAll('[data-llm-provider]').forEach(button => {
     const active = button.dataset.llmProvider === provider;
     button.classList.toggle('selected', active);
@@ -773,11 +765,15 @@ function selectLlmProvider(provider) {
   if (activeModel) activeModel.textContent = `${modelLabels[provider] || provider} · ${selected.model || 'Chưa cấu hình'}`;
   updateModelStatus();
 }
+function setActiveRail(view) {
+  document.querySelectorAll('.dock [data-view]').forEach(button => button.classList.toggle('active', button.dataset.view === view));
+  $('#settings-button').classList.toggle('active', view === 'settings');
+}
 function openPanel(view) {
-  if (view === 'home') { activePanelView = ''; if (dialog.open) dialog.close(); document.querySelectorAll('.rail-main .rail-button').forEach(button => button.classList.toggle('active', button.dataset.view === 'home')); $('.settings-button').classList.remove('active'); return; }
+  if (view === 'journey') { activePanelView = ''; if (dialog.open) dialog.close(); setActiveRail('journey'); openJourney(); return; }
+  if (view === 'home') { activePanelView = ''; closeJourney(); if (dialog.open) dialog.close(); setActiveRail('home'); return; }
   activePanelView = view;
-  document.querySelectorAll('.rail-main .rail-button').forEach(button => button.classList.toggle('active', button.dataset.view === view));
-  $('.settings-button').classList.toggle('active', view === 'settings');
+  setActiveRail(view);
   const currentModel = state.llmOptions.find(item => item.provider === state.llmProvider);
   const sourceMarkup = state.manualEvidence.length
     ? state.manualEvidence.map((item, index) => `<div class="detail-row"><span>Nguồn ${index + 1}</span><strong>${item.source_url ? `<a href="${escapeHtml(item.source_url)}" target="_blank" rel="noreferrer">${escapeHtml(item.section || item.source_id)}</a>` : escapeHtml(item.section || item.source_id)}</strong></div>`).join('')
@@ -785,7 +781,6 @@ function openPanel(view) {
   const manualContent = `<h2>Hiểu chiếc xe của bạn</h2><p>${escapeHtml(state.manualAnswer || 'ViVi sẽ hiển thị câu trả lời đã được grounding từ cẩm nang VF8 2026 tại đây.')}</p>${sourceMarkup}`;
   const contents = {
     vehicle: vehicleDetailsMarkup(),
-    journey: '<h2>Mỗi hành trình, một khám phá.</h2><p>Không gian dành cho địa điểm yêu thích, trạm sạc và chỉ đường trong phiên bản tiếp theo.</p><div class="detail-row"><span>Điểm đến</span><strong>Chưa thiết lập</strong></div><div class="detail-row"><span>Dịch vụ bản đồ</span><strong>Chưa kết nối</strong></div><p class="dialog-note">Prototype hiện tập trung vào trải nghiệm trợ lý và các thao tác cabin.</p>',
     manual: manualContent,
     settings: `<h2>Cấu hình ViVi</h2><p>Chọn cách ViVi suy nghĩ và chuyển động trong không gian của bạn.</p><section class="config-section"><div class="config-heading"><span>MÔ HÌNH HỘI THOẠI</span><strong id="active-model">${escapeHtml(modelLabels[state.llmProvider] || state.llmProvider || 'Chưa kết nối')} · ${escapeHtml(currentModel?.model || '')}</strong></div><div class="model-options">${modelOptionsMarkup()}</div><p class="dialog-note">Lựa chọn được áp dụng từ lượt hội thoại tiếp theo. Model ID và API key vẫn được quản lý an toàn trong .env.</p></section><section class="config-section"><div class="config-heading"><span>TRẢI NGHIỆM</span><strong>Không gian & giọng nói</strong></div><label class="motion-setting"><span><strong>Giảm chuyển động</strong><small>Dừng lơ lửng, quỹ đạo và hiệu ứng sóng</small></span><input id="reduce-motion" type="checkbox" ${state.reduced ? 'checked' : ''}><i></i></label><div class="config-runtime"><div><span>NHẬN DIỆN GIỌNG NÓI</span><strong>${state.sttAvailable ? `${escapeHtml(state.sttProvider)} · ${state.sttDevice === 'cloud' ? `cloud${state.sttStreaming ? ' · trực tiếp' : ''}` : 'local'}` : 'Chưa sẵn sàng'}</strong></div><div><span>GIỌNG PHẢN HỒI</span><strong>${state.ttsAvailable ? `${escapeHtml(state.ttsProvider)} · local` : 'Trình duyệt/text fallback'}</strong></div></div><p class="dialog-note">Audio: ${state.storeAudio ? 'đang lưu' : 'không lưu'} · transcript: ${state.storeTranscripts ? 'đang lưu' : 'không lưu'}.</p></section>`
   };
@@ -793,15 +788,56 @@ function openPanel(view) {
   dialog.classList.toggle('config-dialog', view === 'settings');
   if (!dialog.open) dialog.showModal();
   $('#try-climate')?.addEventListener('click', () => { dialog.close(); runCommand('Tôi hơi lạnh'); });
-  $('#reduce-motion')?.addEventListener('change', event => { state.reduced = event.target.checked; document.body.classList.toggle('reduced-motion', state.reduced); });
+  $('#reduce-motion')?.addEventListener('change', event => applyReducedMotion(event.target.checked));
   document.querySelectorAll('[data-llm-provider]').forEach(button => button.addEventListener('click', () => selectLlmProvider(button.dataset.llmProvider)));
 }
 document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', () => openPanel(button.dataset.view)));
-$('.settings-button').addEventListener('click', () => openPanel('settings'));
+$('#settings-button').addEventListener('click', () => openPanel('settings'));
 $('#close-dialog').addEventListener('click', () => dialog.close());
 dialog.addEventListener('click', event => { if (event.target === dialog) { const rect = dialog.getBoundingClientRect(); if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) dialog.close(); } });
-dialog.addEventListener('close', () => { activePanelView = ''; document.querySelectorAll('.rail-main .rail-button').forEach(button => button.classList.toggle('active', button.dataset.view === 'home')); $('.settings-button').classList.remove('active'); dialog.classList.remove('config-dialog'); });
-motionPreference.addEventListener('change', event => { state.reduced = event.matches; document.body.classList.toggle('reduced-motion', state.reduced); });
-document.body.classList.toggle('reduced-motion', state.reduced);
+dialog.addEventListener('close', () => { activePanelView = ''; setActiveRail(document.body.classList.contains('journey-open') ? 'journey' : 'home'); dialog.classList.remove('config-dialog'); });
+initJourney({
+  onOpen: () => openPanel('journey'),
+  onClose: () => openPanel('home'),
+  // Navigation prompts surface in the assistant line and use ViVi's voice.
+  announce: text => { $('#response-text').textContent = text; if (state.sound) speak(text).catch(() => say(text)); },
+  setDriving: driving => { if (state.driving !== driving) setDemoDriving(driving).catch(() => {}); },
+  progress: progress => { nav = progress; updateHud(); },
+  route: route => { plannedRoute = route; scene?.setRoute(route); },
+  travel: distance => scene?.setRouteDistance(distance)
+});
+function applyReducedMotion(reduced) {
+  state.reduced = reduced;
+  document.body.classList.toggle('reduced-motion', reduced);
+  wave.setReduced(reduced);
+  scene?.setReduced(reduced);
+  capsuleNeon.set({ speed: reduced ? 0 : (NEON_BY_PHASE[state.phase] || NEON_BY_PHASE.idle).speed });
+  maneuverNeon.set({ speed: reduced ? 0 : 4 });
+}
+motionPreference.addEventListener('change', event => applyReducedMotion(event.matches));
+applyReducedMotion(state.reduced);
+
+// The full-screen map hides the 3D scene, so stop rendering it meanwhile.
+new MutationObserver(() => scene?.setPaused(document.body.classList.contains('journey-open'))).observe(document.body, { attributes: true, attributeFilter: ['class'] });
+
+$('#keyboard-toggle').addEventListener('click', () => {
+  const typing = !document.body.classList.contains('typing');
+  document.body.classList.toggle('typing', typing);
+  $('#keyboard-toggle').setAttribute('aria-pressed', String(typing));
+  if (typing) $('#command-input').focus();
+});
+$('#command-input').addEventListener('keydown', event => { if (event.key === 'Escape') $('#keyboard-toggle').click(); });
+const climatePop = $('#climate-pop');
+function toggleClimate(open = climatePop.hidden) {
+  climatePop.hidden = !open;
+  $('#climate-button').setAttribute('aria-expanded', String(open));
+  if (open) {
+    const box = $('#climate-button').getBoundingClientRect();
+    climatePop.style.left = `${Math.max(110, box.left + box.width / 2)}px`;
+  }
+}
+$('#climate-button').addEventListener('click', event => { event.stopPropagation(); toggleClimate(); });
+document.addEventListener('click', event => { if (!climatePop.hidden && !event.target.closest('#climate-pop')) toggleClimate(false); });
 function updateClock() { $('#clock').textContent = new Intl.DateTimeFormat('vi-VN', { hour: '2-digit', minute: '2-digit' }).format(new Date()); }
+if (location.hash === '#journey') openPanel('journey');
 updateClock(); setInterval(updateClock, 60000); updateVehicle(); checkBackend().then(pollVehicleAlerts); setInterval(pollVehicleAlerts, 1500);

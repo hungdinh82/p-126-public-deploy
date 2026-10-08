@@ -38,6 +38,7 @@ data/handbooks/*
 *.sqlite3-wal
 
 !data/handbooks/handbook.sqlite3
+!data/handbooks/handbook-source.sqlite3
 
 # Logs
 logs/
@@ -73,3 +74,4 @@ __pycache__/
 models/
 .DS_Store
 tmp/
+ModelVF8/

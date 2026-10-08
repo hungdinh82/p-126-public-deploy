@@ -5,9 +5,9 @@ PC là môi trường development, ingestion và benchmark đầy đủ. Runtime
 
 ## 1. Nhận code và chạy baseline
 
-Baseline không cần API key, GPU hay model AI. Nó chạy API + UI, LangGraph rules, handbook
-SQLite và vehicle simulator trong bộ nhớ; đây là cách nhanh nhất để xác nhận máy mới đã setup
-đúng.
+Mặc định chạy API + UI, LangGraph rules, SQLite FTS5 + E5 INT8 local và simulator
+trong bộ nhớ. Setup tải trọng số embedding một lần; các lượt hỏi đáp chạy offline,
+không cần API key hay GPU. Xem [RAG local](rag_local.md).
 
 ```bash
 git clone <repository-url>
@@ -64,6 +64,9 @@ Chỉ chạy API, rules, SQLite handbook và simulator:
 python3.12 -m venv .venv
 .venv/bin/python -m pip install --upgrade pip
 .venv/bin/python -m pip install -r requirements-dev.txt
+# Máy mới chưa có ONNX Runtime; giữ runtime GPU nếu đã cài cho speech.
+.venv/bin/python -m pip install -r requirements-rag.txt
+.venv/bin/python -m src.vivi.cli.prepare_embeddings
 cp .env.example .env
 ```
 

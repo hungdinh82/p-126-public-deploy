@@ -44,7 +44,6 @@ docker run --detach --name "$CONTAINER" \
   --env STT_PROVIDER=off \
   --env TTS_PROVIDER=off \
   --env VIVI_VEHICLE_PROVIDER=memory \
-  --env RAG_RETRIEVAL_MODE=sqlite \
   "$IMAGE" >/dev/null
 
 echo "[3/4] Waiting for health and running the API smoke test"
@@ -68,6 +67,7 @@ docker exec "$CONTAINER" sh -lc '
   test ! -e /app/data/mqtt/credentials.env
   test ! -d /app/.ai-log
   test -f /app/data/handbooks/handbook.sqlite3
+  test -f /app/models/multilingual-e5-small-int8/model_quantized.onnx
 '
 
 echo "ViVi Docker quality checks passed."

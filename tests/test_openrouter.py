@@ -11,7 +11,7 @@ from src.vivi.structured_llm import openrouter_client
 
 
 def _settings(**overrides) -> Settings:
-    return Settings(openrouter_api_key="or-test", **overrides)
+    return Settings(openrouter_api_key="or-test", rag_local_only=False, **overrides)
 
 
 def test_openrouter_is_configured_only_with_key():

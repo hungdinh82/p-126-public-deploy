@@ -1,46 +1,17 @@
-# Evaluation Report
+# VF8 RAG evaluation reports
 
-> Báo cáo đánh giá chất lượng sản phẩm theo tiêu chí BTC.
+The measured local baselines are available in:
 
----
+- [Development report](local-dev.md), with [per-case JSON](local-dev.json).
+- [Held-out test report](local-test.md), with [per-case JSON](local-test.json).
 
-## 1. Metrics
+Both use the draft [golden dataset](../golden_dataset.jsonl). Model weights and
+handbook embeddings are local; there are no cloud inference or judge calls.
 
-| Metric | Target | Actual | Status |
-|--------|--------|--------|--------|
-| Response accuracy | >80% | — | ⏳ |
-| Response latency | <3s | — | ⏳ |
-| User satisfaction | >4/5 | — | ⏳ |
-| Test coverage | >60% | — | ⏳ |
+Intent and answer generation currently use rules/extractive baselines. The actual
+self-hosted SLM and AGX Xavier hardware have not yet been benchmarked. Required-fact
+coverage is a lexical proxy and does not prove semantic correctness. Unanswerable
+cases expose incorrect answering by the extractive baseline.
 
-## 2. Test Results
-
-### Unit Tests
-```
-pytest tests/ -v
-# Paste output here
-```
-
-### Integration Tests
-```
-# Mô tả test scenarios và kết quả
-```
-
-## 3. User Feedback
-
-| User | Feedback | Rating |
-|------|----------|--------|
-| [User 1] | [feedback] | [1-5] |
-| [User 2] | [feedback] | [1-5] |
-
-## 4. Demo Results
-
-- Ngày demo: [YYYY-MM-DD]
-- Người tham gia: [số người]
-- Feedback chung: [tóm tắt]
-- Issues phát hiện: [danh sách]
-
-## 5. Action Items
-
-- [ ] [Cần cải thiện 1]
-- [ ] [Cần cải thiện 2]
+See [runner instructions and limits](../README.md) to review labels, reproduce
+results, or evaluate the actual local SLM.
