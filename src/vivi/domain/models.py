@@ -264,6 +264,8 @@ class TTSRequest(BaseModel):
     text: str = Field(min_length=1, max_length=1000)
     session_id: str
     turn_id: str
+    # Engine picked in the settings panel; None uses TTS_PROVIDER.
+    tts_provider: Literal["zerotts", "vieneu"] | None = None
 
 
 class ConfirmationDecisionRequest(BaseModel):

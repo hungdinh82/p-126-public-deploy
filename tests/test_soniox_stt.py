@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 
 import pytest
@@ -22,7 +23,7 @@ def _settings(url: str = "ws://127.0.0.1:1", api_key: str = "test-key") -> Setti
 def test_factory_returns_soniox_adapter():
     adapter = create_stt(_settings())
     assert isinstance(adapter, SonioxAdapter)
-    assert adapter.language_hints == ["vi", "en"]
+    assert adapter.language_hints == ["vi"]
 
 
 def test_missing_api_key_is_unavailable():
@@ -64,6 +65,10 @@ async def test_transcribe_keeps_only_final_tokens(tmp_path):
     assert received["end"] == ""
     assert received["config"]["model"] == "stt-rt-v5"
     assert received["config"]["audio_format"] == "auto"
+    assert received["config"]["language_hints"] == ["vi"]
+    assert "nắp capo" in received["config"]["context"]["terms"]
+    # A file is read to the end; endpointing would cut it at the first pause.
+    assert "enable_endpoint_detection" not in received["config"]
 
 
 @pytest.mark.asyncio
@@ -160,6 +165,35 @@ async def test_stream_reports_interim_text(tmp_path):
 
     assert updates[0] == ("Mở", " cửa")
     assert transcript == "Mở cửa"
+
+
+@pytest.mark.asyncio
+async def test_live_stream_returns_at_endpoint():
+    received: dict = {}
+    stop_audio = asyncio.Event()
+
+    async def fake_soniox(socket):
+        received["config"] = json.loads(await socket.recv())
+        await socket.recv()
+        await socket.send(json.dumps({"tokens": [
+            {"text": "Mở cốp", "is_final": True},
+            {"text": "<end>", "is_final": True},
+        ]}))
+        await socket.wait_closed()
+
+    async def chunks():
+        # The microphone keeps going; the endpoint must end the session anyway.
+        yield b"a"
+        await stop_audio.wait()
+
+    async with websockets.serve(fake_soniox, "127.0.0.1", 0) as server:
+        port = server.sockets[0].getsockname()[1]
+        adapter = SonioxAdapter(_settings(f"ws://127.0.0.1:{port}"))
+        transcript = await asyncio.wait_for(adapter.stream(chunks()), timeout=2)
+
+    assert transcript == "Mở cốp"
+    assert received["config"]["enable_endpoint_detection"] is True
+    assert received["config"]["max_endpoint_delay_ms"] == 1000
 
 
 class _StubSTT:
