@@ -17,16 +17,21 @@ WORKDIR /app
 # execute their console scripts.
 COPY --from=builder /opt/venv /opt/venv
 ENV PATH=/opt/venv/bin:$PATH
-ENV PHOWHISPER_PRELOAD=false ZEROTTS_PRELOAD=false
+# Cloud profile: use hosted providers and lexical/FTS handbook retrieval.  The
+# local E5, PhoWhisper, and ZeroTTS models are intentionally not part of this
+# image; a deployment can still override these defaults explicitly.
+ENV PHOWHISPER_PRELOAD=false \
+    ZEROTTS_PRELOAD=false \
+    VIVI_RAG_LOCAL_ONLY=false \
+    RAG_RETRIEVAL_MODE=sqlite \
+    STT_FALLBACK_PROVIDER=off \
+    TTS_PROVIDER=off
 
 # Security: run as non-root user
 RUN useradd -m appuser
 
 # Copy application code
 COPY . .
-RUN test -f models/multilingual-e5-small-int8/manifest.json \
-    && test -f models/multilingual-e5-small-int8/tokenizer.json \
-    && test -f models/multilingual-e5-small-int8/model_quantized.onnx
 
 # Create data directory with correct ownership
 RUN mkdir -p /app/data && chown -R appuser:appuser /app
