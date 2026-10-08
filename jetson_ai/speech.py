@@ -4,11 +4,11 @@ from __future__ import annotations
 import io
 import json
 import os
-from pathlib import Path
 import socket
 import time
 import wave
 import zipfile
+from pathlib import Path
 
 import httpx
 
@@ -39,7 +39,10 @@ class SpeechModels:
                 self._load_stt()
             else:
                 self._load_tts()
-            state.update(status="ready", load_ms=round((time.monotonic() - started) * 1000))
+            load_ms = round((time.monotonic() - started) * 1000)
+            if name == "stt" and self.stt_engine == "whisper_cpp":
+                load_ms = int(os.environ.get("JETSON_AI_STT_LOAD_MS", load_ms))
+            state.update(status="ready", load_ms=load_ms)
         except Exception as exc:
             state.update(status="unavailable", device="not-loaded", using_gpu=False,
                          error=f"{type(exc).__name__}: {exc}")

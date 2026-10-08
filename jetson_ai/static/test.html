@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ViVi · AI test</title>
+<style>
+:root{font:15px system-ui,sans-serif;color:#dce7ef;background:#101922}*{box-sizing:border-box}body{max-width:1120px;margin:auto;padding:28px 20px}h1{font-size:25px;margin:0 0 8px}h2{font-size:18px;margin:0 0 14px}p{color:#91a8ba;line-height:1.5}.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:22px 0}.card,.panel{background:#192632;border:1px solid #2b3d4a;border-radius:12px;padding:18px}.panel{margin:16px 0}.card h2{display:flex;align-items:center;justify-content:space-between}.badge{font-size:12px;border-radius:6px;padding:4px 8px;background:#354454}.ready{background:#164d3d;color:#a5f3ce}.loading,.busy{background:#5b4517;color:#ffe28b}.unavailable{background:#542d34;color:#ffb6bf}.label{font-size:12px;color:#8ba2b4;margin-top:12px}.value{margin-top:4px;overflow-wrap:anywhere;font-size:13px}.error{color:#ffb6bf;white-space:pre-wrap;overflow-wrap:anywhere}textarea,input{background:#111c26;color:#e6f0f5;border:1px solid #3a4e5d;border-radius:7px;padding:10px;font:inherit}textarea{width:100%;resize:vertical}input[type=password]{width:350px;max-width:100%}button{background:#27a882;color:#fff;border:0;border-radius:7px;padding:10px 15px;cursor:pointer;font:inherit}button.secondary{background:#304657}button:disabled{opacity:.45;cursor:wait}.row{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:12px}.timings{display:flex;gap:24px;flex-wrap:wrap;margin:16px 0;color:#a5f3ce}.timings b{color:#fff}#answer{white-space:pre-wrap;line-height:1.6}audio{width:100%;margin-top:16px}#auth{margin:14px 0}#location{font-size:13px}small{color:#91a8ba}@media(max-width:760px){.cards{grid-template-columns:1fr}body{padding:20px 12px}}
+</style></head><body>
+<h1>ViVi · Test STT / SLM / TTS</h1>
+<p id="location">Đang kết nối AI server…</p>
+<div id="auth"><input id="token" type="password" autocomplete="off" placeholder="Token từ service.env"><button id="connect">Kết nối</button></div>
+<div class="cards" id="models"></div>
+<button class="secondary" id="reload">Thử nạp lại STT/TTS chưa sẵn sàng</button>
+<section class="panel"><h2>Nhập text hoặc audio</h2>
+<textarea id="prompt" rows="4" placeholder="Nhập câu hỏi của bạn…"></textarea>
+<div class="row"><button id="send">Gửi → SLM</button><button class="secondary" id="tts">Đọc text → TTS</button><label><input type="checkbox" id="read" checked> Đọc câu trả lời bằng TTS</label></div>
+<div class="row"><input id="file" type="file" accept="audio/*"><button class="secondary" id="stt">Audio → STT</button><button class="secondary" id="voice">Audio → STT → SLM</button><button class="secondary" id="mic">Ghi âm</button></div>
+<p><small>Audio được chuyển thành WAV mono 16 kHz, tối đa 60 giây. Ghi âm cần localhost hoặc HTTPS; có thể upload file khi truy cập Jetson qua HTTP.</small></p>
+</section>
+<section class="panel"><h2>Kết quả</h2><div class="timings"><span>STT <b id="time-stt">—</b></span><span>SLM <b id="time-llm">—</b></span><span>TTS <b id="time-tts">—</b></span><span>Tổng <b id="time-total">—</b></span></div>
+<p id="progress" aria-live="polite"></p><div id="answer">Câu trả lời sẽ hiện ở đây.</div><audio id="audio" controls hidden></audio><p id="error" class="error" role="alert"></p></section>
+<section class="panel"><details><summary>Chi tiết request / response API</summary><p><small>Hiển thị endpoint, HTTP status và nội dung trả về; token không được đưa vào đây.</small></p><pre id="trace" style="white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px">Chưa gửi request test.</pre></details></section>
+<p><small>Trang này kiểm thử inference STT/SLM/TTS. RAG, LangGraph và tool xe vẫn chạy trên Laptop; test các nhánh đó bằng scripts/test_pipeline.py.</small></p>
+<script>
+const localToken=__LOCAL_TOKEN_JSON__;
+const $=id=>document.getElementById(id);
+const callId=()=>crypto.randomUUID?crypto.randomUUID():Array.from(crypto.getRandomValues(new Uint8Array(16)),v=>v.toString(16).padStart(2,'0')).join('');
+let token=localToken||sessionStorage.getItem('vivi-ai-test-token')||'', busy=false, recorder=null, micStream=null, audioUrl=null, traces=[];
+$('token').value=token;if(localToken)$('auth').hidden=true;
+const fields=[['model_id','Model'],['model_path','Model load từ'],['api_url','Model API'],['location','Chạy tại'],['device','Thiết bị thực tế'],['load_ms','Thời gian load'],['last_latency_ms','Lần xử lý gần nhất']];
+for(const name of ['stt','llm','tts']){
+ const c=document.createElement('div');c.className='card';c.id='card-'+name;
+ const h=document.createElement('h2');h.append(name==='llm'?'SLM':name.toUpperCase());const badge=document.createElement('span');badge.id=name+'-status';badge.className='badge';badge.textContent='Đang kiểm tra';h.append(badge);c.append(h);
+ for(const [key,label]of fields){const l=document.createElement('div');l.className='label';l.textContent=label;c.append(l);const v=document.createElement('div');v.className='value';v.id=name+'-'+key;v.textContent='—';c.append(v)}
+ const e=document.createElement('div');e.id=name+'-error';e.className='error';c.append(e);$('models').append(c);
+}
+function seconds(ms){return ms==null?'—':(Number(ms)/1000).toFixed(2)+' s'}
+async function api(path,options={}){
+ const start=performance.now();
+ const response=await fetch(path,{...options,headers:{Authorization:'Bearer '+token,...options.headers}});
+ if(path!='/v1/capabilities'){
+  let request=null;if(typeof options.body==='string'){try{request=JSON.parse(options.body)}catch{request=options.body}}else if(options.body instanceof FormData){request=Object.fromEntries([...options.body.entries()].map(([k,v])=>[k,v instanceof File?{filename:v.name,bytes:v.size,content_type:v.type}:v]))}
+  let result;try{result=response.headers.get('Content-Type')?.includes('json')?await response.clone().json():{content_type:response.headers.get('Content-Type'),bytes:(await response.clone().arrayBuffer()).byteLength,model:response.headers.get('X-Model-Id'),sample_rate:response.headers.get('X-Audio-Sample-Rate'),latency_ms:response.headers.get('X-ViVi-Latency-Ms')}}catch{result='Không đọc được response'}
+  traces.push({endpoint:(options.method||'GET')+' '+path,http_status:response.status,elapsed_ms:Math.round(performance.now()-start),request,response:result});traces=traces.slice(-8);$('trace').textContent=JSON.stringify(traces,null,2);
+ }
+ if(!response.ok){let detail;try{detail=await response.json()}catch{detail={}}throw new Error('HTTP '+response.status+' · '+(detail.error?.code||'ERROR')+': '+(detail.error?.message||detail.detail||response.statusText))}return response;
+}
+async function poll(){
+ try{const data=await(await api('/v1/capabilities')).json();$('location').textContent='API: '+location.origin+' · Host: '+data.host+' · Backend: '+data.backend_id;
+ for(const name of ['stt','llm','tts']){const m=data.capabilities[name];const b=$(name+'-status');b.textContent=m.status;b.className='badge '+m.status;
+ const values={...m,location:(m.host||data.host)+(m.pid?' · PID '+m.pid:''),device:m.device+(m.using_gpu?' · GPU xác nhận':m.device==='cpu'?' · CPU':' · chưa xác nhận GPU')+(m.using_gpu&&m.gpu_layers?' · '+m.gpu_layers+' layer GPU':'')+(m.gpu_name?' · '+m.gpu_name:''),load_ms:seconds(m.load_ms),last_latency_ms:seconds(m.last_latency_ms)};
+ for(const[key]of fields)$(name+'-'+key).textContent=values[key]??'—';$(name+'-error').textContent=m.error||''}
+ }catch(e){$('location').textContent='Chưa kết nối: '+e.message;for(const name of ['stt','llm','tts']){const b=$(name+'-status');b.textContent='offline';b.className='badge unavailable';$(name+'-device').textContent='Không xác định (mất kết nối)'}}
+}
+function stage(name,ms){$('time-'+name).textContent=seconds(ms)}
+function showError(e){$('error').textContent=e.message||String(e)}
+async function operation(fn){if(busy)return;busy=true;traces=[];$('trace').textContent='Đang gửi…';$('error').textContent='';$('answer').textContent='';$('audio').pause();$('audio').hidden=true;for(const name of ['stt','llm','tts','total'])$('time-'+name).textContent='—';for(const id of ['send','tts','stt','voice','mic','reload'])$(id).disabled=true;const start=performance.now();try{await fn()}catch(e){showError(e)}finally{stage('total',performance.now()-start);busy=false;for(const id of ['send','tts','stt','voice','mic','reload'])$(id).disabled=false;$('progress').textContent='';poll()}}
+async function synthesize(text){
+ if(!text.trim()||text.length>500)throw new Error('TTS cần text từ 1 đến 500 ký tự.');$('progress').textContent='TTS đang tạo audio…';
+ const response=await api('/v1/tts/synthesize',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text,voice:'VIVI',format:'wav'})});
+ stage('tts',response.headers.get('X-ViVi-Latency-Ms'));const blob=await response.blob();if(audioUrl)URL.revokeObjectURL(audioUrl);audioUrl=URL.createObjectURL(blob);$('audio').src=audioUrl;$('audio').hidden=false;$('audio').play().catch(()=>{});
+}
+async function generate(){
+ const text=$('prompt').value.trim();if(!text)throw new Error('Hãy nhập câu hỏi.');$('progress').textContent='SLM đang sinh câu trả lời…';
+ const result=await(await api('/v1/llm/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contract_version:'1.0',capability:'llm',request_id:callId(),call_id:callId(),attempt:1,timeout_ms:60000,input:{messages:[{role:'system',content:'Bạn là trợ lý hữu ích. Trả lời bằng tiếng Việt, ngắn gọn trong một hoặc hai câu. /no_think'},{role:'user',content:text}],max_tokens:128,temperature:0.2,chat_template_kwargs:{enable_thinking:false}}})})).json();
+ stage('llm',result.latency_ms);const answer=result.result.text||'';$('answer').textContent=answer;if($('read').checked)await synthesize(answer);
+}
+async function toWav(blob){
+ const context=new AudioContext();let buffer;try{buffer=await context.decodeAudioData(await blob.arrayBuffer())}finally{await context.close()}
+ if(buffer.duration>60)throw new Error('Audio dài quá 60 giây.');
+ const offline=new OfflineAudioContext(1,Math.ceil(buffer.duration*16000),16000);const source=offline.createBufferSource();source.buffer=buffer;source.connect(offline.destination);source.start();const mono=(await offline.startRendering()).getChannelData(0);
+ const bytes=new ArrayBuffer(44+mono.length*2),v=new DataView(bytes);const str=(offset,s)=>[...s].forEach((c,i)=>v.setUint8(offset+i,c.charCodeAt(0)));
+ str(0,'RIFF');v.setUint32(4,36+mono.length*2,true);str(8,'WAVE');str(12,'fmt ');v.setUint32(16,16,true);v.setUint16(20,1,true);v.setUint16(22,1,true);v.setUint32(24,16000,true);v.setUint32(28,32000,true);v.setUint16(32,2,true);v.setUint16(34,16,true);str(36,'data');v.setUint32(40,mono.length*2,true);
+ mono.forEach((s,i)=>v.setInt16(44+i*2,Math.max(-1,Math.min(1,s))*32767,true));return new Blob([bytes],{type:'audio/wav'});
+}
+async function transcribe(blob){$('progress').textContent='STT đang nhận dạng…';const form=new FormData();form.append('file',await toWav(blob),'input.wav');const result=await(await api('/v1/stt/transcriptions',{method:'POST',body:form})).json();$('prompt').value=result.text;stage('stt',result.latency_ms);$('answer').textContent='Transcript: '+result.text}
+$('connect').onclick=()=>{token=$('token').value.trim();sessionStorage.setItem('vivi-ai-test-token',token);poll()};
+$('send').onclick=()=>operation(generate);$('tts').onclick=()=>operation(()=>synthesize($('prompt').value));
+$('stt').onclick=()=>operation(()=>{const f=$('file').files[0];if(!f)throw new Error('Chọn file audio trước.');return transcribe(f)});
+$('voice').onclick=()=>operation(async()=>{const f=$('file').files[0];if(!f)throw new Error('Chọn file audio trước.');await transcribe(f);await generate()});
+$('reload').onclick=async()=>{try{await api('/v1/models/load',{method:'POST'});poll()}catch(e){showError(e)}};
+$('mic').onclick=async()=>{
+ if(busy)return;
+ if(recorder&&recorder.state==='recording'){recorder.stop();$('mic').textContent='Ghi âm';return}
+ try{if(!navigator.mediaDevices)throw new Error('Ghi âm cần localhost hoặc HTTPS. Hãy upload audio.');micStream=await navigator.mediaDevices.getUserMedia({audio:true});const chunks=[],stream=micStream,current=new MediaRecorder(stream);recorder=current;current.ondataavailable=e=>chunks.push(e.data);const timer=setTimeout(()=>{if(current.state==='recording')current.stop()},59000);current.onstop=()=>{clearTimeout(timer);$('mic').textContent='Ghi âm';stream.getTracks().forEach(t=>t.stop());operation(async()=>{await transcribe(new Blob(chunks,{type:current.mimeType}));await generate()})};current.start();$('mic').textContent='Dừng → STT → SLM → TTS'}catch(e){showError(e)}
+};
+poll();setInterval(poll,2000);
+</script></body></html>

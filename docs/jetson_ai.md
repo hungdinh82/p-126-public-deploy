@@ -1,6 +1,18 @@
 # Jetson AGX Xavier: private STT / SLM / TTS server
 
-Service này chỉ nhận yêu cầu suy luận. API `/api/v1`, LangGraph, RAG, history, safety và MQTT tiếp tục chạy trên Laptop. Profile PC/Nano cũ không đổi. Server có SLM Qwen3-1.7B Q4, STT Whisper-base và TTS ZeroTTS với giọng VIVI; trạng thái và thiết bị thực tế được báo riêng cho từng model. Router Laptop chọn provider trước khi chạy graph và phải bật rõ bằng env; chưa có fallback giữa lượt đang chạy. Nhánh này không có giao diện test.
+Service này chỉ nhận yêu cầu suy luận. API `/api/v1`, LangGraph, RAG, history, safety và MQTT tiếp tục chạy trên Laptop. Profile PC/Nano cũ không đổi. Server có SLM Qwen3-1.7B Q4, STT Whisper-base và TTS ZeroTTS với giọng VIVI; trạng thái và thiết bị thực tế được báo riêng cho từng model. Router Laptop chọn provider trước khi chạy graph và phải bật rõ bằng env; chưa có fallback giữa lượt đang chạy.
+
+## Giao diện theo dõi model và test API
+
+Sau `bash scripts/jetson_ai.sh run`, mở `http://<jetson-private-ip>:8789/test` bằng URL mà script in. Giao diện nằm ngay trong private gateway, không cần chạy frontend riêng và không tải asset từ Internet.
+
+- Mỗi thẻ STT/SLM/TTS hiển thị status, đường dẫn model, host/PID, engine CPU/GPU thực tế, thời gian load và thời gian xử lý gần nhất. Khi mất kết nối, status chuyển `offline`, không giữ nhãn `ready` cũ.
+- Nhập text để test SLM hoặc TTS riêng. Upload audio để test STT riêng hoặc nối STT → SLM; checkbox TTS đọc câu trả lời. Microphone cần localhost/HTTPS; khi truy cập Jetson qua HTTP LAN có thể dùng upload audio.
+- Mục chi tiết API hiển thị endpoint, HTTP status, thời gian HTTP, request và response/lỗi của từng stage. Token không được ghi vào mục này. Kết quả WAV có audio player.
+- Client qua LAN nhập token từ `service.env` rồi bấm **Kết nối**; token chỉ lưu trong tab browser. Browser kết nối loopback đúng hostname `localhost`/`127.0.0.1` được điền token tự động. Model API luôn kiểm tra Bearer token.
+- Nút nạp lại chỉ thử STT/TTS chưa sẵn sàng, không tạo thêm model khi chúng đã ready. SLM do process llama-server quản lý; xem log/restart `run` nếu SLM hỏng.
+
+Trang này test inference. Để kiểm thử các nhánh RAG, LangGraph và tool xe của Laptop, dùng CLI pipeline ở phần dưới; các phần đó không chuyển sang Jetson.
 
 ## Nhập câu hỏi và test model thật ngay trên máy local
 

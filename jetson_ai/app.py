@@ -2,19 +2,20 @@
 from __future__ import annotations
 
 import asyncio
-from contextlib import asynccontextmanager
 import hmac
+import json
 import os
-from pathlib import Path
 import re
 import socket
 import time
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import httpx
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 from jetson_ai.speech import SpeechModels
 
@@ -108,7 +109,7 @@ def create_app(config: ServiceConfig, *, transport: httpx.AsyncBaseTransport | N
 
     @app.middleware("http")
     async def authenticate(request: Request, call_next):
-        if request.url.path == "/health/live":
+        if request.url.path in {"/health/live", "/", "/test"}:
             return await call_next(request)
         supplied = request.headers.get("authorization", "")
         if not hmac.compare_digest(supplied, f"Bearer {config.token}"):
@@ -124,6 +125,17 @@ def create_app(config: ServiceConfig, *, transport: httpx.AsyncBaseTransport | N
     @app.get("/health/live")
     async def live():
         return {"status": "live", "contract_version": VERSION}
+
+    @app.get("/", response_class=HTMLResponse, include_in_schema=False)
+    @app.get("/test", response_class=HTMLResponse, include_in_schema=False)
+    async def test_ui(request: Request):
+        html = (Path(__file__).parent / "static/test.html").read_text(encoding="utf-8")
+        local = request.client and request.client.host in {"127.0.0.1", "::1"}
+        trusted_host = request.url.hostname in {"127.0.0.1", "localhost", "::1"}
+        # LAN clients enter their token. Never trust Host or proxy headers alone.
+        bootstrap = json.dumps(config.token).replace("<", "\\u003c") if local and trusted_host else '""'
+        return HTMLResponse(html.replace("__LOCAL_TOKEN_JSON__", bootstrap),
+                            headers={"Cache-Control": "no-store"})
 
     @app.post("/v1/models/load")
     async def reload_models():
@@ -149,7 +161,7 @@ def create_app(config: ServiceConfig, *, transport: httpx.AsyncBaseTransport | N
                             "stream": False, "queue_depth": 0,
                             "model_path": config.llm_model_path, "api_url": config.backend_url,
                             "host": socket.gethostname(), "pid": os.environ.get("JETSON_AI_LLM_PID"),
-                            "device": "cuda" if gpu else "cpu" if offloads else "unknown",
+                            "device": "not-loaded" if llm_status in {"unavailable", "loading"} else "cuda" if gpu else "cpu" if offloads else "unknown",
                             "using_gpu": gpu, "gpu_name": devices[0] if devices else None,
                             "gpu_layers": int(offloads[-1][0]) if offloads else None,
                             "load_ms": os.environ.get("JETSON_AI_LLM_LOAD_MS"),
@@ -302,7 +314,8 @@ def create_app(config: ServiceConfig, *, transport: httpx.AsyncBaseTransport | N
         await upload.close()
         if len(audio) > 2_000_000:
             return error("INVALID_REQUEST", "Audio exceeds 2 MB / 60 seconds", 413, request=request, capability="stt")
-        import io, wave
+        import io
+        import wave
         try:
             with wave.open(io.BytesIO(audio), "rb") as wav:
                 if wav.getnframes() / wav.getframerate() > 60:

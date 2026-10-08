@@ -92,6 +92,34 @@ async def test_model_readiness_and_timeout_are_separate_from_process_liveness():
 
 
 @pytest.mark.anyio
+async def test_test_ui_bootstraps_token_only_for_local_browser(fake_backend):
+    _, backend = fake_backend
+    config = ServiceConfig(token="secret-test-token-" * 3)
+    app = create_app(config, transport=backend)
+    for host, base, expected in (("127.0.0.1", "http://localhost", True),
+                                 ("192.168.1.20", "http://localhost", False),
+                                 ("127.0.0.1", "http://external.example", False)):
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app, client=(host, 2000)),
+                                     base_url=base) as client:
+            response = await client.get("/test")
+            assert response.status_code == 200
+            assert (config.token in response.text) == expected
+            assert response.headers["cache-control"] == "no-store"
+            assert (await client.get("/v1/capabilities")).status_code == 401
+
+
+@pytest.mark.anyio
+async def test_ui_cannot_inject_configured_token_into_html(fake_backend):
+    _, backend = fake_backend
+    config = ServiceConfig(token="a" * 32 + "</script><script>alert(1)</script>")
+    app = create_app(config, transport=backend)
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://localhost") as client:
+        response = await client.get("/")
+        assert config.token not in response.text
+        assert "\\u003c/script>" in response.text
+
+
+@pytest.mark.anyio
 async def test_speech_api_validates_wav_and_returns_audio_and_timings(fake_backend):
     import io
     import wave

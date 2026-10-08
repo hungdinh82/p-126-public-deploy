@@ -190,6 +190,7 @@ run() {
   done
   (( ready == 1 )) || fail "llama-server did not become ready; see $VIVI_DATA/logs/llama-server.log"
   export JETSON_AI_LLM_LOAD_MS="$(((SECONDS-started)*1000))" JETSON_AI_LLM_PID="$llm_pid"
+  started=$SECONDS
   "$VIVI_DATA/build/whisper.cpp/build/bin/whisper-server" \
     --model "$VIVI_DATA/models/speech/whisper/ggml-base.bin" --host 127.0.0.1 \
     --port "$VIVI_STT_PORT" --language vi > "$VIVI_DATA/logs/whisper-server.log" 2>&1 &
@@ -202,6 +203,7 @@ run() {
     sleep 1
   done
   (( ready == 1 )) || fail "STT did not become ready"
+  export JETSON_AI_STT_LOAD_MS="$(((SECONDS-started)*1000))"
   export JETSON_AI_ENABLE_SPEECH=1 JETSON_AI_DEVICE=cuda JETSON_AI_STT_ENGINE=whisper_cpp \
     JETSON_AI_STT_MODEL="$VIVI_DATA/models/speech/whisper/ggml-base.bin" \
     JETSON_AI_STT_URL="http://127.0.0.1:$VIVI_STT_PORT" JETSON_AI_STT_PID="$stt_pid" \
@@ -211,6 +213,7 @@ run() {
   export HF_HUB_OFFLINE=1 HF_HOME="$VIVI_DATA/cache/huggingface" \
     LD_LIBRARY_PATH="/usr/local/cuda/lib64:/usr/lib/aarch64-linux-gnu:${LD_LIBRARY_PATH:-}"
   echo "Jetson AI API: http://$bind:$VIVI_PORT (STT/TTS tiếp tục nạp ở nền)."
+  echo "Giao diện test: http://$bind:$VIVI_PORT/test"
   cd "$VIVI_REPO"
   "$VIVI_DATA/venv/bin/python" -m uvicorn jetson_ai.app:app --host "$bind" --port "$VIVI_PORT" --workers 1 &
   local gateway_pid=$!
