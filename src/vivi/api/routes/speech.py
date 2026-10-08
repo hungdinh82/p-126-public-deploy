@@ -4,6 +4,7 @@ import asyncio
 import tempfile
 import time
 from pathlib import Path
+from urllib.parse import quote
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile, WebSocket
 from fastapi.responses import Response, StreamingResponse
@@ -156,26 +157,34 @@ async def transcribe_stream(socket: WebSocket, session_id: str, turn_id: str):
     await socket.close()
 
 
+def _tts(request: TTSRequest):
+    if request.tts_provider is None:
+        return runtime.tts
+    return runtime.tts_engines[request.tts_provider]
+
+
 @router.post("/tts")
 async def synthesize(request: TTSRequest):
+    tts = _tts(request)
     try:
-        audio = await runtime.tts.synthesize(request.text)
+        audio = await tts.synthesize(request.text)
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"TTS chưa sẵn sàng: {exc}") from exc
     return Response(
         audio,
         media_type="audio/wav",
-        headers={"X-ViVi-Voice": runtime.settings.zerotts_voice},
+        headers={"X-ViVi-Voice": quote(tts.voice)},
     )
 
 
 @router.post("/tts/stream")
 async def synthesize_stream(request: TTSRequest):
-    available, reason = runtime.tts.availability()
+    tts = _tts(request)
+    available, reason = tts.availability()
     if not available:
         raise HTTPException(status_code=503, detail=f"TTS chưa sẵn sàng: {reason}")
     try:
-        ensure_loaded = getattr(runtime.tts, "ensure_loaded", None)
+        ensure_loaded = getattr(tts, "ensure_loaded", None)
         if ensure_loaded is not None:
             await ensure_loaded()
     except Exception as exc:
@@ -185,10 +194,10 @@ async def synthesize_stream(request: TTSRequest):
         received_at = time.time()
         first_chunk = None
         audio_duration_ms = 0.0
-        async for chunk in runtime.tts.stream(request.text):
+        async for chunk in tts.stream(request.text):
             if first_chunk is None:
                 first_chunk = round((time.perf_counter() - started) * 1000, 2)
-            audio_duration_ms += len(chunk) / 2 / runtime.tts._model.sample_rate * 1000
+            audio_duration_ms += len(chunk) / 2 / tts.sample_rate * 1000
             yield chunk
         runtime.store.record_tts(request.session_id, request.turn_id, {
             "session_id": request.session_id,
@@ -204,9 +213,10 @@ async def synthesize_stream(request: TTSRequest):
         timed_stream(),
         media_type="application/octet-stream",
         headers={
-            "X-ViVi-Voice": runtime.settings.zerotts_voice,
+            # Voice names are Vietnamese; headers only carry latin-1.
+            "X-ViVi-Voice": quote(tts.voice),
             "X-ViVi-Audio-Format": "pcm_s16le",
-            "X-ViVi-Sample-Rate": str(runtime.tts._model.sample_rate),
+            "X-ViVi-Sample-Rate": str(tts.sample_rate),
             "Cache-Control": "no-store",
         },
     )

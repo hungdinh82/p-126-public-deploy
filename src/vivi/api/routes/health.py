@@ -87,12 +87,23 @@ async def health():
         },
         "tts": {
             "provider": runtime.tts.name,
-            "voice": config.zerotts_voice,
+            "voice": runtime.tts.voice,
             "available": tts_ok,
             "detail": tts_detail,
             "requested_device": config.zerotts_device,
             "device": runtime.tts.device,
             "execution_providers": runtime.tts.execution_providers,
+            "options": [
+                {
+                    "provider": name,
+                    "voice": engine.voice,
+                    "device": engine.device,
+                    "available": ok,
+                    "detail": detail,
+                }
+                for name, engine in runtime.tts_engines.items()
+                for ok, detail in [engine.availability()]
+            ],
         },
         "storage": {
             "audio": config.store_audio,

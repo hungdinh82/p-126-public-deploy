@@ -654,7 +654,7 @@ const TRAFFIC_LANE = 3.1, TRAFFIC_GAP = 14, TRAFFIC_LANES = [-1, 0, 1];
 const TRAFFIC = { count: 3, ahead: [30, 120], spawn: [90, 140], behind: -34 };
 // Our car moves over when a car is this close ahead in its lane, and keeps at
 // least this much room when a traffic car would otherwise run into it.
-const AVOID_AHEAD = 42, ROOM_AHEAD = 9, ROOM_BEHIND = 8;
+const AVOID_AHEAD = 45, ROOM_AHEAD = 15, ROOM_BEHIND = 8;
 // Two body styles, each a side profile extruded across the car's width with
 // rounded shoulders. Glass, cladding and tyres are vertex colours, so a style
 // stays one draw call however many cars use it.

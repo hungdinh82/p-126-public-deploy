@@ -118,11 +118,19 @@ class Settings(BaseSettings):
     local_llm_model: str = ""
     local_llm_max_tokens: int = Field(default=512, ge=64, le=4096)
 
-    tts_provider: Literal["off", "zerotts"] = "off"
+    tts_provider: Literal["off", "zerotts", "vieneu"] = "off"
     zerotts_model: str = "zeroweight-ai/ZeroTTS"
     zerotts_voice: str = "VIVI"
     zerotts_device: str = "auto"
     zerotts_preload: bool = False
+    vieneu_api_key: str = Field(
+        default="", validation_alias=AliasChoices("VIENEU_API_KEY", "VIETNEUTTS_API_KEY")
+    )
+    vieneu_base_url: str = "https://api.vieneu.io/api/v1"
+    vieneu_voice: str = "Mai Bé Phương"
+    # PCM at 24 kHz is VieNeu's default rate and half the bytes of 48 kHz.
+    vieneu_sample_rate: Literal[8000, 16000, 22050, 24000, 44100, 48000] = 24000
+    vieneu_timeout_seconds: float = 30
 
     vietmap_api_key: str = ""
     # VietMap issues separate consumers: the API key (search/route) stays on the
@@ -137,6 +145,7 @@ class Settings(BaseSettings):
     # Fallback origin when the browser denies geolocation (Hồ Gươm, Hà Nội).
     navigation_default_lat: float = 21.0285
     navigation_default_lng: float = 105.8522
+    navigation_default_label: str = "Hồ Gươm"
 
     database_url: str = "sqlite:///./data/app.db"
     rag_data_dir: Path = Path("./data/handbooks")

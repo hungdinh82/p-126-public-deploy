@@ -4,6 +4,7 @@ import asyncio
 import io
 import json
 import re
+import struct
 import unicodedata
 import wave
 import zipfile
@@ -15,6 +16,7 @@ from src.vivi.config import Settings
 class DisabledTTSAdapter:
     name = "off"
     device = "disabled"
+    voice = ""
     execution_providers: list[str] = []
 
     @staticmethod
@@ -40,6 +42,7 @@ class ZeroTTSAdapter:
 
     def __init__(self, config: Settings):
         self.config = config
+        self.voice = config.zerotts_voice
         self._model = None
         self._voice = None
         self._execution_providers: tuple[str, ...] = ()
@@ -56,6 +59,10 @@ class ZeroTTSAdapter:
     @property
     def execution_providers(self) -> list[str]:
         return list(self._execution_providers)
+
+    @property
+    def sample_rate(self) -> int:
+        return int(self._model.sample_rate)
 
     @staticmethod
     def _select_execution_providers(device: str, available: list[str]) -> list[str]:
@@ -159,13 +166,7 @@ class ZeroTTSAdapter:
         model = self._load()
         audio = np.asarray(model.synthesize(text, voice=self._voice), dtype=np.float32).reshape(-1)
         pcm = (np.clip(audio, -1, 1) * 32767).astype("<i2").tobytes()
-        output = io.BytesIO()
-        with wave.open(output, "wb") as wav:
-            wav.setnchannels(1)
-            wav.setsampwidth(2)
-            wav.setframerate(int(model.sample_rate))
-            wav.writeframes(pcm)
-        return output.getvalue()
+        return _wav(pcm, int(model.sample_rate))
 
     async def synthesize(self, text: str) -> bytes:
         available, reason = self.availability()
@@ -211,9 +212,108 @@ class ZeroTTSAdapter:
                     close()
 
 
+def _wav(pcm: bytes, sample_rate: int) -> bytes:
+    output = io.BytesIO()
+    with wave.open(output, "wb") as wav:
+        wav.setnchannels(1)
+        wav.setsampwidth(2)
+        wav.setframerate(sample_rate)
+        wav.writeframes(pcm)
+    return output.getvalue()
+
+
+class VieNeuTTSAdapter:
+    """Cloud TTS through the VieNeu streaming API (``POST /tts/stream``).
+
+    The response is a series of frames, each a 4-byte big-endian length and
+    that many bytes of raw s16le PCM; a zero-length frame ends the stream.
+    """
+
+    name = "vieneu"
+    device = "cloud"
+    execution_providers: list[str] = []
+
+    def __init__(self, config: Settings):
+        self.api_key = config.vieneu_api_key
+        self.url = config.vieneu_base_url.rstrip("/") + "/tts/stream"
+        self.voice = config.vieneu_voice
+        self.sample_rate = config.vieneu_sample_rate
+        self.timeout = config.vieneu_timeout_seconds
+        self.transport = None  # Tests swap in an httpx.MockTransport.
+
+    def availability(self) -> tuple[bool, str]:
+        if not self.api_key:
+            return False, "Thiếu VIENEU_API_KEY"
+        return True, f"ready ({self.voice})"
+
+    async def preload(self) -> None:
+        available, reason = self.availability()
+        if not available:
+            raise RuntimeError(reason)
+
+    async def synthesize(self, text: str) -> bytes:
+        pcm = b"".join([chunk async for chunk in self.stream(text)])
+        return _wav(pcm, self.sample_rate)
+
+    async def stream(self, text: str):
+        """Yield little-endian signed 16-bit mono PCM as VieNeu sends it."""
+        import httpx
+
+        available, reason = self.availability()
+        if not available:
+            raise RuntimeError(reason)
+        body = {
+            "text": text,
+            "voiceId": self.voice,
+            "outputFormat": "pcm",
+            "sampleRate": self.sample_rate,
+        }
+        headers = {"Authorization": f"Bearer {self.api_key}"}
+        async with httpx.AsyncClient(timeout=self.timeout, transport=self.transport) as client:
+            async with client.stream("POST", self.url, json=body, headers=headers) as response:
+                if response.status_code != 200:
+                    detail = (await response.aread()).decode("utf-8", "replace")[:300]
+                    raise RuntimeError(f"VieNeu {response.status_code}: {detail}")
+                buffer = b""
+                carry = b""
+                async for data in response.aiter_bytes():
+                    buffer += data
+                    while len(buffer) >= 4:
+                        (size,) = struct.unpack(">I", buffer[:4])
+                        if size == 0:
+                            if carry:
+                                raise RuntimeError("VieNeu trả về PCM lẻ byte")
+                            return
+                        if len(buffer) < 4 + size:
+                            break
+                        # Keep whole 16-bit samples so the browser never
+                        # decodes a split sample as noise.
+                        pcm = carry + buffer[4 : 4 + size]
+                        buffer = buffer[4 + size :]
+                        cut = len(pcm) - len(pcm) % 2
+                        carry = pcm[cut:]
+                        if cut:
+                            yield pcm[:cut]
+        raise RuntimeError("VieNeu ngắt stream trước khi gửi hết audio")
+
+
+def create_tts_engines(config: Settings, default) -> dict:
+    """Every selectable voice engine, so the UI can switch per request.
+
+    The configured default is reused so ZeroTTS is never loaded twice.
+    """
+    engines = {"zerotts": ZeroTTSAdapter, "vieneu": VieNeuTTSAdapter}
+    return {
+        name: default if default.name == name else factory(config)
+        for name, factory in engines.items()
+    }
+
+
 def create_tts(config: Settings):
     if config.tts_provider == "off":
         return DisabledTTSAdapter()
     if config.tts_provider == "zerotts":
         return ZeroTTSAdapter(config)
+    if config.tts_provider == "vieneu":
+        return VieNeuTTSAdapter(config)
     raise ValueError(f"TTS_PROVIDER không hợp lệ: {config.tts_provider}")
