@@ -16,6 +16,16 @@ Trang này test inference. Để kiểm thử các nhánh RAG, LangGraph và too
 
 ## Nhập câu hỏi và test model thật ngay trên máy local
 
+Muốn mở giao diện và giữ cả ba model trên GPU local x86:
+
+```bash
+bash scripts/test_ai_ui.sh
+```
+
+Mở `http://127.0.0.1:8789/test`. Lần đầu script chuẩn bị các dependency/model; SLM dùng wheel CUDA 12.4 tương thích glibc 2.35+, STT dùng PyTorch CUDA và TTS dùng ONNX Runtime CUDA. Mặc định SLM offload 12 layer để cả ba model cùng nằm trong GPU 4 GB; có thể chọn `--gpu-layers` và `--port`. CUDA không hoạt động sẽ báo lỗi, không tự chuyển sang CPU. Log local UI và token nếu browser yêu cầu nằm ở `data/local-ai-ui/`. Ctrl+C dừng các process do script tạo.
+
+Trên Xavier, chính lệnh `bash scripts/test_ai_ui.sh` chuyển sang setup/run native ở mount dữ liệu; không cài wheel x86. Profile Jetson dùng full SLM offload. Hai lệnh setup/run riêng vẫn là cách vận hành chính ở phần Jetson.
+
 Từ thư mục repo, chạy:
 
 ```bash
