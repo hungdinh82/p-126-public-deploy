@@ -120,6 +120,11 @@ class Settings(BaseSettings):
     local_llm_api_key: str = "local"
     local_llm_model: str = ""
     local_llm_max_tokens: int = Field(default=512, ge=64, le=4096)
+    # Opt-in Laptop router for the private Jetson inference gateway.
+    jetson_ai_policy: Literal["disabled", "offline_only", "prefer_local", "allow_cloud"] = "disabled"
+    jetson_ai_url: str = ""
+    jetson_ai_token: str = ""
+    jetson_ai_probe_timeout_seconds: float = Field(default=0.75, gt=0, le=5)
 
     tts_provider: Literal["off", "zerotts", "vieneu"] = "off"
     zerotts_model: str = "zeroweight-ai/ZeroTTS"

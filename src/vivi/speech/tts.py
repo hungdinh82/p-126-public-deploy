@@ -303,6 +303,8 @@ def create_tts_engines(config: Settings, default) -> dict:
     The configured default is reused so ZeroTTS is never loaded twice.
     """
     engines = {"zerotts": ZeroTTSAdapter, "vieneu": VieNeuTTSAdapter}
+    if config.jetson_ai_policy == "offline_only":
+        engines.pop("vieneu")
     return {
         name: default if default.name == name else factory(config)
         for name, factory in engines.items()
@@ -310,6 +312,8 @@ def create_tts_engines(config: Settings, default) -> dict:
 
 
 def create_tts(config: Settings):
+    if config.jetson_ai_policy == "offline_only" and config.tts_provider == "vieneu":
+        return DisabledTTSAdapter()
     if config.tts_provider == "off":
         return DisabledTTSAdapter()
     if config.tts_provider == "zerotts":

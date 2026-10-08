@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
 from src.vivi.api.runtime import runtime
+from src.vivi.ai_router import JetsonProviderRouter
 from src.vivi.domain.models import (
     ConfirmationDecisionRequest,
     TurnRequest,
@@ -14,16 +15,21 @@ from src.vivi.domain.models import (
 )
 
 router = APIRouter(prefix="/api/v1")
+provider_router = JetsonProviderRouter(runtime.settings)
 
 
-def _provider(requested: str | None) -> str:
+async def _provider(requested: str | None) -> str:
     selected = requested or runtime.orchestrator.default_provider
+    if runtime.settings.jetson_ai_policy == "offline_only" and selected not in {"local", "rules"}:
+        if requested is not None:
+            raise HTTPException(status_code=400, detail="offline_only không cho phép cloud provider")
+        selected = "local" if "local" in runtime.orchestrator.graph_providers else "rules"
     if selected not in runtime.orchestrator.graph_providers:
         detail = runtime.orchestrator.provider_errors.get(
             selected, "LLM provider không khả dụng"
         )
         raise HTTPException(status_code=400, detail=detail)
-    return selected
+    return await provider_router.select(selected, runtime.orchestrator.graph_providers)
 
 
 def _reject_inline_confirmation(request: TurnRequest) -> None:
@@ -37,7 +43,7 @@ def _reject_inline_confirmation(request: TurnRequest) -> None:
 @router.post("/turn", response_model=TurnResponse)
 async def turn(request: TurnRequest):
     _reject_inline_confirmation(request)
-    provider = _provider(request.llm_provider)
+    provider = await _provider(request.llm_provider)
     started = time.perf_counter()
     received_at = time.time()
     try:
@@ -54,7 +60,7 @@ async def turn(request: TurnRequest):
 @router.post("/turn/stream")
 async def turn_stream(request: TurnRequest):
     _reject_inline_confirmation(request)
-    provider = _provider(request.llm_provider)
+    provider = await _provider(request.llm_provider)
 
     async def events():
         started = time.perf_counter()
@@ -82,7 +88,7 @@ async def turn_stream(request: TurnRequest):
 async def decide_confirmation(
     confirmation_id: str, request: ConfirmationDecisionRequest
 ):
-    provider = _provider(request.llm_provider)
+    provider = await _provider(request.llm_provider)
     turn_request = TurnRequest(
         transcript="Xác nhận" if request.decision == "approve" else "Hủy",
         session_id=request.session_id,
