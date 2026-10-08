@@ -10,7 +10,7 @@ const API_BASE = '';
 const makeId = () => globalThis.crypto?.randomUUID?.() || `vivi-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 const sessionId = localStorage.getItem('vivi-session-id') || makeId();
 localStorage.setItem('vivi-session-id', sessionId);
-const state = { phase: 'idle', temp: 23, window: false, music: false, driving: false, powerState: 'off', battery: 82, range: 328, powertrainTemp: 45, tirePressures: {}, windows: {}, doors: {}, seatHeatLevels: {}, doorLocked: false, doorOpen: false, seatHeat: 0, alerts: [], alertSequence: 0, reduced: motionPreference.matches, sound: false, busy: false, backendAvailable: false, vehicleProvider: '', sttAvailable: false, sttProvider: '', sttStreaming: false, sttDevice: '', ttsAvailable: false, ttsProvider: '', storeAudio: false, storeTranscripts: false, llmProvider: '', llmOptions: [], lastCommand: '', manualAnswer: '', manualEvidence: [], progress: 0 };
+const state = { phase: 'idle', temp: 23, window: false, music: false, driving: false, powerState: 'off', battery: 82, range: 328, powertrainTemp: 45, tirePressures: {}, windows: {}, doors: {}, seatHeatLevels: {}, doorLocked: false, doorOpen: false, hoodOpen: false, trunkOpen: false, seatHeat: 0, alerts: [], alertSequence: 0, reduced: motionPreference.matches, sound: false, busy: false, backendAvailable: false, vehicleProvider: '', sttAvailable: false, sttProvider: '', sttStreaming: false, sttDevice: '', ttsAvailable: false, ttsProvider: '', storeAudio: false, storeTranscripts: false, llmProvider: '', llmOptions: [], lastCommand: '', manualAnswer: '', manualEvidence: [], progress: 0 };
 const edgeCommandHistoryKey = 'vivi-command-history';
 function readEdgeCommandHistory() {
   try {
@@ -64,7 +64,7 @@ const NEON_BY_PHASE = {
   blocked: { speed: 4, borderSize: 50, color: '#D6AE78' }
 };
 
-import('./scene3d.js?v=31')
+import('./scene3d.js?v=32')
   .then(module => {
     scene = module.createScene($('#space'), { reduced: state.reduced });
     scene.setRoute(plannedRoute);
@@ -74,6 +74,10 @@ import('./scene3d.js?v=31')
   })
   .catch(error => console.warn('3D scene unavailable:', error));
 
+// Live caption: one span per word so only new or revised words animate in.
+// Words still being recognised (interim) stay dim until the STT confirms them.
+const LIVE_CAPTION_WORDS = 22;
+let liveWords = [];
 function setPhase(phase, text) {
   state.phase = phase;
   $('#orb-state').textContent = phaseLabels[phase] || phaseLabels.idle;
@@ -82,8 +86,31 @@ function setPhase(phase, text) {
   const neon = NEON_BY_PHASE[thinking ? 'thinking' : phase] || (['clarify', 'unverified'].includes(phase) ? NEON_BY_PHASE.blocked : NEON_BY_PHASE.idle);
   capsuleNeon.set({ movement: 'continuous', ...neon });
   document.body.dataset.phase = phase;
-  if (text) $('#response-text').textContent = text;
+  if (text) setResponseText(text);
   document.body.classList.toggle('busy', !['idle', 'confirm', 'clarify', 'blocked', 'unverified'].includes(phase));
+}
+function setResponseText(text) {
+  liveWords = [];
+  $('#response-text').classList.remove('live');
+  $('#response-text').textContent = text;
+}
+function renderLiveCaption(final, interim) {
+  const caption = $('#response-text');
+  if (!caption.classList.contains('live')) { caption.textContent = ''; caption.classList.add('live'); liveWords = []; }
+  // STT tokens are sub-word pieces, so a word can straddle the final/interim boundary.
+  const words = [...(final + interim).matchAll(/\S+/g)].map(match => ({ text: match[0], final: match.index + match[0].length <= final.length }));
+  words.forEach((word, index) => {
+    let span = liveWords[index];
+    if (span?.textContent !== word.text) {
+      const fresh = document.createElement('span');
+      fresh.textContent = word.text;
+      if (span) span.replaceWith(fresh); else caption.append(fresh);
+      liveWords[index] = span = fresh;
+    }
+    span.classList.toggle('interim', !word.final);
+    span.hidden = index < words.length - LIVE_CAPTION_WORDS;
+  });
+  liveWords.splice(words.length).forEach(span => span.remove());
 }
 function updateVehicle() {
   $('#temperature').textContent = `${state.temp}°`;
@@ -92,12 +119,49 @@ function updateVehicle() {
   $('#window-toggle').setAttribute('aria-label', state.window ? 'Đóng cửa sổ bên tài' : 'Mở cửa sổ bên tài');
   // Backend reports the opening in percent; the offline demo only knows open or closed.
   scene?.setWindow(state.window ? (state.windows.driver > 0 ? state.windows.driver : 100) : 0);
-  $('#door-toggle').setAttribute('aria-pressed', String(state.doorOpen));
-  $('#door-toggle').setAttribute('aria-label', state.doorOpen ? 'Đóng cửa bên tài' : 'Mở cửa bên tài');
-  scene?.setDoor(state.doorOpen);
+  updateBodyPanel();
+  scene?.setDoors(Object.fromEntries(CABIN_ZONES.map(zone => [zone, Boolean(state.doors[zone]?.open)])));
+  scene?.setHood(state.hoodOpen);
+  scene?.setTrunk(state.trunkOpen);
   $('#music-toggle').setAttribute('aria-pressed', String(state.music));
   $('#music-toggle').setAttribute('aria-label', state.music ? 'Dừng nhạc' : 'Phát nhạc');
   updateHud();
+}
+// Doors, hood and tailgate share one popover; each chip sends the same spoken
+// command a driver would say, so policy and confirmation stay on the backend.
+const CABIN_ZONES = ['driver', 'front_passenger', 'rear_left', 'rear_right'];
+const BODY_PANELS = {
+  hood: { label: 'Capo', noun: 'nắp capo' },
+  driver: { label: 'Cửa tài', noun: 'cửa bên tài' },
+  front_passenger: { label: 'Cửa phụ', noun: 'cửa bên phụ' },
+  rear_left: { label: 'Cửa sau trái', noun: 'cửa sau trái' },
+  rear_right: { label: 'Cửa sau phải', noun: 'cửa sau phải' },
+  trunk: { label: 'Cốp', noun: 'cốp sau' }
+};
+function bodyPanelState(id) {
+  if (id === 'hood') return { open: state.hoodOpen, locked: false };
+  if (id === 'trunk') return { open: state.trunkOpen, locked: false };
+  return { open: Boolean(state.doors[id]?.open), locked: Boolean(state.doors[id]?.locked) };
+}
+function updateBodyPanel() {
+  const opened = [];
+  for (const [id, panel] of Object.entries(BODY_PANELS)) {
+    const { open, locked } = bodyPanelState(id);
+    const chip = $(`#body-pop [data-panel="${id}"]`);
+    chip.setAttribute('aria-pressed', String(open));
+    chip.setAttribute('aria-label', `${open ? 'Đóng' : 'Mở'} ${panel.noun}`);
+    chip.querySelector('small').textContent = open ? 'Đang mở' : locked ? 'Đã khoá' : 'Đã đóng';
+    $(`#body-car [data-part="${id}"]`).classList.toggle('open', open);
+    if (open) opened.push(panel.label);
+  }
+  const locked = CABIN_ZONES.every(zone => state.doors[zone]?.locked);
+  $('#body-car').classList.toggle('locked', locked);
+  $('#lock-all').setAttribute('aria-pressed', String(locked));
+  $('#lock-all span').textContent = locked ? 'Mở khoá tất cả cửa' : 'Khoá tất cả cửa';
+  $('#open-all span').textContent = opened.length ? 'Đóng tất cả' : 'Mở tất cả';
+  $('#open-all').setAttribute('aria-label', opened.length ? 'Đóng tất cả cửa, capo và cốp' : 'Mở tất cả cửa, capo và cốp');
+  $('#body-summary').textContent = opened.length ? `Đang mở · ${opened.join(', ')}` : locked ? 'Đã đóng và khoá' : 'Tất cả đã đóng';
+  $('#body-button').classList.toggle('attention', opened.length > 0);
 }
 const formatKm = (meters) => meters < 1000 ? `${Math.round(meters / 10) * 10} m` : `${(meters / 1000).toLocaleString('vi-VN', { maximumFractionDigits: 1 })} km`;
 // Left HUD: battery while parked, speed while driving; nothing else competes for attention.
@@ -144,10 +208,12 @@ const alertCodeLabels = {
   TIRE_PRESSURE_LOW: 'Áp suất lốp thấp',
   TIRE_PRESSURE_HIGH: 'Áp suất lốp cao',
   POWERTRAIN_OVERHEAT: 'Hệ truyền động quá nhiệt',
-  DOOR_OPEN_WHEN_READY: 'Cửa đang mở'
+  DOOR_OPEN_WHEN_READY: 'Cửa đang mở',
+  HOOD_OPEN_WHEN_READY: 'Capo đang mở',
+  TRUNK_OPEN_WHEN_READY: 'Cốp đang mở'
 };
 const alertSourceLabels = {
-  battery: 'pin', powertrain: 'hệ truyền động', driver: 'bên tài', front_passenger: 'bên phụ',
+  battery: 'pin', powertrain: 'hệ truyền động', hood: 'capo', trunk: 'cốp sau', driver: 'bên tài', front_passenger: 'bên phụ',
   front_left: 'trước trái', front_right: 'trước phải', rear_left: 'sau trái', rear_right: 'sau phải'
 };
 function renderAlerts(snapshot) {
@@ -187,7 +253,7 @@ async function pollVehicleAlerts() {
   } catch { /* Polling resumes automatically after a temporary disconnect. */ }
 }
 function highlight(id) { $(id).classList.add('highlight'); setTimeout(() => $(id).classList.remove('highlight'), 2600); }
-const DOCK_BY_INTENT = { climate: '#climate-button', window: '#window-toggle', door: '#door-toggle', media: '#music-toggle' };
+const DOCK_BY_INTENT = { climate: '#climate-button', window: '#window-toggle', door: '#body-button', hood: '#body-button', trunk: '#body-button', body: '#body-button', media: '#music-toggle' };
 function say(text) {
   if (!state.sound || !('speechSynthesis' in window)) return;
   speechSynthesis.cancel();
@@ -353,7 +419,7 @@ function resolveCommand(command) {
   return { type: 'clarify', message: 'Mình có thể chỉnh nhiệt độ, mở hoặc đóng cửa sổ bên tài, điều khiển nhạc và mở cẩm nang minh họa. Bạn muốn thử việc nào?' };
 }
 function lockControls(locked) {
-  document.querySelectorAll('#climate-pop button, #window-toggle, #door-toggle, #music-toggle, #drive-toggle, .send-button').forEach(button => { button.disabled = locked; });
+  document.querySelectorAll('#climate-pop button, #body-pop button, #window-toggle, #music-toggle, #drive-toggle, .send-button').forEach(button => { button.disabled = locked; });
   // The mic stays enabled while recording so a second tap can stop it.
   $('#demo-mic').disabled = locked && recorder?.state !== 'recording';
   if (state.backendAvailable && state.vehicleProvider !== 'memory') $('#drive-toggle').disabled = true;
@@ -378,7 +444,7 @@ async function runLocalCommand(command, voiceDemo = false) {
     switch (action.type) {
       case 'climate': state.temp = action.value; message = `Mình đã đặt nhiệt độ xe mô phỏng ở ${state.temp} độ. Hy vọng bạn thấy dễ chịu hơn.`; highlight('#climate-button'); break;
       case 'window': state.window = action.value; message = `Mình đã ${state.window ? 'mở' : 'đóng'} cửa sổ bên tài trên xe mô phỏng.`; highlight('#window-toggle'); break;
-      case 'door': state.doorOpen = action.value; state.doors = { ...state.doors, driver: { ...state.doors.driver, open: action.value } }; message = `Mình đã ${state.doorOpen ? 'mở' : 'đóng'} cửa bên tài trên xe mô phỏng.`; highlight('#door-toggle'); break;
+      case 'door': state.doorOpen = action.value; state.doors = { ...state.doors, driver: { ...state.doors.driver, open: action.value } }; message = `Mình đã ${state.doorOpen ? 'mở' : 'đóng'} cửa bên tài trên xe mô phỏng.`; highlight('#body-button'); break;
       case 'music': state.music = action.value; message = state.music ? 'Đã chuyển nhạc sang trạng thái phát trong demo. Một chút bình yên cho hành trình.' : 'Mình đã dừng nhạc mô phỏng.'; highlight('#music-toggle'); break;
       case 'manual': openPanel('manual'); message = 'Mình đã mở cẩm nang minh họa. Bản demo chưa kết nối tài liệu hướng dẫn chính thức.'; break;
       case 'status': openPanel('vehicle'); message = `Xe mô phỏng còn 82% pin, nhiệt độ cài đặt ${state.temp} độ và cửa sổ bên tài ${state.window ? 'đang mở' : 'đang đóng'}.`; break;
@@ -406,6 +472,8 @@ function applyBackendState(vehicle) {
   state.doorLocked = state.doors.driver?.locked ?? vehicle.door_driver_locked;
   state.doorOpen = state.doors.driver?.open ?? vehicle.door_driver_open;
   state.seatHeat = state.seatHeatLevels.driver ?? vehicle.seat_driver_heat_level;
+  state.hoodOpen = Boolean(vehicle.hood_open);
+  state.trunkOpen = Boolean(vehicle.trunk_open);
   updateDriveUI();
   updateVehicle();
   if (activePanelView === 'vehicle' && $('#info-dialog').open) {
@@ -534,7 +602,7 @@ function stopRecording() {
   if (recorder?.state === 'recording') recorder.stop();
 }
 // Live STT: audio chunks go to the backend over a WebSocket while the user
-// speaks, and partial text is shown in the input before the turn is sent.
+// speaks, and partial text appears word by word as a caption above the wave.
 function openSttStream(turnId) {
   return new Promise((resolve, reject) => {
     const scheme = location.protocol === 'https:' ? 'wss' : 'ws';
@@ -548,8 +616,10 @@ function listenSttStream(socket) {
   const result = new Promise((resolve, reject) => {
     socket.onmessage = event => {
       const message = JSON.parse(event.data);
-      if (message.type === 'partial') $('#command-input').value = message.final + message.interim;
-      else if (message.type === 'done') resolve(message.transcript);
+      if (message.type === 'partial') {
+        $('#command-input').value = message.final + message.interim;
+        renderLiveCaption(message.final, message.interim);
+      } else if (message.type === 'done') resolve(message.transcript);
       else if (message.type === 'error') { reject(new Error(message.detail)); stopRecording(); }
     };
     socket.onclose = () => { reject(new Error('STT streaming bị ngắt')); stopRecording(); };
@@ -558,7 +628,9 @@ function listenSttStream(socket) {
   return result;
 }
 async function finishStreaming(socket, result, blob, turnId) {
-  lockControls(true); setPhase('transcribing', `${state.sttProvider} đang chốt câu…`);
+  // Keep the live caption on screen while the last words are confirmed.
+  const captionLive = $('#response-text').classList.contains('live');
+  lockControls(true); setPhase('transcribing', captionLive ? '' : `${state.sttProvider} đang chốt câu…`);
   let transcript;
   try {
     if (socket.readyState === WebSocket.OPEN) socket.send('stop');
@@ -570,6 +642,7 @@ async function finishStreaming(socket, result, blob, turnId) {
     return;
   }
   $('#command-input').value = transcript;
+  renderLiveCaption(transcript, '');
   lockControls(false);
   await runBackendCommand(transcript, turnId);
 }
@@ -618,7 +691,7 @@ async function startRecording() {
       else await submitRecording(blob, turnId);
     };
     recorder.start(250); $('#demo-mic').classList.add('recording'); $('#demo-mic').setAttribute('aria-label', 'Dừng thu âm');
-    setPhase('listening', sttSocket ? 'Mình đang nghe… chữ sẽ hiện trong ô nhập.' : 'Mình đang nghe… Nhấn mic lần nữa để dừng.');
+    setPhase('listening', sttSocket ? 'Mình đang nghe… lời bạn nói sẽ hiện ở đây.' : 'Mình đang nghe… Nhấn mic lần nữa để dừng.');
     audioContext = new AudioContext();
     const source = audioContext.createMediaStreamSource(recorderStream), analyser = audioContext.createAnalyser(), samples = new Uint8Array(512);
     analyser.fftSize = 1024; source.connect(analyser);
@@ -681,12 +754,23 @@ $('#command-form').addEventListener('submit', event => { event.preventDefault();
 $('#demo-mic').addEventListener('click', startRecording);
 document.querySelectorAll('[data-temp]').forEach(button => button.addEventListener('click', () => runCommand(`Đặt nhiệt độ ${state.temp + Number(button.dataset.temp)} độ`)));
 $('#window-toggle').addEventListener('click', () => runCommand(state.window ? 'Đóng cửa sổ bên tài' : 'Mở cửa sổ bên tài'));
-$('#door-toggle').addEventListener('click', () => runCommand(state.doorOpen ? 'Đóng cửa bên tài' : 'Mở cửa bên tài'));
+$('#body-pop').addEventListener('click', event => {
+  const chip = event.target.closest('[data-panel]');
+  if (chip) runCommand(`${bodyPanelState(chip.dataset.panel).open ? 'Đóng' : 'Mở'} ${BODY_PANELS[chip.dataset.panel].noun}`);
+});
+// One grouped action (body.set_open), so the doors, hood and tailgate share a
+// single confirmation.
+$('#open-all').addEventListener('click', () => {
+  const anyOpen = Object.keys(BODY_PANELS).some(id => bodyPanelState(id).open);
+  runCommand(`${anyOpen ? 'Đóng' : 'Mở'} tất cả cửa, capo và cốp`);
+});
+$('#lock-all').addEventListener('click', () => runCommand(CABIN_ZONES.every(zone => state.doors[zone]?.locked) ? 'Mở khóa tất cả cửa' : 'Khóa tất cả cửa'));
 $('#music-toggle').addEventListener('click', () => runCommand(state.music ? 'Dừng nhạc' : 'Phát nhạc thư giãn'));
 async function setDemoDriving(driving) {
   if (!state.backendAvailable) {
-    // Same rule as the memory simulator: no driving off with a door open.
-    if (driving && state.doorOpen) throw new Error('Không thể chuyển sang chế độ lái khi cửa xe đang mở.');
+    // Same rule as the memory simulator: no driving off with a door, the hood or the tailgate open.
+    if (driving && CABIN_ZONES.some(zone => state.doors[zone]?.open)) throw new Error('Không thể chuyển sang chế độ lái khi cửa xe đang mở.');
+    if (driving && (state.hoodOpen || state.trunkOpen)) throw new Error('Không thể chuyển sang chế độ lái khi nắp capo hoặc cốp sau đang mở.');
     state.driving = driving;
     updateDriveUI();
     updateVehicle();
@@ -738,7 +822,7 @@ function vehicleDetailsMarkup() {
   }).join('');
   const tireLabels = { front_left: 'Trước trái', front_right: 'Trước phải', rear_left: 'Sau trái', rear_right: 'Sau phải' };
   const tireRows = Object.entries(tireLabels).map(([position, label]) => `<div class="detail-row"><span>${label}</span><strong>${state.tirePressures[position] ?? 250} kPa</strong></div>`).join('');
-  return `<h2>Không gian của bạn</h2><p>Digital Twin · trạng thái toàn bộ cabin được mô phỏng trong phiên trải nghiệm này.</p><div class="detail-row"><span>Pin còn lại</span><strong>${state.battery}% / ${state.range} km</strong></div><div class="detail-row"><span>Nhiệt độ cabin</span><strong>${state.temp}°C</strong></div><div class="detail-row"><span>Nhiệt độ hệ truyền động</span><strong>${state.powertrainTemp}°C</strong></div><div class="detail-row"><span>Chế độ nguồn</span><strong>${escapeHtml(state.powerState)}</strong></div><div class="cabin-grid">${cabinRows}<section class="cabin-zone tire-zone"><h3>Áp suất bốn lốp</h3>${tireRows}</section></div><div class="detail-row"><span>Multimedia</span><strong>${state.music ? 'Đang phát (mô phỏng)' : 'Đang dừng'}</strong></div><p class="dialog-note">Digital Twin mô phỏng bốn vị trí cabin; chưa kết nối xe thật hoặc dịch vụ VinFast.</p>`;
+  return `<h2>Không gian của bạn</h2><p>Digital Twin · trạng thái toàn bộ cabin được mô phỏng trong phiên trải nghiệm này.</p><div class="detail-row"><span>Pin còn lại</span><strong>${state.battery}% / ${state.range} km</strong></div><div class="detail-row"><span>Nhiệt độ cabin</span><strong>${state.temp}°C</strong></div><div class="detail-row"><span>Nhiệt độ hệ truyền động</span><strong>${state.powertrainTemp}°C</strong></div><div class="detail-row"><span>Chế độ nguồn</span><strong>${escapeHtml(state.powerState)}</strong></div><div class="detail-row"><span>Nắp capo</span><strong>${state.hoodOpen ? 'Đang mở' : 'Đã đóng'}</strong></div><div class="detail-row"><span>Cốp sau</span><strong>${state.trunkOpen ? 'Đang mở' : 'Đã đóng'}</strong></div><div class="cabin-grid">${cabinRows}<section class="cabin-zone tire-zone"><h3>Áp suất bốn lốp</h3>${tireRows}</section></div><div class="detail-row"><span>Multimedia</span><strong>${state.music ? 'Đang phát (mô phỏng)' : 'Đang dừng'}</strong></div><p class="dialog-note">Digital Twin mô phỏng bốn vị trí cabin; chưa kết nối xe thật hoặc dịch vụ VinFast.</p>`;
 }
 function modelOptionsMarkup() {
   if (!state.backendAvailable) return '<div class="config-empty"><i></i><span>Backend chưa kết nối</span><small>Chạy python run.py để tải danh sách model.</small></div>';
@@ -800,7 +884,7 @@ initJourney({
   onOpen: () => openPanel('journey'),
   onClose: () => openPanel('home'),
   // Navigation prompts surface in the assistant line and use ViVi's voice.
-  announce: text => { $('#response-text').textContent = text; if (state.sound) speak(text).catch(() => say(text)); },
+  announce: text => { setResponseText(text); if (state.sound) speak(text).catch(() => say(text)); },
   setDriving: driving => { if (state.driving !== driving) setDemoDriving(driving).catch(() => {}); },
   progress: progress => { nav = progress; updateHud(); },
   route: route => { plannedRoute = route; scene?.setRoute(route); },
@@ -827,17 +911,27 @@ $('#keyboard-toggle').addEventListener('click', () => {
   if (typing) $('#command-input').focus();
 });
 $('#command-input').addEventListener('keydown', event => { if (event.key === 'Escape') $('#keyboard-toggle').click(); });
-const climatePop = $('#climate-pop');
-function toggleClimate(open = climatePop.hidden) {
-  climatePop.hidden = !open;
-  $('#climate-button').setAttribute('aria-expanded', String(open));
+// Dock popovers sit above their button, kept inside the viewport; one at a time.
+const dockPops = [['#climate-pop', '#climate-button'], ['#body-pop', '#body-button']];
+function togglePop(popId, buttonId, open = $(popId).hidden) {
+  const pop = $(popId);
+  if (open) dockPops.forEach(([other, button]) => { if (other !== popId) togglePop(other, button, false); });
+  pop.hidden = !open;
+  $(buttonId).setAttribute('aria-expanded', String(open));
   if (open) {
-    const box = $('#climate-button').getBoundingClientRect();
-    climatePop.style.left = `${Math.max(110, box.left + box.width / 2)}px`;
+    const box = $(buttonId).getBoundingClientRect(), half = pop.offsetWidth / 2 + 12;
+    pop.style.left = `${Math.min(innerWidth - half, Math.max(half, box.left + box.width / 2))}px`;
   }
 }
-$('#climate-button').addEventListener('click', event => { event.stopPropagation(); toggleClimate(); });
-document.addEventListener('click', event => { if (!climatePop.hidden && !event.target.closest('#climate-pop')) toggleClimate(false); });
+for (const [popId, buttonId] of dockPops) {
+  $(buttonId).addEventListener('click', event => { event.stopPropagation(); togglePop(popId, buttonId); });
+}
+document.addEventListener('click', event => {
+  for (const [popId, buttonId] of dockPops) if (!$(popId).hidden && !event.target.closest(popId)) togglePop(popId, buttonId, false);
+});
+document.addEventListener('keydown', event => {
+  if (event.key === 'Escape') for (const [popId, buttonId] of dockPops) if (!$(popId).hidden) { togglePop(popId, buttonId, false); $(buttonId).focus(); }
+});
 function updateClock() { $('#clock').textContent = new Intl.DateTimeFormat('vi-VN', { hour: '2-digit', minute: '2-digit' }).format(new Date()); }
 if (location.hash === '#journey') openPanel('journey');
 updateClock(); setInterval(updateClock, 60000); updateVehicle(); checkBackend().then(pollVehicleAlerts); setInterval(pollVehicleAlerts, 1500);

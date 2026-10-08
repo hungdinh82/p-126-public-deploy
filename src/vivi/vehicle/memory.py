@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from src.vivi.domain.models import ActionProposal, VehicleState
-from src.vivi.vehicle.zones import selected_zones, zone_label
+from src.vivi.vehicle.zones import ALL_PANELS_LABEL, BODY_PANELS, CABIN_ZONES, selected_zones, zone_label
 
 
 @dataclass
@@ -23,6 +23,9 @@ class VehicleSimulator:
         "window.set_position",
         "door.set_open",
         "door.set_lock",
+        "hood.set_open",
+        "trunk.set_open",
+        "body.set_open",
         "seat.set_heat_level",
         "media.play",
         "media.pause",
@@ -51,6 +54,8 @@ class VehicleSimulator:
             state = self._states.setdefault(session_id, VehicleState())
             if driving and any(door.open for _, door in state.door_states):
                 raise ValueError("Không thể chuyển sang chế độ lái khi cửa xe đang mở.")
+            if driving and (state.hood_open or state.trunk_open):
+                raise ValueError("Không thể chuyển sang chế độ lái khi nắp capo hoặc cốp sau đang mở.")
             if state.driving != driving:
                 state.driving = driving
                 state.power_state = "driving" if driving else "off"
@@ -110,6 +115,24 @@ class VehicleSimulator:
                     doors[zone]["open"] = opening
                 state = VehicleState.model_validate({**state.model_dump(), "door_states": doors})
                 message = f"Mình đã {'mở' if opening else 'đóng'} cửa xe {zone_label(action.arguments)}."
+            elif action.intent in BODY_PANELS:
+                field, target = BODY_PANELS[action.intent]
+                opening = bool(action.arguments["open"])
+                if opening and state.driving:
+                    raise ValueError(f"Không thể mở {target} khi xe đang ở chế độ lái.")
+                setattr(state, field, opening)
+                message = f"Mình đã {'mở' if opening else 'đóng'} {target}."
+            elif action.intent == "body.set_open":
+                opening = bool(action.arguments["open"])
+                if opening and state.driving:
+                    raise ValueError("Không thể mở cửa, capo hay cốp khi xe đang ở chế độ lái.")
+                doors = state.door_states.model_dump()
+                for zone in CABIN_ZONES:
+                    doors[zone]["open"] = opening
+                state = VehicleState.model_validate(
+                    {**state.model_dump(), "door_states": doors, "hood_open": opening, "trunk_open": opening}
+                )
+                message = f"Mình đã {'mở' if opening else 'đóng'} {ALL_PANELS_LABEL}."
             elif action.intent == "seat.set_heat_level":
                 seats = state.seat_heat_levels.model_dump()
                 level = int(action.arguments["level"])

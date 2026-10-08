@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from src.vivi.vehicle.zones import selected_zones, zoned_noun
+from src.vivi.vehicle.zones import ALL_PANELS_LABEL, BODY_PANELS, CABIN_ZONES, selected_zones, zoned_noun
 
 from .models import ActionProposal, VehicleState
 
@@ -28,6 +28,9 @@ RISK_BY_INTENT = {
     "window.set_position": "R2",
     "door.set_lock": "R2",
     "door.set_open": "R2",
+    "hood.set_open": "R2",
+    "trunk.set_open": "R2",
+    "body.set_open": "R2",
     "seat.set_heat_level": "R1",
     "unsupported.request": "R3",
     "vehicle.prohibited": "R3",
@@ -41,6 +44,9 @@ def _r2_preview(proposal: ActionProposal) -> str:
     if proposal.intent == "door.set_lock":
         target = zoned_noun("cửa", proposal.arguments)
         return f"Xác nhận khóa {target}?" if proposal.arguments.get("locked") else f"Xác nhận mở khóa {target}?"
+    if proposal.intent in BODY_PANELS or proposal.intent == "body.set_open":
+        target = BODY_PANELS[proposal.intent][1] if proposal.intent in BODY_PANELS else ALL_PANELS_LABEL
+        return f"Xác nhận mở {target}?" if proposal.arguments.get("open") else f"Xác nhận đóng {target}?"
     target = zoned_noun("cửa", proposal.arguments)
     return f"Xác nhận mở {target}?" if proposal.arguments.get("open") else f"Xác nhận đóng {target}?"
 
@@ -86,6 +92,21 @@ def validate(proposal: ActionProposal, vehicle: VehicleState, *, confirmed: bool
             return SafetyResult(False, "blocked", "Không thể mở cửa khi xe đang ở chế độ lái.", risk)
         if opening and any(getattr(vehicle.door_states, zone).locked for zone in zones):
             return SafetyResult(False, "blocked", "Hãy mở khóa cửa trước khi mở cửa.", risk)
+    if proposal.intent in BODY_PANELS:
+        opening = proposal.arguments.get("open")
+        target = BODY_PANELS[proposal.intent][1]
+        if not isinstance(opening, bool):
+            return SafetyResult(False, "clarify", f"Bạn muốn mở hay đóng {target}?", risk)
+        if vehicle.driving and opening:
+            return SafetyResult(False, "blocked", f"Không thể mở {target} khi xe đang ở chế độ lái.", risk)
+    if proposal.intent == "body.set_open":
+        opening = proposal.arguments.get("open")
+        if not isinstance(opening, bool):
+            return SafetyResult(False, "clarify", f"Bạn muốn mở hay đóng {ALL_PANELS_LABEL}?", risk)
+        if vehicle.driving and opening:
+            return SafetyResult(False, "blocked", "Không thể mở cửa, capo hay cốp khi xe đang ở chế độ lái.", risk)
+        if opening and any(getattr(vehicle.door_states, zone).locked for zone in CABIN_ZONES):
+            return SafetyResult(False, "blocked", "Hãy mở khóa cửa trước khi mở tất cả.", risk)
     if proposal.intent == "door.set_lock":
         locked = proposal.arguments.get("locked")
         if not isinstance(locked, bool):

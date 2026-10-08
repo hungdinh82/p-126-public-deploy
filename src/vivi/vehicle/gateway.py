@@ -14,7 +14,7 @@ from src.vivi.domain.models import ActionProposal as DomainActionProposal
 from src.vivi.domain.models import VehicleState
 from src.vivi.domain.safety import validate
 from src.vivi.vehicle.memory import VehicleSimulator
-from src.vivi.vehicle.zones import selected_zones
+from src.vivi.vehicle.zones import BODY_PANELS, CABIN_ZONES, selected_zones
 
 
 @dataclass
@@ -194,6 +194,13 @@ class VehicleActionGateway:
         if proposal.intent == "door.set_lock":
             return all(
                 getattr(state.door_states, zone).locked is arguments["locked"] for zone in selected_zones(arguments)
+            )
+        if proposal.intent in BODY_PANELS:
+            return getattr(state, BODY_PANELS[proposal.intent][0]) is arguments["open"]
+        if proposal.intent == "body.set_open":
+            opening = arguments["open"]
+            return state.hood_open is opening and state.trunk_open is opening and all(
+                getattr(state.door_states, zone).open is opening for zone in CABIN_ZONES
             )
         if proposal.intent == "seat.set_heat_level":
             return all(

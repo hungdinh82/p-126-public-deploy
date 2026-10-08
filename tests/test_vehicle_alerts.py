@@ -96,6 +96,15 @@ def test_each_open_door_has_an_independent_ready_alert() -> None:
     }
 
 
+def test_open_hood_and_trunk_alert_when_ready() -> None:
+    snapshot = AlertEngine().evaluate(state(power_state="ready", hood_open=True, trunk_open=True))
+    assert {(alert.code, alert.source) for alert in snapshot.active_alerts} == {
+        ("HOOD_OPEN_WHEN_READY", "hood"),
+        ("TRUNK_OPEN_WHEN_READY", "trunk"),
+    }
+    assert not AlertEngine().evaluate(state(power_state="off", trunk_open=True)).active_alerts
+
+
 def test_announcement_gate_deduplicates_and_only_cools_down_warnings() -> None:
     engine = AlertEngine()
     now = datetime(2026, 1, 1, tzinfo=UTC)

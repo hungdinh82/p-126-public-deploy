@@ -308,11 +308,10 @@ class APITests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["status"], "ok")
         options = response.json()["llm"]["options"]
-        self.assertEqual(
-            {item["provider"] for item in options},
-            {"rules", "openai", "google", "local", "openrouter"},
-        )
-        self.assertTrue(next(item for item in options if item["provider"] == "rules")["available"])
+        # The catalog follows config (cloud entries appear when rag_local_only is off);
+        # without credentials only the scripted provider can run.
+        self.assertEqual({item["provider"] for item in options}, set(runtime.llm_models))
+        self.assertEqual({item["provider"] for item in options if item["available"]}, {"rules"})
 
     def test_turn_uses_selected_provider_without_changing_default(self):
         class LocalGraph:

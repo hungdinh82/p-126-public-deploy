@@ -6,7 +6,7 @@ import re
 from typing import Any
 
 from src.vivi.agents.contracts import IntentDecision
-from src.vivi.agents.slots import cabin_zone, temperature_number
+from src.vivi.agents.slots import body_panel, cabin_zone, temperature_number
 from src.vivi.text import normalize_text
 
 
@@ -75,6 +75,40 @@ class CabinCommandParser:
                 intent="climate.set_temperature",
                 arguments={"value_celsius": value},
                 response_text=f"Mình sẽ đặt điều hoà ở {value:g} độ nhé.",
+            )
+        everything = re.search(r"\b(mo|dong)\s+(?:het|tat ca|toan bo)\b", text)
+        # "Mở tất cả cửa" stays a door command; naming the hood or tailgate too,
+        # or no part at all ("mở hết"), means every door, the hood and the tailgate.
+        if everything and not re.search(r"\bkhoa\b", text) and (
+            body_panel(text) or not re.search(r"cua|kinh|ghe|nhac|den|dieu hoa", text)
+        ):
+            opening = everything.group(1) == "mo"
+            return IntentDecision(
+                route="action",
+                intent="body.set_open",
+                arguments={"open": opening},
+                response_text=f"Mình sẽ {'mở' if opening else 'đóng'} tất cả cửa, capo và cốp nhé.",
+            )
+        panel = body_panel(text)
+        if panel and re.search(r"\b(?:mo|dong|bat|nang|ha|sap)\b", text) and not re.search(r"\bkhoa\b", text):
+            # "Mở cốp" before the door parser, which would read "mở cửa cốp" as a door.
+            opening = bool(re.search(r"\b(?:mo|bat|nang)\b", text))
+            closing = bool(re.search(r"\b(?:dong|ha|sap)\b", text))
+            noun = "nắp capo" if panel == "hood.set_open" else "cốp sau"
+            if opening == closing:
+                question = f"Bạn muốn mở hay đóng {noun}?"
+                return IntentDecision(
+                    route="clarify",
+                    intent="conversation.clarify",
+                    needs_clarification=True,
+                    clarification_question=question,
+                    response_text=question,
+                )
+            return IntentDecision(
+                route="action",
+                intent=panel,
+                arguments={"open": opening},
+                response_text=f"Mình sẽ {'mở' if opening else 'đóng'} {noun} nhé.",
             )
         if re.search(r"cua so|cua kinh|\bkinh\b", text):
             opening = bool(re.search(r"\b(mo|ha)\b", text))
