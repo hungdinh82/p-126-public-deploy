@@ -54,7 +54,7 @@ async def navigation_config():
         # The browser fetches tiles directly, so the style URL carries the key.
         "style_url": client.style_url if client.available else None,
         "tile_status": await _tile_status(client, lat, lng) if client.available else None,
-        "default_center": {"lat": lat, "lng": lng},
+        "default_center": {"lat": lat, "lng": lng, "label": config.navigation_default_label},
     }
 
 

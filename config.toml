@@ -63,17 +63,22 @@ soniox_max_endpoint_delay_ms = 1000
 soniox_timeout_seconds = 30
 soniox_stream_max_seconds = 60
 
-tts_provider = "off"
+tts_provider = "vieneu"
 zerotts_model = "zeroweight-ai/ZeroTTS"
 zerotts_voice = "VIVI"
 zerotts_device = "auto"
 zerotts_preload = false
+# VieNeu cloud TTS (key: VIENEU_API_KEY in .env). PCM is streamed to the browser.
+vieneu_voice = "Tưởng Vy"
+vieneu_sample_rate = 24000
 
 # Navigation (VietMap). Key goes in .env as VIETMAP_API_KEY.
 # Map style: tm = street, lm = light, dm = dark
 vietmap_map_style = "dm"
-navigation_default_lat = 21.0285
-navigation_default_lng = 105.8522
+# Fallback origin when the browser cannot share its location.
+navigation_default_lat = 20.9912738
+navigation_default_lng = 105.9457946
+navigation_default_label = "VinUni"
 
 # Handbook retrieval
 rag_data_dir = "./data/handbooks"

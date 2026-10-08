@@ -1,6 +1,8 @@
-import { closeJourney, initJourney, openJourney } from './journey.js?v=5';
+import { closeJourney, initJourney, openJourney, pauseJourney } from './journey.js?v=7';
+import { createCabinMusic } from './music.js?v=2';
 import { neonBorder } from './neon.js?v=2';
 import { createWave } from './wave.js?v=2';
+const cabinMusic = createCabinMusic();
 
 const $ = (selector) => document.querySelector(selector);
 const motionPreference = matchMedia('(prefers-reduced-motion: reduce)');
@@ -10,7 +12,7 @@ const API_BASE = '';
 const makeId = () => globalThis.crypto?.randomUUID?.() || `vivi-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 const sessionId = localStorage.getItem('vivi-session-id') || makeId();
 localStorage.setItem('vivi-session-id', sessionId);
-const state = { phase: 'idle', temp: 23, window: false, music: false, driving: false, powerState: 'off', battery: 82, range: 328, powertrainTemp: 45, tirePressures: {}, windows: {}, doors: {}, seatHeatLevels: {}, doorLocked: false, doorOpen: false, hoodOpen: false, trunkOpen: false, seatHeat: 0, alerts: [], alertSequence: 0, reduced: motionPreference.matches, sound: false, busy: false, backendAvailable: false, vehicleProvider: '', sttAvailable: false, sttProvider: '', sttStreaming: false, sttDevice: '', ttsAvailable: false, ttsProvider: '', storeAudio: false, storeTranscripts: false, llmProvider: '', llmOptions: [], lastCommand: '', manualAnswer: '', manualEvidence: [], progress: 0 };
+const state = { phase: 'idle', temp: 23, window: false, music: false, driving: false, powerState: 'off', battery: 82, range: 328, powertrainTemp: 45, tirePressures: {}, windows: {}, doors: {}, seatHeatLevels: {}, doorLocked: false, doorOpen: false, hoodOpen: false, trunkOpen: false, seatHeat: 0, alerts: [], alertSequence: 0, reduced: motionPreference.matches, sound: false, busy: false, backendAvailable: false, vehicleProvider: '', sttAvailable: false, sttProvider: '', sttStreaming: false, sttDevice: '', ttsAvailable: false, ttsProvider: '', ttsVoice: '', ttsDevice: '', ttsOptions: [], storeAudio: false, storeTranscripts: false, llmProvider: '', llmOptions: [], lastCommand: '', manualAnswer: '', manualEvidence: [], progress: 0 };
 const edgeCommandHistoryKey = 'vivi-command-history';
 function readEdgeCommandHistory() {
   try {
@@ -64,7 +66,7 @@ const NEON_BY_PHASE = {
   blocked: { speed: 4, borderSize: 50, color: '#D6AE78' }
 };
 
-import('./scene3d.js?v=32')
+import('./scene3d.js?v=33')
   .then(module => {
     scene = module.createScene($('#space'), { reduced: state.reduced });
     scene.setRoute(plannedRoute);
@@ -80,6 +82,7 @@ const LIVE_CAPTION_WORDS = 22;
 let liveWords = [];
 function setPhase(phase, text) {
   state.phase = phase;
+  cabinMusic.duck(phase);
   $('#orb-state').textContent = phaseLabels[phase] || phaseLabels.idle;
   wave.setPhase(phase);
   const thinking = ['thinking', 'transcribing', 'validating', 'acting', 'synthesizing'].includes(phase);
@@ -124,6 +127,7 @@ function updateVehicle() {
   scene?.setHood(state.hoodOpen);
   scene?.setTrunk(state.trunkOpen);
   $('#music-toggle').setAttribute('aria-pressed', String(state.music));
+  if (state.music) cabinMusic.play().catch(() => {}); else cabinMusic.stop();
   $('#music-toggle').setAttribute('aria-label', state.music ? 'Dừng nhạc' : 'Phát nhạc');
   updateHud();
 }
@@ -188,7 +192,11 @@ function updateHud() {
   const turning = next && next.distance < 220 && next.sign !== 4 && next.sign !== 5;
   scene?.setTurn(turning ? Math.sign(next.sign) : null);
 }
+let shownDriving = false;
 function updateDriveUI() {
+  // Only a D → P change pauses the trip; the trip itself shifts P → D on start.
+  if (shownDriving && !state.driving) pauseJourney();
+  shownDriving = state.driving;
   $('#drive-toggle').setAttribute('aria-pressed', String(state.driving));
   $('#drive-toggle').setAttribute('aria-label', state.driving ? 'Chuyển về đỗ xe' : 'Chuyển sang lái xe');
   $('#drive-toggle span').textContent = state.driving ? 'D' : 'P';
@@ -315,7 +323,7 @@ async function speak(text, turnId = makeId(), sequencePlayback = null) {
       const context = await ensureTtsAudioContext();
       const response = await fetch(`${API_BASE}/api/v1/tts/stream`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: playback.controller.signal,
-        body: JSON.stringify({ text, session_id: sessionId, turn_id: turnId })
+        body: JSON.stringify({ text, session_id: sessionId, turn_id: turnId, tts_provider: state.ttsProvider || undefined })
       });
       if (!response.ok) throw new Error((await response.json()).detail || 'TTS lỗi');
       if (!response.body || response.headers.get('X-ViVi-Audio-Format') !== 'pcm_s16le') throw new Error('Định dạng TTS streaming không hợp lệ');
@@ -732,7 +740,7 @@ function resolveLlmProvider(options, backendDefault, savedProvider, savedDefault
 async function checkBackend() {
   try {
     const response = await fetch(`${API_BASE}/api/v1/health`); if (!response.ok) throw new Error();
-    const health = await response.json(); state.backendAvailable = true; state.vehicleProvider = health.vehicle.provider; state.sttAvailable = health.stt.available; state.sttProvider = health.stt.provider; state.sttStreaming = Boolean(health.stt.streaming); state.sttDevice = health.stt.device; state.ttsAvailable = health.tts.available; state.ttsProvider = health.tts.provider; state.storeAudio = health.storage.audio; state.storeTranscripts = health.storage.transcripts;
+    const health = await response.json(); state.backendAvailable = true; state.vehicleProvider = health.vehicle.provider; state.sttAvailable = health.stt.available; state.sttProvider = health.stt.provider; state.sttStreaming = Boolean(health.stt.streaming); state.sttDevice = health.stt.device; state.ttsOptions = health.tts.options || []; applyTtsProvider(resolveTtsProvider(health.tts)); state.storeAudio = health.storage.audio; state.storeTranscripts = health.storage.transcripts;
     edgeCommandHistory = state.storeTranscripts ? readEdgeCommandHistory() : [];
     if (!state.storeTranscripts) localStorage.removeItem(edgeCommandHistoryKey);
     state.llmOptions = health.llm.options || [];
@@ -745,7 +753,7 @@ async function checkBackend() {
     updateModelStatus();
     $('#backend-status').classList.remove('offline'); $('#backend-status').innerHTML = '<i></i> Local · <span id="backend-model"></span>';
     $('#backend-model').textContent = state.llmProvider;
-    $('#backend-status').title = `STT ${health.stt.available ? 'sẵn sàng' : 'chưa cài'} · TTS ${health.tts.available ? 'Mai Chi' : 'chưa cài'} · LLM ${state.llmProvider}`;
+    $('#backend-status').title = `STT ${health.stt.available ? 'sẵn sàng' : 'chưa cài'} · TTS ${state.ttsAvailable ? ttsVoiceLabel(state.ttsVoice) : 'chưa cài'} · LLM ${state.llmProvider}`;
     $('#drive-toggle').disabled = state.vehicleProvider !== 'memory';
     try {
       const vehicleResponse = await fetch(`${API_BASE}/api/v1/vehicle/state?session_id=${encodeURIComponent(sessionId)}`);
@@ -828,6 +836,44 @@ $('#sound-toggle').addEventListener('click', () => {
 
 const dialog = $('#info-dialog');
 const modelLabels = { rules: 'Kịch bản', openai: 'OpenAI', google: 'Google Gemini', local: 'Local API', openrouter: 'OpenRouter' };
+const ttsLabels = { zerotts: 'ViVi', vieneu: 'VieNeu' };
+const ttsModes = { zerotts: 'On-device · ZeroTTS', vieneu: 'Cloud · cần Internet' };
+const ttsVoiceLabel = voice => voice === 'VIVI' ? 'ViVi' : voice;
+function resolveTtsProvider(tts) {
+  // The saved choice wins while it is usable; otherwise the backend default.
+  const usable = provider => state.ttsOptions.some(item => item.provider === provider && item.available);
+  const saved = localStorage.getItem('vivi-tts-provider');
+  if (usable(saved)) return saved;
+  if (tts.available && (usable(tts.provider) || !state.ttsOptions.length)) return tts.provider;
+  return state.ttsOptions.find(item => item.available)?.provider || '';
+}
+function applyTtsProvider(provider) {
+  const option = state.ttsOptions.find(item => item.provider === provider);
+  state.ttsProvider = provider;
+  state.ttsAvailable = Boolean(option?.available);
+  state.ttsVoice = option?.voice || '';
+  state.ttsDevice = option?.device || '';
+}
+function ttsOptionsMarkup() {
+  if (!state.backendAvailable) return '<div class="config-empty"><i></i><span>Backend chưa kết nối</span><small>Chạy python run.py để tải danh sách giọng.</small></div>';
+  return state.ttsOptions.map(item => {
+    const selected = item.provider === state.ttsProvider;
+    const status = item.available ? ttsModes[item.provider] || '' : item.detail || 'Chưa cấu hình trong .env';
+    return `<button type="button" class="model-option${selected ? ' selected' : ''}" data-tts-provider="${escapeHtml(item.provider)}" aria-pressed="${selected}" ${item.available ? '' : 'disabled'}><span class="model-option-head"><strong>${escapeHtml(ttsLabels[item.provider] || item.provider)}</strong><i></i></span><span class="model-id">${escapeHtml(ttsVoiceLabel(item.voice))}</span><small>${escapeHtml(status)}</small></button>`;
+  }).join('');
+}
+function selectTtsProvider(provider) {
+  if (!state.ttsOptions.some(item => item.provider === provider && item.available)) return;
+  applyTtsProvider(provider);
+  localStorage.setItem('vivi-tts-provider', provider);
+  document.querySelectorAll('[data-tts-provider]').forEach(button => {
+    const active = button.dataset.ttsProvider === provider;
+    button.classList.toggle('selected', active);
+    button.setAttribute('aria-pressed', String(active));
+  });
+  const activeVoice = $('#active-voice');
+  if (activeVoice) activeVoice.textContent = `${ttsLabels[provider] || provider} · ${ttsVoiceLabel(state.ttsVoice)}`;
+}
 const modelModes = { rules: 'Phản hồi định sẵn', openai: 'Cloud · cần Internet', google: 'Cloud · cần Internet', local: 'On-device · riêng tư', openrouter: 'Cloud · cần Internet' };
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>'"]/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character]);
@@ -886,7 +932,7 @@ function openPanel(view) {
   const contents = {
     vehicle: vehicleDetailsMarkup(),
     manual: manualContent,
-    settings: `<h2>Cấu hình ViVi</h2><p>Chọn cách ViVi suy nghĩ và chuyển động trong không gian của bạn.</p><section class="config-section"><div class="config-heading"><span>MÔ HÌNH HỘI THOẠI</span><strong id="active-model">${escapeHtml(modelLabels[state.llmProvider] || state.llmProvider || 'Chưa kết nối')} · ${escapeHtml(currentModel?.model || '')}</strong></div><div class="model-options">${modelOptionsMarkup()}</div><p class="dialog-note">Lựa chọn được áp dụng từ lượt hội thoại tiếp theo. Model ID và API key vẫn được quản lý an toàn trong .env.</p></section><section class="config-section"><div class="config-heading"><span>TRẢI NGHIỆM</span><strong>Không gian & giọng nói</strong></div><label class="motion-setting"><span><strong>Giảm chuyển động</strong><small>Dừng lơ lửng, quỹ đạo và hiệu ứng sóng</small></span><input id="reduce-motion" type="checkbox" ${state.reduced ? 'checked' : ''}><i></i></label><div class="config-runtime"><div><span>NHẬN DIỆN GIỌNG NÓI</span><strong>${state.sttAvailable ? `${escapeHtml(state.sttProvider)} · ${state.sttDevice === 'cloud' ? `cloud${state.sttStreaming ? ' · trực tiếp' : ''}` : 'local'}` : 'Chưa sẵn sàng'}</strong></div><div><span>GIỌNG PHẢN HỒI</span><strong>${state.ttsAvailable ? `${escapeHtml(state.ttsProvider)} · local` : 'Trình duyệt/text fallback'}</strong></div></div><p class="dialog-note">Audio: ${state.storeAudio ? 'đang lưu' : 'không lưu'} · transcript: ${state.storeTranscripts ? 'đang lưu' : 'không lưu'}.</p></section>`
+    settings: `<h2>Cấu hình ViVi</h2><p>Chọn cách ViVi suy nghĩ và chuyển động trong không gian của bạn.</p><section class="config-section"><div class="config-heading"><span>MÔ HÌNH HỘI THOẠI</span><strong id="active-model">${escapeHtml(modelLabels[state.llmProvider] || state.llmProvider || 'Chưa kết nối')} · ${escapeHtml(currentModel?.model || '')}</strong></div><div class="model-options">${modelOptionsMarkup()}</div><p class="dialog-note">Lựa chọn được áp dụng từ lượt hội thoại tiếp theo. Model ID và API key vẫn được quản lý an toàn trong .env.</p></section><section class="config-section"><div class="config-heading"><span>GIỌNG PHẢN HỒI</span><strong id="active-voice">${state.ttsAvailable ? `${escapeHtml(ttsLabels[state.ttsProvider] || state.ttsProvider)} · ${escapeHtml(ttsVoiceLabel(state.ttsVoice))}` : 'Trình duyệt/text fallback'}</strong></div><div class="model-options">${ttsOptionsMarkup()}</div><p class="dialog-note">Áp dụng từ câu trả lời tiếp theo. Lần đầu dùng ViVi local cần vài giây để nạp model.</p></section><section class="config-section"><div class="config-heading"><span>TRẢI NGHIỆM</span><strong>Không gian & giọng nói</strong></div><label class="motion-setting"><span><strong>Giảm chuyển động</strong><small>Dừng lơ lửng, quỹ đạo và hiệu ứng sóng</small></span><input id="reduce-motion" type="checkbox" ${state.reduced ? 'checked' : ''}><i></i></label><div class="config-runtime"><div><span>NHẬN DIỆN GIỌNG NÓI</span><strong>${state.sttAvailable ? `${escapeHtml(state.sttProvider)} · ${state.sttDevice === 'cloud' ? `cloud${state.sttStreaming ? ' · trực tiếp' : ''}` : 'local'}` : 'Chưa sẵn sàng'}</strong></div></div><p class="dialog-note">Audio: ${state.storeAudio ? 'đang lưu' : 'không lưu'} · transcript: ${state.storeTranscripts ? 'đang lưu' : 'không lưu'}.</p></section>`
   };
   $('#dialog-content').innerHTML = contents[view];
   dialog.classList.toggle('config-dialog', view === 'settings');
@@ -894,6 +940,7 @@ function openPanel(view) {
   $('#try-climate')?.addEventListener('click', () => { dialog.close(); runCommand('Tôi hơi lạnh'); });
   $('#reduce-motion')?.addEventListener('change', event => applyReducedMotion(event.target.checked));
   document.querySelectorAll('[data-llm-provider]').forEach(button => button.addEventListener('click', () => selectLlmProvider(button.dataset.llmProvider)));
+  document.querySelectorAll('[data-tts-provider]').forEach(button => button.addEventListener('click', () => selectTtsProvider(button.dataset.ttsProvider)));
 }
 document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', () => openPanel(button.dataset.view)));
 $('#settings-button').addEventListener('click', () => openPanel('settings'));
@@ -905,7 +952,11 @@ initJourney({
   onClose: () => openPanel('home'),
   // Navigation prompts surface in the assistant line and use ViVi's voice.
   announce: text => { setResponseText(text); if (state.sound) speak(text).catch(() => say(text)); },
-  setDriving: driving => { if (state.driving !== driving) setDemoDriving(driving).catch(() => {}); },
+  setDriving: driving => {
+    if (state.driving === driving) return;
+    // The car cannot leave P (door or hood open): keep it still on the map as well.
+    setDemoDriving(driving).catch(error => { if (driving) { pauseJourney(); setPhase('blocked', error.message); } });
+  },
   progress: progress => { nav = progress; updateHud(); },
   route: route => { plannedRoute = route; scene?.setRoute(route); },
   travel: distance => scene?.setRouteDistance(distance)

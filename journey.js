@@ -154,16 +154,20 @@ async function createMap() {
 function locate() {
   $('#journey-origin').textContent = 'Đang xác định vị trí…';
   const fallback = (reason) => {
-    setOrigin({ lat: config.default_center.lat, lng: config.default_center.lng, label: 'Vị trí mặc định · Hồ Gươm' });
+    setOrigin({ lat: config.default_center.lat, lng: config.default_center.lng, label: `Vị trí mặc định · ${config.default_center.label || 'Hồ Gươm'}` });
     setMessage(`${reason} ViVi dùng vị trí mặc định để mô phỏng.`, 'warn');
   };
   if (!('geolocation' in navigator)) return fallback('Trình duyệt không hỗ trợ định vị.');
+  const found = position => {
+    setOrigin({ lat: position.coords.latitude, lng: position.coords.longitude, label: 'Vị trí của bạn' });
+    if (!destination) setMessage('Tìm điểm đến hoặc chạm vào bản đồ để chọn.');
+  };
+  const failed = error => fallback(error.code === error.PERMISSION_DENIED ? 'Bạn chưa cho phép truy cập vị trí.' : 'Không lấy được vị trí hiện tại.');
   navigator.geolocation.getCurrentPosition(
-    position => {
-      setOrigin({ lat: position.coords.latitude, lng: position.coords.longitude, label: 'Vị trí của bạn' });
-      if (!destination) setMessage('Tìm điểm đến hoặc chạm vào bản đồ để chọn.');
-    },
-    error => fallback(error.code === error.PERMISSION_DENIED ? 'Bạn chưa cho phép truy cập vị trí.' : 'Không lấy được vị trí hiện tại.'),
+    found,
+    // Laptops without GPS often time out on high accuracy; Wi-Fi location is enough.
+    error => error.code === error.PERMISSION_DENIED ? failed(error)
+      : navigator.geolocation.getCurrentPosition(found, failed, { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 }),
     { enableHighAccuracy: true, timeout: 8000, maximumAge: 60000 }
   );
 }
@@ -424,6 +428,10 @@ export async function openJourney() {
     $('#journey-origin').textContent = 'Chưa xác định';
     setMessage(error.message, 'error');
   }
+}
+// Shifting to P (button, voice or backend state) stops the car on the map too.
+export function pauseJourney() {
+  if (sim.running) stopSimulation();
 }
 export function closeJourney() {
   // A trip in progress stays visible as the corner map.

@@ -242,7 +242,8 @@ class TTSTests(unittest.TestCase):
 
     def test_stream_route_returns_pcm_chunks_and_format(self):
         class FakeTTS:
-            _model = SimpleNamespace(sample_rate=48000)
+            sample_rate = 48000
+            voice = "Mai Bé Phương"
 
             def availability(self):
                 return True, "loaded"
