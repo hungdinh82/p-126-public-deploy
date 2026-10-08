@@ -115,3 +115,48 @@ class ConfirmationTests(unittest.IsolatedAsyncioTestCase):
         response = await self.turn("Sưởi ghế bên phụ mức 3")
         self.assertEqual(response.status, "verified")
         self.assertEqual(response.vehicle_state.seat_heat_levels.front_passenger, 3)
+
+    async def test_hood_and_trunk_open_after_confirmation_and_block_driving(self):
+        quote = await self.turn("Mở cốp sau")
+        self.assertEqual(quote.status, "confirmation_required")
+        self.assertEqual(quote.confirmation.preview, "Xác nhận mở cốp sau?")
+        approved = await self.turn("Xác nhận", quote.confirmation.confirmation_id, "approve")
+        self.assertEqual(approved.status, "verified")
+        self.assertTrue(approved.vehicle_state.trunk_open)
+        with self.assertRaises(ValueError):
+            self.vehicle.set_driving("s1", True)
+
+        hood = await self.turn("Mở nắp capo")
+        approved = await self.turn("Xác nhận", hood.confirmation.confirmation_id, "approve")
+        self.assertTrue(approved.vehicle_state.hood_open)
+        status = await self.turn("Capo đang mở không?")
+        self.assertIn("Nắp capo đang mở", status.message)
+
+    async def test_hood_cannot_open_while_driving(self):
+        self.vehicle.set_driving("s1", True)
+        response = await self.turn("Mở capo")
+        self.assertEqual(response.status, "blocked")
+        self.assertFalse(self.vehicle.state_for("s1").hood_open)
+
+    async def test_open_all_needs_one_confirmation_for_every_panel(self):
+        quote = await self.turn("Mở tất cả cửa, capo và cốp")
+        self.assertEqual(quote.status, "confirmation_required")
+        self.assertEqual(quote.confirmation.preview, "Xác nhận mở tất cả cửa, nắp capo và cốp sau?")
+        opened = await self.turn("Xác nhận", quote.confirmation.confirmation_id, "approve")
+        self.assertEqual(opened.status, "verified")
+        state = opened.vehicle_state
+        self.assertTrue(state.hood_open and state.trunk_open)
+        self.assertTrue(all(door.open for _, door in state.door_states))
+
+        quote = await self.turn("Đóng tất cả cửa, capo và cốp")
+        closed = await self.turn("Xác nhận", quote.confirmation.confirmation_id, "approve")
+        self.assertEqual(closed.status, "verified")
+        self.assertFalse(closed.vehicle_state.hood_open or closed.vehicle_state.trunk_open)
+        self.assertFalse(any(door.open for _, door in closed.vehicle_state.door_states))
+
+    async def test_open_all_is_blocked_by_a_locked_door(self):
+        quote = await self.turn("Khóa cửa bên phụ")
+        await self.turn("Xác nhận", quote.confirmation.confirmation_id, "approve")
+        response = await self.turn("Mở tất cả cửa, capo và cốp")
+        self.assertEqual(response.status, "blocked")
+        self.assertFalse(self.vehicle.state_for("s1").hood_open)

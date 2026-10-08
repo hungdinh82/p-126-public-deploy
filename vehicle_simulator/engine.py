@@ -13,6 +13,7 @@ from .models import CommandResult, FaultScenario, VehicleAck, VehicleCommand, Ve
 
 logger = logging.getLogger(__name__)
 CABIN_ZONES = ("driver", "front_passenger", "rear_left", "rear_right")
+BODY_PANELS = {"hood.set_open": "hood_open", "trunk.set_open": "trunk_open"}
 
 
 class VehicleSimulator:
@@ -98,6 +99,8 @@ class VehicleSimulator:
                 candidate = VehicleState.model_validate(merged)
                 if candidate.driving and any(getattr(candidate.door_states, zone).open for zone in CABIN_ZONES):
                     raise ValueError("Cannot set driving while driver door is open")
+                if candidate.driving and (candidate.hood_open or candidate.trunk_open):
+                    raise ValueError("Cannot set driving while the hood or trunk is open")
                 if any(getattr(state, name) != getattr(candidate, name) for name in updates):
                     state = VehicleState.model_validate(
                         {**merged, "state_version": state.state_version + 1, "updated_at": utc_now()}
@@ -323,6 +326,25 @@ class VehicleSimulator:
             for zone in zones:
                 doors[zone]["open"] = value
             return VehicleState.model_validate({**state.model_dump(), "door_states": doors}), None
+        if action in BODY_PANELS:
+            value = args.get("open")
+            if not exact_args("open") or not isinstance(value, bool):
+                return state, "invalid_arguments"
+            if value and state.driving:
+                return state, "policy_invariant"
+            return state.model_copy(update={BODY_PANELS[action]: value}), None
+        if action == "body.set_open":
+            value = args.get("open")
+            if not exact_args("open") or not isinstance(value, bool):
+                return state, "invalid_arguments"
+            if value and (state.driving or any(getattr(state.door_states, zone).locked for zone in CABIN_ZONES)):
+                return state, "policy_invariant"
+            doors = state.door_states.model_dump()
+            for zone in CABIN_ZONES:
+                doors[zone]["open"] = value
+            return VehicleState.model_validate(
+                {**state.model_dump(), "door_states": doors, "hood_open": value, "trunk_open": value}
+            ), None
         if action == "seat.set_heat_level":
             value = args.get("level")
             zones = selected_zones()

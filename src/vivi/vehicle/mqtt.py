@@ -13,7 +13,7 @@ from pydantic import ValidationError
 
 from src.vivi.domain.models import ActionProposal, VehicleState
 from src.vivi.vehicle.memory import VehicleOutcome
-from src.vivi.vehicle.zones import selected_zones, zone_label
+from src.vivi.vehicle.zones import ALL_PANELS_LABEL, BODY_PANELS, CABIN_ZONES, selected_zones, zone_label
 from vehicle_simulator.models import VehicleAck, VehicleCommand, utc_now
 from vehicle_simulator.models import VehicleState as SimulatorState
 from vehicle_simulator.mqtt import topic
@@ -276,6 +276,13 @@ class MqttVehicleAdapter:
                 getattr(state.door_states, zone).open is action.arguments["open"]
                 for zone in selected_zones(action.arguments)
             )
+        if action.intent in BODY_PANELS:
+            return getattr(state, BODY_PANELS[action.intent][0]) is action.arguments["open"]
+        if action.intent == "body.set_open":
+            opening = action.arguments["open"]
+            return state.hood_open is opening and state.trunk_open is opening and all(
+                getattr(state.door_states, zone).open is opening for zone in CABIN_ZONES
+            )
         if action.intent == "seat.set_heat_level":
             return all(
                 getattr(state.seat_heat_levels, zone) == action.arguments["level"]
@@ -294,6 +301,10 @@ class MqttVehicleAdapter:
             return f"Mình đã {'khóa' if action.arguments['locked'] else 'mở khóa'} cửa {zone_label(action.arguments)}."
         if action.intent == "door.set_open":
             return f"Mình đã {'mở' if action.arguments['open'] else 'đóng'} cửa xe {zone_label(action.arguments)}."
+        if action.intent in BODY_PANELS:
+            return f"Mình đã {'mở' if action.arguments['open'] else 'đóng'} {BODY_PANELS[action.intent][1]}."
+        if action.intent == "body.set_open":
+            return f"Mình đã {'mở' if action.arguments['open'] else 'đóng'} {ALL_PANELS_LABEL}."
         if action.intent == "seat.set_heat_level":
             return f"Mình đã đặt sưởi ghế {zone_label(action.arguments)} ở mức {action.arguments['level']}."
         return "Mình đã cập nhật trạng thái nhạc trong xe mô phỏng."
