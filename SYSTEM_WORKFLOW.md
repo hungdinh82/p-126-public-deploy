@@ -1,6 +1,6 @@
 # AI Assistant System Architecture & Workflow
 
-> **Purpose:** This document is the authoritative architecture and workflow specification for the AI assistant.  
+> **Purpose:** This document is the authoritative architecture and workflow specification for the AI assistant.
 > Coding/AI agents modifying the system MUST follow these rules unless a higher-priority project requirement explicitly overrides them.
 
 ---

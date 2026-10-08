@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from functools import lru_cache
-import logging
 from pathlib import Path
 from typing import Protocol
 

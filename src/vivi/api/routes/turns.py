@@ -6,8 +6,8 @@ import time
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 
-from src.vivi.api.runtime import runtime
 from src.vivi.ai_router import JetsonProviderRouter
+from src.vivi.api.runtime import runtime
 from src.vivi.domain.models import (
     ConfirmationDecisionRequest,
     TurnRequest,
