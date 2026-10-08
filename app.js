@@ -35,7 +35,7 @@ const seenAlertIds = new Set();
 const alertLastSpoken = new Map();
 const ALERT_TTS_COOLDOWN_MS = 30000;
 const MAX_SEEN_ALERT_IDS = 1024;
-const phaseLabels = { idle: 'ViVi đang ở đây', listening: 'Mình đang nghe bạn', transcribing: 'Mình đang nhận diện lời nói', thinking: 'Để mình xem nhé', validating: 'Đang kiểm tra an toàn', acting: 'Đang chăm sóc không gian của bạn', synthesizing: 'Đang chuẩn bị giọng Mai Chi', speaking: 'Một chút dễ chịu, dành cho bạn', clarify: 'Mình chờ bạn nói thêm', blocked: 'Mình giữ nguyên trạng thái xe' };
+const phaseLabels = { idle: 'ViVi đang ở đây', listening: 'Mình đang nghe bạn', transcribing: 'Mình đang nhận diện lời nói', thinking: 'Để mình xem nhé', validating: 'Đang kiểm tra an toàn', acting: 'Đang chăm sóc không gian của bạn', synthesizing: 'Đang chuẩn bị giọng Mai Chi', speaking: 'Một chút dễ chịu, dành cho bạn', confirm: 'Mình chờ bạn xác nhận', clarify: 'Mình chờ bạn nói thêm', blocked: 'Mình giữ nguyên trạng thái xe' };
 const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 let plannedRoute = null;    // route shape for the 3D road, kept until the scene loads
 let nav = null;             // live journey progress while a route simulation runs
@@ -489,13 +489,13 @@ function applyBackendState(vehicle) {
   }
 }
 
-async function runBackendCommand(command, turnId = makeId()) {
+async function runBackendCommand(command, turnId = makeId(), { autoConfirm = false } = {}) {
   if (state.busy || !command.trim()) return;
   rememberEdgeCommand(command);
   state.busy = true; state.lastCommand = command; lockControls(true); $('#command-input').value = '';
   try {
     setPhase('thinking', `“${command}”`);
-    let response = await fetch(`${API_BASE}/api/v1/turn/stream`, {
+    const response = await fetch(`${API_BASE}/api/v1/turn/stream`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ transcript: command, session_id: sessionId, turn_id: turnId, llm_provider: state.llmProvider })
     });
@@ -525,6 +525,10 @@ async function runBackendCommand(command, turnId = makeId()) {
           speechQueue = speechQueue.then(() => speak(event.text, turnId, speechPlayback));
         } else say(event.text);
       } else if (event.type === 'speech' && event.text) {
+        // A deliberate touch on a concrete vehicle control is the user's
+        // approval. Suppress the intermediate confirmation prompt; the final
+        // verified or blocked result is still spoken below.
+        if (autoConfirm) return;
         streamedSpeech = true;
         // Speech events may contain one event per sentence. Keep them for
         // low-latency audio, but render only the authoritative final response
@@ -552,23 +556,25 @@ async function runBackendCommand(command, turnId = makeId()) {
     }
     if (buffer.trim()) handleEvent(JSON.parse(buffer));
     if (!payload) throw new Error('Backend kết thúc luồng trước khi trả kết quả');
-    if (payload.status === 'confirmation_required' && payload.confirmation) {
+    if (autoConfirm && payload.status === 'confirmation_required' && payload.confirmation) {
       if (voiceStreamed) {
         await speechQueue;
         await finishTtsPlayback(speechPlayback);
         voiceStreamed = false;
       }
-      const approved = window.confirm(payload.confirmation.preview);
       turnId = makeId();
-      response = await fetch(`${API_BASE}/api/v1/confirmations/${payload.confirmation.confirmation_id}`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          session_id: sessionId, turn_id: turnId,
-          decision: approved ? 'approve' : 'deny', llm_provider: state.llmProvider
-        })
-      });
-      payload = await response.json();
-      if (!response.ok) throw new Error(payload.detail || 'Backend không phản hồi');
+      const confirmationResponse = await fetch(
+        `${API_BASE}/api/v1/confirmations/${payload.confirmation.confirmation_id}`,
+        {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            session_id: sessionId, turn_id: turnId,
+            decision: 'approve', llm_provider: state.llmProvider
+          })
+        }
+      );
+      payload = await confirmationResponse.json();
+      if (!confirmationResponse.ok) throw new Error(payload.detail || 'Backend không phản hồi');
       streamedSpeech = false;
     }
     await wait(180);
@@ -578,7 +584,9 @@ async function runBackendCommand(command, turnId = makeId()) {
       state.manualEvidence = payload.evidence || [];
       openPanel('manual');
     }
-    const phase = payload.status === 'verified' ? 'speaking' : payload.status;
+    const phase = payload.status === 'verified'
+      ? 'speaking'
+      : payload.status === 'confirmation_required' ? 'confirm' : payload.status;
     setPhase(phase, payload.message);
     if (payload.status === 'verified') {
       const intent = payload.action?.intent || '';
@@ -599,8 +607,8 @@ async function runBackendCommand(command, turnId = makeId()) {
   }
 }
 
-function runCommand(command, voiceDemo = false) {
-  if (state.backendAvailable) return runBackendCommand(command);
+function runCommand(command, options = {}) {
+  if (state.backendAvailable) return runBackendCommand(command, makeId(), options);
   setPhase('unverified', 'ViVi local chưa kết nối. Xe mô phỏng không nhận lệnh nào.');
   return Promise.resolve();
 }
@@ -764,18 +772,27 @@ function updateModelStatus() {
 $('#command-form').addEventListener('submit', event => { event.preventDefault(); runCommand($('#command-input').value); });
 $('#demo-mic').addEventListener('click', startRecording);
 document.querySelectorAll('[data-temp]').forEach(button => button.addEventListener('click', () => runCommand(`Đặt nhiệt độ ${state.temp + Number(button.dataset.temp)} độ`)));
-$('#window-toggle').addEventListener('click', () => runCommand(state.window ? 'Đóng cửa sổ bên tài' : 'Mở cửa sổ bên tài'));
+$('#window-toggle').addEventListener('click', () => runCommand(
+  state.window ? 'Đóng cửa sổ bên tài' : 'Mở cửa sổ bên tài',
+  { autoConfirm: true }
+));
 $('#body-pop').addEventListener('click', event => {
   const chip = event.target.closest('[data-panel]');
-  if (chip) runCommand(`${bodyPanelState(chip.dataset.panel).open ? 'Đóng' : 'Mở'} ${BODY_PANELS[chip.dataset.panel].noun}`);
+  if (chip) runCommand(
+    `${bodyPanelState(chip.dataset.panel).open ? 'Đóng' : 'Mở'} ${BODY_PANELS[chip.dataset.panel].noun}`,
+    { autoConfirm: true }
+  );
 });
-// One grouped action (body.set_open), so the doors, hood and tailgate share a
-// single confirmation.
+// Direct manipulation is the user's approval, while the backend still binds a
+// single-use confirmation to the exact grouped action and rechecks safety.
 $('#open-all').addEventListener('click', () => {
   const anyOpen = Object.keys(BODY_PANELS).some(id => bodyPanelState(id).open);
-  runCommand(`${anyOpen ? 'Đóng' : 'Mở'} tất cả cửa, capo và cốp`);
+  runCommand(`${anyOpen ? 'Đóng' : 'Mở'} tất cả cửa, capo và cốp`, { autoConfirm: true });
 });
-$('#lock-all').addEventListener('click', () => runCommand(CABIN_ZONES.every(zone => state.doors[zone]?.locked) ? 'Mở khóa tất cả cửa' : 'Khóa tất cả cửa'));
+$('#lock-all').addEventListener('click', () => runCommand(
+  CABIN_ZONES.every(zone => state.doors[zone]?.locked) ? 'Mở khóa tất cả cửa' : 'Khóa tất cả cửa',
+  { autoConfirm: true }
+));
 $('#music-toggle').addEventListener('click', () => runCommand(state.music ? 'Dừng nhạc' : 'Phát nhạc thư giãn'));
 async function setDemoDriving(driving) {
   if (!state.backendAvailable) {

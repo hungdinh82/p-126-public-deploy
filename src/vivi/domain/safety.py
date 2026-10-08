@@ -84,12 +84,15 @@ def validate(proposal: ActionProposal, vehicle: VehicleState, *, confirmed: bool
         opening = proposal.arguments.get("open")
         if not isinstance(opening, bool):
             return SafetyResult(False, "clarify", "Bạn muốn mở hay đóng cửa nào?", risk)
+        # This invariant does not depend on the requested door. Reject it
+        # before collecting a missing zone so an impossible action never
+        # becomes a pending dialogue task.
+        if vehicle.driving and opening:
+            return SafetyResult(False, "blocked", "Không thể mở cửa khi xe đang ở chế độ lái.", risk)
         try:
             zones = selected_zones(proposal.arguments)
         except ValueError as exc:
             return SafetyResult(False, "clarify", str(exc), risk)
-        if vehicle.driving and opening:
-            return SafetyResult(False, "blocked", "Không thể mở cửa khi xe đang ở chế độ lái.", risk)
         if opening and any(getattr(vehicle.door_states, zone).locked for zone in zones):
             return SafetyResult(False, "blocked", "Hãy mở khóa cửa trước khi mở cửa.", risk)
     if proposal.intent in BODY_PANELS:
