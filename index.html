@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#04050a" />
   <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"}}</script>
   <title>ViVi — Không gian của bạn</title>
-  <link rel="stylesheet" href="./style.css?v=7" />
+  <link rel="stylesheet" href="./style.css?v=10" />
 </head>
 <body>
   <svg class="icon-library" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
@@ -19,6 +19,7 @@
     <symbol id="i-climate" viewBox="0 0 24 24"><path d="M12 2v20M3.3 7l17.4 10M3.3 17 20.7 7M9 4l3 3 3-3M9 20l3-3 3 3M3 10l4-1-1-4m12 14-1-4 4-1M3 14l4 1-1 4M18 5l-1 4 4 1"/></symbol>
     <symbol id="i-window" viewBox="0 0 24 24"><path d="M3 18V7a2 2 0 0 1 2-2h10l6 7v6H3Zm0-5h18M7 8h6"/></symbol>
     <symbol id="i-door" viewBox="0 0 24 24"><path d="M6 21V5.5L11 3h7v18H6Zm-3 0h18M14 12h1.5"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></symbol>
     <symbol id="i-music" viewBox="0 0 24 24"><path d="M9 17V5l11-2v12M9 9l11-2"/><ellipse cx="6" cy="18" rx="3" ry="3"/><ellipse cx="17" cy="16" rx="3" ry="3"/></symbol>
     <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="2" width="6" height="13" rx="3"/><path d="M5 10v2a7 7 0 0 0 14 0v-2M12 19v3m-4 0h8"/></symbol>
     <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14m-6-6 6 6-6 6"/></symbol>
@@ -71,7 +72,7 @@
   <nav class="dock" aria-label="Điều khiển nhanh">
     <button id="climate-button" class="dock-button" aria-label="Điều hoà" aria-expanded="false" aria-controls="climate-pop" title="Điều hoà"><svg><use href="#i-climate"/></svg><span id="dock-temp">23°</span></button>
     <button id="window-toggle" class="dock-button" aria-label="Mở cửa sổ bên tài" aria-pressed="false" title="Cửa sổ bên tài"><svg><use href="#i-window"/></svg></button>
-    <button id="door-toggle" class="dock-button" aria-label="Mở cửa bên tài" aria-pressed="false" title="Cửa bên tài"><svg><use href="#i-door"/></svg></button>
+    <button id="body-button" class="dock-button" aria-label="Cửa, capo và cốp" aria-expanded="false" aria-controls="body-pop" title="Cửa · Capo · Cốp"><svg><use href="#i-door"/></svg></button>
     <button id="music-toggle" class="dock-button" aria-label="Phát nhạc" aria-pressed="false" title="Âm nhạc"><svg><use href="#i-music"/></svg></button>
     <span class="dock-divider"></span>
     <button class="dock-button" data-view="journey" aria-label="Hành trình" title="Hành trình"><svg><use href="#i-compass"/></svg></button>
@@ -87,6 +88,36 @@
     <button data-temp="-1" aria-label="Giảm nhiệt độ">−</button>
     <div><strong id="temperature">23°</strong><span>CABIN · AUTO</span></div>
     <button data-temp="1" aria-label="Tăng nhiệt độ">+</button>
+  </div>
+
+  <div id="body-pop" class="body-pop" role="group" aria-labelledby="body-title" hidden>
+    <div class="body-head"><span id="body-title">THÂN XE</span><strong id="body-summary">Tất cả đã đóng</strong></div>
+    <div class="body-map">
+      <button type="button" data-panel="hood" aria-pressed="false"><strong>Capo</strong><small>Đã đóng</small></button>
+      <button type="button" data-panel="driver" aria-pressed="false"><strong>Cửa tài</strong><small>Đã đóng</small></button>
+      <button type="button" data-panel="front_passenger" aria-pressed="false"><strong>Cửa phụ</strong><small>Đã đóng</small></button>
+      <svg id="body-car" class="body-car" viewBox="0 0 120 220" aria-hidden="true">
+        <rect class="shell" x="20" y="8" width="80" height="204" rx="30"/>
+        <path class="mirror" d="M20 92h-8M100 92h8"/>
+        <path class="glass" d="M31 74Q60 63 89 74L85 96Q60 89 35 96Z"/>
+        <rect class="roof" x="35" y="100" width="50" height="62" rx="8"/>
+        <path class="glass" d="M35 166Q60 171 85 166L88 180Q60 186 32 180Z"/>
+        <path class="part lid hood" data-part="hood" d="M27 66C27 33 38 15 60 15S93 33 93 66Q60 58 27 66Z"/>
+        <path class="part lid trunk" data-part="trunk" d="M30 188Q60 194 90 188C90 200 82 206 60 206S30 200 30 188Z"/>
+        <path class="part door left" data-part="driver" d="M20 98v42"/>
+        <path class="part door left" data-part="rear_left" d="M20 144v38"/>
+        <path class="part door right" data-part="front_passenger" d="M100 98v42"/>
+        <path class="part door right" data-part="rear_right" d="M100 144v38"/>
+        <g class="lock-badge"><rect x="51" y="122" width="18" height="15" rx="4"/><path d="M55 122v-4a5 5 0 0 1 10 0v4"/></g>
+      </svg>
+      <button type="button" data-panel="rear_left" aria-pressed="false"><strong>Sau trái</strong><small>Đã đóng</small></button>
+      <button type="button" data-panel="rear_right" aria-pressed="false"><strong>Sau phải</strong><small>Đã đóng</small></button>
+      <button type="button" data-panel="trunk" aria-pressed="false"><strong>Cốp</strong><small>Đã đóng</small></button>
+    </div>
+    <div class="body-actions">
+      <button type="button" id="open-all" class="lock-all"><svg><use href="#i-door"/></svg><span>Mở tất cả</span></button>
+      <button type="button" id="lock-all" class="lock-all" aria-pressed="false"><svg><use href="#i-lock"/></svg><span>Khoá tất cả cửa</span></button>
+    </div>
   </div>
 
   <section id="journey" class="journey" aria-label="Hành trình" hidden>
@@ -117,6 +148,6 @@
   </section>
 
   <dialog id="info-dialog"><div class="dialog-top"><span class="eyebrow">VIVI / SPACE CONCEPT</span><button id="close-dialog" aria-label="Đóng">×</button></div><div id="dialog-content"></div></dialog>
-  <script type="module" src="./app.js?v=39"></script>
+  <script type="module" src="./app.js?v=43"></script>
 </body>
 </html>
