@@ -87,7 +87,11 @@ class Settings(BaseSettings):
     ffmpeg_binary: str = "ffmpeg"
     soniox_api_key: str = ""
     soniox_model: str = "stt-rt-v5"
-    soniox_language_hints: str = "vi,en"
+    soniox_language_hints: str = "vi"
+    soniox_language_hints_strict: bool = False
+    # Soniox closes the utterance on a pause instead of waiting for the client.
+    soniox_endpoint_detection: bool = True
+    soniox_max_endpoint_delay_ms: int = Field(default=1000, ge=500, le=3000)
     soniox_ws_url: str = "wss://stt-rt.soniox.com/transcribe-websocket"
     soniox_timeout_seconds: float = 30
     soniox_stream_max_seconds: float = 60
