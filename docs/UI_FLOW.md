@@ -103,23 +103,22 @@ Trạng thái bắt buộc phải nhìn thấy:
 
 Nếu không đủ bằng chứng, UI phải nói rõ “Không tìm thấy thông tin phù hợp trong sổ tay đang chọn” và không tạo câu trả lời suy đoán.
 
-## 5. HITL confirmation wireframe
+## 5. HITL confirmation trong hội thoại
 
 ```text
 ┌──────────────────────────────────────────────────────────────┐
-│ XÁC NHẬN THAO TÁC NHẠY CẢM                                 │
+│ ViVi: Xác nhận mở cửa sổ bên tài ở mức 20 phần trăm?         │
 │                                                              │
-│ Hành động: MỞ KÍNH GHẾ LÁI                                  │
-│ Giá trị: 20%                                                  │
-│ Trạng thái: xe đã dừng · số P                                │
-│                                                              │
-│ Xác nhận hết hạn sau 10 giây. Chỉ áp dụng cho thao tác này.  │
-│                                                              │
-│               [Hủy]                  [Xác nhận]               │
+│ Người dùng nói: “Xác nhận” / “Đồng ý” / “Hủy”                │
+│ hoặc nhập câu trả lời vào ô chat.                            │
 └──────────────────────────────────────────────────────────────┘
 ```
 
-Confirmation thay đổi action/target/value phải tạo confirmation mới. Timeout, deny hoặc replay không được gửi MQTT command.
+Không mở popup hoặc yêu cầu bấm nút xác nhận. Confirmation vẫn gắn với đúng
+action/target/value và có hạn dùng; timeout, deny hoặc replay không được gửi MQTT
+command. Một lần chạm vào control cụ thể trong bảng thân xe được xem là approval
+cho đúng action đang hiển thị; UI tự gửi confirmation ID tương ứng. Yêu cầu bắt
+đầu từ mic hoặc ô chat vẫn phải được xác nhận bằng một lượt thoại/chat riêng.
 
 ## 6. Engineer dashboard wireframe
 
@@ -170,7 +169,7 @@ Các số trong wireframe chỉ là dữ liệu minh họa bố cục, không ph
 | Push-to-talk, transcript, text fallback | FR-2 |
 | Clarification và intent routes | FR-3 |
 | Vehicle state và acknowledgement | FR-4 |
-| HITL modal | FR-5 |
+| HITL qua lượt thoại/chat | FR-5 |
 | Citation source detail | FR-6 |
 | Error/degraded states | FR-7 |
 | Engineer trace dashboard | FR-8 |

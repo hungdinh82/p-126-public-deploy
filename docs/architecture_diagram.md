@@ -140,6 +140,10 @@ flowchart TD
 | R3 - Prohibited | Braking, steering, propulsion, disabling safety | Tool is absent or always denied and audited. |
 
 HITL is checked at execution time. A later step cannot reuse an earlier approval. While the simulated vehicle is moving, the UI uses voice-first prompts and blocks nonessential multi-touch flows.
+Direct manipulation of a concrete door/window/body control counts as approval for
+that exact action only; the backend still issues and resolves a single-use
+confirmation and rechecks current vehicle state before execution. Voice/chat
+commands continue to require a separate conversational approval turn.
 
 ## 4. LangGraph agent design
 
@@ -216,7 +220,7 @@ Evaluation includes answerable, unanswerable, ambiguous, and wrong-vehicle-manua
 
 | Component | Technology | Responsibility |
 |---|---|---|
-| VIVI simulator | Static web bundle; optional Next.js static export | Voice/text input, streaming output, large targets, confirmation modal, offline indicator, citations. |
+| VIVI simulator | Static web bundle; optional Next.js static export | Voice/text input, streaming output, large targets, confirmation bằng lượt thoại/chat, offline indicator, citations. |
 | Engineering dashboard | Static web bundle | Health, latency, quality, model version, q4/q8 comparison, fleet and OTA status. |
 | API gateway | FastAPI, Pydantic, NDJSON | Validation, turn contracts, streaming events, health endpoints. |
 | Speech services | PhoWhisper/whisper.cpp; ZeroTTS/replaceable adapter | Offline Vietnamese STT/TTS with confidence and timing events. |
