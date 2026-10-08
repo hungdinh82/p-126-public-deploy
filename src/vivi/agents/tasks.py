@@ -45,7 +45,11 @@ def active_task(history: list[dict], now: datetime | None = None) -> PendingTask
 def acceptance(text: str) -> bool | None:
     """Only an unambiguous response to a live proposal is consent."""
     text = normalize_text(text).strip(" .!?,")
-    if re.fullmatch(r"(?:co|dong y|duoc|ok|oke|okay|vang|uh|u|lam di|thuc hien)(?: nhe| di| a| luon)?", text):
+    if re.fullmatch(
+        r"(?:(?:toi )?xac nhan|co|dong y|duoc|ok|oke|okay|vang|uh|u|lam di|thuc hien)"
+        r"(?: nhe| di| a| luon)?",
+        text,
+    ):
         return True
     if re.fullmatch(r"(?:khong|khong can|thoi|thoi khoi|bo qua|huy|dung lam)(?: nhe| nua| dau| di| a)?", text):
         return False

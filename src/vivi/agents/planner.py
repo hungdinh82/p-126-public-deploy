@@ -26,7 +26,7 @@ def is_live_status_request(input_text: str) -> bool:
     ):
         return False
     if re.search(r"\b(dat|tang|giam|ha|chinh|mo|dong|bat|tat|khoa)\b", text) and not re.search(
-        r"\b(dang|hien tai|bay gio|da.*chua|co.*khong)\b", text
+        r"\b(dang(?! sau)|hien tai|bay gio|da.*chua|co.*khong)\b", text
     ):
         return False
     if "thong so" in text and not re.search(r"hien tai|bay gio|luc nay|dang", text):
@@ -50,7 +50,8 @@ def is_live_status_request(input_text: str) -> bool:
     if "ap suat lop" in text and re.search(r"hien tai|bay gio|dang|kiem tra|tinh trang|doc|cho biet|bao nhieu", text):
         return True
     return bool(
-        re.search(r"cua|ghe|nhac|cop|capo|ca po|nap may", text) and re.search(r"dang|hien tai|da.*chua|co.*(?:dong|mo|khoa).*khong", text)
+        re.search(r"cua|ghe|nhac|cop|capo|ca po|nap may", text)
+        and re.search(r"dang(?! sau)|hien tai|da.*chua|co.*(?:dong|mo|khoa).*khong", text)
     )
 
 

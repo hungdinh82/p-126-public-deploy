@@ -251,6 +251,47 @@ def build_graph(services: HandbookServices | None = None):
             return IntentDecision(route="clarify", intent="conversation.clarify", needs_clarification=True,
                                   clarification_question="Mình chưa đọc được lệnh đã nhớ. Bạn nói trực tiếp thao tác nhé.")
 
+    def preflight_pending_action(state: AgentState, decision: IntentDecision) -> dict[str, Any]:
+        """Run slot-independent safety rules before persisting a clarification."""
+        follow_up = decision.follow_up
+        if (
+            action_gateway is None
+            or decision.route != "clarify"
+            or follow_up is None
+            or follow_up.intent != "door.set_open"
+            or follow_up.arguments.open is not True
+        ):
+            return {}
+        proposal = ActionProposal(
+            intent=follow_up.intent,
+            arguments=follow_up.arguments.model_dump(exclude_none=True),
+            confidence=decision.confidence,
+        )
+        safety = action_gateway.check(
+            state["session_id"], proposal, state.get("vehicle_state"), turn_id=state["turn_id"]
+        )
+        if safety.status != "blocked":
+            return {}
+        return {
+            "route": "action",
+            "intent": proposal.intent,
+            "status": "blocked",
+            "answer": safety.message,
+            "response": safety.message,
+            "response_text": safety.message,
+            "tts_text": safety.message,
+            "action_proposal": proposal.model_dump(mode="json"),
+            "requires_execution": False,
+            "execution": {
+                "allowed": False,
+                "executed": False,
+                "verified": False,
+                "risk_class": safety.risk_class,
+                "message": safety.message,
+            },
+            "risk_class": safety.risk_class,
+        }
+
     async def observe_vehicle_state_async(state: AgentState) -> dict[str, Any]:
         started = time.perf_counter()
         if action_gateway is None:
@@ -320,6 +361,7 @@ def build_graph(services: HandbookServices | None = None):
             "status": "classified",
             "errors": errors,
             "timings": _merge_timing(state, "classify_intent", started),
+            **preflight_pending_action(state, decision),
         }
 
     async def classify_intent_async(state: AgentState) -> dict[str, Any]:
@@ -372,6 +414,7 @@ def build_graph(services: HandbookServices | None = None):
             "status": "classified",
             "errors": errors,
             "timings": _merge_timing(state, "classify_intent", started),
+            **preflight_pending_action(state, decision),
         }
 
     def resolve_confirmation(state: AgentState) -> dict[str, Any]:
@@ -873,7 +916,7 @@ def build_graph(services: HandbookServices | None = None):
     def after_classification(
         state: AgentState,
     ) -> Literal["scope_guard", "validate_action", "compose_decision_response", "persist"]:
-        if state.get("status") == "classification_error":
+        if state.get("status") in {"classification_error", "blocked"}:
             return "persist"
         route = state.get("route")
         if route == "handbook":

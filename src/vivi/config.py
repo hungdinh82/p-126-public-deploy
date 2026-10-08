@@ -71,6 +71,9 @@ class Settings(BaseSettings):
     mqtt_api_username: str = ""
     mqtt_api_password: str = ""
     mqtt_timeout_seconds: float = 3.0
+    vehicle_simulator_url: str = Field(
+        default="http://127.0.0.1:8788", validation_alias="VIVI_VEHICLE_SIMULATOR_URL"
+    )
 
     stt_provider: Literal["off", "phowhisper", "whisper_cpp", "soniox"] = "soniox"
     # Local STT used when the primary (cloud) provider is missing or fails.
