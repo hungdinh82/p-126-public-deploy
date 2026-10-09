@@ -6,7 +6,7 @@ export PATH="$HOME/.local/bin:$PATH"
 [[ "$(uname -m)" == x86_64 ]] || { echo 'Trên Xavier: bash scripts/jetson_ai.sh setup --profile agx' >&2; exit 1; }
 command -v uv >/dev/null || { echo 'Cần uv để setup môi trường local.' >&2; exit 1; }
 [[ -x .venv/bin/python ]] || uv venv --python 3.12 .venv
-uv pip install --python .venv/bin/python fastapi httpx uvicorn python-multipart \
+uv pip install --python .venv/bin/python fastapi httpx uvicorn wsproto==1.2.0 python-multipart \
   huggingface-hub tokenizers scipy soundfile 'transformers>=4.51,<5' \
   'onnxruntime-gpu==1.23.2' diskcache==5.6.3
 uv pip install --python .venv/bin/python --no-deps zerotts==0.1.5

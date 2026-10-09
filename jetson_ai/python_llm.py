@@ -5,6 +5,10 @@ import threading
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
+from fastapi.responses import StreamingResponse
+from starlette.background import BackgroundTask
+
+from jetson_ai.streaming import close_iterator, next_or_none, sse, worker
 
 model = None
 lock = threading.Lock()
@@ -39,12 +43,45 @@ def health():
 
 @app.post("/v1/chat/completions")
 def chat(payload: dict):
+    if type(payload.get("stream", False)) is not bool:
+        raise HTTPException(400, "stream must be a boolean")
     if not lock.acquire(blocking=False):
         raise HTTPException(429, "Model is busy")
     try:
         allowed = {key: payload[key] for key in
                    ("messages", "max_tokens", "temperature", "top_p", "tools", "tool_choice", "response_format")
                    if key in payload}
+        if payload.get("stream"):
+            chunks = model.create_chat_completion(**allowed, stream=True)
+            released = False
+
+            async def cleanup():
+                nonlocal released
+                if not released:
+                    released = True
+                    try:
+                        await close_iterator(chunks)
+                    finally:
+                        lock.release()
+
+            async def events():
+                try:
+                    while True:
+                        chunk = await worker(next_or_none, chunks)
+                        if chunk is None:
+                            break
+                        chunk["model"] = "vivi-qwen3-1.7b"
+                        yield sse(chunk)
+                    yield sse("[DONE]")
+                except Exception:
+                    yield sse({"error": {"code": "MODEL_ERROR", "message": "Generation failed"}})
+                    yield sse("[DONE]")
+                finally:
+                    await cleanup()
+
+            return StreamingResponse(events(), media_type="text/event-stream",
+                                     headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+                                     background=BackgroundTask(cleanup))
         result = model.create_chat_completion(**allowed, stream=False)
         for choice in result["choices"]:
             content = choice["message"].get("content")
@@ -53,4 +90,5 @@ def chat(payload: dict):
         result["model"] = "vivi-qwen3-1.7b"
         return result
     finally:
-        lock.release()
+        if not payload.get("stream") or "chunks" not in locals():
+            lock.release()

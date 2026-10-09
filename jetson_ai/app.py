@@ -19,6 +19,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 from jetson_ai.config import auth_required
 from jetson_ai.speech import SpeechModels
+from jetson_ai.stream_routes import ModelStreams
 
 VERSION = "1.0"
 
@@ -64,6 +65,7 @@ def create_app(config: ServiceConfig, *, transport: httpx.AsyncBaseTransport | N
     slots = asyncio.Semaphore(config.max_concurrent)
     active = 0
     last_llm_latency = None
+    last_llm_first_chunk = None
     speech = SpeechModels()
     load_task = None
 
@@ -111,9 +113,16 @@ def create_app(config: ServiceConfig, *, transport: httpx.AsyncBaseTransport | N
             pass
         return "unavailable"
 
+    def record_llm(latency, first_chunk):
+        nonlocal last_llm_latency, last_llm_first_chunk
+        last_llm_latency, last_llm_first_chunk = latency, first_chunk
+
+    streams = ModelStreams(config, speech, slots, backend_status, error, record_llm, transport)
+    streams.install(app)
+
     @app.middleware("http")
     async def authenticate(request: Request, call_next):
-        if request.url.path in {"/health/live", "/", "/test"}:
+        if request.url.path in {"/health/live", "/", "/test", "/streaming.js"}:
             return await call_next(request)
         supplied = request.headers.get("authorization", "")
         if config.auth_required and not hmac.compare_digest(supplied, f"Bearer {config.token}"):
@@ -129,6 +138,11 @@ def create_app(config: ServiceConfig, *, transport: httpx.AsyncBaseTransport | N
     @app.get("/health/live")
     async def live():
         return {"status": "live", "contract_version": VERSION}
+
+    @app.get("/streaming.js", include_in_schema=False)
+    async def streaming_script():
+        return Response((Path(__file__).parent / "static/streaming.js").read_text(encoding="utf-8"),
+                        media_type="application/javascript", headers={"Cache-Control": "no-cache"})
 
     @app.get("/", response_class=HTMLResponse, include_in_schema=False)
     @app.get("/test", response_class=HTMLResponse, include_in_schema=False)
@@ -163,7 +177,7 @@ def create_app(config: ServiceConfig, *, transport: httpx.AsyncBaseTransport | N
                 "host": socket.gethostname(), "api_url": config.backend_url,
                 "capabilities": {
                     "llm": {"status": llm_status, "model_id": config.model_id,
-                            "stream": False, "queue_depth": 0,
+                            "stream": True, "stream_protocol": "sse", "queue_depth": 0,
                             "model_path": config.llm_model_path, "api_url": config.backend_url,
                             "host": socket.gethostname(), "pid": os.environ.get("JETSON_AI_LLM_PID"),
                             "device": "not-loaded" if llm_status in {"unavailable", "loading"} else "cuda" if gpu else "cpu" if offloads else "unknown",
@@ -171,6 +185,7 @@ def create_app(config: ServiceConfig, *, transport: httpx.AsyncBaseTransport | N
                             "gpu_layers": int(offloads[-1][0]) if offloads else None,
                             "load_ms": os.environ.get("JETSON_AI_LLM_LOAD_MS"),
                             "last_latency_ms": last_llm_latency,
+                            "first_chunk_ms": last_llm_first_chunk,
                             "limits": {"max_input_bytes": config.max_input_bytes, "max_tokens": config.max_tokens}},
                     "stt": speech.info["stt"],
                     "tts": speech.info["tts"],
@@ -184,7 +199,7 @@ def create_app(config: ServiceConfig, *, transport: httpx.AsyncBaseTransport | N
         return {"object": "list", "data": [{"id": config.model_id, "object": "model", "owned_by": config.backend_id}]}
 
     async def complete(payload: dict[str, Any], request: Request, timeout_ms: int | None = None):
-        nonlocal active, last_llm_latency
+        nonlocal active, last_llm_latency, last_llm_first_chunk
         state = await backend_status()
         if state != "ready":
             code = "MODEL_LOADING" if state == "loading" else "CAPABILITY_UNAVAILABLE"
@@ -218,6 +233,7 @@ def create_app(config: ServiceConfig, *, transport: httpx.AsyncBaseTransport | N
             finally:
                 active -= 1
                 last_llm_latency = round((time.monotonic() - started) * 1000)
+                last_llm_first_chunk = None
 
     async def validate_json(request: Request) -> dict[str, Any] | JSONResponse:
         body = bytearray()
@@ -244,8 +260,10 @@ def create_app(config: ServiceConfig, *, transport: httpx.AsyncBaseTransport | N
         tokens = payload.get("max_tokens", 512)
         if type(tokens) is not int or not 1 <= tokens <= config.max_tokens:
             return error("INVALID_REQUEST", "Invalid max_tokens", 400, request=request)
-        if payload.get("stream"):
-            return error("INVALID_REQUEST", "Streaming is not enabled", 400, request=request)
+        if type(payload.get("stream", False)) is not bool:
+            return error("INVALID_REQUEST", "stream must be a boolean", 400, request=request)
+        if payload.get("stream") and payload.get("n", 1) != 1:
+            return error("INVALID_REQUEST", "Streaming supports n = 1", 400, request=request)
         payload.setdefault("max_tokens", 512)
         return None
 
@@ -268,6 +286,8 @@ def create_app(config: ServiceConfig, *, transport: httpx.AsyncBaseTransport | N
                 return error("DEADLINE_EXCEEDED", "Deadline expired", 408, request=request)
         else:
             timeout_ms = None
+        if payload.get("stream"):
+            return await streams.chat(payload, request, timeout_ms)
         return await complete(payload, request, timeout_ms)
 
     @app.post("/v1/llm/generate")
@@ -289,10 +309,14 @@ def create_app(config: ServiceConfig, *, transport: httpx.AsyncBaseTransport | N
         source = payload.get("input")
         if not isinstance(source, dict):
             return error("INVALID_REQUEST", "Missing input", 400, request=request)
+        source = {**source, "stream": payload.get("stream", source.get("stream", False))}
         invalid = validate_messages(source, request)
         if invalid:
             return invalid
         source = {**source, "model": config.model_id}
+        if source.get("stream"):
+            return await streams.chat(source, request, timeout_ms, {
+                "request_id": payload["request_id"], "call_id": payload["call_id"], "attempt": payload["attempt"]})
         start = time.monotonic()
         result = await complete(source, request, timeout_ms)
         if isinstance(result, JSONResponse):
@@ -344,11 +368,12 @@ def create_app(config: ServiceConfig, *, transport: httpx.AsyncBaseTransport | N
             except Exception as exc:
                 return error("MODEL_ERROR", str(exc), 502, request=request, capability="stt")
             finally:
-                speech.info["stt"].update(status="ready", last_latency_ms=round((time.monotonic() - started) * 1000))
+                speech.info["stt"].update(status="ready", last_latency_ms=round((time.monotonic() - started) * 1000), first_chunk_ms=None)
         return {"contract_version": VERSION, "model_id": "whisper-base", "text": text,
                 "latency_ms": speech.info["stt"]["last_latency_ms"]}
 
     @app.post("/v1/tts/synthesize")
+    @app.post("/v1/tts/stream")
     async def tts(request: Request):
         if speech.info["tts"]["status"] != "ready":
             return error("CAPABILITY_UNAVAILABLE", speech.info["tts"].get("error") or "TTS not ready",
@@ -359,6 +384,13 @@ def create_app(config: ServiceConfig, *, transport: httpx.AsyncBaseTransport | N
         text = payload.get("input", payload).get("text") if isinstance(payload.get("input", payload), dict) else None
         if not isinstance(text, str) or not 1 <= len(text.strip()) <= 500:
             return error("INVALID_REQUEST", "text must contain 1..500 characters", 400, request=request, capability="tts")
+        stream = payload.get("stream", request.url.path.endswith("/stream"))
+        if type(stream) is not bool:
+            return error("INVALID_REQUEST", "stream must be a boolean", 400, request=request, capability="tts")
+        if stream:
+            if payload.get("format", "pcm_s16le") != "pcm_s16le":
+                return error("INVALID_REQUEST", "TTS stream format is pcm_s16le", 400, request=request, capability="tts")
+            return await streams.tts(text.strip(), request)
         if slots.locked():
             return error("BACKEND_BUSY", "GPU stage is busy", 429, request=request, capability="tts", retryable=True)
         started = time.monotonic()
@@ -374,7 +406,7 @@ def create_app(config: ServiceConfig, *, transport: httpx.AsyncBaseTransport | N
             except Exception as exc:
                 return error("MODEL_ERROR", str(exc), 502, request=request, capability="tts")
             finally:
-                speech.info["tts"].update(status="ready", last_latency_ms=round((time.monotonic() - started) * 1000))
+                speech.info["tts"].update(status="ready", last_latency_ms=round((time.monotonic() - started) * 1000), first_chunk_ms=None)
         return Response(audio, media_type="audio/wav", headers={
             "X-ViVi-Latency-Ms": str(speech.info["tts"]["last_latency_ms"]),
             "X-Audio-Sample-Rate": str(speech.info["tts"]["sample_rate"]),
