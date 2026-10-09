@@ -38,6 +38,39 @@ main. Hai lựa chọn cục bộ trong config.toml (`phowhisper`, `zerotts`) đ
 
 ## Chạy
 
+### Cấu hình một địa chỉ AI server
+
+Gateway AI có thể chạy trên Jetson, PC hoặc máy khác có runtime phù hợp.
+Laptop chỉ cần địa chỉ truy cập được; không phụ thuộc SSH alias hay loại máy.
+Trong `config.toml`:
+
+```toml
+llm_provider = "local"
+local_llm_model = "vivi-qwen3-1.7b"
+ai_server_url = "http://<IP-hoặc-hostname-server>:8789"
+jetson_ai_policy = "prefer_local"
+```
+
+Trong `.env`, đặt `AI_SERVER_TOKEN=<token từ service.env trên AI server>`.
+Backend tự dùng cùng URL và token cho capability probe và SLM; tự nối `/v1`.
+Biến môi trường ưu tiên hơn TOML. Xóa/cập nhật các override `LLM_PROVIDER`,
+`AI_SERVER_URL` hoặc `JETSON_AI_URL` cũ nếu muốn dùng cấu hình trong file.
+`JETSON_AI_TOKEN` và `LOCAL_LLM_API_KEY` cũ vẫn dùng được.
+
+Nếu backend chạy native cùng máy AI server, dùng `http://127.0.0.1:8789`.
+Nếu chạy Docker Desktop và AI server ở máy host, dùng
+`http://host.docker.internal:8789`; với Jetson/máy khác, dùng IP LAN/Tailscale
+mà script `run` in ra. `127.0.0.1` trong container chỉ đến chính container.
+Gateway phải lắng nghe trên địa chỉ truy cập đó; trên Jetson LAN dùng
+`JETSON_AI_BIND=<IP-LAN> bash scripts/jetson_ai.sh run`.
+Thay URL cần restart backend; dùng Docker thì chạy
+`docker compose up -d --build backend` để đưa TOML mới vào image.
+
+Các endpoint capability của gateway ViVi vẫn cần thiết khi policy được bật.
+Với LM Studio/llama.cpp độc lập, đặt `jetson_ai_policy = "disabled"` và cấu hình
+`local_llm_base_url`, model, API key trực tiếp như trước.
+Phần cấu hình này nối SLM; remote STT/TTS chưa được nối vào public Laptop API.
+
 Sau khi bạn tự commit/push bản merge, cập nhật checkout Laptop/Jetson bằng nhánh
 feature. Nếu có local edits, sao lưu/ghép trước; không reset chúng để pull.
 

@@ -35,7 +35,7 @@ planner_max_tokens = 2048
 
 # Language model: rules, local, openai, google, openrouter
 # Cloud providers require rag_local_only = false.
-llm_provider = "google"
+llm_provider = "local"
 llm_timeout_seconds = 30
 openai_model = "gpt-4o-mini"
 google_model = "gemini-3.5-flash-lite"
@@ -47,8 +47,17 @@ openrouter_reasoning = false
 openrouter_max_tokens = 1536
 local_llm_base_url = "http://127.0.0.1:1234/v1"
 local_llm_api_key = "local"
-local_llm_model = ""
+local_llm_model = "vivi-qwen3-1.7b"
 local_llm_max_tokens = 512
+
+# Private AI gateway: can run on Jetson, this PC, or another reachable server.
+# Change only this URL; /v1 and the shared authentication are wired automatically.
+# Docker: use the server's LAN/Tailscale IP, or host.docker.internal for the host PC.
+# Put AI_SERVER_TOKEN in .env (token from the AI server's service.env).
+ai_server_url = "http://127.0.0.1:8789"
+jetson_ai_policy = "prefer_local"
+# To use a standalone LM Studio/llama.cpp server instead, set policy = "disabled"
+# and configure local_llm_base_url / local_llm_api_key above.
 
 # Speech: provider = off to disable; preload = true to load at startup
 stt_provider = "off"
