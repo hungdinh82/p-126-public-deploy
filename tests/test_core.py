@@ -280,6 +280,13 @@ class TTSStreamTests(unittest.IsolatedAsyncioTestCase):
 
 
 class APITests(unittest.TestCase):
+    def setUp(self):
+        # These route tests supply graph doubles, without a real AI gateway.
+        # Gateway availability/fallback is covered by the Jetson integration tests.
+        policy = patch.object(runtime.settings, "jetson_ai_policy", "disabled")
+        policy.start()
+        self.addCleanup(policy.stop)
+
     def test_health(self):
         response = TestClient(app).get("/api/v1/health")
         self.assertEqual(response.status_code, 200)
