@@ -8,7 +8,7 @@ const EARTH_RADIUS_M = 6371000;
 // GraphHopper-style maneuver signs returned by the VietMap route API.
 const SIGN_ICONS = { '-98': '↶', '-8': '↶', '-7': '↖', '-3': '↰', '-2': '↰', '-1': '↖', 0: '↑', 1: '↗', 2: '↱', 3: '↱', 4: '◎', 5: '•', 6: '↻', 7: '↗', 8: '↷' };
 
-let hooks = { announce: () => {}, setDriving: () => {}, progress: () => {}, route: () => {}, travel: () => {} };
+let hooks = { announce: () => {}, setDriving: () => {}, progress: () => {}, route: () => {}, travel: () => {}, network: () => {} };
 let config = null;
 let map = null;
 let sdkPromise = null;
@@ -17,6 +17,7 @@ let destination = null;     // { lat, lng, name, address }
 let route = null;           // backend Route + cumulative distances
 let markers = {};
 let sim = { running: false, speedup: 5, traveled: 0, last: 0, frame: 0, step: -1, follow: true, lastPaint: 0, bearing: 0 };
+let lastNetworkScan = 0;
 // 'full' covers the screen for planning, 'mini' is the corner map while driving.
 let view = 'hidden';
 let searchTimer = 0;
@@ -224,6 +225,7 @@ async function choosePlace(place) {
   }
 }
 
+const MIN_AVERAGE = 22 / 3.6, MAX_AVERAGE = 70 / 3.6;   // m/s
 async function planRoute() {
   if (!origin || !destination || !map) return;
   setMessage('Đang tìm tuyến đường phù hợp…');
@@ -232,8 +234,19 @@ async function planRoute() {
     const planned = await api(`/api/v1/navigation/route?origin=${origin.lat},${origin.lng}&destination=${destination.lat},${destination.lng}`);
     const cumulative = [0];
     for (let index = 1; index < planned.coordinates.length; index++) cumulative.push(cumulative[index - 1] + haversine(planned.coordinates[index - 1], planned.coordinates[index]));
-    route = { ...planned, cumulative, length: cumulative.at(-1) || planned.distance_m };
-    hooks.route({ coordinates: route.coordinates, cumulative });
+    const length = cumulative.at(-1) || planned.distance_m;
+    // VietMap sometimes times short urban routes at walking pace (2.3 km in
+    // 23 min); keep the average a believable city driving speed.
+    const duration = length / Math.min(MAX_AVERAGE, Math.max(MIN_AVERAGE, length / Math.max(1, planned.duration_s)));
+    route = { ...planned, cumulative, length, duration_s: duration };
+    markRoundaboutExits();
+    // Manoeuvre points become intersections in the 3D scene; the start and the
+    // arrival/via signs are not junctions.
+    const junctions = planned.steps.slice(1).filter(step => step.sign !== 4 && step.sign !== 5)
+      .map(step => cumulative[Math.min(step.point_index, cumulative.length - 1)]);
+    hooks.route({ coordinates: route.coordinates, cumulative, junctions });
+    networkKey = '';
+    hooks.network([]);
     map.getSource('vivi-route').setData({ type: 'Feature', geometry: { type: 'LineString', coordinates: planned.coordinates } });
     map.getSource('vivi-traveled').setData(emptyLine());
     const bounds = planned.coordinates.reduce((box, point) => box.extend(point), new vietmapgl.LngLatBounds(planned.coordinates[0], planned.coordinates[0]));
@@ -243,6 +256,8 @@ async function planRoute() {
   } catch (error) {
     route = null;
     hooks.route(null);
+    networkKey = '';
+    hooks.network([]);
     renderRoute();
     setMessage(error.message, 'error');
   } finally {
@@ -280,6 +295,105 @@ function cruiseSpeed(now, upcoming) {
   return Math.max(5, average * (1 + .07 * Math.sin(now / 2300)) * slowdown);
 }
 
+// --- Street network -------------------------------------------------------
+// While driving, the corner map has the street tiles around the car loaded.
+// Every street in them near the route ahead goes to the 3D scene with its
+// real shape, so junctions, bends and roundabouts look like the map. No extra
+// requests: only tiles the map already holds are read.
+const NETWORK_AHEAD = 320, NETWORK_BEHIND = 60, NETWORK_SIDE = 70, NETWORK_SCAN_MS = 1500;
+const ON_ROUTE = 10;   // metres: closer than this, a street is the road we drive on
+// The other carriageway of a divided road runs alongside the route this close.
+const CARRIAGEWAY = 30;
+const ROAD_WIDTH = { motorway: 11, trunk: 11, primary: 10, secondary: 9, tertiary: 8, minor: 6, service: 4.5 };
+let networkKey = '';
+function roadSourceId() {
+  const sources = map.getStyle()?.sources || {};
+  return Object.keys(sources).find(id => sources[id].type === 'vector');
+}
+function scanNetwork(traveled) {
+  const source = roadSourceId();
+  if (!source) return;
+  // Route window in local metres around the car (x east, y north).
+  const [lng0, lat0] = positionAt(traveled).point;
+  const kx = 111320 * Math.cos(lat0 * Math.PI / 180), ky = 110540;
+  const local = ([lng, lat]) => [(lng - lng0) * kx, (lat - lat0) * ky];
+  const { cumulative, coordinates } = route;
+  const from = traveled - NETWORK_BEHIND, to = Math.min(route.length, traveled + NETWORK_AHEAD);
+  const segments = [];
+  for (let index = 0; index < coordinates.length - 1; index++) {
+    if (cumulative[index + 1] < from - NETWORK_SIDE || cumulative[index] > to + NETWORK_SIDE) continue;
+    const [ax, ay] = local(coordinates[index]), [bx, by] = local(coordinates[index + 1]);
+    const length = Math.hypot(bx - ax, by - ay);
+    if (length > .1) segments.push({ ax, ay, dx: (bx - ax) / length, dy: (by - ay) / length, length, start: cumulative[index] });
+  }
+  if (!segments.length) return;
+  // Nearest route point: distance and metres along the route.
+  const nearest = (x, y) => {
+    let best = { distance: Infinity, at: 0 };
+    for (const segment of segments) {
+      const t = Math.max(0, Math.min(segment.length, (x - segment.ax) * segment.dx + (y - segment.ay) * segment.dy));
+      const distance = Math.hypot(x - segment.ax - segment.dx * t, y - segment.ay - segment.dy * t);
+      if (distance < best.distance) best = { distance, at: segment.start + t, dx: segment.dx, dy: segment.dy };
+    }
+    return best;
+  };
+  const inWindow = hit => hit.distance < NETWORK_SIDE && hit.at > from && hit.at < to;
+  const roads = [];
+  const seen = new Set();
+  for (const feature of map.querySourceFeatures(source, { sourceLayer: 'road' })) {
+    const width = ROAD_WIDTH[feature.properties.class];
+    if (!width || feature.properties.brunnel === 'tunnel') continue;
+    const lines = feature.geometry.type === 'LineString' ? [feature.geometry.coordinates] : feature.geometry.type === 'MultiLineString' ? feature.geometry.coordinates : [];
+    for (const line of lines) {
+      // Neighbouring tiles repeat the same street; draw it once.
+      const id = line.map(([lng, lat]) => `${lng.toFixed(6)},${lat.toFixed(6)}`).join(';');
+      if (seen.has(id)) continue;
+      seen.add(id);
+      const hits = line.map(point => { const [x, y] = local(point); return nearest(x, y); });
+      // Split the street into stretches off the route; a stretch keeps the
+      // route point it leaves from or joins at, so it meets our road.
+      let run = null;
+      const close = end => {
+        if (run && run.points.length > 1 && !alongside(run.indices)) roads.push({ width: run.width, points: run.points, startAt: run.startAt, endAt: end ?? null });
+        run = null;
+      };
+      // Mostly parallel to the route and close by: the other carriageway of
+      // the road we are on, already drawn as our road.
+      const alongside = indices => {
+        let parallel = 0, total = 0;
+        for (let k = 1; k < indices.length; k++) {
+          const [ax, ay] = local(line[indices[k - 1]]), [bx, by] = local(line[indices[k]]);
+          const length = Math.hypot(bx - ax, by - ay);
+          const hit = hits[indices[k]];
+          total += length;
+          if (hit.distance < CARRIAGEWAY && Math.abs(((bx - ax) * hit.dx + (by - ay) * hit.dy) / (length || 1)) > .94) parallel += length;
+        }
+        return total > 0 && parallel / total > .7;
+      };
+      hits.forEach((hit, index) => {
+        if (hit.distance <= ON_ROUTE) {
+          if (run) { run.points.push(line[index]); run.indices.push(index); close(hit.at); }
+          return;
+        }
+        if (!inWindow(hit)) { close(); return; }
+        if (!run) {
+          const previous = hits[index - 1];
+          const attached = previous && previous.distance <= ON_ROUTE;
+          run = { width, points: attached ? [line[index - 1]] : [], indices: attached ? [index - 1] : [], startAt: attached ? previous.at : null };
+        }
+        run.points.push(line[index]);
+        run.indices.push(index);
+      });
+      close();
+    }
+  }
+  // Only a changed network is rebuilt in the scene.
+  const key = roads.map(road => `${road.points.length}:${road.points[0]}`).join('|');
+  if (key === networkKey) return;
+  networkKey = key;
+  hooks.network(roads);
+}
+
 // --- Drive simulation -----------------------------------------------------
 function positionAt(distance) {
   const { cumulative, coordinates } = route;
@@ -289,6 +403,17 @@ function positionAt(distance) {
   const t = Math.min(1, Math.max(0, (distance - cumulative[low]) / span));
   const [a, b] = [coordinates[low], coordinates[high]];
   return { index: low, point: [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t], heading: bearing(a, b) };
+}
+// Which way each roundabout (sign 6) is left, from the heading on the way in
+// to the heading after the exit: degrees, positive to the right.
+function markRoundaboutExits() {
+  const at = step => route.cumulative[Math.min(step.point_index, route.cumulative.length - 1)];
+  route.steps.forEach((step, index) => {
+    const exit = route.steps[index + 1];
+    if (step.sign !== 6 || !exit) return;
+    const turn = positionAt(at(exit) + 10).heading - positionAt(Math.max(0, at(step) - 5)).heading;
+    step.exitTurn = ((turn % 360) + 540) % 360 - 180;
+  });
 }
 function stepAt(index) {
   let current = 0;
@@ -334,14 +459,20 @@ function tick(now) {
     const upcoming = showNextManeuver(stepIndex, sim.traveled);
     hooks.progress({
       speedKmh: cruiseSpeed(now, upcoming),
-      next: upcoming ? { sign: upcoming.next.sign, icon: SIGN_ICONS[upcoming.next.sign] ?? '↑', text: upcoming.next.text, distance: upcoming.distance } : null,
-      heading, remaining: summary.remaining, arrival: summary.arrival, destination: destination.name
+      next: upcoming ? { sign: upcoming.next.sign, exitTurn: upcoming.next.exitTurn, icon: SIGN_ICONS[upcoming.next.sign] ?? '↑', text: upcoming.next.text, distance: upcoming.distance } : null,
+      heading, remaining: summary.remaining, arrival: summary.arrival, destination: destination.name,
+      // Inside a roundabout: the next step starts at its exit.
+      roundabout: route.steps[stepIndex]?.sign === 6 ? route.steps[stepIndex].exitTurn ?? 0 : null
     });
     if (stepIndex !== sim.step) {
       sim.step = stepIndex;
       highlightStep(stepIndex);
       if (upcoming) hooks.announce(`Sau ${formatDistance(upcoming.distance)}, ${upcoming.next.text.charAt(0).toLowerCase()}${upcoming.next.text.slice(1)}`);
     }
+  }
+  if (now - lastNetworkScan > NETWORK_SCAN_MS) {
+    lastNetworkScan = now;
+    try { scanNetwork(sim.traveled); } catch (error) { console.warn('Street network scan failed:', error); }
   }
   if (view === 'mini') {
     // Course-up in the corner map: smooth the heading so turns do not snap.
@@ -381,14 +512,34 @@ function stopSimulation(announce = true) {
 function finishSimulation() {
   sim.running = false;
   $('#journey').classList.remove('simulating');
-  $('#journey-start span').textContent = 'Chạy lại mô phỏng';
+  $('#journey-start span').textContent = 'Bắt đầu mô phỏng';
   $('#journey-next').hidden = true;
-  highlightStep(route.steps.length);
   hooks.travel(null);
   hooks.setDriving(false);
   hooks.progress(null);
   setTimeout(() => { if (!sim.running && view === 'mini') setView('hidden'); }, 6000);
   hooks.announce(`Bạn đã đến ${destination.name}. Chúc bạn một ngày tốt lành.`);
+  arrive();
+}
+// The car stays where it arrived: the destination becomes the next origin and
+// the finished route is cleared, ready for a new destination.
+function arrive() {
+  origin = { lat: destination.lat, lng: destination.lng, label: destination.name };
+  destination = null;
+  route = null;
+  sim.traveled = 0;
+  $('#journey-origin').textContent = origin.label;
+  $('#journey-search').value = '';
+  removeMarker('car');
+  removeMarker('destination');
+  placeMarker('origin', [origin.lng, origin.lat], 'origin');
+  map.getSource('vivi-route').setData(emptyLine());
+  map.getSource('vivi-traveled').setData(emptyLine());
+  hooks.route(null);
+  networkKey = '';
+  hooks.network([]);
+  renderRoute();
+  setMessage('Đã đến nơi. Tìm điểm đến tiếp theo để đi tiếp từ đây.');
 }
 function resetSimulation() {
   stopSimulation(false);
