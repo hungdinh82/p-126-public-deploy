@@ -40,6 +40,25 @@ main. Hai lựa chọn cục bộ trong config.toml (`phowhisper`, `zerotts`) đ
 
 ### Cấu hình một địa chỉ AI server
 
+Chạy app bình thường trên PC, trong hai terminal tại repo:
+
+```bash
+# Chuẩn bị AI runtime một lần nếu máy chưa có dependency/model.
+bash scripts/ai_server.sh setup
+# Terminal 1: giữ STT/SLM/TTS và gateway chạy cho app.
+bash scripts/ai_server.sh run
+# Terminal 2: backend chính, workflow/session/RAG và giao diện 8787.
+.venv/bin/python run.py
+```
+
+PC `run` dùng GPU mặc định, cổng 8789; không tạo hội thoại test hoặc đổi backend
+sang profile test. Có thể chọn `--host`, `--port`, `--device cpu`, `--gpu-layers`.
+Log nằm trong `data/ai-server/`. Dừng bằng Ctrl+C; một engine dừng sẽ dừng cả
+service thay vì để app tiếp tục gọi process hỏng. Các model speech nạp ở nền;
+xem trạng thái tại gateway `/test`. Nếu thiếu model/runtime, chạy `setup` trước.
+Trên Xavier, cùng launcher gọi script Jetson native, dùng lại môi trường đã setup.
+Remote STT/TTS chưa được ghép vào app chính; app vẫn giữ adapter speech hiện có.
+
 Gateway AI có thể chạy trên Jetson, PC hoặc máy khác có runtime phù hợp.
 Laptop chỉ cần địa chỉ truy cập được; không phụ thuộc SSH alias hay loại máy.
 Trong `config.toml`:
@@ -51,7 +70,12 @@ ai_server_url = "http://<IP-hoặc-hostname-server>:8789"
 jetson_ai_policy = "prefer_local"
 ```
 
-Trong `.env`, đặt `AI_SERVER_TOKEN=<token từ service.env trên AI server>`.
+Để test cá nhân không cần token, đặt `ai_server_auth_required = false` trong
+`config.toml` của cả backend và AI server (mặc định của nhánh này). Restart cả
+hai process; không cần setup/build lại model. Gateway `/test` tự ẩn ô token.
+Chế độ này cho phép mọi client truy cập được địa chỉ server gọi model.
+Muốn bật lại xác thực, đặt `ai_server_auth_required = true` ở cả hai máy và
+trong `.env` của backend đặt `AI_SERVER_TOKEN=<token từ service.env trên AI server>`.
 Backend tự dùng cùng URL và token cho capability probe và SLM; tự nối `/v1`.
 Biến môi trường ưu tiên hơn TOML. Xóa/cập nhật các override `LLM_PROVIDER`,
 `AI_SERVER_URL` hoặc `JETSON_AI_URL` cũ nếu muốn dùng cấu hình trong file.
