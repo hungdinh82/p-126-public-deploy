@@ -9,6 +9,8 @@ VIVI_MODEL_SHA=b139949c5bd74937ad8ed8c8cf3d9ffb1e99c866c823204dc42c0d91fa181897
 VIVI_MODEL_URL=https://huggingface.co/unsloth/Qwen3-1.7B-GGUF/resolve/d7f544eead698dbd1f15126ef60b45a1e1933222/Qwen3-1.7B-Q4_K_M.gguf
 VIVI_LLAMA_REF=b11447
 VIVI_WHISPER_REF=v1.7.6
+VIVI_EIGEN_REF=e7248b26a1ed53fa030c5c459f7ea095dfd276ac
+VIVI_EIGEN_URL=https://gitlab.com/libeigen/eigen.git
 VIVI_BACKEND_PORT="${JETSON_AI_BACKEND_PORT:-1235}"
 VIVI_PORT="${JETSON_AI_PORT:-8789}"
 VIVI_STT_PORT="${JETSON_AI_STT_PORT:-1236}"
@@ -69,6 +71,25 @@ build_whisper() {
     -DCMAKE_BUILD_TYPE=Release
   cmake --build "$source/build" --target whisper-server -j 2
 }
+prepare_eigen() {
+  local source="$VIVI_DATA/build/eigen"
+  # GitLab archive bytes can change while the underlying commit stays fixed.
+  # Supply the same Eigen revision that ORT 1.16.3 pins in cmake/deps.txt.
+  if [[ -d "$source/.git" ]] && \
+     [[ "$(git -C "$source" rev-parse HEAD 2>/dev/null || true)" == "$VIVI_EIGEN_REF" ]]; then
+    git -C "$source" diff --quiet HEAD -- || fail "Eigen checkout was modified: $source"
+  else
+    if [[ ! -d "$source/.git" ]]; then
+      [[ ! -e "$source" ]] || fail "Eigen directory exists without Git metadata: $source"
+      git init "$source" || fail "Could not create Eigen checkout"
+    fi
+    git -C "$source" fetch --depth 1 "$VIVI_EIGEN_URL" "$VIVI_EIGEN_REF" \
+      || fail "Could not fetch pinned Eigen revision; rerun setup"
+    git -C "$source" checkout --detach "$VIVI_EIGEN_REF" || fail "Eigen checkout failed"
+  fi
+  [[ "$(git -C "$source" rev-parse HEAD)" == "$VIVI_EIGEN_REF" && -f "$source/Eigen/Core" ]] \
+    || fail "Eigen revision or headers do not match the pinned dependency"
+}
 build_ort() {
   local python_bin="$VIVI_DATA/venv/bin/python" source="$VIVI_DATA/build/onnxruntime"
   if "$python_bin" -c 'import onnxruntime as o; assert o.__version__ == "1.16.3"; assert "CUDAExecutionProvider" in o.get_available_providers()' 2>/dev/null; then return; fi
@@ -76,6 +97,7 @@ build_ort() {
   if [[ -n "${JETSON_AI_ORT_WHEEL:-}" ]]; then
     uv pip install --python "$python_bin" --no-deps "$JETSON_AI_ORT_WHEEL"
   else
+    prepare_eigen
     uv pip install --python "$python_bin" 'setuptools<70' wheel packaging 'numpy==1.26.4' \
       coloredlogs flatbuffers 'protobuf<5' sympy
     [[ -d "$source/.git" ]] || git clone --depth 1 --branch v1.16.3 --recursive \
@@ -84,7 +106,9 @@ build_ort() {
      "$python_bin" tools/ci_build/build.py --config Release --build_wheel --parallel 2 \
        --skip_tests --use_cuda --cuda_home /usr/local/cuda --cudnn_home /usr \
        --cmake_path "$VIVI_DATA/venv/bin/cmake" --build_dir "$source/build" \
-       --compile_no_warning_as_error --cmake_extra_defines CMAKE_CUDA_ARCHITECTURES=72)
+       --compile_no_warning_as_error --cmake_extra_defines CMAKE_CUDA_ARCHITECTURES=72 \
+       onnxruntime_USE_PREINSTALLED_EIGEN=ON "eigen_SOURCE_PATH=$VIVI_DATA/build/eigen") \
+      || fail "ONNX Runtime CUDA build failed; rerun setup to resume the existing build"
     local wheels=("$source"/build/Release/dist/onnxruntime_gpu-*.whl)
     [[ -f "${wheels[0]}" ]] || fail "Native CUDA ONNX Runtime wheel was not produced"
     uv pip install --python "$python_bin" --no-deps "${wheels[0]}"
@@ -134,7 +158,6 @@ setup() {
   JETSON_AI_DEVICE=cuda JETSON_AI_TTS_MODEL="$VIVI_DATA/models/speech/zerotts" \
     "$VIVI_DATA/venv/bin/python" -c 'from jetson_ai.speech import SpeechModels; m=SpeechModels(); m.load("tts"); assert m.info["tts"]["using_gpu"], m.info["tts"]; assert m.synthesize("Xin chào bạn.")[:4] == b"RIFF"' \
     || fail "TTS CUDA smoke failed; setup is incomplete"
-  touch "$VIVI_DATA/speech-setup-complete"
   if [[ ! -f "$VIVI_DATA/service.env" ]]; then
     umask 077
     command -v openssl >/dev/null || fail "openssl is required to create the service token"
@@ -144,6 +167,7 @@ setup() {
   (set -a; source "$VIVI_DATA/service.env"; set +a
    "$VIVI_DATA/venv/bin/python" -c 'from jetson_ai.app import app; assert app is not None') \
     || fail "Gateway import check failed"
+  touch "$VIVI_DATA/speech-setup-complete"
   echo "Setup complete: SLM + STT + TTS CUDA."
   echo "Service token: $VIVI_DATA/service.env (copy securely to Laptop)"
   if command -v tailscale >/dev/null 2>&1; then
@@ -155,8 +179,8 @@ run() {
   check_platform
   [[ -x "$VIVI_DATA/venv/bin/python" ]] || fail "Run setup first: missing venv"
   [[ -x "$VIVI_DATA/build/llama.cpp/build/bin/llama-server" ]] || fail "Run setup first: missing llama-server"
+  [[ -f "$VIVI_DATA/speech-setup-complete" ]] || fail "Setup incomplete: rerun bash scripts/jetson_ai.sh setup --profile agx"
   [[ -r "$VIVI_DATA/service.env" ]] || fail "Run setup first: missing service token"
-  [[ -f "$VIVI_DATA/speech-setup-complete" ]] || fail "Run setup again: speech CUDA smoke has not passed"
   [[ -x "$VIVI_DATA/build/whisper.cpp/build/bin/whisper-server" ]] || fail "Run setup again: missing STT server"
   [[ -f "$VIVI_DATA/models/speech/whisper/ggml-base.bin" ]] || fail "Run setup again: missing speech weights"
   echo "$VIVI_MODEL_SHA  $VIVI_MODEL" | sha256sum -c --status || fail "Model missing or checksum mismatch"
@@ -224,8 +248,10 @@ run() {
   trap - EXIT INT TERM
 }
 
-case "${1:-}" in
-  setup) shift; setup "$@" ;;
-  run) shift; [[ $# == 0 ]] || fail "Usage: bash scripts/jetson_ai.sh run"; run ;;
-  *) fail "Usage: bash scripts/jetson_ai.sh {setup --profile agx|run}" ;;
-esac
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  case "${1:-}" in
+    setup) shift; setup "$@" ;;
+    run) shift; [[ $# == 0 ]] || fail "Usage: bash scripts/jetson_ai.sh run"; run ;;
+    *) fail "Usage: bash scripts/jetson_ai.sh {setup --profile agx|run}" ;;
+  esac
+fi

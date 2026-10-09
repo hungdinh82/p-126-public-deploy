@@ -75,6 +75,19 @@ bash scripts/jetson_ai.sh run
 
 `setup` build llama.cpp `b11447`, whisper.cpp `v1.7.6` cho CUDA kiến trúc Xavier `sm_72`, tải speech model theo revision cố định và kiểm tra SHA256 GGUF. TTS dùng ONNX Runtime CUDA 1.16.3 build native cho CUDA 11.4/cuDNN 8, hoặc wheel riêng qua `JETSON_AI_ORT_WHEEL`. Lần build ONNX Runtime đầu có thể mất nhiều thời gian; lần sau dùng lại binary/wheel. Nếu có venv service Python 3.12 từ mốc LLM cũ, script giữ bản đó với tên `venv-before-speech-*` rồi tạo venv 3.10.
 
+### Python và lỗi tải Eigen khi setup
+
+Môi trường chính `.venv` của repo dùng Python 3.12. Service AI trên Xavier dùng Python 3.10 riêng tại `/mnt/jetson-data/vivi-ai/venv`; log setup hiện tại ghi 3.10.22. Kiểm tra đúng interpreter bằng:
+
+```bash
+/mnt/jetson-data/vivi-ai/venv/bin/python -V
+.venv/bin/python -V
+```
+
+Nếu build ONNX Runtime dừng ở `eigen-populate` với `SHA1 hash ... does not match expected value`, setup chưa hoàn tất nên chưa có service token. Script lấy Eigen bằng Git tại đúng commit mà ORT 1.16.3 yêu cầu, kiểm tra revision và dùng `onnxruntime_USE_PREINSTALLED_EIGEN` để tránh tải lại ZIP bị sai checksum. Đây là tùy chọn trong [CMake chính thức của ORT 1.16.3](https://github.com/microsoft/onnxruntime/blob/v1.16.3/cmake/external/eigen.cmake).
+
+Pull bản sửa rồi chạy lại `bash scripts/jetson_ai.sh setup --profile agx`. Giữ nguyên thư mục dữ liệu để dùng lại model, binary llama/whisper và phần build đã có. Chỉ chạy `run` sau khi thấy `Setup complete: SLM + STT + TTS CUDA.`; không tạo token thủ công để bỏ qua setup.
+
 **Điểm cần xác minh trên Xavier:** ZeroTTS 0.1.5 khai báo ONNX Runtime >=1.17. Profile CUDA 11.4 thử bản 1.16.3 riêng và chỉ đánh dấu setup hoàn tất khi nạp CUDA và tạo WAV thật thành công. Chưa chạy phép kiểm này trên AGX; không coi runtime này đã được nghiệm thu. Kiểm tra CPU 1.16.3 không chạy được export FP16 do kernel ArgMax; không dùng CPU đó làm fallback cho TTS. Lý do tránh lấy bản ORT mới tùy ý: [hướng dẫn build chính thức](https://onnxruntime.ai/docs/build/eps.html) yêu cầu CUDA >=11.8 cho JetPack 5 từ ORT 1.17. Khi CUDA build/smoke lỗi, setup dừng và báo bước lỗi; không tự chuyển sang CPU.
 
 `run` ưu tiên địa chỉ Tailscale của Jetson, hoặc localhost nếu không có Tailscale. Muốn Laptop kết nối qua LAN, đặt `JETSON_AI_BIND` bằng IP LAN riêng của Jetson trước khi chạy. llama-server và whisper-server chỉ lắng nghe loopback; gateway dùng Bearer token trong `/mnt/jetson-data/vivi-ai/service.env` (quyền 0600). `Ctrl+C` dừng gateway và model process. Muốn đổi mount, dùng `JETSON_AI_DATA_DIR` trong cả hai lệnh. Không cần chạy Docker hay ba lệnh model riêng.
