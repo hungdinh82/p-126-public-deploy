@@ -25,9 +25,11 @@ class SpeechModels:
             "status": "unavailable", "model_id": "whisper-base" if name == "stt" else "ZeroTTS",
             "engine": self.stt_engine if name == "stt" else "onnxruntime",
             "model_path": self.stt_path if name == "stt" else self.tts_path,
-            "device": "not-loaded", "using_gpu": False, "stream": False, "queue_depth": 0,
+            "device": "not-loaded", "using_gpu": False, "stream": True, "queue_depth": 0,
+            "stream_protocol": "websocket_pcm16" if name == "stt" else "http_pcm16",
+            "stream_mode": "rolling_utterance" if name == "stt" else "decoder_chunks",
             "host": socket.gethostname(), "pid": os.getpid(), "load_ms": None,
-            "last_latency_ms": None, "error": None,
+            "last_latency_ms": None, "first_chunk_ms": None, "error": None,
         } for name in ("stt", "tts")}
 
     def load(self, name: str) -> None:
@@ -129,11 +131,17 @@ class SpeechModels:
                 raise ValueError("Upload mono 16-bit WAV at 16000 Hz")
             samples = np.frombuffer(wav.readframes(wav.getnframes()), dtype="<i2").astype(np.float32) / 32768
         model, processor = self.models["stt"]
-        features = processor(samples, sampling_rate=16000, return_tensors="pt").input_features
-        with torch.inference_mode():
-            tokens = model.generate(features.to(device=model.device, dtype=model.dtype),
-                                    language="vi", task="transcribe", max_new_tokens=128)
-        return processor.batch_decode(tokens, skip_special_tokens=True)[0].strip()
+        texts = []
+        # Whisper's feature extractor only covers a 30-second window. Decode
+        # every window so the 60-second API limit does not silently drop audio.
+        for offset in range(0, len(samples), 30 * 16000):
+            features = processor(samples[offset:offset + 30 * 16000], sampling_rate=16000,
+                                 return_tensors="pt").input_features
+            with torch.inference_mode():
+                tokens = model.generate(features.to(device=model.device, dtype=model.dtype),
+                                        language="vi", task="transcribe", max_new_tokens=256)
+            texts.append(processor.batch_decode(tokens, skip_special_tokens=True)[0].strip())
+        return " ".join(text for text in texts if text)
 
     def synthesize(self, text: str) -> bytes:
         import numpy as np
@@ -146,3 +154,18 @@ class SpeechModels:
             wav.setframerate(int(model.sample_rate))
             wav.writeframes((np.clip(audio, -1, 1) * 32767).astype("<i2").tobytes())
         return output.getvalue()
+
+    def synthesize_stream(self, text: str):
+        """Yield real ZeroTTS decoder chunks as mono PCM16, without a WAV header."""
+        import numpy as np
+
+        model, voice = self.models["tts"]
+        chunks = model.synthesize_stream(text, voice=voice)
+        try:
+            for chunk in chunks:
+                samples = np.asarray(chunk, dtype=np.float32).reshape(-1)
+                pcm = (np.clip(samples, -1, 1) * 32767).astype("<i2").tobytes()
+                if pcm:
+                    yield pcm
+        finally:
+            chunks.close()
