@@ -1,4 +1,4 @@
-import { closeJourney, initJourney, openJourney, pauseJourney } from './journey.js?v=7';
+import { closeJourney, initJourney, openJourney, pauseJourney } from './journey.js?v=16';
 import { createCabinMusic } from './music.js?v=2';
 import { neonBorder } from './neon.js?v=2';
 import { createWave } from './wave.js?v=2';
@@ -66,10 +66,11 @@ const NEON_BY_PHASE = {
   blocked: { speed: 4, borderSize: 50, color: '#D6AE78' }
 };
 
-import('./scene3d.js?v=33')
+import('./scene3d.js?v=42')
   .then(module => {
     scene = module.createScene($('#space'), { reduced: state.reduced });
     scene.setRoute(plannedRoute);
+    scene.onBlink(onBlink);
     document.body.classList.add('space-ready');
     updateDriveUI();
     updateVehicle();
@@ -118,8 +119,7 @@ function renderLiveCaption(final, interim) {
 function updateVehicle() {
   $('#temperature').textContent = `${state.temp}°`;
   $('#dock-temp').textContent = `${state.temp}°`;
-  $('#window-toggle').setAttribute('aria-pressed', String(state.window));
-  $('#window-toggle').setAttribute('aria-label', state.window ? 'Đóng cửa sổ bên tài' : 'Mở cửa sổ bên tài');
+  updateWindowPanel();
   // Backend reports the opening in percent; the offline demo only knows open or closed.
   scene?.setWindow(state.window ? (state.windows.driver > 0 ? state.windows.driver : 100) : 0);
   updateBodyPanel();
@@ -130,6 +130,28 @@ function updateVehicle() {
   if (state.music) cabinMusic.play().catch(() => {}); else cabinMusic.stop();
   $('#music-toggle').setAttribute('aria-label', state.music ? 'Dừng nhạc' : 'Phát nhạc');
   updateHud();
+}
+// The four side windows share one popover, sending the spoken command per window.
+const WINDOWS = {
+  driver: { label: 'Bên tài', noun: 'cửa sổ bên tài' },
+  front_passenger: { label: 'Bên phụ', noun: 'cửa sổ bên phụ' },
+  rear_left: { label: 'Sau trái', noun: 'cửa sổ sau trái' },
+  rear_right: { label: 'Sau phải', noun: 'cửa sổ sau phải' }
+};
+const windowPercent = zone => zone === 'driver' && !state.windows.driver ? (state.window ? 100 : 0) : Number(state.windows[zone]) || 0;
+function updateWindowPanel() {
+  const opened = [];
+  for (const [zone, pane] of Object.entries(WINDOWS)) {
+    const percent = windowPercent(zone), open = percent > 0;
+    const chip = $(`#window-pop [data-window="${zone}"]`);
+    chip.setAttribute('aria-pressed', String(open));
+    chip.setAttribute('aria-label', `${open ? 'Đóng' : 'Mở'} ${pane.noun}`);
+    chip.querySelector('small').textContent = !open ? 'Đã đóng' : percent < 100 ? `Mở ${percent}%` : 'Đang mở';
+    $(`#window-car [data-pane="${zone}"]`).classList.toggle('open', open);
+    if (open) opened.push(pane.label);
+  }
+  $('#window-summary').textContent = opened.length ? `Đang mở · ${opened.join(', ')}` : 'Tất cả đã đóng';
+  $('#window-button').classList.toggle('attention', opened.length > 0);
 }
 // Doors, hood and tailgate share one popover; each chip sends the same spoken
 // command a driver would say, so policy and confirmation stay on the backend.
@@ -191,6 +213,43 @@ function updateHud() {
   // VietMap signs: negative turns left, positive right; only near turns get a cue.
   const turning = next && next.distance < 220 && next.sign !== 4 && next.sign !== 5;
   scene?.setTurn(turning ? Math.sign(next.sign) : null);
+  scene?.setIndicator(driving ? signalFor(nav) : 0);
+}
+const SIGNAL_DISTANCE = 70;   // metres before a turn
+const EXIT_SIGNAL = 25;       // metres before leaving a roundabout
+// Signal shortly before a real turn; not for straight on, arrival or via
+// points. Roundabouts (sign 6) run anticlockwise: an exit to the right is
+// signalled right all the way; going straight on only signals right at the
+// exit; further round signals left until the exit, then right.
+const exitSide = turn => turn > 30 ? 1 : turn < -30 ? -1 : 0;
+function signalFor(progress) {
+  const next = progress?.next;
+  if (progress?.roundabout != null) return next && next.distance < EXIT_SIGNAL ? 1 : exitSide(progress.roundabout);
+  if (!next || next.distance >= SIGNAL_DISTANCE) return 0;
+  if (next.sign === 6) return exitSide(next.exitTurn ?? 0);
+  return [0, 4, 5].includes(Math.abs(next.sign)) ? 0 : Math.sign(next.sign);
+}
+
+// Blinker lamp on the HUD and the relay tick, both driven by the scene's blink.
+let tickContext = null;
+function blinkerTick(on) {
+  if (!state.sound || state.reduced) return;
+  try {
+    tickContext ??= new AudioContext();
+    if (tickContext.state === 'suspended') tickContext.resume();
+    const now = tickContext.currentTime, click = tickContext.createOscillator(), gain = tickContext.createGain();
+    click.type = 'square';
+    click.frequency.value = on ? 1900 : 1300;
+    gain.gain.setValueAtTime(.05, now);
+    gain.gain.exponentialRampToValueAtTime(.0001, now + .025);
+    click.connect(gain).connect(tickContext.destination);
+    click.start(now);
+    click.stop(now + .03);
+  } catch { /* audio unavailable */ }
+}
+function onBlink(side) {
+  document.querySelectorAll('.blinkers [data-blink]').forEach(arrow => arrow.classList.toggle('on', Number(arrow.dataset.blink) === side));
+  blinkerTick(side !== 0);
 }
 let shownDriving = false;
 function updateDriveUI() {
@@ -261,7 +320,7 @@ async function pollVehicleAlerts() {
   } catch { /* Polling resumes automatically after a temporary disconnect. */ }
 }
 function highlight(id) { $(id).classList.add('highlight'); setTimeout(() => $(id).classList.remove('highlight'), 2600); }
-const DOCK_BY_INTENT = { climate: '#climate-button', window: '#window-toggle', door: '#body-button', hood: '#body-button', trunk: '#body-button', body: '#body-button', media: '#music-toggle' };
+const DOCK_BY_INTENT = { climate: '#climate-button', window: '#window-button', door: '#body-button', hood: '#body-button', trunk: '#body-button', body: '#body-button', media: '#music-toggle' };
 function say(text) {
   if (!state.sound || !('speechSynthesis' in window)) return;
   speechSynthesis.cancel();
@@ -427,7 +486,7 @@ function resolveCommand(command) {
   return { type: 'clarify', message: 'Mình có thể chỉnh nhiệt độ, mở hoặc đóng cửa sổ bên tài, điều khiển nhạc và mở cẩm nang minh họa. Bạn muốn thử việc nào?' };
 }
 function lockControls(locked) {
-  document.querySelectorAll('#climate-pop button, #body-pop button, #window-toggle, #music-toggle, #drive-toggle, .send-button').forEach(button => { button.disabled = locked; });
+  document.querySelectorAll('#climate-pop button, #body-pop button, #window-pop button, #music-toggle, #drive-toggle, .send-button').forEach(button => { button.disabled = locked; });
   // The mic stays enabled while recording so a second tap can stop it.
   $('#demo-mic').disabled = !state.backendAvailable || !state.sttAvailable;
   if (state.backendAvailable && state.vehicleProvider !== 'memory') $('#drive-toggle').disabled = true;
@@ -451,7 +510,7 @@ async function runLocalCommand(command, voiceDemo = false) {
     let message = '';
     switch (action.type) {
       case 'climate': state.temp = action.value; message = `Mình đã đặt nhiệt độ xe mô phỏng ở ${state.temp} độ. Hy vọng bạn thấy dễ chịu hơn.`; highlight('#climate-button'); break;
-      case 'window': state.window = action.value; message = `Mình đã ${state.window ? 'mở' : 'đóng'} cửa sổ bên tài trên xe mô phỏng.`; highlight('#window-toggle'); break;
+      case 'window': state.window = action.value; state.windows = { ...state.windows, driver: action.value ? 100 : 0 }; message = `Mình đã ${state.window ? 'mở' : 'đóng'} cửa sổ bên tài trên xe mô phỏng.`; highlight('#window-button'); break;
       case 'door': state.doorOpen = action.value; state.doors = { ...state.doors, driver: { ...state.doors.driver, open: action.value } }; message = `Mình đã ${state.doorOpen ? 'mở' : 'đóng'} cửa bên tài trên xe mô phỏng.`; highlight('#body-button'); break;
       case 'music': state.music = action.value; message = state.music ? 'Đã chuyển nhạc sang trạng thái phát trong demo. Một chút bình yên cho hành trình.' : 'Mình đã dừng nhạc mô phỏng.'; highlight('#music-toggle'); break;
       case 'manual': openPanel('manual'); message = 'Mình đã mở cẩm nang minh họa. Bản demo chưa kết nối tài liệu hướng dẫn chính thức.'; break;
@@ -835,10 +894,15 @@ function updateModelStatus() {
 $('#command-form').addEventListener('submit', event => { event.preventDefault(); runCommand($('#command-input').value); });
 $('#demo-mic').addEventListener('click', startRecording);
 document.querySelectorAll('[data-temp]').forEach(button => button.addEventListener('click', () => runCommand(`Đặt nhiệt độ ${state.temp + Number(button.dataset.temp)} độ`, { action: { capability: 'climate.set_temperature', arguments: { temperature_delta_celsius: Number(button.dataset.temp) } } })));
-$('#window-toggle').addEventListener('click', () => runCommand(
-  state.window ? 'Đóng cửa sổ bên tài' : 'Mở cửa sổ bên tài',
-  { autoConfirm: true, action: { capability: 'window.set_position', arguments: { zone: 'driver', position_percent: state.window ? 0 : 100 } } }
-));
+const windowAction = (zone, open) => ({ autoConfirm: true, action: { capability: 'window.set_position', arguments: { zone, position_percent: open ? 100 : 0 } } });
+$('#window-pop').addEventListener('click', event => {
+  const chip = event.target.closest('[data-window]');
+  if (!chip) return;
+  const zone = chip.dataset.window, open = !(windowPercent(zone) > 0);
+  runCommand(`${open ? 'Mở' : 'Đóng'} ${WINDOWS[zone].noun}`, windowAction(zone, open));
+});
+$('#windows-open-all').addEventListener('click', () => runCommand('Mở tất cả cửa sổ', windowAction('all', true)));
+$('#windows-close-all').addEventListener('click', () => runCommand('Đóng tất cả cửa sổ', windowAction('all', false)));
 $('#body-pop').addEventListener('click', event => {
   const chip = event.target.closest('[data-panel]');
   if (chip) runCommand(
@@ -1036,7 +1100,8 @@ initJourney({
   },
   progress: progress => { nav = progress; updateHud(); },
   route: route => { plannedRoute = route; scene?.setRoute(route); },
-  travel: distance => scene?.setRouteDistance(distance)
+  travel: distance => scene?.setRouteDistance(distance),
+  network: roads => scene?.setNetwork(roads)
 });
 function applyReducedMotion(reduced) {
   state.reduced = reduced;
@@ -1060,7 +1125,7 @@ $('#keyboard-toggle').addEventListener('click', () => {
 });
 $('#command-input').addEventListener('keydown', event => { if (event.key === 'Escape') $('#keyboard-toggle').click(); });
 // Dock popovers sit above their button, kept inside the viewport; one at a time.
-const dockPops = [['#climate-pop', '#climate-button'], ['#body-pop', '#body-button']];
+const dockPops = [['#climate-pop', '#climate-button'], ['#window-pop', '#window-button'], ['#body-pop', '#body-button']];
 function togglePop(popId, buttonId, open = $(popId).hidden) {
   const pop = $(popId);
   if (open) dockPops.forEach(([other, button]) => { if (other !== popId) togglePop(other, button, false); });

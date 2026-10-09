@@ -242,8 +242,56 @@ async function loadCar() {
   for (const zone of ['front_passenger', 'rear_left', 'rear_right']) doors[zone] = rigDoor(car, zone, DOOR_GLASS_MESHES);
   const hood = rigHood(car), tailgate = rigTailgate(car);
   paintRear(car);
+  const signals = rigSignals(car);
   wheels.radius *= scale;
-  return { car, wheels, glow, doors, driverWindow, hood, tailgate };
+  return { car, wheels, glow, doors, driverWindow, hood, tailgate, signals };
+}
+
+// Turn signals: the rear amber bar (Object007) and the mirror indicators,
+// split into a left and a right half that light up on their own. Emissive
+// only, so bloom makes them glow without adding a scene light.
+const SIGNAL_AMBER = 0xff6a08;
+function rigSignals(car) {
+  car.updateMatrixWorld(true);
+  const lit = { '-1': [], 1: [] };
+  const signal = base => {
+    const material = base.clone();
+    material.emissive = new THREE.Color(SIGNAL_AMBER);
+    material.emissiveIntensity = 0;
+    material.toneMapped = false;
+    return material;
+  };
+  const point = new THREE.Vector3();
+  car.traverse(node => {
+    if (!node.isMesh) return;
+    if (node.name === 'Object007' && node.geometry.index) {
+      // One mesh spans the tailgate width: sort its triangles by side.
+      const geometry = node.geometry, index = geometry.index.array, position = geometry.attributes.position;
+      const sides = [[], []];
+      for (let i = 0; i < index.length; i += 3) {
+        let x = 0;
+        for (let k = 0; k < 3; k++) x += point.fromBufferAttribute(position, index[i + k]).applyMatrix4(node.matrixWorld).x;
+        sides[x < 0 ? 0 : 1].push(index[i], index[i + 1], index[i + 2]);
+      }
+      geometry.setIndex([...sides[0], ...sides[1]]);
+      geometry.clearGroups();
+      geometry.addGroup(0, sides[0].length, 0);
+      geometry.addGroup(sides[0].length, sides[1].length, 1);
+      node.material = [signal(node.material), signal(node.material)];
+      // Drawn after the smoked tail lens (transparent, no depth write) so the
+      // lens does not swallow the amber; unlit, it matches the lens anyway.
+      for (const material of node.material) material.transparent = true;
+      node.renderOrder = 1;
+      lit[-1].push(node.material[0]); lit[1].push(node.material[1]);
+    } else if (node.name === 'indicator_lf_moving') {
+      // Each front door carries its own mirror's indicator.
+      node.material = signal(node.material);
+      lit[Math.sign(node.userData.bounds.getCenter(point).x) || 1].push(node.material);
+    }
+  });
+  return (direction, on, reveal) => {
+    for (const side of [-1, 1]) for (const material of lit[side]) material.emissiveIntensity = direction === side && on ? 3 * reveal : 0;
+  };
 }
 
 // Split a mesh into its connected pieces (vertices welded by position) and
@@ -494,7 +542,9 @@ function buildFloor() {
 // The road follows a path in metres on a local plane (x east, -z north) with
 // compass headings in degrees. A planned route gives the real shape of the road
 // ahead; without one the road runs straight on.
-const PATH_STEP = 2, PATH_SMOOTHING = 5;
+// Light smoothing: corners become drivable bends but junctions and
+// roundabouts keep their shape, so side streets from the map line up.
+const PATH_STEP = 2, PATH_SMOOTHING = 3;
 function straightPath(heading) {
   const radians = THREE.MathUtils.degToRad(heading);
   return { at(distance, out) { out.x = Math.sin(radians) * distance; out.z = -Math.cos(radians) * distance; out.h = heading; return out; } };
@@ -535,6 +585,8 @@ function routePath(coordinates, cumulative) {
   };
   const behind = {}, ahead = {};
   return {
+    // Same local metres as the path, before smoothing: x east, z south.
+    project([lng, lat]) { return { x: (lng - lng0) * kx, z: -(lat - lat0) * kz }; },
     at(distance, out) {
       point(distance, out); point(distance - 3, behind); point(distance + 3, ahead);
       out.h = THREE.MathUtils.radToDeg(Math.atan2(ahead.x - behind.x, behind.z - ahead.z));
@@ -646,10 +698,191 @@ function buildRoad() {
   return { road, asphalt, edges, edgeMaterial, dashes, dashMaterial, posts, postMaterial, streaks, streakMaterial, streakSeeds, chevron, chevronMaterial, guide, guideMaterial, beams };
 }
 
+// --- Intersections --------------------------------------------------------
+// One crossroads at a time: the next manoeuvre point of the planned route, or
+// every JUNCTION_EVERY metres on the free road. It is a cross street, a stop
+// line with a zebra crossing and a signal on our side.
+const JUNCTION_EVERY = 320, JUNCTION_AHEAD = 120, JUNCTION_BEHIND = 30;
+const CROSS_LENGTH = 70, CROSS_HALF_WIDTH = 4.2;
+const ZEBRA = { stripes: 10, width: .42, length: 2.4, at: CROSS_HALF_WIDTH + 1.6 }, STOP_LINE = CROSS_HALF_WIDTH + 3.2;
+// The signal turns green for us at this distance, so we never run a red.
+const SIGNAL_GREEN = 70;
+function buildJunction() {
+  const group = new THREE.Group();
+  group.visible = false;
+  const fade = { transparent: true, opacity: 0, depthWrite: false };
+  const flat = geometry => geometry.rotateX(-Math.PI / 2);
+  // The cross street sits just under our road so the two never z-fight.
+  const asphaltMaterial = new THREE.MeshStandardMaterial({ color: 0x020307, roughness: .9, metalness: 0, envMapIntensity: .02, ...fade });
+  const asphalt = new THREE.Mesh(flat(new THREE.PlaneGeometry(CROSS_LENGTH, CROSS_HALF_WIDTH * 2)).translate(0, .001, 0), asphaltMaterial);
+  // Its kerb lines stop where they meet our road.
+  const edgeMaterial = new THREE.MeshBasicMaterial({ color: STARLIGHT, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, ...fade });
+  const span = CROSS_LENGTH / 2 - EDGES[1];
+  const edges = new THREE.Mesh(mergeGeometries([-1, 1].flatMap(side => [-1, 1].map(z =>
+    flat(new THREE.PlaneGeometry(span, EDGE_WIDTH)).translate(side * (EDGES[1] + span / 2), .008, z * (CROSS_HALF_WIDTH - EDGE_WIDTH / 2))))), edgeMaterial);
+  // Zebra crossing and stop line across our road, on the side we arrive from.
+  const paintMaterial = new THREE.MeshBasicMaterial({ color: 0x8e97ab, side: THREE.DoubleSide, ...fade });
+  const pitch = (EDGES[1] * 2 - .4) / ZEBRA.stripes;
+  const paint = new THREE.Mesh(mergeGeometries([
+    ...Array.from({ length: ZEBRA.stripes }, (_, index) => flat(new THREE.PlaneGeometry(ZEBRA.width, ZEBRA.length)).translate(-EDGES[1] + .2 + pitch * (index + .5), .009, ZEBRA.at)),
+    flat(new THREE.PlaneGeometry(EDGES[1] * 2, .3)).translate(0, .009, STOP_LINE)
+  ]), paintMaterial);
+  // Signal: a pole on the right kerb with an arm reaching over the road.
+  const poleMaterial = new THREE.MeshStandardMaterial({ color: 0x1b1f28, roughness: .5, metalness: .6, ...fade });
+  const pole = new THREE.Mesh(mergeGeometries([
+    new THREE.CylinderGeometry(.09, .11, 4.4, 10).translate(EDGES[1] + 1.4, 2.2, STOP_LINE),
+    new THREE.CylinderGeometry(.06, .06, 4, 8).rotateZ(Math.PI / 2).translate(EDGES[1] - .6, 4.25, STOP_LINE),
+    new THREE.BoxGeometry(.42, 1.2, .3).translate(2.2, 3.55, STOP_LINE)
+  ]), poleMaterial);
+  // Red, amber and green lenses facing us; the lit one is bright enough to bloom.
+  const lamps = [[2.4, .3, .25], [2.2, 1.4, .2], [.2, 2.4, 1]].map(([r, g, b], index) => {
+    const lamp = new THREE.Mesh(new THREE.CircleGeometry(.13, 18), new THREE.MeshBasicMaterial({ color: new THREE.Color(r, g, b), toneMapped: false, ...fade }));
+    lamp.position.set(2.2, 3.93 - index * .38, STOP_LINE + .16);
+    return lamp;
+  });
+  group.add(asphalt, edges, paint, pole, ...lamps);
+  return { group, lamps, cross: [asphalt, edges], materials: [asphaltMaterial, edgeMaterial, paintMaterial, poleMaterial], at: null, green: false, open: false };
+}
+
+// Street network around a planned route, read from the map tiles: every
+// street near the route with its real shape and kerbs, faded out by the fog.
+// It is built once per map scan in path space; each frame only moves the
+// whole network under the chase camera.
+const NETWORK_STEP = 2.5, NETWORK_BLEND = 25;
+function buildNetwork() {
+  const group = new THREE.Group();
+  group.matrixAutoUpdate = false;
+  const fade = { transparent: true, opacity: 0, depthWrite: false };
+  const asphaltMaterial = new THREE.MeshStandardMaterial({ color: 0x020307, roughness: .9, metalness: 0, envMapIntensity: .02, ...fade });
+  const edgeMaterial = new THREE.MeshBasicMaterial({ color: STARLIGHT, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, ...fade });
+  const asphalt = new THREE.Mesh(new THREE.BufferGeometry(), asphaltMaterial);
+  const edges = new THREE.Mesh(new THREE.BufferGeometry(), edgeMaterial);
+  for (const mesh of [asphalt, edges]) { mesh.frustumCulled = false; group.add(mesh); }
+  return { group, asphalt, edges, materials: [asphaltMaterial, edgeMaterial], gaps: [] };
+}
+// Streets ([{ points: [[lng, lat]], width, startAt, endAt }], startAt/endAt
+// in metres along the route where a street joins it, else null) become
+// ribbons in path space. Where a street joins, its end is pinned to our
+// smoothed road; its kerbs hide wherever they run over another road's
+// surface, and our kerb opens where the street's kerbs meet it.
+function networkGeometry(roads, path, distance) {
+  const CELL = 8;
+  const grid = new Map();
+  const cell = (x, z) => `${Math.floor(x / CELL)},${Math.floor(z / CELL)}`;
+  const insert = (x, z, half, id, at) => {
+    const key = cell(x, z);
+    if (!grid.has(key)) grid.set(key, []);
+    grid.get(key).push({ x, z, half, id, at });
+  };
+  // Our own road takes part as id -1, with route distances for the gaps.
+  const heading = {};
+  for (let at = distance - 80; at <= distance + 480; at += 1.5) { path.at(at, heading); insert(heading.x, heading.z, EDGES[1], -1, at); }
+  const covered = (x, z, id) => {
+    let hit = null;
+    const cx = Math.floor(x / CELL), cz = Math.floor(z / CELL);
+    for (let i = cx - 1; i <= cx + 1; i++) for (let j = cz - 1; j <= cz + 1; j++) {
+      for (const sample of grid.get(`${i},${j}`) || []) {
+        if (sample.id === id || Math.hypot(sample.x - x, sample.z - z) > sample.half + .3) continue;
+        if (sample.id === -1) return sample;
+        hit = sample;
+      }
+    }
+    return hit;
+  };
+  const strips = [];
+  roads.forEach((road, id) => {
+    const line = road.points.map(point => path.project(point));
+    const lengths = [0];
+    for (let index = 1; index < line.length; index++) lengths.push(lengths[index - 1] + Math.hypot(line[index].x - line[index - 1].x, line[index].z - line[index - 1].z));
+    const total = lengths.at(-1);
+    if (total < 2) return;
+    // Pin joined ends to our road, blending the shift out along the street.
+    for (const [end, at] of [[0, road.startAt], [line.length - 1, road.endAt]]) {
+      if (!Number.isFinite(at)) continue;
+      const anchor = path.at(at, {});
+      const dx = anchor.x - line[end].x, dz = anchor.z - line[end].z;
+      line.forEach((point, index) => {
+        const weight = Math.max(0, 1 - Math.abs(lengths[index] - lengths[end]) / NETWORK_BLEND);
+        point.x += dx * weight; point.z += dz * weight;
+      });
+    }
+    const count = Math.max(2, Math.ceil(total / NETWORK_STEP) + 1);
+    const samples = [];
+    for (let sample = 0, segment = 0; sample < count; sample++) {
+      const along = Math.min(total, sample * NETWORK_STEP);
+      while (segment < line.length - 2 && lengths[segment + 1] < along) segment++;
+      const a = line[segment], b = line[segment + 1];
+      const length = lengths[segment + 1] - lengths[segment] || 1;
+      const t = (along - lengths[segment]) / length;
+      samples.push({ x: a.x + (b.x - a.x) * t, z: a.z + (b.z - a.z) * t, rx: -(b.z - a.z) / length, rz: (b.x - a.x) / length });
+    }
+    for (const sample of samples) insert(sample.x, sample.z, road.width / 2, id, null);
+    strips.push({ id, road, samples });
+  });
+  const gaps = [];
+  const asphalt = [], edges = [];
+  for (const { id, road, samples } of strips) {
+    const half = road.width / 2;
+    asphalt.push(samples.map(sample => [sample, -half, half]));
+    for (const kerb of [-half, half]) {
+      let previous;
+      edges.push(samples.map(sample => {
+        const x = sample.x + sample.rx * kerb, z = sample.z + sample.rz * kerb;
+        const under = covered(x, z, id);
+        // Where a kerb comes off our road or runs onto it, our own kerb
+        // opens for it.
+        const ours = !under && previous?.id === -1 ? previous : under?.id === -1 && previous === null ? under : null;
+        if (ours) {
+          path.at(ours.at, heading);
+          const radians = THREE.MathUtils.degToRad(heading.h);
+          gaps.push({ side: Math.sign((x - heading.x) * Math.cos(radians) + (z - heading.z) * Math.sin(radians)), at: ours.at });
+        }
+        previous = under;
+        const width = under ? 0 : EDGE_WIDTH / 2;
+        return [sample, kerb - width, kerb + width];
+      }));
+    }
+  }
+  return { asphalt: ribbonGeometry(asphalt, .001), edges: ribbonGeometry(edges, .008), gaps: mergeGaps(gaps) };
+}
+// Kerb crossings on each side close together open one stretch of our kerb.
+function mergeGaps(crossings) {
+  const gaps = [];
+  for (const side of [-1, 1]) {
+    const ats = crossings.filter(crossing => crossing.side === side).map(crossing => crossing.at).sort((a, b) => a - b);
+    for (const at of ats) {
+      const last = gaps.at(-1);
+      if (last && last.side === side && at - last.to < 14) last.to = at + .8;
+      else gaps.push({ side, from: at - .8, to: at + .8 });
+    }
+  }
+  return gaps;
+}
+// Strips of [sample, left, right] become one indexed ribbon mesh.
+function ribbonGeometry(strips, y) {
+  const vertices = strips.reduce((sum, strip) => sum + strip.length * 2, 0);
+  const position = new Float32Array(vertices * 3), normal = new Float32Array(vertices * 3), index = [];
+  let vertex = 0;
+  for (const strip of strips) {
+    strip.forEach(([at, left, right], sample) => {
+      position.set([at.x + at.rx * left, y, at.z + at.rz * left, at.x + at.rx * right, y, at.z + at.rz * right], vertex * 3);
+      normal[vertex * 3 + 1] = normal[vertex * 3 + 4] = 1;
+      if (sample) index.push(vertex - 2, vertex - 1, vertex, vertex, vertex - 1, vertex + 1);
+      vertex += 2;
+    });
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(position, 3));
+  geometry.setAttribute('normal', new THREE.BufferAttribute(normal, 3));
+  geometry.setIndex(index);
+  return geometry;
+}
+
 // --- Traffic --------------------------------------------------------------
 // Simulated cars for context, like a self-driving display, on a one-way road
 // of three lanes (-1 left, 0 centre, 1 right). They mostly drive a little
 // slower than us, so the VinFast changes lanes to get past them.
+const SIGNAL_PERIOD = .75, SIGNAL_HOLD = 1.2;   // seconds
 const TRAFFIC_LANE = 3.1, TRAFFIC_GAP = 14, TRAFFIC_LANES = [-1, 0, 1];
 const TRAFFIC = { count: 3, ahead: [30, 120], spawn: [90, 140], behind: -34 };
 // Our car moves over when a car is this close ahead in its lane, and keeps at
@@ -810,6 +1043,10 @@ export function createScene(canvas, options = {}) {
   scene.add(road.road);
   const traffic = buildTraffic();
   scene.add(traffic.group);
+  const junction = buildJunction();
+  scene.add(junction.group);
+  const network = buildNetwork();
+  scene.add(network.group);
   const carPivot = new THREE.Group();
   carPivot.add(road.beams);
   scene.add(carPivot);
@@ -833,7 +1070,7 @@ export function createScene(canvas, options = {}) {
     mode: 'parked', drive: 0, speed: 0, displaySpeed: 0, distance: 0,
     orbit: -2.35, orbitVelocity: 0, dragging: false, lastX: 0,
     voice: 0, turn: null, turnStrength: 0, yaw: 0, reveal: 0,
-    route: null, routeDistance: 0, routeLive: false, onRoute: false, straight: null, carHeading: 0, camHeading: 0, chevronTurn: 0, lane: 0, laneOffset: 0, laneVelocity: 0, laneHold: 0, lastDistance: 0, forward: 0, laneYaw: 0, camLane: 0, guideLane: 0, window: 0, windowOpen: 0, doors: {}, doorsOpen: {}, hood: 0, hoodOpen: 0, trunk: 0, trunkOpen: 0,
+    route: null, junctions: [], routeDistance: 0, routeLive: false, onRoute: false, straight: null, carHeading: 0, camHeading: 0, chevronTurn: 0, lane: 0, laneOffset: 0, laneVelocity: 0, laneHold: 0, lastDistance: 0, forward: 0, laneYaw: 0, camLane: 0, guideLane: 0, window: 0, windowOpen: 0, indicator: 0, signal: 0, signalHold: 0, blink: false, onBlink: null, doors: {}, doorsOpen: {}, hood: 0, hoodOpen: 0, trunk: 0, trunkOpen: 0,
     reduced: Boolean(options.reduced), paused: false, time: 0, last: performance.now(), frame: 0
   };
 
@@ -861,7 +1098,12 @@ export function createScene(canvas, options = {}) {
     for (let sample = 0; sample < ROAD_SAMPLES; sample++) {
       place(path, distance - ROAD_BEHIND + sample * PATH_STEP);
       writePair(asphalt.array, sample * 2, point, -ROAD_HALF_WIDTH, ROAD_HALF_WIDTH, .002);
-      EDGES.forEach((x, strip) => writePair(edges.array, (strip * ROAD_SAMPLES + sample) * 2, point, x - EDGE_WIDTH / 2, x + EDGE_WIDTH / 2, .008));
+      // Kerb lines break where a street joins.
+      const mark = distance - ROAD_BEHIND + sample * PATH_STEP;
+      EDGES.forEach((x, strip) => {
+        const half = opening(mark, Math.sign(x)) ? 0 : EDGE_WIDTH / 2;
+        writePair(edges.array, (strip * ROAD_SAMPLES + sample) * 2, point, x - half, x + half, .008);
+      });
     }
     asphalt.needsUpdate = edges.needsUpdate = true;
     const guide = road.guide.geometry.attributes.position;
@@ -877,6 +1119,7 @@ export function createScene(canvas, options = {}) {
     const dashes = road.dashes.geometry.attributes.position;
     let count = 0;
     for (let mark = Math.ceil((distance - ROAD_BEHIND) / DASH_SPACING) * DASH_SPACING; mark + DASH_LENGTH <= distance + ROAD_AHEAD; mark += DASH_SPACING) {
+      if (crossing(mark) || crossing(mark + DASH_LENGTH)) continue;
       for (const lane of LANE_LINES) {
         if (count >= MAX_DASHES) break;
         writePair(dashes.array, count * 4, place(path, mark), lane - DASH_WIDTH / 2, lane + DASH_WIDTH / 2, .009);
@@ -891,6 +1134,7 @@ export function createScene(canvas, options = {}) {
       place(path, mark);
       for (const x of POSTS) {
         if (count >= MAX_POSTS) break;
+        if (opening(mark, Math.sign(x), 1)) continue;
         matrix.makeTranslation(point.x + point.rx * x, 0, point.z + point.rz * x);
         road.posts.setMatrixAt(count++, matrix);
       }
@@ -907,6 +1151,52 @@ export function createScene(canvas, options = {}) {
       road.streaks.setMatrixAt(streakIndex, matrix);
     });
     road.streaks.instanceMatrix.needsUpdate = true;
+  }
+
+  // The junction in reach, in metres along the path, or null.
+  function nextJunction(distance, onRoute) {
+    if (!onRoute) {
+      const at = Math.ceil((distance - JUNCTION_BEHIND) / JUNCTION_EVERY) * JUNCTION_EVERY;
+      return at > 0 && at < distance + JUNCTION_AHEAD ? at : null;
+    }
+    return state.junctions.find(at => at > distance - JUNCTION_BEHIND && at < distance + JUNCTION_AHEAD) ?? null;
+  }
+  const crossing = mark => junction.open && Math.abs(mark - junction.at) < CROSS_HALF_WIDTH + .4;
+  // Our kerb opens where a street of the network joins (on a route only).
+  let networkLive = false;
+  const opening = (mark, side, margin = 0) => crossing(mark) || (networkLive && network.gaps.some(gap => gap.side === side && mark > gap.from - margin && mark < gap.to + margin));
+  function layoutJunction(path, distance, onRoute) {
+    junction.at = nextJunction(distance, onRoute);
+    junction.group.visible = junction.at !== null && state.drive > .01;
+    // Real side streets from the map replace the generic cross street.
+    junction.open = junction.at !== null && !(onRoute && network.gaps.some(gap => gap.to > junction.at - 25 && gap.from < junction.at + 25));
+    for (const mesh of junction.cross) mesh.visible = junction.open;
+    if (junction.at === null) return;
+    // Square to the street we arrive on, so a turn leaves along the cross street.
+    const rel = place(path, junction.at - 12).rel;
+    place(path, junction.at);
+    junction.group.position.set(point.x, 0, point.z);
+    junction.group.rotation.y = -rel;
+    junction.green = junction.at - distance < SIGNAL_GREEN;
+    junction.lamps.forEach((lamp, index) => { lamp.material.opacity = state.drive * (index === (junction.green ? 2 : 0) ? 1 : .12); });
+  }
+
+  // The network is static in path space: one matrix puts it in the camera's
+  // frame (the same transform as place()).
+  const networkMove = new THREE.Matrix4();
+  function layoutNetwork(onRoute) {
+    networkLive = onRoute;
+    network.group.visible = onRoute && state.drive > .01;
+    network.group.matrix.makeRotationY(THREE.MathUtils.degToRad(view.heading))
+      .multiply(networkMove.makeTranslation(-carPoint.x, 0, -carPoint.z));
+    network.group.matrixWorldNeedsUpdate = true;
+  }
+  function setNetworkRoads(roads) {
+    const built = state.route && roads?.length ? networkGeometry(roads, state.route, state.distance) : null;
+    for (const mesh of [network.asphalt, network.edges]) mesh.geometry.dispose();
+    network.asphalt.geometry = built?.asphalt || new THREE.BufferGeometry();
+    network.edges.geometry = built?.edges || new THREE.BufferGeometry();
+    network.gaps = built?.gaps || [];
   }
 
   // Traffic moves with the distance we cover, at a pace close to ours. Cars
@@ -1028,6 +1318,7 @@ export function createScene(canvas, options = {}) {
     if (vehicle) {
       for (const wheel of vehicle.wheels.pivots) wheel.rotation.x -= metersPerSecond * 1.8 * dt / vehicle.wheels.radius;
       vehicle.glow(drive, state.voice, reveal);
+      vehicle.signals(state.signal, state.blink, reveal);
       // About 1.5 s from closed to fully open, like a real window motor.
       state.windowOpen = state.reduced ? state.window : ease(state.windowOpen, state.window, 2.4, dt);
       vehicle.driverWindow?.(state.windowOpen);
@@ -1058,8 +1349,20 @@ export function createScene(canvas, options = {}) {
     road.streakMaterial.opacity = state.reduced ? 0 : Math.min(.45, state.displaySpeed / 90) * drive;
     road.beams.material.opacity = .28 * drive;
     for (const material of traffic.materials) material.opacity = drive;
+    for (const material of junction.materials) material.opacity = drive;
+    // Side streets stay quieter than the road we drive on.
+    network.materials[0].opacity = drive;
+    network.materials[1].opacity = .14 * drive;
     traffic.group.visible = drive > .01;
     road.guideMaterial.opacity = (state.reduced ? .7 : .62 + Math.sin(state.time * 2.2) * .08) * drive;
+
+    // Turn signals: for the coming manoeuvre, or while changing lanes; they
+    // keep blinking a moment after, as a driver cancels them.
+    const laneShift = state.lane * TRAFFIC_LANE - state.laneOffset;
+    const wanted = !driving ? 0 : state.indicator || (Math.abs(laneShift) > .5 ? Math.sign(laneShift) : 0);
+    if (wanted) { state.signal = wanted; state.signalHold = SIGNAL_HOLD; } else if ((state.signalHold -= dt) <= 0) state.signal = 0;
+    const blink = state.signal !== 0 && (state.time % SIGNAL_PERIOD) < SIGNAL_PERIOD * .55;
+    if (blink !== state.blink) { state.blink = blink; state.onBlink?.(blink ? state.signal : 0); }
 
     // Manoeuvre cue: chevrons glow and point toward the coming turn.
     state.turnStrength = ease(state.turnStrength, driving && state.turn !== null ? 1 : 0, 3, dt);
@@ -1088,6 +1391,8 @@ export function createScene(canvas, options = {}) {
     state.camHeading = driving ? ease(state.camHeading, state.carHeading, 1.4, dt) : state.carHeading;
     view.heading = state.camHeading;
     view.cos = Math.cos(THREE.MathUtils.degToRad(view.heading)); view.sin = Math.sin(THREE.MathUtils.degToRad(view.heading));
+    layoutJunction(path, state.distance, onRoute);
+    layoutNetwork(onRoute);
     layoutRoad(path, state.distance);
     layoutTraffic(path, state.distance);
     const bend = THREE.MathUtils.degToRad(state.carHeading - state.camHeading) * drive;
@@ -1122,12 +1427,23 @@ export function createScene(canvas, options = {}) {
     setSpeed(kmh) { state.speed = Math.max(0, Number(kmh) || 0); },
     // -1 left, 0 straight, 1 right, null for no upcoming manoeuvre.
     setTurn(direction) { state.turn = direction; },
+    // Turn signal for the coming manoeuvre: -1 left, 1 right, 0 off. Lane
+    // changes signal on their own.
+    setIndicator(direction) { state.indicator = Math.sign(Number(direction) || 0); },
+    // Called with -1/1 when a signal lamp lights and 0 when it goes dark.
+    onBlink(listener) { state.onBlink = listener; },
     // Planned route as [lng, lat] points with cumulative distances in metres,
     // or null; the drive simulation then reports how far along it the car is.
     setRoute(route) {
       state.route = route?.coordinates?.length > 1 ? routePath(route.coordinates, route.cumulative) : null;
+      // Manoeuvres closer together than a junction's width read as one.
+      state.junctions = (state.route ? route.junctions || [] : []).filter(Number.isFinite).sort((a, b) => a - b)
+        .filter((at, index, all) => at > 20 && (index === 0 || at - all[index - 1] > 25));
       state.routeLive = false;
+      setNetworkRoads(null);
     },
+    // Streets around the route from the map (see networkGeometry).
+    setNetwork(roads) { setNetworkRoads(roads); },
     // Metres travelled along the route, or null when the simulation stops.
     setRouteDistance(distance) {
       state.routeLive = Number.isFinite(distance);
