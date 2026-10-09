@@ -49,6 +49,9 @@ def runtime_report():
         raise RuntimeError("Expected private CPython 3.12.15")
     if ort.__version__ != "1.20.1" or "CUDAExecutionProvider" not in ort.get_available_providers():
         raise RuntimeError("Expected ONNX Runtime 1.20.1 GPU")
+    platform_fix = Path(sys.prefix) / "ort-platform-fix"
+    if not platform_fix.is_file() or platform_fix.read_text().strip() != "ort-arm-cpuid-bounds-v1":
+        raise RuntimeError("ORT wheel needs upstream ARM CPUID bounds fix; rerun updated setup")
     try:
         metadata.version("onnxruntime")
     except metadata.PackageNotFoundError:
@@ -67,6 +70,7 @@ def runtime_report():
         if requirement.specifier and version not in requirement.specifier:
             raise RuntimeError(f"Dependency mismatch: {requirement}, installed {version}")
     return {"profile": PROFILE, "python": sys.version.split()[0],
+            "ort_platform_fix": platform_fix.read_text().strip(),
             "onnxruntime": ort.__version__, "numpy": metadata.version("numpy"),
             "zerotts": metadata.version("zerotts"),
             "lock_sha256": hashlib.sha256(
@@ -82,6 +86,7 @@ def artifact_report():
     if sha256(decoder) != TTS_FRAME_SHA256:
         raise RuntimeError("ZeroTTS decoder differs from pinned original model; rerun setup")
     return {"tts_decoder_sha256": TTS_FRAME_SHA256,
+            "ort_binary_sha256": sha256(Path(sys.prefix) / "lib/python3.12/site-packages/onnxruntime/capi/onnxruntime_pybind11_state.so"),
             "llama_sha256": sha256(data / "build/llama.cpp/build-cu118-gcc10/bin/llama-server"),
             "whisper_sha256": sha256(data / "build/whisper.cpp/build-cu118-gcc10/bin/whisper-server")}
 
@@ -99,7 +104,7 @@ if __name__ == "__main__":
         saved = json.loads(args.check_manifest.read_text())
         # Driver micro updates may report a different driver API level. Compare
         # the profile and actual library versions; recheck GPU access every run.
-        for key in ("profile", "python", "onnxruntime", "numpy", "zerotts",
+        for key in ("profile", "python", "onnxruntime", "numpy", "zerotts", "ort_platform_fix", "ort_binary_sha256",
                     "lock_sha256", "cuda_runtime", "cudnn", "compute_capability",
                     "tts_decoder_sha256", "llama_sha256", "whisper_sha256"):
             if saved.get(key) != report[key]:

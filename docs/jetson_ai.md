@@ -127,9 +127,23 @@ bash scripts/jetson_ai.sh setup --profile agx
 
 APT sẽ cài cả thư viện runtime cuSPARSE phụ thuộc và báo dung lượng cần thêm trước khi xác nhận. Đây là bổ sung thư viện cho CUDA 11.8, không thay Python/model.
 
+### Nếu ORT build xong nhưng smoke báo `SLM log did not confirm GPU offload`
+
+llama.cpp b11447 đặt log thư viện (bao gồm `offloaded N/M layers to GPU`) ở verbosity 4, trong khi mặc định server là 3. Launcher và smoke hiện chọn rõ `--log-verbosity 4` để kiểm tra GPU và hiển thị trạng thái đúng. Giữ nguyên kiểm tra số layer offload > 0; không bỏ smoke hoặc coi tham số `--n-gpu-layers` là bằng chứng GPU đã chạy. Cập nhật hai file `scripts/jetson_ai.sh`, `scripts/smoke_jetson_profile.py` rồi chạy lại setup; wheel ORT đã build được dùng lại.
+
+### Nếu suy luận xong rồi crash `free(): invalid pointer`
+
+GDB trên Xavier đã xác nhận stack `CPUIDInfo::~CPUIDInfo()` → `_int_free` lúc process thoát. Đây là heap corruption ở phần đọc CPU topology của ORT, không phải lỗi ArgMax/model. [Upstream PR 28344](https://github.com/microsoft/onnxruntime/pull/28344) bổ sung bounds check cho `proc->linux_id` trước khi ghi vào vector per-core.
+
+Profile giữ ORT 1.20.1/CUDA 11.8/cuDNN 8.6 và backport đúng bounds check upstream bằng `scripts/prepare_ort_platform.py`. Helper lưu backup source, chạy lại không sửa thêm và từ chối đoạn source không khớp. Setup yêu cầu marker bản sửa ở wheel cache và venv; wheel 1.20.1 cũ dù import được vẫn phải rebuild/cài lại. Manifest ghi bản sửa và SHA256 của thư viện ORT để run phát hiện artifact thay đổi. Không sửa graph, toán tử hay OS/JetPack; không dùng `os._exit`, bỏ mã lỗi hoặc tạo marker thủ công.
+
+Sau khi cập nhật gói script, chạy lại `bash scripts/jetson_ai.sh setup --profile agx`. CMake giữ object/cache đã có, biên dịch phần CPU thay đổi rồi link/đóng gói lại wheel; không xóa cả build. Chỉ báo hoàn tất nếu smoke suy luận và thoát thành công.
+
+Kết quả trước bản sửa: ba engine cùng nạp và dùng GPU; SLM offload 29/29, trả `2 cộng 3 bằng 5` khoảng 642 ms; TTS tạo WAV khoảng 5.429 s, STT khoảng 3.163 s. STT nhận sai nhiều từ tiếng Việt, chưa đạt nghiệm thu chất lượng. Memcpy warnings cho thấy có copy dữ liệu giữa provider; các lần NvMap allocation thất bại cần đo riêng khi tối ưu RAM/latency. Crash destructor vẫn khiến setup thất bại dù có kết quả inference. Chưa nghiệm thu wheel sau backport trên thiết bị.
+
 ## Môi trường mục tiêu trên AGX Xavier
 
-**Quyết định ngày 09/10/2026:** giữ nguyên OS và JetPack; ưu tiên Python 3.12; giữ graph ZeroTTS nguyên bản. Không dùng bản vá ArgMax. Đây là bộ mục tiêu đã kiểm tra compatibility và một phần bằng model thật, chưa được nghiệm thu CUDA trên Xavier. Script trong workspace đã chuyển sang profile `agx-cu118-ort1201-py312`; phần cài hệ thống nằm riêng trong `jetson_system.sh`. Chưa cài bộ mới và chưa nghiệm thu GPU trên Jetson.
+**Quyết định ngày 09/10/2026:** giữ nguyên OS và JetPack; ưu tiên Python 3.12; giữ graph ZeroTTS nguyên bản. Không dùng bản vá ArgMax. Đây là bộ mục tiêu đã kiểm tra compatibility và một phần bằng model thật, đã chạy inference CUDA trên Xavier nhưng chưa nghiệm thu shutdown ổn định và chất lượng STT. Script trong workspace đã chuyển sang profile `agx-cu118-ort1201-py312`; phần cài hệ thống nằm riêng trong `jetson_system.sh`. Bộ mới đã chạy được ba engine CUDA trên Jetson; bản sửa upstream CPUIDInfo còn cần rebuild và smoke xác nhận thoát sạch.
 
 ### Snapshot SSH, không thay đổi máy
 
@@ -165,7 +179,7 @@ Chọn native + môi trường AI riêng để phù hợp launcher đang có và
 - Trong venv tạm local Python **3.12.13**, NumPy 1.26.4, ORT **1.20.1 CPU**, cả 5 graph model gốc nạp thành công, ZeroTTS + VIVI tạo WAV thật. Phép thử Python 3.10 cũng thành công. Interpreter mục tiêu trên Jetson là 3.12.15; chưa chạy phép thử GPU này trên ARM.
 - [Bảng kernel ORT 1.20.1](https://github.com/microsoft/onnxruntime/blob/v1.20.1/docs/OperatorKernels.md) hỗ trợ ArgMax(13) INT64 trên CPU, CUDA ArgMax vẫn giới hạn opset 1–11. Cho phép partition vài node sang CPU trong session CUDA là hoạt động bình thường; không mô tả TTS là mọi node đều chạy GPU. Nghiệm thu phải kiểm tra profiling và latency, không chỉ `get_available_providers()`.
 - ORT 1.16.3 đã build trên Xavier nhưng model gốc không nạp được vì ArgMax(13) INT64; loại bộ đó khỏi đường setup mục tiêu. Đổi Python riêng lẻ không giải quyết lỗi kernel này.
-- Chưa cài CUDA 11.8/GCC 10, chưa build wheel GPU 1.20.1, chưa sửa OS/JetPack trên Jetson.
+- Đã cài CUDA 11.8/GCC 10 và build wheel GPU 1.20.1 trên Jetson. Inference GPU đã chạy, nhưng wheel chưa có upstream CPUID bounds fix crash khi thoát; cần rebuild. OS/JetPack giữ nguyên.
 
 ### Các kiểm tra trong đường setup mới
 
@@ -238,4 +252,4 @@ export JETSON_AI_POLICY=prefer_local
 
 Sau đó chạy Laptop bằng entrypoint hiện tại. `JETSON_AI_POLICY` mặc định `disabled`. Với provider yêu cầu là `local`, `prefer_local` chọn Jetson nếu LLM `ready`; nếu không thì chọn cloud provider đã cấu hình, sau cùng là `rules`. `offline_only` chỉ chọn Jetson hoặc `rules`, từ chối khi client chỉ định cloud; Soniox được thay bằng STT fallback local (hoặc tắt), VieNeu bị tắt và không còn trong danh sách voice chọn được. `allow_cloud` hiện có cùng thứ tự chọn fallback như `prefer_local`; chưa có chính sách lọc dữ liệu riêng cho từng provider. Giữ voice provider hiện có ở Laptop: **remote STT/TTS adapter chưa được nối vào public `/api/v1`**. Server đã có endpoint STT/TTS độc lập để test trên Jetson; không tự chuyển luồng voice đang dùng bởi các thành viên khác. `RAG_RETRIEVAL_MODE=sqlite_local` vẫn truy xuất trên Laptop; khi model E5 thiếu hoặc lỗi nạp, retriever dùng FTS5 trên **cùng handbook SQLite**. Index hỏng hoặc handbook mất vẫn là lỗi, không bị che bằng fallback.
 
-Router chỉ kiểm tra Jetson trước khi bắt đầu lượt. Nó chưa thử lại nếu Jetson/cloud mất giữa lượt; không replay graph vì có thể đã có side effect. Khi cả Jetson và Internet đều mất, `offline_only` đảm bảo rules/RAG text; `prefer_local` chưa tự xác nhận cloud mất mạng trước khi chọn cloud. Lệnh `setup` và model thật **chưa được smoke trên AGX**. Smoke GPU x86 local đã nạp cùng lúc ba model, tạo WAV và nhận dạng qua API; đây không xác nhận tương thích ARM/CUDA 11.8 của profile mới. Whisper-base đã nhận sai vài từ tiếng Việt trong mẫu tổng hợp ngắn, cần eval/thay model trước nghiệm thu giọng nói. Chỉ chuyển mặc định sang topology mới sau smoke trên Xavier và các fault test trong [kế hoạch migration](LAPTOP_JETSON_MIGRATION_PLAN.md).
+Router chỉ kiểm tra Jetson trước khi bắt đầu lượt. Nó chưa thử lại nếu Jetson/cloud mất giữa lượt; không replay graph vì có thể đã có side effect. Khi cả Jetson và Internet đều mất, `offline_only` đảm bảo rules/RAG text; `prefer_local` chưa tự xác nhận cloud mất mạng trước khi chọn cloud. Smoke trên AGX đã chạy suy luận ba model thật; lần kiểm tra hiện tại crash lúc thoát trong ORT CPUIDInfo, nên setup **chưa hoàn tất**. Smoke GPU x86 local đã nạp cùng lúc ba model, tạo WAV và nhận dạng qua API; đây không xác nhận tương thích ARM/CUDA 11.8 của profile mới. Whisper-base đã nhận sai vài từ tiếng Việt trong mẫu tổng hợp ngắn, cần eval/thay model trước nghiệm thu giọng nói. Chỉ chuyển mặc định sang topology mới sau smoke trên Xavier và các fault test trong [kế hoạch migration](LAPTOP_JETSON_MIGRATION_PLAN.md).

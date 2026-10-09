@@ -66,6 +66,7 @@ def smoke(args):
             str(args.data / "build" / "llama.cpp" / args.native_build / "bin" / "llama-server"),
             "--model", str(args.model), "--host", "127.0.0.1", "--port", str(args.backend_port),
             "--ctx-size", "4096", "--parallel", "1", "--n-gpu-layers", "99", "--reasoning", "off",
+            "--log-verbosity", "4",  # b11447 hides library GPU/offload info at the default level 3.
         ], stdout=llm_log, stderr=subprocess.STDOUT)
         stack.callback(stop, llm)
         client = stack.enter_context(httpx.Client(timeout=120, trust_env=False))

@@ -8,7 +8,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from scripts import check_jetson_runtime, prepare_ort_metadata, prepare_speech_models
+from scripts import check_jetson_runtime, prepare_ort_metadata, prepare_ort_platform, prepare_speech_models
 from scripts.smoke_jetson_profile import stop
 
 
@@ -22,6 +22,26 @@ def test_eigen_metadata_changes_only_verified_dependency_and_preserves_backup(tm
     first = path.read_bytes()
     prepare_ort_metadata.prepare(path)
     assert path.read_bytes() == first
+
+
+def test_arm_cpu_bounds_fix_preserves_other_source_and_is_idempotent(tmp_path):
+    path = tmp_path / "cpuid_info.cc"
+    original = "// header\n" + prepare_ort_platform.ORIGINAL + "// footer\n"
+    path.write_text(original)
+    prepare_ort_platform.prepare(path)
+    assert path.read_text() == "// header\n" + prepare_ort_platform.FIXED + "// footer\n"
+    assert path.with_name(path.name + ".before-arm-cpuid-bounds").read_text() == original
+    first = path.read_bytes()
+    prepare_ort_platform.prepare(path)
+    assert path.read_bytes() == first
+
+
+def test_arm_cpu_bounds_fix_refuses_unexpected_source(tmp_path):
+    path = tmp_path / "cpuid_info.cc"
+    path.write_text("unrecognized source")
+    with pytest.raises(ValueError, match="Unexpected"):
+        prepare_ort_platform.prepare(path)
+    assert path.read_text() == "unrecognized source"
 
 
 @pytest.mark.parametrize("row", ["eigen;unexpected-url;hash", f"eigen;{prepare_ort_metadata.EIGEN_URL};unexpected"])

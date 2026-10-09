@@ -5,6 +5,7 @@ VIVI_DATA="${JETSON_AI_DATA_DIR:-/mnt/jetson-data/vivi-ai}"
 VIVI_PROFILE=agx-cu118-ort1201-py312
 VIVI_PYTHON=3.12.15
 VIVI_ORT=1.20.1
+VIVI_ORT_FIX=ort-arm-cpuid-bounds-v1
 VIVI_CUDA=/usr/local/cuda-11.8
 VIVI_VENV="$VIVI_DATA/envs/$VIVI_PROFILE/venv"
 VIVI_NATIVE_BUILD=build-cu118-gcc10

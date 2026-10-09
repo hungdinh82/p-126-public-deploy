@@ -74,13 +74,17 @@ build_whisper() {
 }
 build_ort() {
   local python_bin="$VIVI_VENV/bin/python" source="$VIVI_DATA/build/onnxruntime-$VIVI_ORT"
-  if "$python_bin" -c 'import onnxruntime as o; assert o.__version__ == "1.20.1"; assert "CUDAExecutionProvider" in o.get_available_providers()' 2>/dev/null; then return; fi
+  local installed_fix="$VIVI_VENV/ort-platform-fix"
+  if [[ -f "$installed_fix" && "$(cat "$installed_fix")" == "$VIVI_ORT_FIX" ]] && \
+     "$python_bin" -c 'import onnxruntime as o; assert o.__version__ == "1.20.1"; assert "CUDAExecutionProvider" in o.get_available_providers()' 2>/dev/null; then return; fi
   if [[ -n "${JETSON_AI_ORT_WHEEL:-}" ]]; then
     [[ -f "$JETSON_AI_ORT_WHEEL" && -n "${JETSON_AI_ORT_WHEEL_SHA256:-}" ]] \
       || fail "Custom wheel requires a local file and JETSON_AI_ORT_WHEEL_SHA256"
+    [[ "${JETSON_AI_ORT_PLATFORM_FIX:-}" == "$VIVI_ORT_FIX" ]] \
+      || fail "Custom ORT wheel must include $VIVI_ORT_FIX; set JETSON_AI_ORT_PLATFORM_FIX after verifying its build"
     echo "$JETSON_AI_ORT_WHEEL_SHA256  $JETSON_AI_ORT_WHEEL" | sha256sum -c --status \
       || fail "Custom ORT wheel checksum mismatch"
-    uv pip install --python "$python_bin" --no-deps "$JETSON_AI_ORT_WHEEL"
+    uv pip install --python "$python_bin" --no-deps --reinstall --refresh "$JETSON_AI_ORT_WHEEL"
   else
     [[ -d "$source/.git" ]] || git clone --depth 1 --branch "v$VIVI_ORT" --recursive \
       --shallow-submodules https://github.com/microsoft/onnxruntime.git "$source"
@@ -89,8 +93,11 @@ build_ort() {
     # GitLab's regenerated ZIP has identical source at the pinned commit.
     # Keep archive verification, using the verified current SHA1 only for Eigen.
     "$python_bin" "$VIVI_REPO/scripts/prepare_ort_metadata.py" "$source/cmake/deps.txt"
+    "$python_bin" "$VIVI_REPO/scripts/prepare_ort_platform.py" "$source/onnxruntime/core/common/cpuid_info.cc"
     local wheels=("$source"/build/Release/dist/onnxruntime_gpu-1.20.1-cp312-cp312-linux_aarch64.whl)
-    if [[ ! -f "${wheels[0]}" || ! -f "${wheels[0]}.sha256" ]]; then
+    if [[ ! -f "${wheels[0]}" || ! -f "${wheels[0]}.sha256" || \
+          ! -f "${wheels[0]}.platform-fix" || "$(cat "${wheels[0]}.platform-fix")" != "$VIVI_ORT_FIX" ]]; then
+      rm -f "${wheels[0]}.platform-fix"
       (cd "$source"
        "$python_bin" tools/ci_build/build.py --config Release --build_wheel --parallel 2 \
          --skip_tests --nvcc_threads 1 --use_cuda --cuda_home "$VIVI_CUDA" --cudnn_home /usr \
@@ -100,12 +107,14 @@ build_ort() {
          "CMAKE_C_COMPILER=$CC" "CMAKE_CXX_COMPILER=$CXX" onnxruntime_BUILD_UNIT_TESTS=OFF)
       [[ -f "${wheels[0]}" ]] || fail "Native cp312/aarch64 CUDA wheel was not produced"
       sha256sum "${wheels[0]}" > "${wheels[0]}.sha256"
+      printf '%s\n' "$VIVI_ORT_FIX" > "${wheels[0]}.platform-fix"
     fi
     sha256sum -c "${wheels[0]}.sha256" || fail "Cached ORT wheel checksum mismatch"
-    uv pip install --python "$python_bin" --no-deps "${wheels[0]}"
+    uv pip install --python "$python_bin" --no-deps --reinstall --refresh "${wheels[0]}"
   fi
   "$python_bin" -c 'import onnxruntime as o; assert o.__version__ == "1.20.1"; assert "CUDAExecutionProvider" in o.get_available_providers()' \
     || fail "ORT 1.20.1 CUDA is required for this Xavier profile"
+  printf '%s\n' "$VIVI_ORT_FIX" > "$installed_fix"
 }
 setup() {
   [[ "${1:-}" == --profile && "${2:-}" == agx ]] || fail "Usage: bash scripts/jetson_ai.sh setup --profile agx"
@@ -190,7 +199,7 @@ run() {
   "$VIVI_DATA/build/llama.cpp/$VIVI_NATIVE_BUILD/bin/llama-server" \
     --model "$VIVI_MODEL" --alias vivi-qwen3-1.7b --host 127.0.0.1 \
     --port "$VIVI_BACKEND_PORT" --ctx-size 4096 --parallel 1 \
-    --n-gpu-layers "$gpu_layers" --reasoning off \
+    --n-gpu-layers "$gpu_layers" --reasoning off --log-verbosity 4 \
     > "$VIVI_DATA/logs/llama-server.log" 2>&1 &
   local llm_pid=$!
   trap 'kill "$llm_pid" 2>/dev/null || true; wait "$llm_pid" 2>/dev/null || true' EXIT INT TERM
