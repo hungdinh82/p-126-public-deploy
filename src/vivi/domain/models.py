@@ -5,7 +5,10 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
+from src.vivi.dialogue.contracts import ActionDraft
+
 Intent = Literal[
+    "memory.reset",
     "climate.set_temperature",
     "window.set_position",
     "door.set_lock",
@@ -218,6 +221,7 @@ class ConfirmationPreview(BaseModel):
 
 
 class TurnRequest(BaseModel):
+    action: ActionDraft | None = None
     transcript: str = Field(min_length=1, max_length=500)
     session_id: str = Field(min_length=1, max_length=100)
     turn_id: str = Field(min_length=1, max_length=100)
@@ -241,6 +245,7 @@ class TurnResponse(BaseModel):
     status: TurnStatus
     action: ActionProposal | None = None
     risk_class: RiskClass | None = None
+    execution: dict[str, Any] | None = None
     confirmation: ConfirmationPreview | None = None
     evidence: list[Evidence] = Field(default_factory=list)
     grounding_status: str = "not_applicable"
@@ -249,6 +254,8 @@ class TurnResponse(BaseModel):
     error: str | None = None
     latency_ms: dict[str, float] = Field(default_factory=dict)
     trace: list[TraceSpan] = Field(default_factory=list)
+    diagnostics: dict[str, Any] = Field(default_factory=dict)
+    steps: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class STTResponse(BaseModel):

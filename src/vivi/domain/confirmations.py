@@ -43,6 +43,12 @@ class ConfirmationStore:
         self._active_by_session: dict[str, str] = {}
         self._lock = threading.Lock()
 
+    def cancel(self, session_id: str) -> None:
+        with self._lock:
+            identifier = self._active_by_session.pop(session_id, None)
+            if identifier in self._pending:
+                self._pending[identifier].used = True
+
     def create(
         self,
         session_id: str,

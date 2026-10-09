@@ -7,9 +7,37 @@ platform, agent và vehicle owner.
 
 - UI sở hữu audio/touch state, không sở hữu vehicle state.
 - Vehicle adapter/MQTT state là nguồn sự thật cho policy và kết quả action.
-- LLM chỉ tạo `ActionProposal`; không tạo MQTT payload.
+- LLM chỉ tạo `SemanticTurn` gồm capability draft; không tạo MQTT payload.
 - Tool result đã verify là nguồn sự thật cho câu “đã thực hiện”.
 - Handbook claim chỉ hợp lệ khi ánh xạ tới `source_id` trong retrieval result.
+
+## Workflow thống nhất
+
+Xem [runtime thống nhất](langgraph_unified_runtime.md) cho checkpoints, task revision, cancellation
+và rollback. Response thêm `execution` (executed/verified), `diagnostics`
+(provider thực tế, từng lần fallback, semantic event, task revision và node spans).
+`steps` chứa ID, capability, arguments, status và result từng bước. `action`/`execution`
+phản ánh bước hiện tại; chỉ `verified` khi toàn bộ yêu cầu hoàn tất. Checkpoint là
+nguồn task duy nhất; history không phục hồi task. Chat không có quan sát xe mới có
+`diagnostics.observation_available=false`; giữ snapshot UI hiện có.
+
+NDJSON v2 thêm `version`, `session_id`, `turn_id`, `sequence`, `timestamp` vào
+provider/step/progress/speech/final. Hủy bằng `POST /api/v1/turns/{turn_id}/cancel` với session_id;
+đối chiếu kết quả bằng `GET /api/v1/turns/{turn_id}?session_id=...`. Cancel sau
+dispatch không hoàn tác lệnh. Ledger chưa rõ kết quả không tự phát lại.
+
+Zoned action dùng `zone` hoặc `zones` không trùng, không đồng thời;
+`window.set_position`: 0=đóng, 100=mở. Subset giữ đúng yêu cầu ngoại trừ.
+
+Nút điều khiển trực tiếp gửi `action`, ví dụ:
+
+```json
+{"transcript":"Mở kính bên tài","session_id":"trip-01","turn_id":"touch-01","action":{"capability":"window.set_position","arguments":{"zone":"driver","position_percent":100}}}
+```
+
+Thao tác này bỏ qua diễn giải ngôn ngữ, vẫn qua reducer/scheduler/policy và có thể
+trả `confirmation_required`. Một lần approve chỉ cấp quyền cho bước được grant ràng
+buộc; không cấp quyền cho cả chuỗi.
 
 ## Turn
 

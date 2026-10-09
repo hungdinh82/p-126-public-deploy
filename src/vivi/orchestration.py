@@ -1,17 +1,21 @@
 from __future__ import annotations
 
+import asyncio
 import random
 import re
+import time
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Any
 from uuid import uuid4
 
 from src.vivi.agents.contracts import AssistantOutput
-from src.vivi.agents.graph import build_graph
 from src.vivi.config import get_settings
 from src.vivi.persistence.event_store import EventStore
+from src.vivi.persistence.runtime_store import RuntimeStore
 from src.vivi.providers import configured_llm_providers
 from src.vivi.rag.runtime import create_services
+from src.vivi.turn_control import TurnControl, current_control
 from src.vivi.vehicle.gateway import VehicleActionGateway
 
 from .domain.models import (
@@ -44,12 +48,64 @@ class LangGraphOrchestrator:
         store: EventStore,
         default_provider: str = "rules",
         provider_errors: dict[str, str] | None = None,
+        ledger: RuntimeStore | None = None,
+        timeout_seconds: float = 45,
+        profile_id: str = "default",
     ) -> None:
         self.graphs = graphs
         self.gateway = gateway
         self.store = store
         self.default_provider = default_provider
         self.provider_errors = provider_errors or {}
+        self.ledger, self.timeout_seconds = ledger, timeout_seconds
+        self.profile_id = profile_id
+        self._sessions: dict[str, asyncio.Lock] = {}
+        self._active: dict[tuple[str, str], TurnControl] = {}
+        self._runners: dict[tuple[str, str], asyncio.Task] = {}
+
+    def session_key(self, request):
+        return f"{self.profile_id}:{request.session_id}"
+
+    @asynccontextmanager
+    async def turn_scope(self, request, provider):
+        session = self.session_key(request)
+        lock = self._sessions.setdefault(session, asyncio.Lock())
+        control = TurnControl(time.monotonic() + self.timeout_seconds)
+        token = current_control.set(control)
+        key = (request.session_id, request.turn_id)
+        try:
+            async with asyncio.timeout(self.timeout_seconds):
+                async with lock:
+                    cached = await asyncio.to_thread(self.ledger.reserve_turn, session, request.turn_id,
+                        {**request.model_dump(mode="json", exclude={"vehicle_state"}), "provider": provider}) if self.ledger else None
+                    self._active[key] = control
+                    self._runners[key] = asyncio.current_task()
+                    try:
+                        yield cached
+                    except BaseException:
+                        control.cancel()
+                        if self.ledger and not cached:
+                            await asyncio.to_thread(self.ledger.fail_turn, session, request.turn_id)
+                        raise
+                    finally:
+                        self._active.pop(key, None)
+                        self._runners.pop(key, None)
+        finally:
+            current_control.reset(token)
+
+    def cancel(self, session_id, turn_id):
+        control = self._active.get((session_id, turn_id))
+        if control is None:
+            return {"cancelled": False, "dispatched": False}
+        dispatched = control.cancel()
+        runner = self._runners.get((session_id, turn_id))
+        if not dispatched and runner:
+            runner.cancel()
+        return {"cancelled": True, "dispatched": dispatched}
+
+    async def complete(self, request, response):
+        if self.ledger:
+            await asyncio.to_thread(self.ledger.finish_turn, self.session_key(request), request.turn_id, response.model_dump(mode="json"))
 
     @property
     def graph_providers(self) -> set[str]:
@@ -76,37 +132,74 @@ class LangGraphOrchestrator:
             "vehicle_state": None,
             "confirmation_id": request.confirmation_id,
             "confirmation_decision": request.confirmation_decision,
+            "provider": request.llm_provider or "rules",
+            "action": request.action.model_dump(mode="json") if request.action else None,
         }
 
     async def run(self, request: TurnRequest, provider: str | None = None) -> TurnResponse:
         provider, graph = self._graph(provider)
-        result = await graph.ainvoke(self._graph_input(request))
-        output = AssistantOutput.model_validate(result["output"])
-        return self._to_turn_response(request, provider, output)
+        started = time.perf_counter()
+        async with self.turn_scope(request, provider) as cached:
+            if cached:
+                return TurnResponse.model_validate(cached)
+            result = await graph.ainvoke({**self._graph_input(request), "provider": provider})
+            output = AssistantOutput.model_validate(result["output"])
+            response = self._to_turn_response(request, provider, output)
+            response.latency_ms["total"] = round((time.perf_counter() - started) * 1000, 2)
+            await self.complete(request, response)
+            return response
 
     async def run_stream(
         self, request: TurnRequest, provider: str | None = None
     ) -> AsyncIterator[dict]:
+        provider, _ = self._graph(provider)
+        sequence = 0
+        async with self.turn_scope(request, provider) as cached:
+            if cached:
+                yield {"type": "final", "streamed_speech": False, "response": cached,
+                       "session_id": request.session_id, "turn_id": request.turn_id, "sequence": 1, "version": 2, "timestamp": time.time()}
+                return
+            async for event in self._stream(request, provider):
+                if self.ledger:
+                    sequence += 1
+                    event = {**event, "session_id": request.session_id, "turn_id": request.turn_id,
+                             "sequence": sequence, "version": 2, "timestamp": time.time()}
+                yield event
+
+    async def _stream(self, request, provider):
         provider, graph = self._graph(provider)
+        started = time.perf_counter()
         result: dict[str, Any] = {}
+        spoken = False
+        reported_results = 0
         async for mode, chunk in graph.astream(
-            self._graph_input(request), stream_mode=["updates", "values"]
+            {**self._graph_input(request), "provider": provider}, stream_mode=["updates", "values"]
         ):
             if mode == "values":
                 result = chunk
-            elif "scope_guard" in chunk and (chunk["scope_guard"] or {}).get(
-                "status"
-            ) != "out_of_scope":
-                # The question passed the scope check, so retrieval and answer
-                # generation follow; announce the wait before the slow part.
-                yield {"type": "progress", "text": random.choice(PROGRESS_MESSAGES)}
+            elif "interpret" in chunk:
+                turn = (chunk["interpret"] or {}).get("turn", {})
+                yield {"type": "provider", "provider": turn.get("effective_provider"),
+                       "attempts": turn.get("provider_attempts", [])}
+                if any(a.get("capability") == "manual.search" for a in turn.get("semantic", {}).get("actions", [])):
+                    yield {"type": "progress", "text": random.choice(PROGRESS_MESSAGES)}
+            elif "capability" in chunk or "validate" in chunk:
+                update = chunk.get("capability", chunk.get("validate")) or {}
+                turn = update.get("turn", {})
+                results = turn.get("results", [])
+                for result in results[reported_results:]:
+                    yield {"type": "step", "step": result, "provider": turn.get("effective_provider")}
+                reported_results = len(results)
         output = AssistantOutput.model_validate(result["output"])
         response = self._to_turn_response(request, provider, output)
+        response.latency_ms["total"] = round((time.perf_counter() - started) * 1000, 2)
+        await self.complete(request, response)
         speech_segments, remainder = self._take_speech_segments(response.message)
         if remainder.strip():
             speech_segments.append(remainder.strip())
-        for segment in speech_segments:
-            yield {"type": "speech", "text": segment}
+        if not spoken:
+            for segment in speech_segments:
+                yield {"type": "speech", "text": segment}
         yield {
             "type": "final",
             "streamed_speech": bool(speech_segments),
@@ -179,7 +272,7 @@ class LangGraphOrchestrator:
         trace = [
             TraceSpan(
                 stage=self._trace_stage(stage),
-                outcome=output.status,
+                outcome=next((span["outcome"] for span in output.diagnostics.get("node_spans", []) if span["node"] == stage), output.status),
                 latency_ms=latency,
                 detail={"node": stage},
             )
@@ -190,11 +283,13 @@ class LangGraphOrchestrator:
             turn_id=output.turn_id,
             trace_id=str(uuid4()),
             transcript=request.transcript,
-            provider=f"langgraph/{provider}",
+            provider=f"langgraph/{output.diagnostics.get('effective_provider', provider)}",
+            steps=output.steps,
             route=route_map[output.route],
             status=status,
             action=action,
             risk_class=output.execution.risk_class if output.execution else None,
+            execution=output.execution.model_dump(mode="json") if output.execution else None,
             confirmation=confirmation,
             evidence=evidence,
             grounding_status=output.grounding_status,
@@ -203,19 +298,20 @@ class LangGraphOrchestrator:
             error="; ".join(item["message"] for item in output.errors) or None,
             latency_ms={**output.timings, "total": round(sum(output.timings.values()), 2)},
             trace=trace,
+            diagnostics=output.diagnostics,
         )
         self.store.append_event({"event_type": "turn", **response.model_dump(mode="json")})
         return response
 
     @staticmethod
     def _trace_stage(stage: str) -> str:
-        if stage in {"classify_intent", "retrieve", "generate", "validate_citations"}:
+        if stage == "interpret":
             return "model"
-        if stage in {"scope_guard", "validate_action", "safety_check", "resolve_confirmation"}:
+        if stage == "validate":
             return "policy"
-        if stage in {"execute_action", "verify_action"}:
+        if stage == "capability":
             return "tool"
-        if stage == "compose_output":
+        if stage == "response":
             return "result"
         return "route"
 
@@ -246,27 +342,37 @@ def create_langgraph_orchestrator(
     config=None,
 ) -> LangGraphOrchestrator:
     config = config or get_settings()
-    gateway = VehicleActionGateway(vehicle=vehicle)
-    graphs = {}
-    provider_errors = {}
-    for provider in configured_llm_providers(config):
+    from src.vivi.dialogue.planner import ModelProvider, SemanticResolver
+    from src.vivi.graphs.assistant import build_assistant_graph
+    from src.vivi.persistence.checkpoints import ThreadedSqliteSaver
+    from src.vivi.persistence.confirmations import DurableConfirmations
+    from src.vivi.persistence.migration import migrate_runtime
+    ledger = RuntimeStore(config.data_dir / "runtime" / "state.sqlite3")
+    gateway = VehicleActionGateway(vehicle=vehicle, confirmations=DurableConfirmations(ledger), ledger=ledger)
+    migrate_runtime(ledger, databases=[config.rag_history_db, config.memory_path])
+    services = create_services(config, provider="rules")
+    services.action_gateway = gateway
+    providers, generators, errors = {}, {"rules": services.generator}, {}
+    for name in set(configured_llm_providers(config)) - {"rules"}:
         try:
-            services = create_services(
-                config,
-                retrieval_mode=config.rag_retrieval_mode,
-                provider=provider,
-            )
-            services.action_gateway = gateway
-            graphs[provider] = build_graph(services)
+            candidate = create_services(config, provider=name)
+            client = candidate.semantic_client
+            client.max_tokens, client.max_attempts = config.planner_max_tokens, 1
+            budget = config.local_budget_seconds if name == "local" else config.cloud_budget_seconds
+            providers[name] = ModelProvider(name, client, budget)
+            generators[name] = candidate.generator
         except Exception as exc:
-            provider_errors[provider] = str(exc)
-    if "rules" not in graphs:
-        raise RuntimeError(f"Không khởi tạo được rules graph: {provider_errors['rules']}")
-    default_provider = config.llm_provider if config.llm_provider in graphs else "rules"
-    return LangGraphOrchestrator(
-        graphs,
-        gateway,
-        store,
-        default_provider=default_provider,
-        provider_errors=provider_errors,
-    )
+            errors[name] = str(exc)
+    resolver = SemanticResolver(providers, breaker_seconds=config.provider_breaker_seconds)
+    saver = ThreadedSqliteSaver(config.data_dir / "runtime" / "conversation-v3.sqlite3")
+    graph = build_assistant_graph(services, saver, ledger, resolver=resolver, generators=generators,
+        budgets={name: value.budget_seconds for name, value in providers.items()})
+    graph.default_provider = config.llm_provider
+    # Provider selection changes the resolver's first tier, never the workflow or
+    # session namespace. Missing configurations remain available through fallback.
+    graphs = {name: graph for name in ("rules", "google", "openai", "openrouter", "local")}
+    result = LangGraphOrchestrator(graphs, gateway, store, default_provider=config.llm_provider,
+        provider_errors=errors, ledger=ledger, timeout_seconds=config.turn_timeout_seconds,
+        profile_id=config.memory_profile_id)
+    result.semantic_providers = {"rules", *providers}
+    return result
