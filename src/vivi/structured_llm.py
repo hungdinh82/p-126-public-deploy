@@ -1,11 +1,29 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import json
 import time
 from typing import Any
 
 import httpx
+
+
+def strict_schema(schema: dict) -> dict:
+    """Provider strict mode requires closed objects and every property required."""
+    result = copy.deepcopy(schema)
+    def visit(value):
+        if isinstance(value, dict):
+            if value.get("type") == "object" and "properties" in value:
+                value["additionalProperties"] = False
+                value["required"] = list(value["properties"])
+            for child in value.values():
+                visit(child)
+        elif isinstance(value, list):
+            for child in value:
+                visit(child)
+    visit(result)
+    return result
 
 
 class StructuredChatClient:
@@ -146,7 +164,7 @@ class StructuredChatClient:
                 "json_schema": {
                     "name": schema_name,
                     "strict": True,
-                    "schema": schema,
+                    "schema": strict_schema(schema),
                 },
             },
         }

@@ -13,8 +13,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import patch
 
-from src.vivi.agents.classifier import RulesIntentClassifier
-from src.vivi.agents.graph import build_graph
+from src.vivi.graphs import build_graph
 from src.vivi.history.sqlite import SQLiteConversationHistory
 from src.vivi.memory.sqlite import SQLiteLongTermMemory
 from src.vivi.rag.generator import ExtractiveHandbookGenerator
@@ -40,7 +39,7 @@ def evaluate(dataset: Path, directory: Path) -> dict:
                 root = directory / episode
                 services = HandbookServices(
                     NoRetrieval(), ExtractiveHandbookGenerator(), SQLiteConversationHistory(root / "history.sqlite3"),
-                    classifier=RulesIntentClassifier(), action_gateway=VehicleActionGateway(),
+                    action_gateway=VehicleActionGateway(),
                     memory=SQLiteLongTermMemory(root / "memory.sqlite3"),
                 )
                 episodes[episode] = services

@@ -7,7 +7,7 @@ import sqlite3
 import pytest
 
 from eval.benchmark import fact_coverage, load_dataset, local_network_only
-from src.vivi.agents.classifier import RulesIntentClassifier
+from tests.semantic_helpers import parse
 from src.vivi.rag.schemas import HandbookChunk
 from src.vivi.rag.sqlite_store import SQLiteHandbookStore
 from src.vivi.rag.sqlite_vector import SQLiteVectorRetriever, write_vectors
@@ -72,11 +72,10 @@ def test_index_identity_and_invalid_vector_fail_closed(tmp_path):
 
 
 def test_questions_about_controls_and_safety_are_not_actions():
-    classifier = RulesIntentClassifier()
     for query in ["Cách mở cửa sổ bên tài như thế nào?", "Phanh ABS hoạt động như thế nào?",
                   "VF8 có tối đa bao nhiêu túi khí?"]:
-        assert classifier.classify(query, []).route == "handbook"
-    assert classifier.classify("Đạp phanh giúp tôi", []).route == "unsupported"
+        assert parse(query).route == "handbook"
+    assert parse("Đạp phanh giúp tôi").route == "unsupported"
 
 
 def test_evaluation_blocks_network_and_checks_facts():
@@ -141,7 +140,7 @@ def test_services_use_canonical_local_index_and_reject_cloud_before_initializing
                       openai_api_key="configured-but-disabled", local_llm_model="", llm_provider="rules")
     monkeypatch.setattr(runtime, "local_embeddings", lambda *args: FakeEmbeddings())
     services = runtime.create_services(config)
-    assert isinstance(services.retriever, runtime.EmbeddingFallbackRetriever)
+    assert isinstance(services.retriever, runtime.FallbackRetriever)
     assert isinstance(services.retriever.primary, SQLiteVectorRetriever)
     assert services.retriever.retrieve("áp suất lốp", "VF8", 2026, "vi_vn")
     assert set(llm_models(config)) == {"rules", "local"}
@@ -179,3 +178,17 @@ def test_runtime_embedding_failure_uses_same_handbook_fts5(tmp_path, monkeypatch
     monkeypatch.setattr(runtime, "local_embeddings", lambda *args: FailingEmbeddings())
     services = runtime.create_services(config, provider="rules")
     assert services.retriever.retrieve("áp suất lốp", "VF8", 2026, "vi_vn")[0].source_id == "lexical"
+
+
+def test_embedding_unavailable_uses_local_fts(tmp_path, monkeypatch):
+    from src.vivi.config import Settings
+    from src.vivi.rag import runtime
+    config = Settings(rag_retrieval_mode="sqlite_local", rag_handbook_db=vector_database(tmp_path),
+                      rag_history_db=tmp_path / "history.sqlite3", llm_provider="rules")
+    def unavailable(*args):
+        raise FileNotFoundError("embedding not installed")
+    monkeypatch.setattr(runtime, "local_embeddings", unavailable)
+    services = runtime.create_services(config)
+    from src.vivi.rag.sqlite_store import SQLiteHandbookRetriever
+    assert isinstance(services.retriever, SQLiteHandbookRetriever)
+    assert services.retriever.retrieve("áp suất lốp", "VF8", 2026, "vi_vn")

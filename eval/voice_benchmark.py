@@ -10,8 +10,8 @@ import time
 from pathlib import Path
 
 from eval.benchmark import local_network_only
-from src.vivi.agents.graph import build_graph
 from src.vivi.config import Settings
+from src.vivi.graphs import build_graph
 from src.vivi.rag.runtime import create_services
 
 
