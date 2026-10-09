@@ -11,12 +11,11 @@ from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
 
-from tests.semantic_helpers import parse
-from src.vivi.dialogue.contracts import SessionState
-from src.vivi.dialogue.reducer import reduce_turn
 from src.vivi.api.app import app
 from src.vivi.api.runtime import runtime
 from src.vivi.config import Settings, settings
+from src.vivi.dialogue.contracts import SessionState
+from src.vivi.dialogue.reducer import reduce_turn
 from src.vivi.domain.models import ActionProposal, TurnRequest, VehicleState
 from src.vivi.domain.safety import validate
 from src.vivi.orchestration import (
@@ -29,6 +28,7 @@ from src.vivi.speech.stt import DisabledSTTAdapter, PhoWhisperAdapter, create_st
 from src.vivi.speech.tts import DisabledTTSAdapter, ZeroTTSAdapter, create_tts
 from src.vivi.vehicle.gateway import VehicleActionGateway
 from src.vivi.vehicle.memory import VehicleSimulator
+from tests.semantic_helpers import parse
 
 
 class SafetyTests(unittest.TestCase):

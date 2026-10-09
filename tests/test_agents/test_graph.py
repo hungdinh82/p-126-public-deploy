@@ -1,8 +1,9 @@
 import pytest
+
 from src.vivi.graphs import build_graph
-from src.vivi.rag.runtime import HandbookServices
-from tests.test_rag import FakeRetriever, FakeGenerator
 from src.vivi.history.sqlite import SQLiteConversationHistory
+from src.vivi.rag.runtime import HandbookServices
+from tests.test_rag import FakeGenerator, FakeRetriever
 
 
 @pytest.mark.asyncio

@@ -6,9 +6,9 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from src.vivi.graphs import build_graph
 from src.vivi.dialogue.contracts import SemanticTurn, SessionState
 from src.vivi.dialogue.reducer import reduce_turn
+from src.vivi.graphs import build_graph
 from tests.test_long_term_memory import invoke
 from tests.test_long_term_memory import services as _services
 
