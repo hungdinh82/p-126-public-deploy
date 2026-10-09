@@ -4,12 +4,16 @@ Service này chỉ nhận yêu cầu suy luận. API `/api/v1`, LangGraph, RAG, 
 
 ## Giao diện theo dõi model và test API
 
+Model có tùy chọn streaming theo từng request: SLM qua SSE, TTS qua PCM HTTP,
+STT qua WebSocket với partial/final. Xem [MODEL_STREAMING.md](MODEL_STREAMING.md)
+để chọn checkbox, gọi API và cập nhật dependency WebSocket trên Xavier.
+
 Sau `bash scripts/jetson_ai.sh run`, mở `http://<jetson-private-ip>:8789/test` bằng URL mà script in. Giao diện nằm ngay trong private gateway, không cần chạy frontend riêng và không tải asset từ Internet.
 
 - Mỗi thẻ STT/SLM/TTS hiển thị status, đường dẫn model, host/PID, engine CPU/GPU thực tế, thời gian load và thời gian xử lý gần nhất. Khi mất kết nối, status chuyển `offline`, không giữ nhãn `ready` cũ.
 - Nhập text để test SLM hoặc TTS riêng. Upload audio để test STT riêng hoặc nối STT → SLM; checkbox TTS đọc câu trả lời. Microphone cần localhost/HTTPS; khi truy cập Jetson qua HTTP LAN có thể dùng upload audio.
 - Mục chi tiết API hiển thị endpoint, HTTP status, thời gian HTTP, request và response/lỗi của từng stage. Token không được ghi vào mục này. Kết quả WAV có audio player.
-- Client qua LAN nhập token từ `service.env` rồi bấm **Kết nối**; token chỉ lưu trong tab browser. Browser kết nối loopback đúng hostname `localhost`/`127.0.0.1` được điền token tự động. Model API luôn kiểm tra Bearer token.
+- Client qua LAN nhập token từ `service.env` rồi bấm **Kết nối**; token chỉ lưu trong tab browser. Browser kết nối loopback đúng hostname `localhost`/`127.0.0.1` được điền token tự động. Khi `ai_server_auth_required = true`, model API kiểm tra Bearer token; đặt false trong config của server/backend để chạy không token trong mạng riêng.
 - Nút nạp lại chỉ thử STT/TTS chưa sẵn sàng, không tạo thêm model khi chúng đã ready. SLM do process llama-server quản lý; xem log/restart `run` nếu SLM hỏng.
 
 Trang này test inference. Để kiểm thử các nhánh RAG, LangGraph và tool xe của Laptop, dùng CLI pipeline ở phần dưới; các phần đó không chuyển sang Jetson.
@@ -234,7 +238,7 @@ curl --fail-with-body -H "Authorization: Bearer $JETSON_AI_TOKEN" \
   http://<jetson-private-ip>:8789/v1/tts/synthesize -o answer.wav
 ```
 
-Trên Ubuntu 20.04 với curl cũ chưa hỗ trợ `--fail-with-body`, thay bằng `--fail`. Endpoint `/v1/llm/generate` trả envelope version 1.0; `/v1/chat/completions` tương thích client local hiện tại. STT/TTS hiện là upload/synthesis một lần, chưa streaming và chưa đủ canonical envelope của kiến trúc đích.
+Trên Ubuntu 20.04 với curl cũ chưa hỗ trợ `--fail-with-body`, thay bằng `--fail`. Endpoint `/v1/llm/generate` trả envelope version 1.0; `/v1/chat/completions` tương thích client local hiện tại. Upload STT và WAV TTS vẫn được giữ. Có thêm STT WebSocket partial/final và TTS PCM streaming theo [MODEL_STREAMING.md](MODEL_STREAMING.md); chưa đủ canonical envelope của kiến trúc đích.
 
 ## Laptop
 

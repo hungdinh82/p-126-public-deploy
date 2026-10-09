@@ -58,6 +58,10 @@ http://127.0.0.1:8789/test
 Trang này theo dõi và gọi trực tiếp model; không chạy workflow/RAG/xe của app.
 Log service nằm trong `data/ai-server/`.
 
+Có thể bật checkbox **SLM streaming**, **TTS streaming**, **STT streaming**
+riêng cho mỗi model trong trang này. Chi tiết protocol, giới hạn Whisper và
+cập nhật dependency Jetson ở [MODEL_STREAMING.md](MODEL_STREAMING.md).
+
 Các tùy chọn khi cần:
 
 ```bash
