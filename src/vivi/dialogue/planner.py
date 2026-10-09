@@ -68,14 +68,17 @@ class ModelProvider:
 
 
 class SemanticResolver:
-    def __init__(self, providers=None, *, parser=None, breaker_seconds=30):
+    def __init__(self, providers=None, *, parser=None, breaker_seconds=30, fallback_chains=None):
         self.providers = providers or {}
         self.parser = parser or OfflineParser()
         self.breaker_seconds = breaker_seconds
+        self.fallback_chains = fallback_chains or {}
 
     def chain(self, requested):
         if requested == "rules":
             return []
+        if requested in self.fallback_chains:
+            return list(self.fallback_chains[requested])
         return [requested] if requested == "local" else [requested, "local"]
 
     async def resolve(self, text, session, *, requested="rules", history=None, memory=None, catalog=None):

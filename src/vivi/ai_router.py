@@ -48,7 +48,7 @@ class JetsonProviderRouter:
     async def select(self, requested: str, available: set[str]) -> str:
         if self.config.jetson_ai_policy == "disabled" or requested != "local":
             return requested
-        if await self._ready():
+        if "local" in available and await self._ready():
             return "local"
         if self.config.jetson_ai_policy != "offline_only" and not self.config.rag_local_only:
             for provider in ("google", "openai", "openrouter"):

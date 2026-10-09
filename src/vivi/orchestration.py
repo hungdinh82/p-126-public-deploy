@@ -363,7 +363,14 @@ def create_langgraph_orchestrator(
             generators[name] = candidate.generator
         except Exception as exc:
             errors[name] = str(exc)
-    resolver = SemanticResolver(providers, breaker_seconds=config.provider_breaker_seconds)
+    fallback_chains = {}
+    if config.jetson_ai_policy != "disabled":
+        cloud = [] if config.jetson_ai_policy == "offline_only" or config.rag_local_only else [
+            name for name in ("google", "openai", "openrouter") if name in providers
+        ]
+        fallback_chains["local"] = ["local", *cloud]
+    resolver = SemanticResolver(providers, breaker_seconds=config.provider_breaker_seconds,
+                                fallback_chains=fallback_chains)
     saver = ThreadedSqliteSaver(config.data_dir / "runtime" / "conversation-v3.sqlite3")
     graph = build_assistant_graph(services, saver, ledger, resolver=resolver, generators=generators,
         budgets={name: value.budget_seconds for name, value in providers.items()})
@@ -375,4 +382,5 @@ def create_langgraph_orchestrator(
         provider_errors=errors, ledger=ledger, timeout_seconds=config.turn_timeout_seconds,
         profile_id=config.memory_profile_id)
     result.semantic_providers = {"rules", *providers}
+    result.provider_fallbacks = fallback_chains
     return result

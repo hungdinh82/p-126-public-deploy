@@ -31,7 +31,8 @@ async def _provider(requested: str | None) -> str:
             selected, "LLM provider không khả dụng"
         )
         raise HTTPException(status_code=400, detail=detail)
-    return await provider_router.select(selected, runtime.orchestrator.graph_providers)
+    available = getattr(runtime.orchestrator, "semantic_providers", runtime.orchestrator.graph_providers)
+    return await provider_router.select(selected, available)
 
 
 def _reject_inline_confirmation(request: TurnRequest) -> None:
