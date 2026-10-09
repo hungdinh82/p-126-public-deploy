@@ -1,0 +1,14 @@
+{
+  "turns": 21,
+  "correct": 21,
+  "clarifications": 3,
+  "turn_accuracy": 1.0,
+  "latency_p50_ms": 1897.98,
+  "latency_p95_ms": 2983.34,
+  "actual_cloud_turns": 21,
+  "unique_fixture_turns_covered": 21,
+  "cloud_only_episodes": 9,
+  "cloud_only_episodes_passed": 9,
+  "prompt_version": "semantic-unified-5",
+  "scope": "Final full development run; 21 distinct fixture turns, not held-out accuracy."
+}

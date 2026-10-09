@@ -195,8 +195,11 @@ class MqttVehicleAdapter:
         session_id: str,
         turn_id: str,
         action: ActionProposal,
+        *, expected_state_version: int | None = None,
     ) -> tuple[VehicleState, str]:
         observed = self._get_state()
+        if expected_state_version is not None and observed.state_version != expected_state_version:
+            raise VehicleUnavailableError("state_version_conflict before dispatch")
         outcome = self._execute(session_id, turn_id, action, observed)
         if outcome.status != "verified":
             raise VehicleUnavailableError(outcome.message)

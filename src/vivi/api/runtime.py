@@ -27,6 +27,9 @@ class Runtime:
     llm_models: dict[str, str]
 
     def close(self) -> None:
+        for graph in set(self.orchestrator.graphs.values()):
+            if hasattr(graph, "close"):
+                graph.close()
         if isinstance(self.vehicle, MqttVehicleAdapter):
             self.vehicle.close()
 

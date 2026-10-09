@@ -1,0 +1,4694 @@
+{
+  "provider": "rules",
+  "cases": 57,
+  "route_and_intent_accuracy": 1.0,
+  "turns": 57,
+  "latency_p50_ms": 136.58,
+  "latency_p95_ms": 250.51,
+  "error_count": 0,
+  "over_360_characters": 0,
+  "answer_or_argument_failures": 0,
+  "limitations": [
+    "Development cases include recent user utterances; not a held-out accuracy estimate.",
+    "Length and routing checks do not measure factual correctness or SLM voice quality.",
+    "Actions run only against an in-memory simulator; external TCP is blocked."
+  ],
+  "results": [
+    {
+      "id": "voice-01",
+      "query": "điều hoà đang là bao nhiêu độ",
+      "expected_route": "action",
+      "expected_intent": "vehicle.get_status",
+      "review_status": "draft",
+      "category": "conversation_regression",
+      "route": "action",
+      "intent": "vehicle.get_status",
+      "status": "action_verified",
+      "action_proposal": {
+        "intent": "vehicle.get_status",
+        "arguments": {},
+        "confidence": 1.0
+      },
+      "execution": {
+        "allowed": true,
+        "executed": true,
+        "verified": true,
+        "risk_class": "R0",
+        "message": "Điều hoà đang ở 23 độ.",
+        "error": null
+      },
+      "timings": {
+        "context": 1.51,
+        "interpret": 14.97,
+        "reducer": 0.26,
+        "scheduler": 0.27,
+        "validate": 13.59,
+        "capability": 15.21
+      },
+      "answer": "Điều hoà đang ở 23 độ.",
+      "characters": 22,
+      "citations": [],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 251.83,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "voice-01",
+          "query": "điều hoà đang là bao nhiêu độ",
+          "expected_route": "action",
+          "expected_intent": "vehicle.get_status",
+          "review_status": "draft",
+          "category": "conversation_regression",
+          "route": "action",
+          "intent": "vehicle.get_status",
+          "status": "action_verified",
+          "action_proposal": {
+            "intent": "vehicle.get_status",
+            "arguments": {},
+            "confidence": 1.0
+          },
+          "execution": {
+            "allowed": true,
+            "executed": true,
+            "verified": true,
+            "risk_class": "R0",
+            "message": "Điều hoà đang ở 23 độ.",
+            "error": null
+          },
+          "timings": {
+            "context": 1.51,
+            "interpret": 14.97,
+            "reducer": 0.26,
+            "scheduler": 0.27,
+            "validate": 13.59,
+            "capability": 15.21
+          },
+          "answer": "Điều hoà đang ở 23 độ.",
+          "characters": 22,
+          "citations": [],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 251.79,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "voice-02",
+      "query": "tình trạng pin hiện tại",
+      "expected_route": "action",
+      "expected_intent": "vehicle.get_status",
+      "review_status": "draft",
+      "category": "conversation_regression",
+      "route": "action",
+      "intent": "vehicle.get_status",
+      "status": "action_verified",
+      "action_proposal": {
+        "intent": "vehicle.get_status",
+        "arguments": {},
+        "confidence": 1.0
+      },
+      "execution": {
+        "allowed": true,
+        "executed": true,
+        "verified": true,
+        "risk_class": "R0",
+        "message": "Pin còn 82 phần trăm.",
+        "error": null
+      },
+      "timings": {
+        "context": 1.19,
+        "interpret": 6.07,
+        "reducer": 0.41,
+        "scheduler": 0.45,
+        "validate": 12.87,
+        "capability": 14.02
+      },
+      "answer": "Pin còn 82 phần trăm.",
+      "characters": 21,
+      "citations": [],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 199.01,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "voice-02",
+          "query": "tình trạng pin hiện tại",
+          "expected_route": "action",
+          "expected_intent": "vehicle.get_status",
+          "review_status": "draft",
+          "category": "conversation_regression",
+          "route": "action",
+          "intent": "vehicle.get_status",
+          "status": "action_verified",
+          "action_proposal": {
+            "intent": "vehicle.get_status",
+            "arguments": {},
+            "confidence": 1.0
+          },
+          "execution": {
+            "allowed": true,
+            "executed": true,
+            "verified": true,
+            "risk_class": "R0",
+            "message": "Pin còn 82 phần trăm.",
+            "error": null
+          },
+          "timings": {
+            "context": 1.19,
+            "interpret": 6.07,
+            "reducer": 0.41,
+            "scheduler": 0.45,
+            "validate": 12.87,
+            "capability": 14.02
+          },
+          "answer": "Pin còn 82 phần trăm.",
+          "characters": 21,
+          "citations": [],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 198.98,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "voice-03",
+      "query": "pin còn bao nhiêu phần trăm",
+      "expected_route": "action",
+      "expected_intent": "vehicle.get_status",
+      "review_status": "draft",
+      "category": "conversation_regression",
+      "route": "action",
+      "intent": "vehicle.get_status",
+      "status": "action_verified",
+      "action_proposal": {
+        "intent": "vehicle.get_status",
+        "arguments": {},
+        "confidence": 1.0
+      },
+      "execution": {
+        "allowed": true,
+        "executed": true,
+        "verified": true,
+        "risk_class": "R0",
+        "message": "Pin còn 82 phần trăm.",
+        "error": null
+      },
+      "timings": {
+        "context": 1.14,
+        "interpret": 9.19,
+        "reducer": 0.15,
+        "scheduler": 0.25,
+        "validate": 12.35,
+        "capability": 14.62
+      },
+      "answer": "Pin còn 82 phần trăm.",
+      "characters": 21,
+      "citations": [],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 202.57,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "voice-03",
+          "query": "pin còn bao nhiêu phần trăm",
+          "expected_route": "action",
+          "expected_intent": "vehicle.get_status",
+          "review_status": "draft",
+          "category": "conversation_regression",
+          "route": "action",
+          "intent": "vehicle.get_status",
+          "status": "action_verified",
+          "action_proposal": {
+            "intent": "vehicle.get_status",
+            "arguments": {},
+            "confidence": 1.0
+          },
+          "execution": {
+            "allowed": true,
+            "executed": true,
+            "verified": true,
+            "risk_class": "R0",
+            "message": "Pin còn 82 phần trăm.",
+            "error": null
+          },
+          "timings": {
+            "context": 1.14,
+            "interpret": 9.19,
+            "reducer": 0.15,
+            "scheduler": 0.25,
+            "validate": 12.35,
+            "capability": 14.62
+          },
+          "answer": "Pin còn 82 phần trăm.",
+          "characters": 21,
+          "citations": [],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 202.54,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "voice-04",
+      "query": "tình trạng áp suất lốp hiện tại",
+      "expected_route": "action",
+      "expected_intent": "vehicle.get_status",
+      "review_status": "draft",
+      "category": "conversation_regression",
+      "route": "action",
+      "intent": "vehicle.get_status",
+      "status": "action_verified",
+      "action_proposal": {
+        "intent": "vehicle.get_status",
+        "arguments": {},
+        "confidence": 1.0
+      },
+      "execution": {
+        "allowed": true,
+        "executed": true,
+        "verified": true,
+        "risk_class": "R0",
+        "message": "Áp suất lốp: front_left: 250 kPa; front_right: 250 kPa; rear_left: 250 kPa; rear_right: 250 kPa.",
+        "error": null
+      },
+      "timings": {
+        "context": 1.14,
+        "interpret": 8.7,
+        "reducer": 0.17,
+        "scheduler": 0.44,
+        "validate": 12.15,
+        "capability": 17.44
+      },
+      "answer": "Áp suất lốp: front_left: 250 kPa; front_right: 250 kPa; rear_left: 250 kPa; rear_right: 250 kPa.",
+      "characters": 96,
+      "citations": [],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 205.52,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "voice-04",
+          "query": "tình trạng áp suất lốp hiện tại",
+          "expected_route": "action",
+          "expected_intent": "vehicle.get_status",
+          "review_status": "draft",
+          "category": "conversation_regression",
+          "route": "action",
+          "intent": "vehicle.get_status",
+          "status": "action_verified",
+          "action_proposal": {
+            "intent": "vehicle.get_status",
+            "arguments": {},
+            "confidence": 1.0
+          },
+          "execution": {
+            "allowed": true,
+            "executed": true,
+            "verified": true,
+            "risk_class": "R0",
+            "message": "Áp suất lốp: front_left: 250 kPa; front_right: 250 kPa; rear_left: 250 kPa; rear_right: 250 kPa.",
+            "error": null
+          },
+          "timings": {
+            "context": 1.14,
+            "interpret": 8.7,
+            "reducer": 0.17,
+            "scheduler": 0.44,
+            "validate": 12.15,
+            "capability": 17.44
+          },
+          "answer": "Áp suất lốp: front_left: 250 kPa; front_right: 250 kPa; rear_left: 250 kPa; rear_right: 250 kPa.",
+          "characters": 96,
+          "citations": [],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 205.5,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "voice-05",
+      "query": "còn đi được bao xa",
+      "expected_route": "action",
+      "expected_intent": "vehicle.get_status",
+      "review_status": "draft",
+      "category": "conversation_regression",
+      "route": "action",
+      "intent": "vehicle.get_status",
+      "status": "action_verified",
+      "action_proposal": {
+        "intent": "vehicle.get_status",
+        "arguments": {},
+        "confidence": 1.0
+      },
+      "execution": {
+        "allowed": true,
+        "executed": true,
+        "verified": true,
+        "risk_class": "R0",
+        "message": "Quãng đường dự kiến còn 328 km.",
+        "error": null
+      },
+      "timings": {
+        "context": 1.11,
+        "interpret": 12.32,
+        "reducer": 0.32,
+        "scheduler": 0.52,
+        "validate": 11.97,
+        "capability": 14.66
+      },
+      "answer": "Quãng đường dự kiến còn 328 km.",
+      "characters": 31,
+      "citations": [],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 198.62,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "voice-05",
+          "query": "còn đi được bao xa",
+          "expected_route": "action",
+          "expected_intent": "vehicle.get_status",
+          "review_status": "draft",
+          "category": "conversation_regression",
+          "route": "action",
+          "intent": "vehicle.get_status",
+          "status": "action_verified",
+          "action_proposal": {
+            "intent": "vehicle.get_status",
+            "arguments": {},
+            "confidence": 1.0
+          },
+          "execution": {
+            "allowed": true,
+            "executed": true,
+            "verified": true,
+            "risk_class": "R0",
+            "message": "Quãng đường dự kiến còn 328 km.",
+            "error": null
+          },
+          "timings": {
+            "context": 1.11,
+            "interpret": 12.32,
+            "reducer": 0.32,
+            "scheduler": 0.52,
+            "validate": 11.97,
+            "capability": 14.66
+          },
+          "answer": "Quãng đường dự kiến còn 328 km.",
+          "characters": 31,
+          "citations": [],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 198.6,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "voice-06",
+      "query": "cửa bên tài đã khoá chưa",
+      "expected_route": "action",
+      "expected_intent": "vehicle.get_status",
+      "review_status": "draft",
+      "category": "conversation_regression",
+      "route": "action",
+      "intent": "vehicle.get_status",
+      "status": "action_verified",
+      "action_proposal": {
+        "intent": "vehicle.get_status",
+        "arguments": {},
+        "confidence": 1.0
+      },
+      "execution": {
+        "allowed": true,
+        "executed": true,
+        "verified": true,
+        "risk_class": "R0",
+        "message": "Nắp capo đang đóng. Cốp sau đang đóng. Các cửa: driver: đóng, mở khóa; front_passenger: đóng, mở khóa; rear_left: đóng, mở khóa; rear_right: đóng, mở khóa.",
+        "error": null
+      },
+      "timings": {
+        "context": 1.95,
+        "interpret": 10.91,
+        "reducer": 0.32,
+        "scheduler": 0.24,
+        "validate": 12.04,
+        "capability": 15.06
+      },
+      "answer": "Nắp capo đang đóng. Cốp sau đang đóng. Các cửa: driver: đóng, mở khóa; front_passenger: đóng, mở khóa; rear_left: đóng, mở khóa; rear_right: đóng, mở khóa.",
+      "characters": 155,
+      "citations": [],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 204.42,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "voice-06",
+          "query": "cửa bên tài đã khoá chưa",
+          "expected_route": "action",
+          "expected_intent": "vehicle.get_status",
+          "review_status": "draft",
+          "category": "conversation_regression",
+          "route": "action",
+          "intent": "vehicle.get_status",
+          "status": "action_verified",
+          "action_proposal": {
+            "intent": "vehicle.get_status",
+            "arguments": {},
+            "confidence": 1.0
+          },
+          "execution": {
+            "allowed": true,
+            "executed": true,
+            "verified": true,
+            "risk_class": "R0",
+            "message": "Nắp capo đang đóng. Cốp sau đang đóng. Các cửa: driver: đóng, mở khóa; front_passenger: đóng, mở khóa; rear_left: đóng, mở khóa; rear_right: đóng, mở khóa.",
+            "error": null
+          },
+          "timings": {
+            "context": 1.95,
+            "interpret": 10.91,
+            "reducer": 0.32,
+            "scheduler": 0.24,
+            "validate": 12.04,
+            "capability": 15.06
+          },
+          "answer": "Nắp capo đang đóng. Cốp sau đang đóng. Các cửa: driver: đóng, mở khóa; front_passenger: đóng, mở khóa; rear_left: đóng, mở khóa; rear_right: đóng, mở khóa.",
+          "characters": 155,
+          "citations": [],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 204.4,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "voice-07",
+      "query": "thông tin về lốp dự phòng",
+      "expected_route": "handbook",
+      "expected_intent": "manual.search",
+      "review_status": "draft",
+      "category": "conversation_regression",
+      "route": "handbook",
+      "intent": "manual.search",
+      "status": "answered",
+      "action_proposal": null,
+      "execution": null,
+      "timings": {
+        "context": 1.15,
+        "interpret": 13.65,
+        "reducer": 0.21,
+        "scheduler": 0.31,
+        "validate": 11.04,
+        "capability": 743.58
+      },
+      "answer": "Lốp dự phòng CHỈ SỬ DỤNG TẠM THỜI. Lái xe cẩn thận khi lốp dự phòng được lắp vào xe.",
+      "characters": 84,
+      "citations": [
+        {
+          "source_id": "vf-44e24b3a6a63477755fb",
+          "section_path": [
+            "Bảo dưỡng",
+            "Vành và bánh xe",
+            "Thay thế lốp dự phòng (nếu được trang bị)"
+          ],
+          "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266375"
+        }
+      ],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 928.74,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "voice-07",
+          "query": "thông tin về lốp dự phòng",
+          "expected_route": "handbook",
+          "expected_intent": "manual.search",
+          "review_status": "draft",
+          "category": "conversation_regression",
+          "route": "handbook",
+          "intent": "manual.search",
+          "status": "answered",
+          "action_proposal": null,
+          "execution": null,
+          "timings": {
+            "context": 1.15,
+            "interpret": 13.65,
+            "reducer": 0.21,
+            "scheduler": 0.31,
+            "validate": 11.04,
+            "capability": 743.58
+          },
+          "answer": "Lốp dự phòng CHỈ SỬ DỤNG TẠM THỜI. Lái xe cẩn thận khi lốp dự phòng được lắp vào xe.",
+          "characters": 84,
+          "citations": [
+            {
+              "source_id": "vf-44e24b3a6a63477755fb",
+              "section_path": [
+                "Bảo dưỡng",
+                "Vành và bánh xe",
+                "Thay thế lốp dự phòng (nếu được trang bị)"
+              ],
+              "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266375"
+            }
+          ],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 928.72,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "voice-08",
+      "query": "thay lốp dự phòng",
+      "expected_route": "handbook",
+      "expected_intent": "manual.search",
+      "review_status": "draft",
+      "category": "conversation_regression",
+      "route": "handbook",
+      "intent": "manual.search",
+      "status": "answered",
+      "action_proposal": null,
+      "execution": null,
+      "timings": {
+        "context": 1.64,
+        "interpret": 15.76,
+        "reducer": 0.55,
+        "scheduler": 0.5700000000000001,
+        "validate": 15.41,
+        "capability": 32.68
+      },
+      "answer": "Lốp dự phòng CHỈ SỬ DỤNG TẠM THỜI. Luôn thay lốp dự phòng trong trường hợp bị hao mòn, móp méo hoặc phồng bất thường.",
+      "characters": 117,
+      "citations": [
+        {
+          "source_id": "vf-44e24b3a6a63477755fb",
+          "section_path": [
+            "Bảo dưỡng",
+            "Vành và bánh xe",
+            "Thay thế lốp dự phòng (nếu được trang bị)"
+          ],
+          "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266375"
+        }
+      ],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 244.12,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "voice-08",
+          "query": "thay lốp dự phòng",
+          "expected_route": "handbook",
+          "expected_intent": "manual.search",
+          "review_status": "draft",
+          "category": "conversation_regression",
+          "route": "handbook",
+          "intent": "manual.search",
+          "status": "answered",
+          "action_proposal": null,
+          "execution": null,
+          "timings": {
+            "context": 1.64,
+            "interpret": 15.76,
+            "reducer": 0.55,
+            "scheduler": 0.5700000000000001,
+            "validate": 15.41,
+            "capability": 32.68
+          },
+          "answer": "Lốp dự phòng CHỈ SỬ DỤNG TẠM THỜI. Luôn thay lốp dự phòng trong trường hợp bị hao mòn, móp méo hoặc phồng bất thường.",
+          "characters": 117,
+          "citations": [
+            {
+              "source_id": "vf-44e24b3a6a63477755fb",
+              "section_path": [
+                "Bảo dưỡng",
+                "Vành và bánh xe",
+                "Thay thế lốp dự phòng (nếu được trang bị)"
+              ],
+              "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266375"
+            }
+          ],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 244.09,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "voice-09",
+      "query": "thay lốp dự phòng như nào",
+      "expected_route": "handbook",
+      "expected_intent": "manual.search",
+      "review_status": "draft",
+      "category": "conversation_regression",
+      "route": "handbook",
+      "intent": "manual.search",
+      "status": "answered",
+      "action_proposal": null,
+      "execution": null,
+      "timings": {
+        "context": 3.03,
+        "interpret": 19.3,
+        "reducer": 0.29,
+        "scheduler": 0.27,
+        "validate": 13.21,
+        "capability": 30.3
+      },
+      "answer": "Lốp dự phòng CHỈ SỬ DỤNG TẠM THỜI. Luôn thay lốp dự phòng trong trường hợp bị hao mòn, móp méo hoặc phồng bất thường.",
+      "characters": 117,
+      "citations": [
+        {
+          "source_id": "vf-44e24b3a6a63477755fb",
+          "section_path": [
+            "Bảo dưỡng",
+            "Vành và bánh xe",
+            "Thay thế lốp dự phòng (nếu được trang bị)"
+          ],
+          "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266375"
+        }
+      ],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 250.54,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "voice-09",
+          "query": "thay lốp dự phòng như nào",
+          "expected_route": "handbook",
+          "expected_intent": "manual.search",
+          "review_status": "draft",
+          "category": "conversation_regression",
+          "route": "handbook",
+          "intent": "manual.search",
+          "status": "answered",
+          "action_proposal": null,
+          "execution": null,
+          "timings": {
+            "context": 3.03,
+            "interpret": 19.3,
+            "reducer": 0.29,
+            "scheduler": 0.27,
+            "validate": 13.21,
+            "capability": 30.3
+          },
+          "answer": "Lốp dự phòng CHỈ SỬ DỤNG TẠM THỜI. Luôn thay lốp dự phòng trong trường hợp bị hao mòn, móp méo hoặc phồng bất thường.",
+          "characters": 117,
+          "citations": [
+            {
+              "source_id": "vf-44e24b3a6a63477755fb",
+              "section_path": [
+                "Bảo dưỡng",
+                "Vành và bánh xe",
+                "Thay thế lốp dự phòng (nếu được trang bị)"
+              ],
+              "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266375"
+            }
+          ],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 250.51,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "voice-10",
+      "query": "tính năng cruise control",
+      "expected_route": "handbook",
+      "expected_intent": "manual.search",
+      "review_status": "draft",
+      "category": "conversation_regression",
+      "route": "handbook",
+      "intent": "manual.search",
+      "status": "answered",
+      "action_proposal": null,
+      "execution": null,
+      "timings": {
+        "context": 2.01,
+        "interpret": 10.47,
+        "reducer": 0.19,
+        "scheduler": 0.22,
+        "validate": 11.27,
+        "capability": 26.62
+      },
+      "answer": "Hệ thống kiểm soát hành trình thích ứng (ACC) là một hệ thống hỗ trợ người lái xe tiên tiến, tự động điều chỉnh tốc độ xe để duy trì khoảng cách an toàn với các xe khác phía trước.",
+      "characters": 180,
+      "citations": [
+        {
+          "source_id": "vf-7642695d1ae837b025cc",
+          "section_path": [
+            "Hỗ trợ người lái nâng cao",
+            "Kiểm soát hành trình",
+            "Hệ thống kiểm soát hành trình thích ứng (nếu được trang bị)"
+          ],
+          "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266344"
+        }
+      ],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 217.53,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "voice-10",
+          "query": "tính năng cruise control",
+          "expected_route": "handbook",
+          "expected_intent": "manual.search",
+          "review_status": "draft",
+          "category": "conversation_regression",
+          "route": "handbook",
+          "intent": "manual.search",
+          "status": "answered",
+          "action_proposal": null,
+          "execution": null,
+          "timings": {
+            "context": 2.01,
+            "interpret": 10.47,
+            "reducer": 0.19,
+            "scheduler": 0.22,
+            "validate": 11.27,
+            "capability": 26.62
+          },
+          "answer": "Hệ thống kiểm soát hành trình thích ứng (ACC) là một hệ thống hỗ trợ người lái xe tiên tiến, tự động điều chỉnh tốc độ xe để duy trì khoảng cách an toàn với các xe khác phía trước.",
+          "characters": 180,
+          "citations": [
+            {
+              "source_id": "vf-7642695d1ae837b025cc",
+              "section_path": [
+                "Hỗ trợ người lái nâng cao",
+                "Kiểm soát hành trình",
+                "Hệ thống kiểm soát hành trình thích ứng (nếu được trang bị)"
+              ],
+              "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266344"
+            }
+          ],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 217.51,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "voice-11",
+      "query": "bạn có cruise control không?",
+      "expected_route": "handbook",
+      "expected_intent": "manual.search",
+      "review_status": "draft",
+      "category": "conversation_regression",
+      "route": "handbook",
+      "intent": "manual.search",
+      "status": "answered",
+      "action_proposal": null,
+      "execution": null,
+      "timings": {
+        "context": 0.97,
+        "interpret": 8.51,
+        "reducer": 0.24,
+        "scheduler": 0.52,
+        "validate": 13.46,
+        "capability": 59.08
+      },
+      "answer": "Trang bị kiểm soát hành trình thích ứng (ACC) tuỳ phiên bản. Hệ thống kiểm soát hành trình thích ứng (ACC) là một hệ thống hỗ trợ người lái xe tiên tiến, tự động điều chỉnh tốc độ xe để duy trì khoảng cách an toàn với các xe khác phía trước.",
+      "characters": 241,
+      "citations": [
+        {
+          "source_id": "vf-7642695d1ae837b025cc",
+          "section_path": [
+            "Hỗ trợ người lái nâng cao",
+            "Kiểm soát hành trình",
+            "Hệ thống kiểm soát hành trình thích ứng (nếu được trang bị)"
+          ],
+          "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266344"
+        }
+      ],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 182.3,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "voice-11",
+          "query": "bạn có cruise control không?",
+          "expected_route": "handbook",
+          "expected_intent": "manual.search",
+          "review_status": "draft",
+          "category": "conversation_regression",
+          "route": "handbook",
+          "intent": "manual.search",
+          "status": "answered",
+          "action_proposal": null,
+          "execution": null,
+          "timings": {
+            "context": 0.97,
+            "interpret": 8.51,
+            "reducer": 0.24,
+            "scheduler": 0.52,
+            "validate": 13.46,
+            "capability": 59.08
+          },
+          "answer": "Trang bị kiểm soát hành trình thích ứng (ACC) tuỳ phiên bản. Hệ thống kiểm soát hành trình thích ứng (ACC) là một hệ thống hỗ trợ người lái xe tiên tiến, tự động điều chỉnh tốc độ xe để duy trì khoảng cách an toàn với các xe khác phía trước.",
+          "characters": 241,
+          "citations": [
+            {
+              "source_id": "vf-7642695d1ae837b025cc",
+              "section_path": [
+                "Hỗ trợ người lái nâng cao",
+                "Kiểm soát hành trình",
+                "Hệ thống kiểm soát hành trình thích ứng (nếu được trang bị)"
+              ],
+              "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266344"
+            }
+          ],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 182.28,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "voice-12",
+      "query": "tiện ích cabin có những gì",
+      "expected_route": "handbook",
+      "expected_intent": "manual.search",
+      "review_status": "draft",
+      "category": "conversation_regression",
+      "route": "handbook",
+      "intent": "manual.search",
+      "status": "answered",
+      "action_proposal": null,
+      "execution": null,
+      "timings": {
+        "context": 1.42,
+        "interpret": 13.48,
+        "reducer": 0.24,
+        "scheduler": 0.36,
+        "validate": 12.7,
+        "capability": 17.89
+      },
+      "answer": "CHÚ Ý Tính năng được trang bị và tiện ích sẵn có phụ thuộc vào phiên bản xe và thị trường.",
+      "characters": 90,
+      "citations": [
+        {
+          "source_id": "vf-e2046d67b33faf010eb3",
+          "section_path": [
+            "Màn hình, Kết nối và Điều hòa",
+            "Điều hướng",
+            "Tổng quan về điều hướng"
+          ],
+          "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266363"
+        }
+      ],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 146.18,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "voice-12",
+          "query": "tiện ích cabin có những gì",
+          "expected_route": "handbook",
+          "expected_intent": "manual.search",
+          "review_status": "draft",
+          "category": "conversation_regression",
+          "route": "handbook",
+          "intent": "manual.search",
+          "status": "answered",
+          "action_proposal": null,
+          "execution": null,
+          "timings": {
+            "context": 1.42,
+            "interpret": 13.48,
+            "reducer": 0.24,
+            "scheduler": 0.36,
+            "validate": 12.7,
+            "capability": 17.89
+          },
+          "answer": "CHÚ Ý Tính năng được trang bị và tiện ích sẵn có phụ thuộc vào phiên bản xe và thị trường.",
+          "characters": 90,
+          "citations": [
+            {
+              "source_id": "vf-e2046d67b33faf010eb3",
+              "section_path": [
+                "Màn hình, Kết nối và Điều hòa",
+                "Điều hướng",
+                "Tổng quan về điều hướng"
+              ],
+              "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266363"
+            }
+          ],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 146.16,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "voice-13",
+      "query": "Cách kiểm tra áp suất lốp",
+      "expected_route": "handbook",
+      "expected_intent": "manual.search",
+      "review_status": "draft",
+      "category": "conversation_regression",
+      "route": "handbook",
+      "intent": "manual.search",
+      "status": "insufficient_evidence",
+      "action_proposal": null,
+      "execution": null,
+      "timings": {
+        "context": 1.41,
+        "interpret": 11.87,
+        "reducer": 0.2,
+        "scheduler": 0.41000000000000003,
+        "validate": 12.38,
+        "capability": 31.0
+      },
+      "answer": "Mình chưa có thông tin đủ rõ để trả lời đúng câu này.",
+      "characters": 53,
+      "citations": [],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 168.38,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "voice-13",
+          "query": "Cách kiểm tra áp suất lốp",
+          "expected_route": "handbook",
+          "expected_intent": "manual.search",
+          "review_status": "draft",
+          "category": "conversation_regression",
+          "route": "handbook",
+          "intent": "manual.search",
+          "status": "insufficient_evidence",
+          "action_proposal": null,
+          "execution": null,
+          "timings": {
+            "context": 1.41,
+            "interpret": 11.87,
+            "reducer": 0.2,
+            "scheduler": 0.41000000000000003,
+            "validate": 12.38,
+            "capability": 31.0
+          },
+          "answer": "Mình chưa có thông tin đủ rõ để trả lời đúng câu này.",
+          "characters": 53,
+          "citations": [],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 168.36,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "voice-14",
+      "query": "Dung lượng pin SDI bao nhiêu",
+      "expected_route": "handbook",
+      "expected_intent": "manual.search",
+      "review_status": "draft",
+      "category": "conversation_regression",
+      "route": "handbook",
+      "intent": "manual.search",
+      "status": "answered",
+      "action_proposal": null,
+      "execution": null,
+      "timings": {
+        "context": 1.4,
+        "interpret": 13.57,
+        "reducer": 0.24,
+        "scheduler": 0.25,
+        "validate": 12.13,
+        "capability": 21.77
+      },
+      "answer": "Dung lượng sử dụng 82 kWh.",
+      "characters": 26,
+      "citations": [
+        {
+          "source_id": "vf-e7d64702ac5cdc4642bf",
+          "section_path": [
+            "Thông số kỹ thuật",
+            "Thông số kỹ thuật",
+            "Pin điện áp cao -SDI"
+          ],
+          "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266381"
+        }
+      ],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 149.55,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "voice-14",
+          "query": "Dung lượng pin SDI bao nhiêu",
+          "expected_route": "handbook",
+          "expected_intent": "manual.search",
+          "review_status": "draft",
+          "category": "conversation_regression",
+          "route": "handbook",
+          "intent": "manual.search",
+          "status": "answered",
+          "action_proposal": null,
+          "execution": null,
+          "timings": {
+            "context": 1.4,
+            "interpret": 13.57,
+            "reducer": 0.24,
+            "scheduler": 0.25,
+            "validate": 12.13,
+            "capability": 21.77
+          },
+          "answer": "Dung lượng sử dụng 82 kWh.",
+          "characters": 26,
+          "citations": [
+            {
+              "source_id": "vf-e7d64702ac5cdc4642bf",
+              "section_path": [
+                "Thông số kỹ thuật",
+                "Thông số kỹ thuật",
+                "Pin điện áp cao -SDI"
+              ],
+              "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266381"
+            }
+          ],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 149.53,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "voice-15",
+      "query": "Phanh ABS hoạt động như thế nào",
+      "expected_route": "handbook",
+      "expected_intent": "manual.search",
+      "review_status": "draft",
+      "category": "conversation_regression",
+      "route": "handbook",
+      "intent": "manual.search",
+      "status": "answered",
+      "action_proposal": null,
+      "execution": null,
+      "timings": {
+        "context": 1.05,
+        "interpret": 8.5,
+        "reducer": 0.28,
+        "scheduler": 0.35,
+        "validate": 11.85,
+        "capability": 21.36
+      },
+      "answer": "Hệ thống chống bó cứng phanh ngăn không cho bánh xe bị bó cứng và giúp duy trì khả năng đánh lái trong những trường hợp phanh gấp.",
+      "characters": 130,
+      "citations": [
+        {
+          "source_id": "vf-5061d1292bd7122ac5d5",
+          "section_path": [
+            "Lái xe",
+            "Dừng và phanh xe",
+            "Hệ thống chống bó cứng phanh (ABS)"
+          ],
+          "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266355"
+        }
+      ],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 141.09,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "voice-15",
+          "query": "Phanh ABS hoạt động như thế nào",
+          "expected_route": "handbook",
+          "expected_intent": "manual.search",
+          "review_status": "draft",
+          "category": "conversation_regression",
+          "route": "handbook",
+          "intent": "manual.search",
+          "status": "answered",
+          "action_proposal": null,
+          "execution": null,
+          "timings": {
+            "context": 1.05,
+            "interpret": 8.5,
+            "reducer": 0.28,
+            "scheduler": 0.35,
+            "validate": 11.85,
+            "capability": 21.36
+          },
+          "answer": "Hệ thống chống bó cứng phanh ngăn không cho bánh xe bị bó cứng và giúp duy trì khả năng đánh lái trong những trường hợp phanh gấp.",
+          "characters": 130,
+          "citations": [
+            {
+              "source_id": "vf-5061d1292bd7122ac5d5",
+              "section_path": [
+                "Lái xe",
+                "Dừng và phanh xe",
+                "Hệ thống chống bó cứng phanh (ABS)"
+              ],
+              "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266355"
+            }
+          ],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 141.07,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "voice-16",
+      "query": "Bạn có thể mở cửa sổ bên tài giúp tôi không?",
+      "expected_route": "action",
+      "expected_intent": "window.set_position",
+      "review_status": "draft",
+      "category": "conversation_regression",
+      "route": "action",
+      "intent": "window.set_position",
+      "status": "confirmation_required",
+      "action_proposal": {
+        "intent": "window.set_position",
+        "arguments": {
+          "zone": "driver",
+          "position_percent": 100
+        },
+        "confidence": 1.0
+      },
+      "execution": {
+        "allowed": false,
+        "executed": false,
+        "verified": false,
+        "risk_class": "R2",
+        "message": "Xác nhận đặt cửa sổ bên tài ở mức 100 phần trăm?",
+        "error": null
+      },
+      "timings": {
+        "context": 1.83,
+        "interpret": 13.24,
+        "reducer": 0.18,
+        "scheduler": 0.22,
+        "validate": 11.9,
+        "capability": 7.58
+      },
+      "answer": "Xác nhận đặt cửa sổ bên tài ở mức 100 phần trăm?",
+      "characters": 48,
+      "citations": [],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 127.18,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "voice-16",
+          "query": "Bạn có thể mở cửa sổ bên tài giúp tôi không?",
+          "expected_route": "action",
+          "expected_intent": "window.set_position",
+          "review_status": "draft",
+          "category": "conversation_regression",
+          "route": "action",
+          "intent": "window.set_position",
+          "status": "confirmation_required",
+          "action_proposal": {
+            "intent": "window.set_position",
+            "arguments": {
+              "zone": "driver",
+              "position_percent": 100
+            },
+            "confidence": 1.0
+          },
+          "execution": {
+            "allowed": false,
+            "executed": false,
+            "verified": false,
+            "risk_class": "R2",
+            "message": "Xác nhận đặt cửa sổ bên tài ở mức 100 phần trăm?",
+            "error": null
+          },
+          "timings": {
+            "context": 1.83,
+            "interpret": 13.24,
+            "reducer": 0.18,
+            "scheduler": 0.22,
+            "validate": 11.9,
+            "capability": 7.58
+          },
+          "answer": "Xác nhận đặt cửa sổ bên tài ở mức 100 phần trăm?",
+          "characters": 48,
+          "citations": [],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 127.15,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "voice-17",
+      "query": "Có thể mở cửa bên tài không?",
+      "expected_route": "action",
+      "expected_intent": "door.set_open",
+      "review_status": "draft",
+      "category": "conversation_regression",
+      "route": "action",
+      "intent": "door.set_open",
+      "status": "confirmation_required",
+      "action_proposal": {
+        "intent": "door.set_open",
+        "arguments": {
+          "zone": "driver",
+          "open": true
+        },
+        "confidence": 1.0
+      },
+      "execution": {
+        "allowed": false,
+        "executed": false,
+        "verified": false,
+        "risk_class": "R2",
+        "message": "Xác nhận mở cửa bên tài?",
+        "error": null
+      },
+      "timings": {
+        "context": 0.97,
+        "interpret": 7.6,
+        "reducer": 0.2,
+        "scheduler": 0.25,
+        "validate": 13.52,
+        "capability": 10.29
+      },
+      "answer": "Xác nhận mở cửa bên tài?",
+      "characters": 24,
+      "citations": [],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 138.5,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "voice-17",
+          "query": "Có thể mở cửa bên tài không?",
+          "expected_route": "action",
+          "expected_intent": "door.set_open",
+          "review_status": "draft",
+          "category": "conversation_regression",
+          "route": "action",
+          "intent": "door.set_open",
+          "status": "confirmation_required",
+          "action_proposal": {
+            "intent": "door.set_open",
+            "arguments": {
+              "zone": "driver",
+              "open": true
+            },
+            "confidence": 1.0
+          },
+          "execution": {
+            "allowed": false,
+            "executed": false,
+            "verified": false,
+            "risk_class": "R2",
+            "message": "Xác nhận mở cửa bên tài?",
+            "error": null
+          },
+          "timings": {
+            "context": 0.97,
+            "interpret": 7.6,
+            "reducer": 0.2,
+            "scheduler": 0.25,
+            "validate": 13.52,
+            "capability": 10.29
+          },
+          "answer": "Xác nhận mở cửa bên tài?",
+          "characters": 24,
+          "citations": [],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 138.47,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "voice-18",
+      "query": "Mở khoá cửa bên phụ giúp tôi",
+      "expected_route": "action",
+      "expected_intent": "door.set_lock",
+      "review_status": "draft",
+      "category": "conversation_regression",
+      "route": "action",
+      "intent": "door.set_lock",
+      "status": "confirmation_required",
+      "action_proposal": {
+        "intent": "door.set_lock",
+        "arguments": {
+          "zone": "front_passenger",
+          "locked": false
+        },
+        "confidence": 1.0
+      },
+      "execution": {
+        "allowed": false,
+        "executed": false,
+        "verified": false,
+        "risk_class": "R2",
+        "message": "Xác nhận mở khóa cửa bên phụ?",
+        "error": null
+      },
+      "timings": {
+        "context": 2.01,
+        "interpret": 11.36,
+        "reducer": 0.2,
+        "scheduler": 0.42,
+        "validate": 13.18,
+        "capability": 9.19
+      },
+      "answer": "Xác nhận mở khóa cửa bên phụ?",
+      "characters": 29,
+      "citations": [],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 144.23,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "voice-18",
+          "query": "Mở khoá cửa bên phụ giúp tôi",
+          "expected_route": "action",
+          "expected_intent": "door.set_lock",
+          "review_status": "draft",
+          "category": "conversation_regression",
+          "route": "action",
+          "intent": "door.set_lock",
+          "status": "confirmation_required",
+          "action_proposal": {
+            "intent": "door.set_lock",
+            "arguments": {
+              "zone": "front_passenger",
+              "locked": false
+            },
+            "confidence": 1.0
+          },
+          "execution": {
+            "allowed": false,
+            "executed": false,
+            "verified": false,
+            "risk_class": "R2",
+            "message": "Xác nhận mở khóa cửa bên phụ?",
+            "error": null
+          },
+          "timings": {
+            "context": 2.01,
+            "interpret": 11.36,
+            "reducer": 0.2,
+            "scheduler": 0.42,
+            "validate": 13.18,
+            "capability": 9.19
+          },
+          "answer": "Xác nhận mở khóa cửa bên phụ?",
+          "characters": 29,
+          "citations": [],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 144.14,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "voice-19",
+      "query": "Cửa sổ bên tài không mở được",
+      "expected_route": "handbook",
+      "expected_intent": "manual.search",
+      "review_status": "draft",
+      "category": "conversation_regression",
+      "route": "handbook",
+      "intent": "manual.search",
+      "status": "answered",
+      "action_proposal": null,
+      "execution": null,
+      "timings": {
+        "context": 1.4,
+        "interpret": 8.99,
+        "reducer": 0.24,
+        "scheduler": 0.48,
+        "validate": 13.46,
+        "capability": 30.9
+      },
+      "answer": "Không mở cửa sổ trời khi trời mưa. Không mở cửa sổ trời đã bị phủ tuyết.",
+      "characters": 72,
+      "citations": [
+        {
+          "source_id": "vf-7833479d6ccdec3981d6",
+          "section_path": [
+            "Đóng Mở và Khoang chứa đồ",
+            "Cửa sổ điện",
+            "Hiệu chỉnh lại cửa sổ trời"
+          ],
+          "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266337"
+        }
+      ],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 191.7,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "voice-19",
+          "query": "Cửa sổ bên tài không mở được",
+          "expected_route": "handbook",
+          "expected_intent": "manual.search",
+          "review_status": "draft",
+          "category": "conversation_regression",
+          "route": "handbook",
+          "intent": "manual.search",
+          "status": "answered",
+          "action_proposal": null,
+          "execution": null,
+          "timings": {
+            "context": 1.4,
+            "interpret": 8.99,
+            "reducer": 0.24,
+            "scheduler": 0.48,
+            "validate": 13.46,
+            "capability": 30.9
+          },
+          "answer": "Không mở cửa sổ trời khi trời mưa. Không mở cửa sổ trời đã bị phủ tuyết.",
+          "characters": 72,
+          "citations": [
+            {
+              "source_id": "vf-7833479d6ccdec3981d6",
+              "section_path": [
+                "Đóng Mở và Khoang chứa đồ",
+                "Cửa sổ điện",
+                "Hiệu chỉnh lại cửa sổ trời"
+              ],
+              "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266337"
+            }
+          ],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 191.68,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "voice-20",
+      "query": "Đừng mở cửa sổ",
+      "expected_route": "conversation",
+      "expected_intent": "conversation.respond",
+      "review_status": "draft",
+      "category": "conversation_regression",
+      "route": "conversation",
+      "intent": "conversation.respond",
+      "status": "answered",
+      "action_proposal": null,
+      "execution": null,
+      "timings": {
+        "context": 1.24,
+        "interpret": 12.8,
+        "reducer": 0.08,
+        "scheduler": 0.03
+      },
+      "answer": "Được nhé, mình giữ nguyên.",
+      "characters": 26,
+      "citations": [],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 102.81,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "voice-20",
+          "query": "Đừng mở cửa sổ",
+          "expected_route": "conversation",
+          "expected_intent": "conversation.respond",
+          "review_status": "draft",
+          "category": "conversation_regression",
+          "route": "conversation",
+          "intent": "conversation.respond",
+          "status": "answered",
+          "action_proposal": null,
+          "execution": null,
+          "timings": {
+            "context": 1.24,
+            "interpret": 12.8,
+            "reducer": 0.08,
+            "scheduler": 0.03
+          },
+          "answer": "Được nhé, mình giữ nguyên.",
+          "characters": 26,
+          "citations": [],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 102.8,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "voice-21",
+      "query": "Mở cửa sổ bên tài và phát nhạc",
+      "expected_route": "action",
+      "expected_intent": "window.set_position",
+      "review_status": "draft",
+      "category": "conversation_regression",
+      "expected_status": "confirmation_required",
+      "expected_executed": false,
+      "route": "action",
+      "intent": "window.set_position",
+      "status": "confirmation_required",
+      "action_proposal": {
+        "intent": "window.set_position",
+        "arguments": {
+          "zone": "driver",
+          "position_percent": 100
+        },
+        "confidence": 1.0
+      },
+      "execution": {
+        "allowed": false,
+        "executed": false,
+        "verified": false,
+        "risk_class": "R2",
+        "message": "Xác nhận đặt cửa sổ bên tài ở mức 100 phần trăm?",
+        "error": null
+      },
+      "timings": {
+        "context": 1.03,
+        "interpret": 7.04,
+        "reducer": 0.17,
+        "scheduler": 0.4,
+        "validate": 12.25,
+        "capability": 8.45
+      },
+      "answer": "Xác nhận đặt cửa sổ bên tài ở mức 100 phần trăm?",
+      "characters": 48,
+      "citations": [],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 127.98,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "voice-21",
+          "query": "Mở cửa sổ bên tài và phát nhạc",
+          "expected_route": "action",
+          "expected_intent": "window.set_position",
+          "review_status": "draft",
+          "category": "conversation_regression",
+          "expected_status": "confirmation_required",
+          "expected_executed": false,
+          "route": "action",
+          "intent": "window.set_position",
+          "status": "confirmation_required",
+          "action_proposal": {
+            "intent": "window.set_position",
+            "arguments": {
+              "zone": "driver",
+              "position_percent": 100
+            },
+            "confidence": 1.0
+          },
+          "execution": {
+            "allowed": false,
+            "executed": false,
+            "verified": false,
+            "risk_class": "R2",
+            "message": "Xác nhận đặt cửa sổ bên tài ở mức 100 phần trăm?",
+            "error": null
+          },
+          "timings": {
+            "context": 1.03,
+            "interpret": 7.04,
+            "reducer": 0.17,
+            "scheduler": 0.4,
+            "validate": 12.25,
+            "capability": 8.45
+          },
+          "answer": "Xác nhận đặt cửa sổ bên tài ở mức 100 phần trăm?",
+          "characters": 48,
+          "citations": [],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 127.97,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "voice-22",
+      "query": "Lát nữa mở cửa bên tài",
+      "expected_route": "clarify",
+      "expected_intent": "conversation.clarify",
+      "review_status": "draft",
+      "category": "conversation_regression",
+      "route": "clarify",
+      "intent": "conversation.clarify",
+      "status": "clarify",
+      "action_proposal": null,
+      "execution": null,
+      "timings": {
+        "context": 1.01,
+        "interpret": 11.04,
+        "reducer": 0.06,
+        "scheduler": 0.03
+      },
+      "answer": "Mình chưa thực hiện theo điều kiện hoặc hẹn giờ. Bạn nói thao tác cần làm ngay nhé.",
+      "characters": 83,
+      "citations": [],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 84.65,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "voice-22",
+          "query": "Lát nữa mở cửa bên tài",
+          "expected_route": "clarify",
+          "expected_intent": "conversation.clarify",
+          "review_status": "draft",
+          "category": "conversation_regression",
+          "route": "clarify",
+          "intent": "conversation.clarify",
+          "status": "clarify",
+          "action_proposal": null,
+          "execution": null,
+          "timings": {
+            "context": 1.01,
+            "interpret": 11.04,
+            "reducer": 0.06,
+            "scheduler": 0.03
+          },
+          "answer": "Mình chưa thực hiện theo điều kiện hoặc hẹn giờ. Bạn nói thao tác cần làm ngay nhé.",
+          "characters": 83,
+          "citations": [],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 84.63,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "voice-23",
+      "query": "Tôi hơi lạnh",
+      "expected_route": "action",
+      "expected_intent": "climate.set_temperature",
+      "review_status": "draft",
+      "category": "conversation_regression",
+      "route": "action",
+      "intent": "climate.set_temperature",
+      "status": "action_verified",
+      "action_proposal": {
+        "intent": "climate.set_temperature",
+        "arguments": {
+          "value_celsius": 25.0
+        },
+        "confidence": 1.0
+      },
+      "execution": {
+        "allowed": true,
+        "executed": true,
+        "verified": true,
+        "risk_class": "R1",
+        "message": "Mình đã đặt nhiệt độ ở 25 độ.",
+        "error": null
+      },
+      "timings": {
+        "context": 1.16,
+        "interpret": 7.03,
+        "reducer": 0.21,
+        "scheduler": 0.22999999999999998,
+        "validate": 12.96,
+        "capability": 16.09
+      },
+      "answer": "Mình đã đặt nhiệt độ ở 25 độ.",
+      "characters": 29,
+      "citations": [],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 136.19,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "voice-23",
+          "query": "Tôi hơi lạnh",
+          "expected_route": "action",
+          "expected_intent": "climate.set_temperature",
+          "review_status": "draft",
+          "category": "conversation_regression",
+          "route": "action",
+          "intent": "climate.set_temperature",
+          "status": "action_verified",
+          "action_proposal": {
+            "intent": "climate.set_temperature",
+            "arguments": {
+              "value_celsius": 25.0
+            },
+            "confidence": 1.0
+          },
+          "execution": {
+            "allowed": true,
+            "executed": true,
+            "verified": true,
+            "risk_class": "R1",
+            "message": "Mình đã đặt nhiệt độ ở 25 độ.",
+            "error": null
+          },
+          "timings": {
+            "context": 1.16,
+            "interpret": 7.03,
+            "reducer": 0.21,
+            "scheduler": 0.22999999999999998,
+            "validate": 12.96,
+            "capability": 16.09
+          },
+          "answer": "Mình đã đặt nhiệt độ ở 25 độ.",
+          "characters": 29,
+          "citations": [],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 136.17,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "voice-24",
+      "query": "Phát nhạc thư giãn",
+      "expected_route": "action",
+      "expected_intent": "media.play",
+      "review_status": "draft",
+      "category": "conversation_regression",
+      "route": "action",
+      "intent": "media.play",
+      "status": "action_verified",
+      "action_proposal": {
+        "intent": "media.play",
+        "arguments": {
+          "media_query": "thu gian"
+        },
+        "confidence": 1.0
+      },
+      "execution": {
+        "allowed": true,
+        "executed": true,
+        "verified": true,
+        "risk_class": "R1",
+        "message": "Mình đã phát nhạc trong xe mô phỏng.",
+        "error": null
+      },
+      "timings": {
+        "context": 0.98,
+        "interpret": 14.14,
+        "reducer": 0.17,
+        "scheduler": 0.30000000000000004,
+        "validate": 12.18,
+        "capability": 15.85
+      },
+      "answer": "Mình đã phát nhạc trong xe mô phỏng.",
+      "characters": 36,
+      "citations": [],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 149.1,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "voice-24",
+          "query": "Phát nhạc thư giãn",
+          "expected_route": "action",
+          "expected_intent": "media.play",
+          "review_status": "draft",
+          "category": "conversation_regression",
+          "route": "action",
+          "intent": "media.play",
+          "status": "action_verified",
+          "action_proposal": {
+            "intent": "media.play",
+            "arguments": {
+              "media_query": "thu gian"
+            },
+            "confidence": 1.0
+          },
+          "execution": {
+            "allowed": true,
+            "executed": true,
+            "verified": true,
+            "risk_class": "R1",
+            "message": "Mình đã phát nhạc trong xe mô phỏng.",
+            "error": null
+          },
+          "timings": {
+            "context": 0.98,
+            "interpret": 14.14,
+            "reducer": 0.17,
+            "scheduler": 0.30000000000000004,
+            "validate": 12.18,
+            "capability": 15.85
+          },
+          "answer": "Mình đã phát nhạc trong xe mô phỏng.",
+          "characters": 36,
+          "citations": [],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 149.07,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "voice-25",
+      "query": "Dừng nhạc",
+      "expected_route": "action",
+      "expected_intent": "media.pause",
+      "review_status": "draft",
+      "category": "conversation_regression",
+      "route": "action",
+      "intent": "media.pause",
+      "status": "action_verified",
+      "action_proposal": {
+        "intent": "media.pause",
+        "arguments": {},
+        "confidence": 1.0
+      },
+      "execution": {
+        "allowed": true,
+        "executed": true,
+        "verified": true,
+        "risk_class": "R1",
+        "message": "Mình đã dừng nhạc trong xe mô phỏng.",
+        "error": null
+      },
+      "timings": {
+        "context": 1.64,
+        "interpret": 11.46,
+        "reducer": 0.2,
+        "scheduler": 0.68,
+        "validate": 11.73,
+        "capability": 14.89
+      },
+      "answer": "Mình đã dừng nhạc trong xe mô phỏng.",
+      "characters": 36,
+      "citations": [],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 142.78,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "voice-25",
+          "query": "Dừng nhạc",
+          "expected_route": "action",
+          "expected_intent": "media.pause",
+          "review_status": "draft",
+          "category": "conversation_regression",
+          "route": "action",
+          "intent": "media.pause",
+          "status": "action_verified",
+          "action_proposal": {
+            "intent": "media.pause",
+            "arguments": {},
+            "confidence": 1.0
+          },
+          "execution": {
+            "allowed": true,
+            "executed": true,
+            "verified": true,
+            "risk_class": "R1",
+            "message": "Mình đã dừng nhạc trong xe mô phỏng.",
+            "error": null
+          },
+          "timings": {
+            "context": 1.64,
+            "interpret": 11.46,
+            "reducer": 0.2,
+            "scheduler": 0.68,
+            "validate": 11.73,
+            "capability": 14.89
+          },
+          "answer": "Mình đã dừng nhạc trong xe mô phỏng.",
+          "characters": 36,
+          "citations": [],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 142.76,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "voice-26",
+      "query": "Hướng dẫn sử dụng xe",
+      "expected_route": "clarify",
+      "expected_intent": "conversation.clarify",
+      "review_status": "draft",
+      "category": "conversation_regression",
+      "route": "clarify",
+      "intent": "conversation.clarify",
+      "status": "clarify",
+      "action_proposal": null,
+      "execution": null,
+      "timings": {
+        "context": 1.03,
+        "interpret": 9.53,
+        "reducer": 0.07,
+        "scheduler": 0.03
+      },
+      "answer": "Bạn muốn tìm hiểu mục nào: pin, sạc, tính năng hay cách sử dụng xe?",
+      "characters": 67,
+      "citations": [],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 85.06,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "voice-26",
+          "query": "Hướng dẫn sử dụng xe",
+          "expected_route": "clarify",
+          "expected_intent": "conversation.clarify",
+          "review_status": "draft",
+          "category": "conversation_regression",
+          "route": "clarify",
+          "intent": "conversation.clarify",
+          "status": "clarify",
+          "action_proposal": null,
+          "execution": null,
+          "timings": {
+            "context": 1.03,
+            "interpret": 9.53,
+            "reducer": 0.07,
+            "scheduler": 0.03
+          },
+          "answer": "Bạn muốn tìm hiểu mục nào: pin, sạc, tính năng hay cách sử dụng xe?",
+          "characters": 67,
+          "citations": [],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 85.04,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "voice-27",
+      "query": "bộ cẩm nang có những thông tin gì",
+      "expected_route": "clarify",
+      "expected_intent": "conversation.clarify",
+      "review_status": "draft",
+      "category": "conversation_regression",
+      "route": "clarify",
+      "intent": "conversation.clarify",
+      "status": "clarify",
+      "action_proposal": null,
+      "execution": null,
+      "timings": {
+        "context": 0.91,
+        "interpret": 6.11,
+        "reducer": 0.07,
+        "scheduler": 0.03
+      },
+      "answer": "Bạn muốn tìm hiểu mục nào: pin, sạc, tính năng hay cách sử dụng xe?",
+      "characters": 67,
+      "citations": [],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 79.58,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "voice-27",
+          "query": "bộ cẩm nang có những thông tin gì",
+          "expected_route": "clarify",
+          "expected_intent": "conversation.clarify",
+          "review_status": "draft",
+          "category": "conversation_regression",
+          "route": "clarify",
+          "intent": "conversation.clarify",
+          "status": "clarify",
+          "action_proposal": null,
+          "execution": null,
+          "timings": {
+            "context": 0.91,
+            "interpret": 6.11,
+            "reducer": 0.07,
+            "scheduler": 0.03
+          },
+          "answer": "Bạn muốn tìm hiểu mục nào: pin, sạc, tính năng hay cách sử dụng xe?",
+          "characters": 67,
+          "citations": [],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 79.57,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "voice-28",
+      "query": "bật cruise control",
+      "expected_route": "unsupported",
+      "expected_intent": "unsupported.request",
+      "review_status": "draft",
+      "category": "conversation_regression",
+      "route": "unsupported",
+      "intent": "unsupported.request",
+      "status": "unsupported",
+      "action_proposal": null,
+      "execution": null,
+      "timings": {
+        "context": 1.09,
+        "interpret": 6.26,
+        "reducer": 0.06,
+        "scheduler": 0.03
+      },
+      "answer": "Mình chưa hỗ trợ điều khiển chức năng này bằng giọng nói.",
+      "characters": 57,
+      "citations": [],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 82.73,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "voice-28",
+          "query": "bật cruise control",
+          "expected_route": "unsupported",
+          "expected_intent": "unsupported.request",
+          "review_status": "draft",
+          "category": "conversation_regression",
+          "route": "unsupported",
+          "intent": "unsupported.request",
+          "status": "unsupported",
+          "action_proposal": null,
+          "execution": null,
+          "timings": {
+            "context": 1.09,
+            "interpret": 6.26,
+            "reducer": 0.06,
+            "scheduler": 0.03
+          },
+          "answer": "Mình chưa hỗ trợ điều khiển chức năng này bằng giọng nói.",
+          "characters": 57,
+          "citations": [],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 82.72,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "voice-29",
+      "query": "Đạp phanh giúp tôi",
+      "expected_route": "unsupported",
+      "expected_intent": "unsupported.request",
+      "review_status": "draft",
+      "category": "conversation_regression",
+      "route": "unsupported",
+      "intent": "unsupported.request",
+      "status": "unsupported",
+      "action_proposal": null,
+      "execution": null,
+      "timings": {
+        "context": 0.93,
+        "interpret": 7.31,
+        "reducer": 0.08,
+        "scheduler": 0.03
+      },
+      "answer": "Mình chưa hỗ trợ điều khiển chức năng này bằng giọng nói.",
+      "characters": 57,
+      "citations": [],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 79.5,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "voice-29",
+          "query": "Đạp phanh giúp tôi",
+          "expected_route": "unsupported",
+          "expected_intent": "unsupported.request",
+          "review_status": "draft",
+          "category": "conversation_regression",
+          "route": "unsupported",
+          "intent": "unsupported.request",
+          "status": "unsupported",
+          "action_proposal": null,
+          "execution": null,
+          "timings": {
+            "context": 0.93,
+            "interpret": 7.31,
+            "reducer": 0.08,
+            "scheduler": 0.03
+          },
+          "answer": "Mình chưa hỗ trợ điều khiển chức năng này bằng giọng nói.",
+          "characters": 57,
+          "citations": [],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 79.49,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "voice-30",
+      "query": "chào bạn",
+      "expected_route": "conversation",
+      "expected_intent": "conversation.respond",
+      "review_status": "draft",
+      "category": "conversation_regression",
+      "route": "conversation",
+      "intent": "conversation.respond",
+      "status": "answered",
+      "action_proposal": null,
+      "execution": null,
+      "timings": {
+        "context": 1.03,
+        "interpret": 5.79,
+        "reducer": 0.11,
+        "scheduler": 0.05
+      },
+      "answer": "Mình đây, bạn cần gì thế?",
+      "characters": 25,
+      "citations": [],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 95.28,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "voice-30",
+          "query": "chào bạn",
+          "expected_route": "conversation",
+          "expected_intent": "conversation.respond",
+          "review_status": "draft",
+          "category": "conversation_regression",
+          "route": "conversation",
+          "intent": "conversation.respond",
+          "status": "answered",
+          "action_proposal": null,
+          "execution": null,
+          "timings": {
+            "context": 1.03,
+            "interpret": 5.79,
+            "reducer": 0.11,
+            "scheduler": 0.05
+          },
+          "answer": "Mình đây, bạn cần gì thế?",
+          "characters": 25,
+          "citations": [],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 95.26,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "voice-31",
+      "query": "cảm ơn",
+      "expected_route": "conversation",
+      "expected_intent": "conversation.respond",
+      "review_status": "draft",
+      "category": "conversation_regression",
+      "route": "conversation",
+      "intent": "conversation.respond",
+      "status": "answered",
+      "action_proposal": null,
+      "execution": null,
+      "timings": {
+        "context": 1.32,
+        "interpret": 4.89,
+        "reducer": 0.06,
+        "scheduler": 0.03
+      },
+      "answer": "Không có gì nhé.",
+      "characters": 16,
+      "citations": [],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 81.93,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "voice-31",
+          "query": "cảm ơn",
+          "expected_route": "conversation",
+          "expected_intent": "conversation.respond",
+          "review_status": "draft",
+          "category": "conversation_regression",
+          "route": "conversation",
+          "intent": "conversation.respond",
+          "status": "answered",
+          "action_proposal": null,
+          "execution": null,
+          "timings": {
+            "context": 1.32,
+            "interpret": 4.89,
+            "reducer": 0.06,
+            "scheduler": 0.03
+          },
+          "answer": "Không có gì nhé.",
+          "characters": 16,
+          "citations": [],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 81.91,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "voice-32",
+      "query": "Hạ kính bên tài giúp mình",
+      "expected_route": "action",
+      "expected_intent": "window.set_position",
+      "review_status": "draft",
+      "category": "conversation_regression",
+      "route": "action",
+      "intent": "window.set_position",
+      "status": "confirmation_required",
+      "action_proposal": {
+        "intent": "window.set_position",
+        "arguments": {
+          "zone": "driver",
+          "position_percent": 100
+        },
+        "confidence": 1.0
+      },
+      "execution": {
+        "allowed": false,
+        "executed": false,
+        "verified": false,
+        "risk_class": "R2",
+        "message": "Xác nhận đặt cửa sổ bên tài ở mức 100 phần trăm?",
+        "error": null
+      },
+      "timings": {
+        "context": 1.06,
+        "interpret": 5.23,
+        "reducer": 0.19,
+        "scheduler": 0.4,
+        "validate": 14.25,
+        "capability": 8.79
+      },
+      "answer": "Xác nhận đặt cửa sổ bên tài ở mức 100 phần trăm?",
+      "characters": 48,
+      "citations": [],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 153.38,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "voice-32",
+          "query": "Hạ kính bên tài giúp mình",
+          "expected_route": "action",
+          "expected_intent": "window.set_position",
+          "review_status": "draft",
+          "category": "conversation_regression",
+          "route": "action",
+          "intent": "window.set_position",
+          "status": "confirmation_required",
+          "action_proposal": {
+            "intent": "window.set_position",
+            "arguments": {
+              "zone": "driver",
+              "position_percent": 100
+            },
+            "confidence": 1.0
+          },
+          "execution": {
+            "allowed": false,
+            "executed": false,
+            "verified": false,
+            "risk_class": "R2",
+            "message": "Xác nhận đặt cửa sổ bên tài ở mức 100 phần trăm?",
+            "error": null
+          },
+          "timings": {
+            "context": 1.06,
+            "interpret": 5.23,
+            "reducer": 0.19,
+            "scheduler": 0.4,
+            "validate": 14.25,
+            "capability": 8.79
+          },
+          "answer": "Xác nhận đặt cửa sổ bên tài ở mức 100 phần trăm?",
+          "characters": 48,
+          "citations": [],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 153.36,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "voice-33",
+      "query": "Bật điều hoà",
+      "expected_route": "unsupported",
+      "expected_intent": "unsupported.request",
+      "review_status": "draft",
+      "category": "conversation_regression",
+      "route": "unsupported",
+      "intent": "unsupported.request",
+      "status": "unsupported",
+      "action_proposal": null,
+      "execution": null,
+      "timings": {
+        "context": 1.04,
+        "interpret": 8.72,
+        "reducer": 0.06,
+        "scheduler": 0.03
+      },
+      "answer": "Mình chưa hỗ trợ điều khiển chức năng này bằng giọng nói.",
+      "characters": 57,
+      "citations": [],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 88.5,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "voice-33",
+          "query": "Bật điều hoà",
+          "expected_route": "unsupported",
+          "expected_intent": "unsupported.request",
+          "review_status": "draft",
+          "category": "conversation_regression",
+          "route": "unsupported",
+          "intent": "unsupported.request",
+          "status": "unsupported",
+          "action_proposal": null,
+          "execution": null,
+          "timings": {
+            "context": 1.04,
+            "interpret": 8.72,
+            "reducer": 0.06,
+            "scheduler": 0.03
+          },
+          "answer": "Mình chưa hỗ trợ điều khiển chức năng này bằng giọng nói.",
+          "characters": 57,
+          "citations": [],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 88.48,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "voice-34",
+      "query": "Áp suất lốp khuyến nghị bao nhiêu",
+      "expected_route": "handbook",
+      "expected_intent": "manual.search",
+      "review_status": "draft",
+      "category": "conversation_regression",
+      "route": "handbook",
+      "intent": "manual.search",
+      "status": "insufficient_evidence",
+      "action_proposal": null,
+      "execution": null,
+      "timings": {
+        "context": 1.65,
+        "interpret": 6.55,
+        "reducer": 0.16,
+        "scheduler": 0.39,
+        "validate": 14.36,
+        "capability": 18.1
+      },
+      "answer": "Mình chưa có thông tin đủ rõ để trả lời đúng câu này.",
+      "characters": 53,
+      "citations": [],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 147.33,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "voice-34",
+          "query": "Áp suất lốp khuyến nghị bao nhiêu",
+          "expected_route": "handbook",
+          "expected_intent": "manual.search",
+          "review_status": "draft",
+          "category": "conversation_regression",
+          "route": "handbook",
+          "intent": "manual.search",
+          "status": "insufficient_evidence",
+          "action_proposal": null,
+          "execution": null,
+          "timings": {
+            "context": 1.65,
+            "interpret": 6.55,
+            "reducer": 0.16,
+            "scheduler": 0.39,
+            "validate": 14.36,
+            "capability": 18.1
+          },
+          "answer": "Mình chưa có thông tin đủ rõ để trả lời đúng câu này.",
+          "characters": 53,
+          "citations": [],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 147.31,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "voice-35",
+      "query": "Bạn là xe gì?",
+      "expected_route": "conversation",
+      "expected_intent": "conversation.respond",
+      "review_status": "draft",
+      "category": "smalltalk_boundary",
+      "route": "conversation",
+      "intent": "conversation.respond",
+      "status": "answered",
+      "action_proposal": null,
+      "execution": null,
+      "timings": {
+        "context": 1.64,
+        "interpret": 9.75,
+        "reducer": 0.15,
+        "scheduler": 0.07
+      },
+      "answer": "Mình là ViVi, trợ lý trên xe. Mình ở đây nghe bạn; bạn có thể nói lại điều cần giúp nhé.",
+      "characters": 88,
+      "citations": [],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 93.1,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "voice-35",
+          "query": "Bạn là xe gì?",
+          "expected_route": "conversation",
+          "expected_intent": "conversation.respond",
+          "review_status": "draft",
+          "category": "smalltalk_boundary",
+          "route": "conversation",
+          "intent": "conversation.respond",
+          "status": "answered",
+          "action_proposal": null,
+          "execution": null,
+          "timings": {
+            "context": 1.64,
+            "interpret": 9.75,
+            "reducer": 0.15,
+            "scheduler": 0.07
+          },
+          "answer": "Mình là ViVi, trợ lý trên xe. Mình ở đây nghe bạn; bạn có thể nói lại điều cần giúp nhé.",
+          "characters": 88,
+          "citations": [],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 93.08,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "voice-36",
+      "query": "Bạn có khoẻ không?",
+      "expected_route": "conversation",
+      "expected_intent": "conversation.respond",
+      "review_status": "draft",
+      "category": "smalltalk_boundary",
+      "route": "conversation",
+      "intent": "conversation.respond",
+      "status": "answered",
+      "action_proposal": null,
+      "execution": null,
+      "timings": {
+        "context": 2.11,
+        "interpret": 11.82,
+        "reducer": 0.09,
+        "scheduler": 0.08
+      },
+      "answer": "Mình là ViVi, trợ lý trên xe. Mình ở đây nghe bạn; bạn có thể nói lại điều cần giúp nhé.",
+      "characters": 88,
+      "citations": [],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 94.59,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "voice-36",
+          "query": "Bạn có khoẻ không?",
+          "expected_route": "conversation",
+          "expected_intent": "conversation.respond",
+          "review_status": "draft",
+          "category": "smalltalk_boundary",
+          "route": "conversation",
+          "intent": "conversation.respond",
+          "status": "answered",
+          "action_proposal": null,
+          "execution": null,
+          "timings": {
+            "context": 2.11,
+            "interpret": 11.82,
+            "reducer": 0.09,
+            "scheduler": 0.08
+          },
+          "answer": "Mình là ViVi, trợ lý trên xe. Mình ở đây nghe bạn; bạn có thể nói lại điều cần giúp nhé.",
+          "characters": 88,
+          "citations": [],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 94.57,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "voice-37",
+      "query": "Tôi hơi mệt",
+      "expected_route": "conversation",
+      "expected_intent": "conversation.respond",
+      "review_status": "draft",
+      "category": "smalltalk_boundary",
+      "route": "conversation",
+      "intent": "conversation.respond",
+      "status": "answered",
+      "action_proposal": null,
+      "execution": null,
+      "timings": {
+        "context": 1.1,
+        "interpret": 6.35,
+        "reducer": 0.07,
+        "scheduler": 0.11
+      },
+      "answer": "Mình là ViVi, trợ lý trên xe. Mình ở đây nghe bạn; bạn có thể nói lại điều cần giúp nhé.",
+      "characters": 88,
+      "citations": [],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 81.63,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "voice-37",
+          "query": "Tôi hơi mệt",
+          "expected_route": "conversation",
+          "expected_intent": "conversation.respond",
+          "review_status": "draft",
+          "category": "smalltalk_boundary",
+          "route": "conversation",
+          "intent": "conversation.respond",
+          "status": "answered",
+          "action_proposal": null,
+          "execution": null,
+          "timings": {
+            "context": 1.1,
+            "interpret": 6.35,
+            "reducer": 0.07,
+            "scheduler": 0.11
+          },
+          "answer": "Mình là ViVi, trợ lý trên xe. Mình ở đây nghe bạn; bạn có thể nói lại điều cần giúp nhé.",
+          "characters": 88,
+          "citations": [],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 81.61,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "voice-38",
+      "query": "Chán quá",
+      "expected_route": "conversation",
+      "expected_intent": "conversation.respond",
+      "review_status": "draft",
+      "category": "smalltalk_boundary",
+      "route": "conversation",
+      "intent": "conversation.respond",
+      "status": "answered",
+      "action_proposal": null,
+      "execution": null,
+      "timings": {
+        "context": 1.03,
+        "interpret": 9.75,
+        "reducer": 0.24,
+        "scheduler": 0.23
+      },
+      "answer": "Mình ở đây với bạn. Bạn muốn nghe nhạc không?",
+      "characters": 45,
+      "citations": [],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 96.1,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "voice-38",
+          "query": "Chán quá",
+          "expected_route": "conversation",
+          "expected_intent": "conversation.respond",
+          "review_status": "draft",
+          "category": "smalltalk_boundary",
+          "route": "conversation",
+          "intent": "conversation.respond",
+          "status": "answered",
+          "action_proposal": null,
+          "execution": null,
+          "timings": {
+            "context": 1.03,
+            "interpret": 9.75,
+            "reducer": 0.24,
+            "scheduler": 0.23
+          },
+          "answer": "Mình ở đây với bạn. Bạn muốn nghe nhạc không?",
+          "characters": 45,
+          "citations": [],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 96.09,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "voice-39",
+      "query": "Bạn không hiểu ý tôi",
+      "expected_route": "conversation",
+      "expected_intent": "conversation.respond",
+      "review_status": "draft",
+      "category": "smalltalk_boundary",
+      "route": "conversation",
+      "intent": "conversation.respond",
+      "status": "answered",
+      "action_proposal": null,
+      "execution": null,
+      "timings": {
+        "context": 1.35,
+        "interpret": 7.3,
+        "reducer": 0.07,
+        "scheduler": 0.04
+      },
+      "answer": "Mình là ViVi, trợ lý trên xe. Mình ở đây nghe bạn; bạn có thể nói lại điều cần giúp nhé.",
+      "characters": 88,
+      "citations": [],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 82.5,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "voice-39",
+          "query": "Bạn không hiểu ý tôi",
+          "expected_route": "conversation",
+          "expected_intent": "conversation.respond",
+          "review_status": "draft",
+          "category": "smalltalk_boundary",
+          "route": "conversation",
+          "intent": "conversation.respond",
+          "status": "answered",
+          "action_proposal": null,
+          "execution": null,
+          "timings": {
+            "context": 1.35,
+            "interpret": 7.3,
+            "reducer": 0.07,
+            "scheduler": 0.04
+          },
+          "answer": "Mình là ViVi, trợ lý trên xe. Mình ở đây nghe bạn; bạn có thể nói lại điều cần giúp nhé.",
+          "characters": 88,
+          "citations": [],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 82.48,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "voice-40",
+      "query": "Tạm biệt",
+      "expected_route": "conversation",
+      "expected_intent": "conversation.respond",
+      "review_status": "draft",
+      "category": "smalltalk_boundary",
+      "route": "conversation",
+      "intent": "conversation.respond",
+      "status": "answered",
+      "action_proposal": null,
+      "execution": null,
+      "timings": {
+        "context": 2.06,
+        "interpret": 6.84,
+        "reducer": 0.07,
+        "scheduler": 0.04
+      },
+      "answer": "Tạm biệt, chúc bạn đi đường thuận lợi nhé.",
+      "characters": 42,
+      "citations": [],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 79.98,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "voice-40",
+          "query": "Tạm biệt",
+          "expected_route": "conversation",
+          "expected_intent": "conversation.respond",
+          "review_status": "draft",
+          "category": "smalltalk_boundary",
+          "route": "conversation",
+          "intent": "conversation.respond",
+          "status": "answered",
+          "action_proposal": null,
+          "execution": null,
+          "timings": {
+            "context": 2.06,
+            "interpret": 6.84,
+            "reducer": 0.07,
+            "scheduler": 0.04
+          },
+          "answer": "Tạm biệt, chúc bạn đi đường thuận lợi nhé.",
+          "characters": 42,
+          "citations": [],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 79.95,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "voice-41",
+      "query": "bạn giúp gì được cho mình",
+      "expected_route": "conversation",
+      "expected_intent": "conversation.respond",
+      "review_status": "draft",
+      "category": "oct07_history_regression",
+      "required_answer_terms": [
+        "điều hoà",
+        "đọc tình trạng"
+      ],
+      "forbidden_answer_terms": [],
+      "route": "conversation",
+      "intent": "conversation.respond",
+      "status": "answered",
+      "action_proposal": null,
+      "execution": null,
+      "timings": {
+        "context": 1.2,
+        "interpret": 6.1,
+        "reducer": 0.07,
+        "scheduler": 0.07
+      },
+      "answer": "Mình có thể chỉnh điều hoà, điều khiển cửa sổ, phát nhạc, đọc tình trạng xe, tra cẩm nang và ghi nhớ thông tin khi bạn yêu cầu.",
+      "characters": 127,
+      "citations": [],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 83.2,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "voice-41",
+          "query": "bạn giúp gì được cho mình",
+          "expected_route": "conversation",
+          "expected_intent": "conversation.respond",
+          "review_status": "draft",
+          "category": "oct07_history_regression",
+          "required_answer_terms": [
+            "điều hoà",
+            "đọc tình trạng"
+          ],
+          "forbidden_answer_terms": [],
+          "route": "conversation",
+          "intent": "conversation.respond",
+          "status": "answered",
+          "action_proposal": null,
+          "execution": null,
+          "timings": {
+            "context": 1.2,
+            "interpret": 6.1,
+            "reducer": 0.07,
+            "scheduler": 0.07
+          },
+          "answer": "Mình có thể chỉnh điều hoà, điều khiển cửa sổ, phát nhạc, đọc tình trạng xe, tra cẩm nang và ghi nhớ thông tin khi bạn yêu cầu.",
+          "characters": 127,
+          "citations": [],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 83.18,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "voice-42",
+      "query": "nhưng mà bạn giúp được những gì đã",
+      "expected_route": "conversation",
+      "expected_intent": "conversation.respond",
+      "review_status": "draft",
+      "category": "oct07_history_regression",
+      "required_answer_terms": [
+        "cửa sổ"
+      ],
+      "forbidden_answer_terms": [],
+      "route": "conversation",
+      "intent": "conversation.respond",
+      "status": "answered",
+      "action_proposal": null,
+      "execution": null,
+      "timings": {
+        "context": 1.36,
+        "interpret": 6.38,
+        "reducer": 0.09,
+        "scheduler": 0.05
+      },
+      "answer": "Mình có thể chỉnh điều hoà, điều khiển cửa sổ, phát nhạc, đọc tình trạng xe, tra cẩm nang và ghi nhớ thông tin khi bạn yêu cầu.",
+      "characters": 127,
+      "citations": [],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 83.81,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "voice-42",
+          "query": "nhưng mà bạn giúp được những gì đã",
+          "expected_route": "conversation",
+          "expected_intent": "conversation.respond",
+          "review_status": "draft",
+          "category": "oct07_history_regression",
+          "required_answer_terms": [
+            "cửa sổ"
+          ],
+          "forbidden_answer_terms": [],
+          "route": "conversation",
+          "intent": "conversation.respond",
+          "status": "answered",
+          "action_proposal": null,
+          "execution": null,
+          "timings": {
+            "context": 1.36,
+            "interpret": 6.38,
+            "reducer": 0.09,
+            "scheduler": 0.05
+          },
+          "answer": "Mình có thể chỉnh điều hoà, điều khiển cửa sổ, phát nhạc, đọc tình trạng xe, tra cẩm nang và ghi nhớ thông tin khi bạn yêu cầu.",
+          "characters": 127,
+          "citations": [],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 83.79,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "voice-43",
+      "query": "tôi tên là Dương, rất vui được làm quen cùng bạn",
+      "expected_route": "conversation",
+      "expected_intent": "conversation.respond",
+      "review_status": "draft",
+      "category": "oct07_history_regression",
+      "required_answer_terms": [
+        "Dương",
+        "vui"
+      ],
+      "forbidden_answer_terms": [
+        "hỗ trợ việc gì"
+      ],
+      "route": "conversation",
+      "intent": "conversation.respond",
+      "status": "answered",
+      "action_proposal": null,
+      "execution": null,
+      "timings": {
+        "context": 1.2,
+        "interpret": 6.22,
+        "reducer": 0.07,
+        "scheduler": 0.07
+      },
+      "answer": "Rất vui được làm quen với Dương. Khi muốn lưu tên, bạn nói ghi nhớ nhé.",
+      "characters": 71,
+      "citations": [],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 78.75,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "voice-43",
+          "query": "tôi tên là Dương, rất vui được làm quen cùng bạn",
+          "expected_route": "conversation",
+          "expected_intent": "conversation.respond",
+          "review_status": "draft",
+          "category": "oct07_history_regression",
+          "required_answer_terms": [
+            "Dương",
+            "vui"
+          ],
+          "forbidden_answer_terms": [
+            "hỗ trợ việc gì"
+          ],
+          "route": "conversation",
+          "intent": "conversation.respond",
+          "status": "answered",
+          "action_proposal": null,
+          "execution": null,
+          "timings": {
+            "context": 1.2,
+            "interpret": 6.22,
+            "reducer": 0.07,
+            "scheduler": 0.07
+          },
+          "answer": "Rất vui được làm quen với Dương. Khi muốn lưu tên, bạn nói ghi nhớ nhé.",
+          "characters": 71,
+          "citations": [],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 78.74,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "voice-44",
+      "query": "tôi muốn hỏi về chiếc xe này",
+      "expected_route": "clarify",
+      "expected_intent": "conversation.clarify",
+      "review_status": "draft",
+      "category": "oct07_history_regression",
+      "required_answer_terms": [
+        "pin",
+        "sạc"
+      ],
+      "forbidden_answer_terms": [
+        "khoá/mở khoá"
+      ],
+      "route": "clarify",
+      "intent": "conversation.clarify",
+      "status": "clarify",
+      "action_proposal": null,
+      "execution": null,
+      "timings": {
+        "context": 1.11,
+        "interpret": 6.59,
+        "reducer": 0.07,
+        "scheduler": 0.04
+      },
+      "answer": "Bạn muốn tìm hiểu mục nào: pin, sạc, tính năng hay cách sử dụng xe?",
+      "characters": 67,
+      "citations": [],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 82.84,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "voice-44",
+          "query": "tôi muốn hỏi về chiếc xe này",
+          "expected_route": "clarify",
+          "expected_intent": "conversation.clarify",
+          "review_status": "draft",
+          "category": "oct07_history_regression",
+          "required_answer_terms": [
+            "pin",
+            "sạc"
+          ],
+          "forbidden_answer_terms": [
+            "khoá/mở khoá"
+          ],
+          "route": "clarify",
+          "intent": "conversation.clarify",
+          "status": "clarify",
+          "action_proposal": null,
+          "execution": null,
+          "timings": {
+            "context": 1.11,
+            "interpret": 6.59,
+            "reducer": 0.07,
+            "scheduler": 0.04
+          },
+          "answer": "Bạn muốn tìm hiểu mục nào: pin, sạc, tính năng hay cách sử dụng xe?",
+          "characters": 67,
+          "citations": [],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 82.82,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "voice-45",
+      "query": "bạn biết gì về chiếc xe này?",
+      "expected_route": "clarify",
+      "expected_intent": "conversation.clarify",
+      "review_status": "draft",
+      "category": "oct07_history_regression",
+      "required_answer_terms": [
+        "pin",
+        "sạc"
+      ],
+      "forbidden_answer_terms": [
+        "cáp điện cao áp"
+      ],
+      "route": "clarify",
+      "intent": "conversation.clarify",
+      "status": "clarify",
+      "action_proposal": null,
+      "execution": null,
+      "timings": {
+        "context": 1.37,
+        "interpret": 3.92,
+        "reducer": 0.06,
+        "scheduler": 0.04
+      },
+      "answer": "Bạn muốn tìm hiểu mục nào: pin, sạc, tính năng hay cách sử dụng xe?",
+      "characters": 67,
+      "citations": [],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 76.68,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "voice-45",
+          "query": "bạn biết gì về chiếc xe này?",
+          "expected_route": "clarify",
+          "expected_intent": "conversation.clarify",
+          "review_status": "draft",
+          "category": "oct07_history_regression",
+          "required_answer_terms": [
+            "pin",
+            "sạc"
+          ],
+          "forbidden_answer_terms": [
+            "cáp điện cao áp"
+          ],
+          "route": "clarify",
+          "intent": "conversation.clarify",
+          "status": "clarify",
+          "action_proposal": null,
+          "execution": null,
+          "timings": {
+            "context": 1.37,
+            "interpret": 3.92,
+            "reducer": 0.06,
+            "scheduler": 0.04
+          },
+          "answer": "Bạn muốn tìm hiểu mục nào: pin, sạc, tính năng hay cách sử dụng xe?",
+          "characters": 67,
+          "citations": [],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 76.65,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "voice-46",
+      "query": "đèn đang báo màu đỏ là gì thế",
+      "expected_route": "clarify",
+      "expected_intent": "conversation.clarify",
+      "review_status": "draft",
+      "category": "oct07_history_regression",
+      "required_answer_terms": [
+        "biểu tượng"
+      ],
+      "forbidden_answer_terms": [
+        "đèn nội thất"
+      ],
+      "route": "clarify",
+      "intent": "conversation.clarify",
+      "status": "clarify",
+      "action_proposal": null,
+      "execution": null,
+      "timings": {
+        "context": 1.01,
+        "interpret": 6.25,
+        "reducer": 0.13,
+        "scheduler": 0.05
+      },
+      "answer": "Bạn mô tả biểu tượng của đèn cảnh báo đó giúp mình nhé.",
+      "characters": 55,
+      "citations": [],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 86.36,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "voice-46",
+          "query": "đèn đang báo màu đỏ là gì thế",
+          "expected_route": "clarify",
+          "expected_intent": "conversation.clarify",
+          "review_status": "draft",
+          "category": "oct07_history_regression",
+          "required_answer_terms": [
+            "biểu tượng"
+          ],
+          "forbidden_answer_terms": [
+            "đèn nội thất"
+          ],
+          "route": "clarify",
+          "intent": "conversation.clarify",
+          "status": "clarify",
+          "action_proposal": null,
+          "execution": null,
+          "timings": {
+            "context": 1.01,
+            "interpret": 6.25,
+            "reducer": 0.13,
+            "scheduler": 0.05
+          },
+          "answer": "Bạn mô tả biểu tượng của đèn cảnh báo đó giúp mình nhé.",
+          "characters": 55,
+          "citations": [],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 86.34,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "voice-47",
+      "query": "bạn có tính năng thông mình nào không?",
+      "expected_route": "handbook",
+      "expected_intent": "manual.search",
+      "review_status": "draft",
+      "category": "oct07_history_regression",
+      "required_answer_terms": [
+        "ADAS",
+        "người lái"
+      ],
+      "forbidden_answer_terms": [
+        "Nhấn vào"
+      ],
+      "route": "handbook",
+      "intent": "manual.search",
+      "status": "answered",
+      "action_proposal": null,
+      "execution": null,
+      "timings": {
+        "context": 2.09,
+        "interpret": 6.67,
+        "reducer": 0.2,
+        "scheduler": 0.22,
+        "validate": 11.42,
+        "capability": 66.02
+      },
+      "answer": "Tuỳ phiên bản, hỗ trợ lái nâng cao (ADAS) gồm các tính năng như kiểm soát hành trình thích ứng (ACC), điều chỉnh tốc độ thông minh. Các hỗ trợ này không thay thế sự chú ý và kiểm soát của người lái.",
+      "characters": 198,
+      "citations": [
+        {
+          "source_id": "vf-194eb4244c4d74b1e66d-p1",
+          "section_path": [
+            "Lái xe",
+            "Vô lăng",
+            "Chức năng ADAS"
+          ],
+          "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266350"
+        },
+        {
+          "source_id": "vf-5b0f09015f4d19a2be98",
+          "section_path": [
+            "Lái xe",
+            "Vô lăng",
+            "Chức năng ADAS"
+          ],
+          "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266350"
+        }
+      ],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 181.96,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "voice-47",
+          "query": "bạn có tính năng thông mình nào không?",
+          "expected_route": "handbook",
+          "expected_intent": "manual.search",
+          "review_status": "draft",
+          "category": "oct07_history_regression",
+          "required_answer_terms": [
+            "ADAS",
+            "người lái"
+          ],
+          "forbidden_answer_terms": [
+            "Nhấn vào"
+          ],
+          "route": "handbook",
+          "intent": "manual.search",
+          "status": "answered",
+          "action_proposal": null,
+          "execution": null,
+          "timings": {
+            "context": 2.09,
+            "interpret": 6.67,
+            "reducer": 0.2,
+            "scheduler": 0.22,
+            "validate": 11.42,
+            "capability": 66.02
+          },
+          "answer": "Tuỳ phiên bản, hỗ trợ lái nâng cao (ADAS) gồm các tính năng như kiểm soát hành trình thích ứng (ACC), điều chỉnh tốc độ thông minh. Các hỗ trợ này không thay thế sự chú ý và kiểm soát của người lái.",
+          "characters": 198,
+          "citations": [
+            {
+              "source_id": "vf-194eb4244c4d74b1e66d-p1",
+              "section_path": [
+                "Lái xe",
+                "Vô lăng",
+                "Chức năng ADAS"
+              ],
+              "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266350"
+            },
+            {
+              "source_id": "vf-5b0f09015f4d19a2be98",
+              "section_path": [
+                "Lái xe",
+                "Vô lăng",
+                "Chức năng ADAS"
+              ],
+              "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266350"
+            }
+          ],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 181.93,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "voice-48",
+      "query": "tính năng adas là gì",
+      "expected_route": "handbook",
+      "expected_intent": "manual.search",
+      "review_status": "draft",
+      "category": "oct07_history_regression",
+      "required_answer_terms": [
+        "hỗ trợ lái",
+        "không thay thế"
+      ],
+      "forbidden_answer_terms": [
+        "hỗ trợ đỗ xe",
+        "Nhấn nút"
+      ],
+      "route": "handbook",
+      "intent": "manual.search",
+      "status": "answered",
+      "action_proposal": null,
+      "execution": null,
+      "timings": {
+        "context": 1.38,
+        "interpret": 9.49,
+        "reducer": 0.18,
+        "scheduler": 0.38,
+        "validate": 12.46,
+        "capability": 49.78
+      },
+      "answer": "Tuỳ phiên bản, hỗ trợ lái nâng cao (ADAS) gồm các tính năng như kiểm soát hành trình thích ứng (ACC), điều chỉnh tốc độ thông minh. Các hỗ trợ này không thay thế sự chú ý và kiểm soát của người lái.",
+      "characters": 198,
+      "citations": [
+        {
+          "source_id": "vf-194eb4244c4d74b1e66d-p1",
+          "section_path": [
+            "Lái xe",
+            "Vô lăng",
+            "Chức năng ADAS"
+          ],
+          "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266350"
+        },
+        {
+          "source_id": "vf-5b0f09015f4d19a2be98",
+          "section_path": [
+            "Lái xe",
+            "Vô lăng",
+            "Chức năng ADAS"
+          ],
+          "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266350"
+        }
+      ],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 168.91,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "voice-48",
+          "query": "tính năng adas là gì",
+          "expected_route": "handbook",
+          "expected_intent": "manual.search",
+          "review_status": "draft",
+          "category": "oct07_history_regression",
+          "required_answer_terms": [
+            "hỗ trợ lái",
+            "không thay thế"
+          ],
+          "forbidden_answer_terms": [
+            "hỗ trợ đỗ xe",
+            "Nhấn nút"
+          ],
+          "route": "handbook",
+          "intent": "manual.search",
+          "status": "answered",
+          "action_proposal": null,
+          "execution": null,
+          "timings": {
+            "context": 1.38,
+            "interpret": 9.49,
+            "reducer": 0.18,
+            "scheduler": 0.38,
+            "validate": 12.46,
+            "capability": 49.78
+          },
+          "answer": "Tuỳ phiên bản, hỗ trợ lái nâng cao (ADAS) gồm các tính năng như kiểm soát hành trình thích ứng (ACC), điều chỉnh tốc độ thông minh. Các hỗ trợ này không thay thế sự chú ý và kiểm soát của người lái.",
+          "characters": 198,
+          "citations": [
+            {
+              "source_id": "vf-194eb4244c4d74b1e66d-p1",
+              "section_path": [
+                "Lái xe",
+                "Vô lăng",
+                "Chức năng ADAS"
+              ],
+              "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266350"
+            },
+            {
+              "source_id": "vf-5b0f09015f4d19a2be98",
+              "section_path": [
+                "Lái xe",
+                "Vô lăng",
+                "Chức năng ADAS"
+              ],
+              "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266350"
+            }
+          ],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 168.89,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "voice-49",
+      "query": "tính năng cruise control là gì?",
+      "expected_route": "handbook",
+      "expected_intent": "manual.search",
+      "review_status": "draft",
+      "category": "oct07_history_regression",
+      "required_answer_terms": [
+        "tốc độ",
+        "khoảng cách"
+      ],
+      "forbidden_answer_terms": [
+        "chỉ kiểm soát vô lăng"
+      ],
+      "route": "handbook",
+      "intent": "manual.search",
+      "status": "answered",
+      "action_proposal": null,
+      "execution": null,
+      "timings": {
+        "context": 1.48,
+        "interpret": 11.84,
+        "reducer": 0.2,
+        "scheduler": 0.21000000000000002,
+        "validate": 11.93,
+        "capability": 58.67
+      },
+      "answer": "Hệ thống kiểm soát hành trình thích ứng (ACC) là một hệ thống hỗ trợ người lái xe tiên tiến, tự động điều chỉnh tốc độ xe để duy trì khoảng cách an toàn với các xe khác phía trước.",
+      "characters": 180,
+      "citations": [
+        {
+          "source_id": "vf-7642695d1ae837b025cc",
+          "section_path": [
+            "Hỗ trợ người lái nâng cao",
+            "Kiểm soát hành trình",
+            "Hệ thống kiểm soát hành trình thích ứng (nếu được trang bị)"
+          ],
+          "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266344"
+        }
+      ],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 176.88,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "voice-49",
+          "query": "tính năng cruise control là gì?",
+          "expected_route": "handbook",
+          "expected_intent": "manual.search",
+          "review_status": "draft",
+          "category": "oct07_history_regression",
+          "required_answer_terms": [
+            "tốc độ",
+            "khoảng cách"
+          ],
+          "forbidden_answer_terms": [
+            "chỉ kiểm soát vô lăng"
+          ],
+          "route": "handbook",
+          "intent": "manual.search",
+          "status": "answered",
+          "action_proposal": null,
+          "execution": null,
+          "timings": {
+            "context": 1.48,
+            "interpret": 11.84,
+            "reducer": 0.2,
+            "scheduler": 0.21000000000000002,
+            "validate": 11.93,
+            "capability": 58.67
+          },
+          "answer": "Hệ thống kiểm soát hành trình thích ứng (ACC) là một hệ thống hỗ trợ người lái xe tiên tiến, tự động điều chỉnh tốc độ xe để duy trì khoảng cách an toàn với các xe khác phía trước.",
+          "characters": 180,
+          "citations": [
+            {
+              "source_id": "vf-7642695d1ae837b025cc",
+              "section_path": [
+                "Hỗ trợ người lái nâng cao",
+                "Kiểm soát hành trình",
+                "Hệ thống kiểm soát hành trình thích ứng (nếu được trang bị)"
+              ],
+              "source_url": "https://om.vinfastauto.com/vi_vn/detail?car=VF8&year=2026&lv2=1266344"
+            }
+          ],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 176.85,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "voice-50",
+      "query": "thông số pin hiện tại",
+      "expected_route": "action",
+      "expected_intent": "vehicle.get_status",
+      "review_status": "draft",
+      "category": "oct07_history_regression",
+      "required_answer_terms": [
+        "82",
+        "phần trăm"
+      ],
+      "forbidden_answer_terms": [
+        "nhà sản xuất"
+      ],
+      "route": "action",
+      "intent": "vehicle.get_status",
+      "status": "action_verified",
+      "action_proposal": {
+        "intent": "vehicle.get_status",
+        "arguments": {},
+        "confidence": 1.0
+      },
+      "execution": {
+        "allowed": true,
+        "executed": true,
+        "verified": true,
+        "risk_class": "R0",
+        "message": "Pin còn 82 phần trăm.",
+        "error": null
+      },
+      "timings": {
+        "context": 1.04,
+        "interpret": 7.59,
+        "reducer": 0.29,
+        "scheduler": 0.23,
+        "validate": 14.86,
+        "capability": 13.64
+      },
+      "answer": "Pin còn 82 phần trăm.",
+      "characters": 21,
+      "citations": [],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 134.52,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "voice-50",
+          "query": "thông số pin hiện tại",
+          "expected_route": "action",
+          "expected_intent": "vehicle.get_status",
+          "review_status": "draft",
+          "category": "oct07_history_regression",
+          "required_answer_terms": [
+            "82",
+            "phần trăm"
+          ],
+          "forbidden_answer_terms": [
+            "nhà sản xuất"
+          ],
+          "route": "action",
+          "intent": "vehicle.get_status",
+          "status": "action_verified",
+          "action_proposal": {
+            "intent": "vehicle.get_status",
+            "arguments": {},
+            "confidence": 1.0
+          },
+          "execution": {
+            "allowed": true,
+            "executed": true,
+            "verified": true,
+            "risk_class": "R0",
+            "message": "Pin còn 82 phần trăm.",
+            "error": null
+          },
+          "timings": {
+            "context": 1.04,
+            "interpret": 7.59,
+            "reducer": 0.29,
+            "scheduler": 0.23,
+            "validate": 14.86,
+            "capability": 13.64
+          },
+          "answer": "Pin còn 82 phần trăm.",
+          "characters": 21,
+          "citations": [],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 134.49,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "voice-51",
+      "query": "còn đi được bao lâu?",
+      "expected_route": "action",
+      "expected_intent": "vehicle.get_status",
+      "review_status": "draft",
+      "category": "oct07_history_regression",
+      "required_answer_terms": [
+        "số giờ",
+        "328"
+      ],
+      "forbidden_answer_terms": [],
+      "route": "action",
+      "intent": "vehicle.get_status",
+      "status": "action_verified",
+      "action_proposal": {
+        "intent": "vehicle.get_status",
+        "arguments": {},
+        "confidence": 1.0
+      },
+      "execution": {
+        "allowed": true,
+        "executed": true,
+        "verified": true,
+        "risk_class": "R0",
+        "message": "Mình chưa có số giờ di chuyển còn lại. Quãng đường dự kiến còn 328 km.",
+        "error": null
+      },
+      "timings": {
+        "context": 1.65,
+        "interpret": 14.78,
+        "reducer": 0.24,
+        "scheduler": 0.42000000000000004,
+        "validate": 11.25,
+        "capability": 14.31
+      },
+      "answer": "Mình chưa có số giờ di chuyển còn lại. Quãng đường dự kiến còn 328 km.",
+      "characters": 70,
+      "citations": [],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 136.6,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "voice-51",
+          "query": "còn đi được bao lâu?",
+          "expected_route": "action",
+          "expected_intent": "vehicle.get_status",
+          "review_status": "draft",
+          "category": "oct07_history_regression",
+          "required_answer_terms": [
+            "số giờ",
+            "328"
+          ],
+          "forbidden_answer_terms": [],
+          "route": "action",
+          "intent": "vehicle.get_status",
+          "status": "action_verified",
+          "action_proposal": {
+            "intent": "vehicle.get_status",
+            "arguments": {},
+            "confidence": 1.0
+          },
+          "execution": {
+            "allowed": true,
+            "executed": true,
+            "verified": true,
+            "risk_class": "R0",
+            "message": "Mình chưa có số giờ di chuyển còn lại. Quãng đường dự kiến còn 328 km.",
+            "error": null
+          },
+          "timings": {
+            "context": 1.65,
+            "interpret": 14.78,
+            "reducer": 0.24,
+            "scheduler": 0.42000000000000004,
+            "validate": 11.25,
+            "capability": 14.31
+          },
+          "answer": "Mình chưa có số giờ di chuyển còn lại. Quãng đường dự kiến còn 328 km.",
+          "characters": 70,
+          "citations": [],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 136.58,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "voice-52",
+      "query": "cần bao lâu để sạc đầy",
+      "expected_route": "clarify",
+      "expected_intent": "conversation.clarify",
+      "review_status": "draft",
+      "category": "oct07_history_regression",
+      "required_answer_terms": [
+        "AC",
+        "DC"
+      ],
+      "forbidden_answer_terms": [
+        "không dây"
+      ],
+      "route": "clarify",
+      "intent": "conversation.clarify",
+      "status": "clarify",
+      "action_proposal": null,
+      "execution": null,
+      "timings": {
+        "context": 1.73,
+        "interpret": 11.13,
+        "reducer": 0.17,
+        "scheduler": 0.39,
+        "validate": 0.21
+      },
+      "answer": "Bạn muốn hỏi thời gian sạc AC hay sạc nhanh DC?",
+      "characters": 47,
+      "citations": [],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 105.5,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "voice-52",
+          "query": "cần bao lâu để sạc đầy",
+          "expected_route": "clarify",
+          "expected_intent": "conversation.clarify",
+          "review_status": "draft",
+          "category": "oct07_history_regression",
+          "required_answer_terms": [
+            "AC",
+            "DC"
+          ],
+          "forbidden_answer_terms": [
+            "không dây"
+          ],
+          "route": "clarify",
+          "intent": "conversation.clarify",
+          "status": "clarify",
+          "action_proposal": null,
+          "execution": null,
+          "timings": {
+            "context": 1.73,
+            "interpret": 11.13,
+            "reducer": 0.17,
+            "scheduler": 0.39,
+            "validate": 0.21
+          },
+          "answer": "Bạn muốn hỏi thời gian sạc AC hay sạc nhanh DC?",
+          "characters": 47,
+          "citations": [],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 105.47,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "voice-53",
+      "query": "tăng điều hoà lên tối đa",
+      "expected_route": "action",
+      "expected_intent": "climate.set_temperature",
+      "review_status": "draft",
+      "category": "oct07_history_regression",
+      "required_answer_terms": [
+        "30"
+      ],
+      "forbidden_answer_terms": [],
+      "expected_value_celsius": 30,
+      "route": "action",
+      "intent": "climate.set_temperature",
+      "status": "action_verified",
+      "action_proposal": {
+        "intent": "climate.set_temperature",
+        "arguments": {
+          "value_celsius": 30.0
+        },
+        "confidence": 1.0
+      },
+      "execution": {
+        "allowed": true,
+        "executed": true,
+        "verified": true,
+        "risk_class": "R1",
+        "message": "Mình đã đặt nhiệt độ ở 30 độ.",
+        "error": null
+      },
+      "timings": {
+        "context": 1.11,
+        "interpret": 6.94,
+        "reducer": 0.17,
+        "scheduler": 0.28,
+        "validate": 12.15,
+        "capability": 14.76
+      },
+      "answer": "Mình đã đặt nhiệt độ ở 30 độ.",
+      "characters": 29,
+      "citations": [],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 129.25,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "voice-53",
+          "query": "tăng điều hoà lên tối đa",
+          "expected_route": "action",
+          "expected_intent": "climate.set_temperature",
+          "review_status": "draft",
+          "category": "oct07_history_regression",
+          "required_answer_terms": [
+            "30"
+          ],
+          "forbidden_answer_terms": [],
+          "expected_value_celsius": 30,
+          "route": "action",
+          "intent": "climate.set_temperature",
+          "status": "action_verified",
+          "action_proposal": {
+            "intent": "climate.set_temperature",
+            "arguments": {
+              "value_celsius": 30.0
+            },
+            "confidence": 1.0
+          },
+          "execution": {
+            "allowed": true,
+            "executed": true,
+            "verified": true,
+            "risk_class": "R1",
+            "message": "Mình đã đặt nhiệt độ ở 30 độ.",
+            "error": null
+          },
+          "timings": {
+            "context": 1.11,
+            "interpret": 6.94,
+            "reducer": 0.17,
+            "scheduler": 0.28,
+            "validate": 12.15,
+            "capability": 14.76
+          },
+          "answer": "Mình đã đặt nhiệt độ ở 30 độ.",
+          "characters": 29,
+          "citations": [],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 129.24,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "voice-54",
+      "query": "hạ nhiệt độ xuống thấp nhất",
+      "expected_route": "action",
+      "expected_intent": "climate.set_temperature",
+      "review_status": "draft",
+      "category": "oct07_history_regression",
+      "required_answer_terms": [
+        "16"
+      ],
+      "forbidden_answer_terms": [],
+      "expected_value_celsius": 16,
+      "route": "action",
+      "intent": "climate.set_temperature",
+      "status": "action_verified",
+      "action_proposal": {
+        "intent": "climate.set_temperature",
+        "arguments": {
+          "value_celsius": 16.0
+        },
+        "confidence": 1.0
+      },
+      "execution": {
+        "allowed": true,
+        "executed": true,
+        "verified": true,
+        "risk_class": "R1",
+        "message": "Mình đã đặt nhiệt độ ở 16 độ.",
+        "error": null
+      },
+      "timings": {
+        "context": 1.16,
+        "interpret": 10.12,
+        "reducer": 0.15,
+        "scheduler": 0.24,
+        "validate": 12.66,
+        "capability": 19.31
+      },
+      "answer": "Mình đã đặt nhiệt độ ở 16 độ.",
+      "characters": 29,
+      "citations": [],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 141.48,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "voice-54",
+          "query": "hạ nhiệt độ xuống thấp nhất",
+          "expected_route": "action",
+          "expected_intent": "climate.set_temperature",
+          "review_status": "draft",
+          "category": "oct07_history_regression",
+          "required_answer_terms": [
+            "16"
+          ],
+          "forbidden_answer_terms": [],
+          "expected_value_celsius": 16,
+          "route": "action",
+          "intent": "climate.set_temperature",
+          "status": "action_verified",
+          "action_proposal": {
+            "intent": "climate.set_temperature",
+            "arguments": {
+              "value_celsius": 16.0
+            },
+            "confidence": 1.0
+          },
+          "execution": {
+            "allowed": true,
+            "executed": true,
+            "verified": true,
+            "risk_class": "R1",
+            "message": "Mình đã đặt nhiệt độ ở 16 độ.",
+            "error": null
+          },
+          "timings": {
+            "context": 1.16,
+            "interpret": 10.12,
+            "reducer": 0.15,
+            "scheduler": 0.24,
+            "validate": 12.66,
+            "capability": 19.31
+          },
+          "answer": "Mình đã đặt nhiệt độ ở 16 độ.",
+          "characters": 29,
+          "citations": [],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 141.44,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "voice-55",
+      "query": "tăng nhiệt độ thêm 20 độ",
+      "expected_route": "action",
+      "expected_intent": "climate.set_temperature",
+      "review_status": "draft",
+      "category": "oct07_history_regression",
+      "required_answer_terms": [
+        "30"
+      ],
+      "forbidden_answer_terms": [],
+      "expected_value_celsius": 30,
+      "route": "action",
+      "intent": "climate.set_temperature",
+      "status": "action_verified",
+      "action_proposal": {
+        "intent": "climate.set_temperature",
+        "arguments": {
+          "value_celsius": 30.0
+        },
+        "confidence": 1.0
+      },
+      "execution": {
+        "allowed": true,
+        "executed": true,
+        "verified": true,
+        "risk_class": "R1",
+        "message": "Mình đã đặt nhiệt độ ở 30 độ.",
+        "error": null
+      },
+      "timings": {
+        "context": 2.46,
+        "interpret": 15.36,
+        "reducer": 0.4,
+        "scheduler": 0.26,
+        "validate": 12.07,
+        "capability": 16.06
+      },
+      "answer": "Mình đã đặt nhiệt độ ở 30 độ.",
+      "characters": 29,
+      "citations": [],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 160.64,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "voice-55",
+          "query": "tăng nhiệt độ thêm 20 độ",
+          "expected_route": "action",
+          "expected_intent": "climate.set_temperature",
+          "review_status": "draft",
+          "category": "oct07_history_regression",
+          "required_answer_terms": [
+            "30"
+          ],
+          "forbidden_answer_terms": [],
+          "expected_value_celsius": 30,
+          "route": "action",
+          "intent": "climate.set_temperature",
+          "status": "action_verified",
+          "action_proposal": {
+            "intent": "climate.set_temperature",
+            "arguments": {
+              "value_celsius": 30.0
+            },
+            "confidence": 1.0
+          },
+          "execution": {
+            "allowed": true,
+            "executed": true,
+            "verified": true,
+            "risk_class": "R1",
+            "message": "Mình đã đặt nhiệt độ ở 30 độ.",
+            "error": null
+          },
+          "timings": {
+            "context": 2.46,
+            "interpret": 15.36,
+            "reducer": 0.4,
+            "scheduler": 0.26,
+            "validate": 12.07,
+            "capability": 16.06
+          },
+          "answer": "Mình đã đặt nhiệt độ ở 30 độ.",
+          "characters": 29,
+          "citations": [],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 160.61,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "voice-56",
+      "query": "tăng nhiệt độ lên 20 độ",
+      "expected_route": "action",
+      "expected_intent": "climate.set_temperature",
+      "review_status": "draft",
+      "category": "oct07_history_regression",
+      "required_answer_terms": [
+        "20"
+      ],
+      "forbidden_answer_terms": [],
+      "expected_value_celsius": 20,
+      "route": "action",
+      "intent": "climate.set_temperature",
+      "status": "action_verified",
+      "action_proposal": {
+        "intent": "climate.set_temperature",
+        "arguments": {
+          "value_celsius": 20.0
+        },
+        "confidence": 1.0
+      },
+      "execution": {
+        "allowed": true,
+        "executed": true,
+        "verified": true,
+        "risk_class": "R1",
+        "message": "Mình đã đặt nhiệt độ ở 20 độ.",
+        "error": null
+      },
+      "timings": {
+        "context": 1.39,
+        "interpret": 16.87,
+        "reducer": 0.2,
+        "scheduler": 0.24,
+        "validate": 16.92,
+        "capability": 12.9
+      },
+      "answer": "Mình đã đặt nhiệt độ ở 20 độ.",
+      "characters": 29,
+      "citations": [],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 148.8,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "voice-56",
+          "query": "tăng nhiệt độ lên 20 độ",
+          "expected_route": "action",
+          "expected_intent": "climate.set_temperature",
+          "review_status": "draft",
+          "category": "oct07_history_regression",
+          "required_answer_terms": [
+            "20"
+          ],
+          "forbidden_answer_terms": [],
+          "expected_value_celsius": 20,
+          "route": "action",
+          "intent": "climate.set_temperature",
+          "status": "action_verified",
+          "action_proposal": {
+            "intent": "climate.set_temperature",
+            "arguments": {
+              "value_celsius": 20.0
+            },
+            "confidence": 1.0
+          },
+          "execution": {
+            "allowed": true,
+            "executed": true,
+            "verified": true,
+            "risk_class": "R1",
+            "message": "Mình đã đặt nhiệt độ ở 20 độ.",
+            "error": null
+          },
+          "timings": {
+            "context": 1.39,
+            "interpret": 16.87,
+            "reducer": 0.2,
+            "scheduler": 0.24,
+            "validate": 16.92,
+            "capability": 12.9
+          },
+          "answer": "Mình đã đặt nhiệt độ ở 20 độ.",
+          "characters": 29,
+          "citations": [],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 148.79,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    },
+    {
+      "id": "voice-57",
+      "query": "Bạn có đang gặp vấn đề gì không?",
+      "expected_route": "action",
+      "expected_intent": "vehicle.get_status",
+      "review_status": "draft",
+      "category": "oct07_history_regression",
+      "required_answer_terms": [
+        "chưa đọc được",
+        "lỗi"
+      ],
+      "forbidden_answer_terms": [],
+      "route": "action",
+      "intent": "vehicle.get_status",
+      "status": "action_verified",
+      "action_proposal": {
+        "intent": "vehicle.get_status",
+        "arguments": {},
+        "confidence": 1.0
+      },
+      "execution": {
+        "allowed": true,
+        "executed": true,
+        "verified": true,
+        "risk_class": "R0",
+        "message": "Mình chưa đọc được mã lỗi của xe; bạn kiểm tra đèn cảnh báo và cẩm nang nhé.",
+        "error": null
+      },
+      "timings": {
+        "context": 0.98,
+        "interpret": 9.68,
+        "reducer": 0.44,
+        "scheduler": 0.35,
+        "validate": 11.88,
+        "capability": 14.69
+      },
+      "answer": "Mình chưa đọc được mã lỗi của xe; bạn kiểm tra đèn cảnh báo và cẩm nang nhé.",
+      "characters": 76,
+      "citations": [],
+      "errors": [],
+      "answer_checks": true,
+      "execution_checks": true,
+      "memory_checks": true,
+      "latency_ms": 133.65,
+      "argument_checks": true,
+      "status_checks": true,
+      "route_checks": true,
+      "turn_results": [
+        {
+          "id": "voice-57",
+          "query": "Bạn có đang gặp vấn đề gì không?",
+          "expected_route": "action",
+          "expected_intent": "vehicle.get_status",
+          "review_status": "draft",
+          "category": "oct07_history_regression",
+          "required_answer_terms": [
+            "chưa đọc được",
+            "lỗi"
+          ],
+          "forbidden_answer_terms": [],
+          "route": "action",
+          "intent": "vehicle.get_status",
+          "status": "action_verified",
+          "action_proposal": {
+            "intent": "vehicle.get_status",
+            "arguments": {},
+            "confidence": 1.0
+          },
+          "execution": {
+            "allowed": true,
+            "executed": true,
+            "verified": true,
+            "risk_class": "R0",
+            "message": "Mình chưa đọc được mã lỗi của xe; bạn kiểm tra đèn cảnh báo và cẩm nang nhé.",
+            "error": null
+          },
+          "timings": {
+            "context": 0.98,
+            "interpret": 9.68,
+            "reducer": 0.44,
+            "scheduler": 0.35,
+            "validate": 11.88,
+            "capability": 14.69
+          },
+          "answer": "Mình chưa đọc được mã lỗi của xe; bạn kiểm tra đèn cảnh báo và cẩm nang nhé.",
+          "characters": 76,
+          "citations": [],
+          "errors": [],
+          "answer_checks": true,
+          "execution_checks": true,
+          "memory_checks": true,
+          "latency_ms": 133.63,
+          "argument_checks": true,
+          "status_checks": true,
+          "route_checks": true
+        }
+      ]
+    }
+  ]
+}

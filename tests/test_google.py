@@ -4,8 +4,7 @@ from dataclasses import replace
 import httpx
 import pytest
 
-from src.vivi.agents.classifier import GoogleIntentClassifier
-from src.vivi.agents.graph import build_graph
+from src.vivi.graphs import build_graph
 from src.vivi.config import Settings
 from src.vivi.domain.models import ConfirmationDecisionRequest, TurnRequest
 from src.vivi.providers import configured_llm_providers, llm_models
@@ -44,7 +43,8 @@ def test_google_credentials_accept_gemini_alias(monkeypatch):
 def test_auto_services_respect_selected_google_provider(tmp_path):
     services = create_services(configuration(tmp_path))
     assert services.generation_provider == "google"
-    assert isinstance(services.classifier, GoogleIntentClassifier)
+    assert services.semantic_client is services.generator.client
+    assert services.semantic_client.model == "gemini-3.5-flash-lite"
     assert isinstance(services.generator, GoogleHandbookGenerator)
 
 
@@ -79,20 +79,18 @@ async def test_google_graph_calls_intent_and_grounded_answer(tmp_path):
         body = json.loads(request.content)
         name = body["response_format"]["json_schema"]["name"]
         requests.append(name)
-        if name == "vivi_intent_decision":
-            result = {"route": "handbook", "intent": "manual.search",
-                      "arguments": {"query": "Sạc AC thế nào?"}, "follow_up": None}
+        if name == "vivi_semantic_turn":
+            result = {"act": "question", "actions": [{"capability": "manual.search", "arguments": {"query": "Sạc AC thế nào?"}}]}
         else:
             result = {"answer": "Dừng xe ở vị trí an toàn trước khi kết nối cáp sạc.",
                       "claims": [{"text": "Dừng xe ở vị trí an toàn trước khi kết nối cáp sạc.", "source_ids": ["S1"]}]}
         return httpx.Response(200, json={"choices": [{"message": {"content": json.dumps(result)}}]})
     services = replace(create_services(configuration(tmp_path)), retriever=_Retriever())
-    for model in [services.classifier, services.generator]:
-        model.client.transport = httpx.MockTransport(handler)
+    services.semantic_client.transport = httpx.MockTransport(handler)
     output = (await build_graph(services).ainvoke({
         "session_id": "google-rag", "turn_id": "one", "input_text": "Sạc AC thế nào?"
     }))["output"]
-    assert requests == ["vivi_intent_decision", "vivi_grounded_answer"]
+    assert requests == ["vivi_semantic_turn", "vivi_grounded_answer"]
     assert output["route"] == "handbook" and output["grounding_status"] == "supported"
     assert output["citations"][0]["source_id"] == "vf-local-charge"
     assert not output["errors"]

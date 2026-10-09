@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import time
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field
 
 from src.vivi.api.runtime import runtime
 from src.vivi.domain.models import (
@@ -45,6 +47,12 @@ async def turn(request: TurnRequest):
         finished = time.perf_counter()
         runtime.store.update_turn(request.session_id, request.turn_id, {"received_at": received_at, "output_at": time.time(), "end_to_end_ms": round((finished - started) * 1000, 2)})
         return response
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except TimeoutError as exc:
+        raise HTTPException(status_code=504, detail="Lượt xử lý đã vượt thời gian chờ.") from exc
+    except asyncio.CancelledError as exc:
+        raise HTTPException(status_code=409, detail="Lượt xử lý đã được hủy.") from exc
     except Exception as exc:
         raise HTTPException(
             status_code=502, detail=f"Không xử lý được lượt hội thoại: {exc}"
@@ -65,6 +73,8 @@ async def turn_stream(request: TurnRequest):
                     finished = time.perf_counter()
                     runtime.store.update_turn(request.session_id, request.turn_id, {"received_at": received_at, "output_at": time.time(), "end_to_end_ms": round((finished - started) * 1000, 2)})
                 yield json.dumps(event, ensure_ascii=False) + "\n"
+        except asyncio.CancelledError:
+            yield json.dumps({"type": "cancelled", "turn_id": request.turn_id}, ensure_ascii=False) + "\n"
         except Exception as exc:
             yield json.dumps(
                 {"type": "error", "detail": f"Không xử lý được lượt hội thoại: {exc}"},
@@ -76,6 +86,31 @@ async def turn_stream(request: TurnRequest):
         media_type="application/x-ndjson",
         headers={"Cache-Control": "no-store"},
     )
+
+
+class CancelTurn(BaseModel):
+    session_id: str = Field(min_length=1, max_length=100)
+
+
+@router.get("/turns/{turn_id}")
+async def turn_status(turn_id: str, session_id: str):
+    ledger = runtime.orchestrator.ledger
+    value = await asyncio.to_thread(ledger.turn_status, f"{runtime.orchestrator.profile_id}:{session_id}", turn_id, session_id) if ledger else None
+    if value is None:
+        raise HTTPException(status_code=404, detail="Không tìm thấy lượt xử lý.")
+    # Observations aid reconciliation but never prove attribution or trigger replay.
+    if value["command"] and value["command"]["status"] in {"dispatched", "unknown"}:
+        try:
+            observed = await runtime.vehicle.get_state(session_id)
+            value["observed_vehicle_state"] = observed.model_dump(mode="json")
+        except Exception:
+            value["observed_vehicle_state"] = None
+    return value
+
+
+@router.post("/turns/{turn_id}/cancel")
+async def cancel_turn(turn_id: str, request: CancelTurn):
+    return runtime.orchestrator.cancel(request.session_id, turn_id)
 
 
 @router.post("/confirmations/{confirmation_id}", response_model=TurnResponse)
@@ -93,6 +128,10 @@ async def decide_confirmation(
     )
     try:
         return await runtime.orchestrator.run(turn_request, provider=provider)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except TimeoutError as exc:
+        raise HTTPException(status_code=504, detail="Xác nhận đã vượt thời gian chờ.") from exc
     except Exception as exc:
         raise HTTPException(
             status_code=502, detail=f"Không xử lý được xác nhận: {exc}"

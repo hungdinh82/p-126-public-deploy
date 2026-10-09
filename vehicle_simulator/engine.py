@@ -260,6 +260,11 @@ class VehicleSimulator:
             return set(args) == set(names)
 
         def selected_zones() -> tuple[str, ...] | None:
+            if "zones" in args:
+                zones = args["zones"]
+                if "zone" in args or not isinstance(zones, list) or not zones or any(not isinstance(z, str) or z not in CABIN_ZONES for z in zones) or len(set(zones)) != len(zones):
+                    return None
+                return tuple(z for z in CABIN_ZONES if z in zones)
             zone = args.get("zone", "driver")
             if zone == "all":
                 return CABIN_ZONES
@@ -268,7 +273,7 @@ class VehicleSimulator:
             return None
 
         def zoned_args(value_name: str) -> bool:
-            return set(args) in ({value_name}, {value_name, "zone"})
+            return set(args) in ({value_name}, {value_name, "zone"}, {value_name, "zones"})
 
         if action == "vehicle.get_state":
             return (state, None) if exact_args() else (state, "invalid_arguments")

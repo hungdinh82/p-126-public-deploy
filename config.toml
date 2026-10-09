@@ -26,6 +26,13 @@ mqtt_timeout_seconds = 3
 # Local-only HTTP control used by Engineer Dashboard only when vehicle_provider = "mqtt".
 vehicle_simulator_url = "http://127.0.0.1:8788"
 
+# One checkpoint-owned workflow. Availability fallback: cloud -> configured local -> parser.
+turn_timeout_seconds = 45
+cloud_budget_seconds = 10
+local_budget_seconds = 12
+provider_breaker_seconds = 30
+planner_max_tokens = 2048
+
 # Language model: rules, local, openai, google, openrouter
 # Cloud providers require rag_local_only = false.
 llm_provider = "google"

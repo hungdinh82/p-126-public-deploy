@@ -30,12 +30,12 @@ async def _local_llm_available() -> tuple[bool, str | None]:
 async def _llm_options() -> list[dict]:
     options = []
     for provider, model in runtime.llm_models.items():
-        available = provider in runtime.orchestrator.graph_providers
+        available = provider in getattr(runtime.orchestrator, "semantic_providers", runtime.orchestrator.graph_providers)
         detail = runtime.orchestrator.provider_errors.get(provider)
         if provider == "local" and available:
             available, detail = await _local_llm_available()
         options.append(
-            {"provider": provider, "model": model, "available": available, "detail": detail}
+            {"provider": provider, "model": model, "available": available, "fallback_available": True, "detail": detail}
         )
     return options
 
@@ -60,6 +60,12 @@ async def health():
         "runtime": "local",
         "orchestration": {
             "engine": "langgraph",
+            "workflow_version": "unified-3",
+            "fallback_chain": ["rules"] if config.llm_provider == "rules" else ["local", "rules"] if config.llm_provider == "local" else [config.llm_provider, "local", "rules"],
+            "cloud_budget_seconds": config.cloud_budget_seconds,
+            "local_budget_seconds": config.local_budget_seconds,
+            "turn_timeout_seconds": config.turn_timeout_seconds,
+            "durable_tasks": True,
             "graph_providers": sorted(runtime.orchestrator.graph_providers),
             "retrieval": {
                 "sqlite": "sqlite_fts5",
@@ -73,7 +79,7 @@ async def health():
         },
         "llm": {
             "provider": active_provider,
-            "configured": config.llm_provider in runtime.orchestrator.graph_providers,
+            "configured": config.llm_provider in getattr(runtime.orchestrator, "semantic_providers", runtime.orchestrator.graph_providers),
             "detail": runtime.orchestrator.provider_errors.get(config.llm_provider),
             "options": llm_options,
         },

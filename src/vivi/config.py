@@ -49,6 +49,11 @@ class Settings(BaseSettings):
     cors_origins: str = "http://127.0.0.1:8787,http://localhost:8787"
 
     data_dir: Path = Field(default=Path("./data"), validation_alias="VIVI_DATA_DIR")
+    turn_timeout_seconds: float = Field(default=45, ge=1, le=180)
+    cloud_budget_seconds: float = Field(default=10, ge=0.1, le=60)
+    local_budget_seconds: float = Field(default=12, ge=0.1, le=60)
+    provider_breaker_seconds: float = Field(default=30, ge=0, le=300)
+    planner_max_tokens: int = Field(default=2048, ge=512, le=8192)
     store_audio: bool = Field(default=False, validation_alias="VIVI_STORE_AUDIO")
     store_transcripts: bool = Field(default=False, validation_alias="VIVI_STORE_TRANSCRIPTS")
     memory_enabled: bool = Field(default=True, validation_alias="VIVI_MEMORY_ENABLED")

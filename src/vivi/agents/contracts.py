@@ -2,94 +2,14 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, model_validator
+from pydantic import BaseModel, Field
 
-Intent = Literal[
-    "manual.search",
-    "climate.set_temperature",
-    "window.set_position",
-    "door.set_lock",
-    "door.set_open",
-    "hood.set_open",
-    "trunk.set_open",
-    "body.set_open",
-    "seat.set_heat_level",
-    "media.play",
-    "media.pause",
-    "vehicle.get_status",
-    "memory.recall",
-    "memory.remember",
-    "memory.forget",
-    "memory.reset",
-    "conversation.respond",
-    "conversation.clarify",
-    "unsupported.request",
-    "vehicle.prohibited",
-]
 Route = Literal["handbook", "action", "conversation", "clarify", "unsupported"]
-
-
-class DecisionArguments(BaseModel):
-    """Canonical arguments shared by the supported intent set."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    query: str | None = None
-    value_celsius: float | None = None
-    position_percent: StrictInt | None = None
-    open: StrictBool | None = None
-    locked: StrictBool | None = None
-    level: StrictInt | None = None
-    zone: Literal["driver", "front_passenger", "rear_left", "rear_right", "all"] | None = None
-    media_query: str | None = None
-    memory_key: str | None = None
-    memory_value: str | None = None
-
-
-class FollowUp(BaseModel):
-    """A proposed next step, never permission to execute it in this turn."""
-
-    model_config = ConfigDict(extra="forbid")
-    intent: Intent
-    arguments: DecisionArguments = Field(default_factory=DecisionArguments)
-    missing_slot: Literal["zone", "value_celsius", "level"] | None = None
-
-
-class IntentDecision(BaseModel):
-    """Structured result produced by the intent-classification model."""
-
-    route: Route
-    intent: Intent
-    arguments: DecisionArguments = Field(default_factory=DecisionArguments)
-    response_text: str = ""
-    needs_clarification: bool = False
-    clarification_question: str | None = None
-    confidence: float = Field(default=1.0, ge=0, le=1)
-    follow_up: FollowUp | None = None
-
-    @model_validator(mode="after")
-    def validate_route_intent_pair(self) -> IntentDecision:
-        expected_routes: dict[str, str] = {
-            "manual.search": "handbook",
-            "conversation.respond": "conversation",
-            "conversation.clarify": "clarify",
-            "unsupported.request": "unsupported",
-            "vehicle.prohibited": "unsupported",
-            "memory.recall": "conversation",
-            "memory.remember": "conversation",
-            "memory.forget": "conversation",
-            "memory.reset": "conversation",
-        }
-        expected = expected_routes.get(self.intent, "action")
-        if self.route != expected:
-            raise ValueError(f"intent {self.intent} must use route {expected}")
-        if self.needs_clarification and self.route != "clarify":
-            raise ValueError("needs_clarification requires the clarify route")
-        return self
 
 
 class ActionProposal(BaseModel):
     intent: Literal[
+        "memory.reset",
         "climate.set_temperature",
         "window.set_position",
         "door.set_lock",
@@ -138,3 +58,5 @@ class AssistantOutput(BaseModel):
     grounding_status: str = "not_applicable"
     errors: list[dict[str, str]] = Field(default_factory=list)
     timings: dict[str, float] = Field(default_factory=dict)
+    diagnostics: dict[str, Any] = Field(default_factory=dict)
+    steps: list[dict[str, Any]] = Field(default_factory=list)

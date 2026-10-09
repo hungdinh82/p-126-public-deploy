@@ -1,1 +1,1 @@
-"""LangGraph agent contracts, classifiers, state, and graph assembly."""
+"""Public response DTOs, capability parameter schemas and voice persona."""

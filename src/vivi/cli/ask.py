@@ -5,8 +5,10 @@ import json
 from pathlib import Path
 from uuid import uuid4
 
-from src.vivi.agents.graph import build_graph
-from src.vivi.rag.runtime import create_services
+from src.vivi.config import get_settings
+from src.vivi.orchestration import create_langgraph_orchestrator
+from src.vivi.persistence.event_store import EventStore
+from src.vivi.vehicle.memory import VehicleSimulator
 
 
 def _print_result(result: dict) -> None:
@@ -63,7 +65,8 @@ def _ask(
     if input_text is not None:
         state["input_text"] = input_text
     if payload is not None:
-        state["model_input"] = payload
+        state["action"] = payload if "capability" in payload else {"capability": payload["intent"], "arguments": {k: v for k, v in payload.get("arguments", {}).items() if k not in {"vehicle_model", "model_year", "locale"}}}
+        state["input_text"] = state["action"].get("arguments", {}).get("query", "Thao tác trực tiếp")
     if confirmation_id is not None:
         state["confirmation_id"] = confirmation_id
         state["confirmation_decision"] = confirmation_decision
@@ -87,39 +90,46 @@ def main() -> None:
         parser.error("choose --text, --input FILE, or --interactive")
 
     try:
-        graph = build_graph(create_services(retrieval_mode=args.retrieval))
+        config = get_settings()
+        if args.retrieval:
+            config = config.model_copy(update={"rag_retrieval_mode": args.retrieval})
+        runtime = create_langgraph_orchestrator(VehicleSimulator(), EventStore(config), config)
+        graph = runtime.graphs[config.llm_provider]
     except (FileNotFoundError, RuntimeError, ValueError) as exc:
         parser.exit(2, f"Không thể khởi tạo RAG: {exc}\n")
-    if args.input:
-        payload = json.loads(args.input.read_text(encoding="utf-8"))
-        _print_result(_ask(graph, args.session, payload=payload))
-    if args.text:
-        _print_result(_ask(graph, args.session, input_text=args.text))
-    if args.interactive:
-        print("ViVi handbook VF8 2026. Gõ 'exit' để thoát.")
-        while True:
-            try:
-                query = input("\nBạn: ").strip()
-            except (EOFError, KeyboardInterrupt):
-                print()
-                break
-            if query.lower() in {"exit", "quit", "thoát", "thoat"}:
-                break
-            if query:
-                result = _ask(graph, args.session, input_text=query)
-                _print_result(result)
-                confirmation = (result.get("output") or {}).get("confirmation")
-                if confirmation:
-                    choice = input("Xác nhận thao tác? [y/N]: ").strip().lower()
-                    decision = "approve" if choice in {"y", "yes", "có", "co"} else "deny"
-                    resolved = _ask(
-                        graph,
-                        args.session,
-                        input_text="Xác nhận" if decision == "approve" else "Hủy",
-                        confirmation_id=confirmation["confirmation_id"],
-                        confirmation_decision=decision,
-                    )
-                    _print_result(resolved)
+    try:
+        if args.input:
+            payload = json.loads(args.input.read_text(encoding="utf-8"))
+            _print_result(_ask(graph, args.session, payload=payload))
+        if args.text:
+            _print_result(_ask(graph, args.session, input_text=args.text))
+        if args.interactive:
+            print("ViVi handbook VF8 2026. Gõ 'exit' để thoát.")
+            while True:
+                try:
+                    query = input("\nBạn: ").strip()
+                except (EOFError, KeyboardInterrupt):
+                    print()
+                    break
+                if query.lower() in {"exit", "quit", "thoát", "thoat"}:
+                    break
+                if query:
+                    result = _ask(graph, args.session, input_text=query)
+                    _print_result(result)
+                    confirmation = (result.get("output") or {}).get("confirmation")
+                    if confirmation:
+                        choice = input("Xác nhận thao tác? [y/N]: ").strip().lower()
+                        decision = "approve" if choice in {"y", "yes", "có", "co"} else "deny"
+                        resolved = _ask(
+                            graph,
+                            args.session,
+                            input_text="Xác nhận" if decision == "approve" else "Hủy",
+                            confirmation_id=confirmation["confirmation_id"],
+                            confirmation_decision=decision,
+                        )
+                        _print_result(resolved)
+    finally:
+        graph.close()
 
 
 if __name__ == "__main__":

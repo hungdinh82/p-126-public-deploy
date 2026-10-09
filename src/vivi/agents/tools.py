@@ -9,9 +9,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, ValidationError, field_validator
-
-from src.vivi.text import normalize_text
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    StrictBool,
+    StrictInt,
+    ValidationError,
+    model_validator,
+)
 
 Zone = Literal["driver", "front_passenger", "rear_left", "rear_right", "all"]
 
@@ -24,43 +30,57 @@ class Temperature(Parameters):
     value_celsius: float = Field(ge=16, le=30, description="Nhiệt độ đích, không phải số độ tăng/giảm.")
 
 
-class Window(Parameters):
-    position_percent: StrictInt = Field(ge=0, le=100, description="0 đóng hoàn toàn, 100 mở hoàn toàn.")
-    zone: Zone
+class ZonedParameters(Parameters):
+    zone: Zone | None = None
+    zones: list[Literal["driver", "front_passenger", "rear_left", "rear_right"]] | None = Field(default=None, min_length=1, max_length=4)
+
+    @model_validator(mode="after")
+    def one_target(self):
+        if (self.zone is None) == (self.zones is None):
+            raise ValueError("Supply exactly one of zone or zones")
+        if self.zones and len(set(self.zones)) != len(self.zones):
+            raise ValueError("Duplicate cabin zones")
+        return self
 
 
-class DoorOpen(Parameters):
+class Window(ZonedParameters):
+    position_percent: StrictInt = Field(ge=0, le=100, description="Độ mở, không phải chiều cao kính: 0 = nâng kính lên/đóng; 100 = hạ kính xuống/mở. Hạ kính không nói mức nghĩa là 100, không phải 0.")
+
+
+class DoorOpen(ZonedParameters):
     open: StrictBool
-    zone: Zone
 
 
 class PanelOpen(Parameters):
     open: StrictBool
 
 
-class DoorLock(Parameters):
+class DoorLock(ZonedParameters):
     locked: StrictBool
-    zone: Zone
 
 
-class SeatHeat(Parameters):
+class SeatHeat(ZonedParameters):
     level: StrictInt = Field(ge=0, le=3, description="0 tắt sưởi, 1–3 mức sưởi.")
-    zone: Zone
 
 
 class MediaPlay(Parameters):
     media_query: str | None = Field(default=None, max_length=200, description="Requested song, artist or genre only. Omit for generic music; đi/nhé/nhạc are not search terms.")
 
-    @field_validator("media_query")
-    @classmethod
-    def generic_music_is_not_a_title(cls, value):
-        if value is not None and normalize_text(value).strip(" .!?") in {"nhac", "music", "di", "nhe", "luon di"}:
-            return None
-        return value
 
 
-class ManualSearch(Parameters):
+class SearchQuery(Parameters):
     query: str = Field(min_length=2, max_length=1000)
+
+
+class ManualSearch(SearchQuery):
+    requested_vehicle_model: str | None = Field(default=None, pattern=r"^VF[0-9]+$")
+    requested_model_year: StrictInt | None = Field(default=None, ge=2000, le=2100)
+    question_kind: Literal["charging_duration"] | None = None
+    charging_mode: Literal["AC", "DC"] | None = None
+
+
+class StatusRead(Parameters):
+    query: str | None = Field(default=None, pattern=r"^(?:summary|temperature|battery|tires|range|range_time|body|diagnostics)(?:,(?:temperature|battery|tires|range|range_time|body|diagnostics))*$")
 
 
 class MemoryRecall(Parameters):
@@ -111,7 +131,7 @@ TOOLS = (
     ToolSpec(
         "vehicle.get_status",
         "Đọc số đo và trạng thái xe hiện tại. Không dùng thông số cẩm nang làm số đo; chỉ trả những trường được adapter thực sự cung cấp.",
-        Parameters,
+        StatusRead,
         "Bạn muốn kiểm tra thông tin nào của xe?",
         True,
     ),
@@ -123,7 +143,7 @@ TOOLS = (
     ),
     ToolSpec(
         "window.set_position",
-        "Điều chỉnh độ mở cửa sổ tại vị trí được yêu cầu. Không mở cửa xe.",
+        "Điều chỉnh độ mở cửa sổ tại vị trí được yêu cầu. Hạ kính xuống là mở (100%); nâng kính lên là đóng (0%). Khi có phần trăm dùng đúng mức đó. Không mở cửa xe.",
         Window,
         "Bạn muốn mở hoặc đóng cửa sổ bên nào?",
     ),
@@ -167,6 +187,8 @@ TOOLS = (
     ToolSpec("media.pause", "Dừng phát âm thanh.", Parameters, "Bạn muốn dừng nhạc phải không?"),
 )
 TOOL_REGISTRY = {tool.name: tool for tool in TOOLS}
+NAVIGATION_TOOL = ToolSpec("navigation.search", "Tìm địa điểm qua VietMap; không giả định GPS hoặc tự bắt đầu dẫn đường.", SearchQuery, "Bạn muốn tìm địa điểm nào?", True)
+TOOL_REGISTRY[NAVIGATION_TOOL.name] = NAVIGATION_TOOL
 
 
 def validate_tool_arguments(name: str, arguments: dict) -> tuple[dict | None, str | None]:

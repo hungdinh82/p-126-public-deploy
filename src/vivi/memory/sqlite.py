@@ -145,7 +145,7 @@ class SQLiteLongTermMemory:
         words = set(re.findall(r"\w+", normalize_text(query))) - {"toi", "ban", "minh", "la", "va", "cua", "gi"}
 
         def score(item):
-            tokens = set(re.findall(r"\w+", normalize_text(f"{item['label']} {item['value']}")))
+            tokens = set(re.findall(r"\w+", normalize_text(f"{item['key']} {item['label']} {item['value']}")))
             return (item["key"] in LABELS, len(tokens & words))
 
         # Preferences are small and always useful; notes require lexical relevance.

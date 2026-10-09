@@ -16,9 +16,9 @@ test('an explicit body control click approves only its bound action', () => {
     app.indexOf("$('#command-form').addEventListener"),
     app.indexOf('async function setDemoDriving')
   );
-  assert.match(app, /async function runBackendCommand\(command, turnId = makeId\(\), \{ autoConfirm = false \} = \{\}\)/);
+  assert.match(app, /async function runBackendCommand\(command, turnId = makeId\(\), \{ autoConfirm = false, action = null \} = \{\}\)/);
   assert.match(app, /autoConfirm && payload\.status === 'confirmation_required'/);
   assert.match(app, /\/api\/v1\/confirmations\/\$\{payload\.confirmation\.confirmation_id\}/);
-  assert.equal((controls.match(/\{ autoConfirm: true \}/g) || []).length, 4);
+  assert.equal((controls.match(/\{ autoConfirm: true, action:/g) || []).length, 4);
   assert.match(app, /\$\('#command-form'\)[^\n]+runCommand\(\$\('#command-input'\)\.value\)/);
 });

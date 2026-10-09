@@ -136,3 +136,5 @@ body.journey-mini .alert-panel{top:auto;bottom:96px}
 
 .reduced-motion *,.reduced-motion *:before,.reduced-motion *:after{animation:none!important;transition:none!important}
 @media(prefers-reduced-motion:reduce){*,*:before,*:after{animation:none!important;transition:none!important}}
+
+.turn-steps{max-width:520px;max-height:140px;overflow:auto;margin:10px auto 0;padding-left:24px;text-align:left;font-size:12px;line-height:1.5;color:#aab2c3}.turn-steps[hidden]{display:none}.turn-steps li{margin:4px 0}

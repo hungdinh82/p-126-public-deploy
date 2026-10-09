@@ -68,6 +68,7 @@ class VehicleSimulator:
         session_id: str,
         turn_id: str,
         action: ActionProposal,
+        *, expected_state_version: int | None = None,
     ) -> tuple[VehicleState, str]:
         """Execute once per session/turn; safe for sync LangGraph nodes."""
         with self._lock:
@@ -82,6 +83,8 @@ class VehicleSimulator:
             if action.intent not in self.ALLOWED_INTENTS:
                 raise ValueError(f"Action is not executable: {action.intent}")
             state = self._states.setdefault(session_id, VehicleState())
+            if expected_state_version is not None and state.state_version != expected_state_version:
+                raise ValueError("state_version_conflict before applying action")
             zones = selected_zones(action.arguments) if action.intent in {
                 "window.set_position", "door.set_open", "door.set_lock", "seat.set_heat_level"
             } else ()
