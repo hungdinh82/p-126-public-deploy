@@ -1,0 +1,151 @@
+{
+  "dataset": "eval/dialogue_v2_cases.jsonl",
+  "split": "development-regression",
+  "provider": "rules",
+  "workflow": "v2",
+  "cases": 9,
+  "passed": 3,
+  "turns": 21,
+  "latency_p50_ms": 91.29,
+  "latency_p95_ms": 122.9,
+  "environment": "Local memory simulator, temporary SQLite databases; no model API calls",
+  "episodes": [
+    {
+      "id": "front-right-slot",
+      "passed": false,
+      "failures": [
+        {
+          "query": "Phía trước bên phải",
+          "failed_checks": [
+            "status",
+            "intent",
+            "arguments"
+          ]
+        },
+        {
+          "query": "Đúng rồi mở đi",
+          "failed_checks": [
+            "status",
+            "executed"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "correct-capability",
+      "passed": false,
+      "failures": [
+        {
+          "query": "Không, mở cửa kính bên đấy thôi",
+          "failed_checks": [
+            "status",
+            "intent",
+            "arguments"
+          ]
+        },
+        {
+          "query": "Ừ đúng rồi",
+          "failed_checks": [
+            "status",
+            "executed"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "half-correction",
+      "passed": false,
+      "failures": [
+        {
+          "query": "Mở kính bên ghế lái",
+          "failed_checks": [
+            "status"
+          ]
+        },
+        {
+          "query": "Mở 1 nửa thôi",
+          "failed_checks": [
+            "status",
+            "arguments"
+          ]
+        },
+        {
+          "query": "Xác nhận",
+          "failed_checks": [
+            "status",
+            "state"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "lower-windows",
+      "passed": true,
+      "failures": []
+    },
+    {
+      "id": "exclusion",
+      "passed": false,
+      "failures": [
+        {
+          "query": "Đóng tất cả cửa sổ trừ cửa ghế lái",
+          "failed_checks": [
+            "status",
+            "arguments"
+          ]
+        },
+        {
+          "query": "Xác nhận",
+          "failed_checks": [
+            "status",
+            "state"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "cooling-conflict",
+      "passed": false,
+      "failures": [
+        {
+          "query": "Tôi nóng quá tăng điều hoà lên tối đa",
+          "failed_checks": [
+            "status",
+            "executed",
+            "state"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "pillar-handbook",
+      "passed": true,
+      "failures": []
+    },
+    {
+      "id": "no-weather-tool",
+      "passed": true,
+      "failures": []
+    },
+    {
+      "id": "cabin-scope-correction",
+      "passed": false,
+      "failures": [
+        {
+          "query": "Chỉ cửa ra vào xe thôi",
+          "failed_checks": [
+            "status",
+            "intent",
+            "arguments"
+          ]
+        },
+        {
+          "query": "Xác nhận",
+          "failed_checks": [
+            "status"
+          ]
+        }
+      ]
+    }
+  ]
+}

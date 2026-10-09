@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import asyncio
 import hashlib
 import ipaddress
 import json
@@ -16,11 +17,12 @@ from contextlib import contextmanager
 from importlib.metadata import version
 from pathlib import Path
 
-from src.vivi.agents.classifier import LocalIntentClassifier, RulesIntentClassifier
+from src.vivi.capabilities.registry import REGISTRY, catalog
 from src.vivi.config import Settings
+from src.vivi.dialogue.contracts import SessionState
+from src.vivi.dialogue.planner import ModelProvider, SemanticResolver
 from src.vivi.rag.embeddings.local import LocalE5EmbeddingProvider
 from src.vivi.rag.generator import ExtractiveHandbookGenerator, LocalHandbookGenerator, validate_grounding
-from src.vivi.rag.scope import scope_rejection_reason
 from src.vivi.rag.sqlite_store import SQLiteHandbookRetriever, SQLiteHandbookStore
 from src.vivi.rag.sqlite_vector import SQLiteVectorRetriever
 
@@ -159,8 +161,8 @@ def run(args) -> dict:
     config = Settings(llm_provider=args.provider, rag_local_only=True,
                       local_llm_model=args.model or "", local_llm_base_url=args.base_url,
                       llm_timeout_seconds=args.timeout)
-    classifier = LocalIntentClassifier(config) if args.provider == "local" else RulesIntentClassifier()
     generator = LocalHandbookGenerator(config) if args.provider == "local" else ExtractiveHandbookGenerator()
+    resolver = SemanticResolver({"local": ModelProvider("local", generator.client, config.local_budget_seconds)} if args.provider == "local" else {})
     embeddings = None
     model_load_ms = None
     if args.retriever not in {"fts", "fts_local"}:
@@ -177,13 +179,19 @@ def run(args) -> dict:
     for case in cases:
         started = time.perf_counter()
         try:
-            decision = classifier.classify_with_context(case["query"], [], None)
-            route, intent, error = decision.route, decision.intent, None
+            frame, tier, attempts = asyncio.run(resolver.resolve(case["query"], SessionState(), requested=args.provider, catalog=catalog()))
+            action = frame.actions[0] if frame.actions else None
+            intent = action.capability if action else "unsupported.request" if frame.act == "unsupported" else "conversation.clarify" if frame.act == "clarify" else "conversation.respond"
+            route = "handbook" if intent == "manual.search" else "conversation" if intent.startswith(("memory.", "conversation.respond")) else "clarify" if frame.act == "clarify" else "unsupported" if frame.act == "unsupported" else "action"
+            if action and REGISTRY[action.capability].validate(action)[1]:
+                route, intent = "clarify", "conversation.clarify"
+            error = None
         except Exception as exc:
             route, intent, error = "error", "error", str(exc)
         intent_rows.append({"id": case["id"], "query": case["query"], "expected_route": case["expected_route"],
                             "route": route, "expected_intent": case["expected_intent"], "intent": intent,
                             "latency_ms": round((time.perf_counter() - started) * 1000, 2), "error": error})
+    intent_by_id = {row["id"]: row for row in intent_rows}
     # Oracle evidence isolates answer generation from retrieval/router mistakes.
     oracle_rows = []
     for case in cases:
@@ -203,7 +211,7 @@ def run(args) -> dict:
             started = time.perf_counter()
             error = None
             try:
-                chunks = ([] if scope_rejection_reason(case["query"]) else
+                chunks = ([] if intent_by_id[case["id"]]["route"] != "handbook" else
                           retriever.retrieve(case["query"], case["vehicle_model"], case["model_year"], case["locale"]))
             except Exception as exc:
                 chunks, error = [], str(exc)

@@ -1,7 +1,8 @@
 # VF8 local RAG evaluation
 
 This directory separates **intent**, **retrieval**, and **answer generation**.
-All inference is local. No cloud embedding, generation, or judge is used.
+Existing RAG runners keep all inference local. The unified dialogue runner
+supports cloud models only with explicit `--allow-api`; it does not relax their network guard.
 
 ## Artifacts
 
@@ -172,3 +173,34 @@ LOCAL_LLM_MODEL=vivi-qwen3-1.7b LLM_TIMEOUT_SECONDS=90 \
 
 See `docs/dialogue_tasks.md` for architecture, pinned artifacts, measured limitations
 and why the small experimental SLM is not the default runtime.
+
+
+## Unified dialogue regression
+
+`dialogue_v2_cases.jsonl` and `dialogue_v2_benchmark.py` keep their existing filenames,
+but now invoke only the unified workflow. Nine sanitized log-derived episodes check
+21 turns, exact arguments, real simulator effects, exclusions and final state.
+
+```bash
+.venv/bin/python -m eval.dialogue_v2_benchmark --provider rules --output /tmp/unified-parser.json
+# Explicit API opt-in; four-second pacing avoids the measured rate limit.
+.venv/bin/python -m eval.dialogue_v2_benchmark --provider google --allow-api --interval-seconds 4 --output /tmp/unified-google.json
+.venv/bin/python -m eval.voice_benchmark --output /tmp/unified-voice.json
+.venv/bin/python -m eval.memory_benchmark --output /tmp/unified-memory.json
+```
+
+See [the validation report](results/dialogue-unified-report.md) for separate parser,
+cloud, fallback, MQTT, API and voice checks. `by_tier` counts the provider that actually
+served each turn, with accuracy, clarification count and latency. Episode completion
+is reported separately; a fallback pass does not prove cloud accuracy.
+
+These are development regressions, including logged utterances and corrections.
+They are not independent held-out accuracy estimates. Scripted providers test
+architecture behavior, not Qwen understanding. Speech smoke uses adapters/mock
+transports; it does not measure microphones, speakers or speech-model quality.
+
+Historical v2 artifacts remain for comparison: `dialogue-v2-rules-summary.json`
+(3/9 episodes) and `dialogue-v2-google-smoke-summary.json` (first three episodes only).
+The initial unified Google run also remains: its failures prompted stricter
+capability argument validation and a clearer missing-slot/conflict contract.
+See [runtime and migration](../docs/langgraph_unified_runtime.md).

@@ -1,0 +1,3743 @@
+{
+  "dataset": "eval/dialogue_v2_cases.jsonl",
+  "split": "development-regression",
+  "provider": "google",
+  "workflow": "unified-3",
+  "max_cases": 9,
+  "max_tokens_per_planner_call": 2048,
+  "cases": 9,
+  "passed": 9,
+  "turns": 21,
+  "by_tier": {
+    "rules": {
+      "turns": 8,
+      "correct": 8,
+      "clarifications": 1,
+      "turn_accuracy": 1.0,
+      "latency_p50_ms": 107.21000000000001,
+      "latency_p95_ms": 10137.68
+    },
+    "google": {
+      "turns": 13,
+      "correct": 13,
+      "clarifications": 2,
+      "turn_accuracy": 1.0,
+      "latency_p50_ms": 1820.8,
+      "latency_p95_ms": 8085.6
+    }
+  },
+  "task_completion": 1.0,
+  "limitations": [
+    "Log-derived development regression, not held-out accuracy.",
+    "VehicleSimulator only; does not measure physical vehicle, microphone STT or speaker TTS."
+  ],
+  "latency_p50_ms": 1632.68,
+  "latency_p95_ms": 8089.4,
+  "results": [
+    {
+      "id": "front-right-slot",
+      "passed": true,
+      "turns": [
+        {
+          "query": "Mở cửa",
+          "passed": true,
+          "checks": {
+            "status": true,
+            "executed": true,
+            "state": true,
+            "planner_available": true,
+            "nonempty": true,
+            "answer": true
+          },
+          "actual": {
+            "status": "clarify",
+            "route": "clarify",
+            "intent": "door.set_open",
+            "arguments": null,
+            "executed": false,
+            "state": {
+              "vehicle_id": "demo-car-1",
+              "state_version": 0,
+              "updated_at": "2026-10-09T08:54:57.717062Z",
+              "temperature_celsius": 23.0,
+              "window_driver_percent": 0,
+              "door_driver_locked": false,
+              "door_driver_open": false,
+              "seat_driver_heat_level": 0,
+              "media_playing": false,
+              "driving": false,
+              "power_state": "off",
+              "battery_percent": 82,
+              "range_km": 328,
+              "tire_pressures_kpa": {
+                "front_left": 250.0,
+                "front_right": 250.0,
+                "rear_left": 250.0,
+                "rear_right": 250.0
+              },
+              "powertrain_temperature_celsius": 45.0,
+              "window_positions": {
+                "driver": 0,
+                "front_passenger": 0,
+                "rear_left": 0,
+                "rear_right": 0
+              },
+              "door_states": {
+                "driver": {
+                  "open": false,
+                  "locked": false
+                },
+                "front_passenger": {
+                  "open": false,
+                  "locked": false
+                },
+                "rear_left": {
+                  "open": false,
+                  "locked": false
+                },
+                "rear_right": {
+                  "open": false,
+                  "locked": false
+                }
+              },
+              "hood_open": false,
+              "trunk_open": false,
+              "seat_heat_levels": {
+                "driver": 0,
+                "front_passenger": 0,
+                "rear_left": 0,
+                "rear_right": 0
+              }
+            }
+          },
+          "message": "Bạn muốn mở hay đóng cửa ở vị trí nào?",
+          "error": null,
+          "diagnostics": {
+            "workflow_version": "unified-3",
+            "prompt_version": "semantic-unified-3",
+            "requested_provider": "google",
+            "effective_provider": "rules",
+            "decision_source": "rules",
+            "provider_attempts": [
+              {
+                "provider": "google",
+                "outcome": "fallback",
+                "reason": "TimeoutError",
+                "http_status": null,
+                "latency_ms": 10010.54
+              },
+              {
+                "provider": "local",
+                "outcome": "fallback",
+                "reason": "ConnectError",
+                "http_status": null,
+                "latency_ms": 11.93
+              },
+              {
+                "provider": "rules",
+                "outcome": "served",
+                "latency_ms": 7.65
+              }
+            ],
+            "semantic": {
+              "act": "request",
+              "task_ref": null,
+              "step_index": null,
+              "actions": [
+                {
+                  "capability": "door.set_open",
+                  "arguments": {
+                    "query": null,
+                    "value_celsius": null,
+                    "position_percent": null,
+                    "open": true,
+                    "locked": null,
+                    "level": null,
+                    "zone": null,
+                    "zones": null,
+                    "media_query": null,
+                    "memory_key": null,
+                    "memory_value": null,
+                    "question_kind": null,
+                    "charging_mode": null,
+                    "temperature_delta_celsius": null
+                  },
+                  "excluded_zones": [],
+                  "referenced_target": false
+                }
+              ],
+              "text": "",
+              "negated": false,
+              "conditional": false,
+              "scheduled": false,
+              "conflicting": false,
+              "unresolved": []
+            },
+            "node_spans": [
+              {
+                "node": "context",
+                "outcome": "ok",
+                "latency_ms": 5.21,
+                "step_id": null,
+                "provider": "rules"
+              },
+              {
+                "node": "interpret",
+                "outcome": "rules",
+                "latency_ms": 10045.67,
+                "step_id": null,
+                "provider": "rules"
+              },
+              {
+                "node": "reducer",
+                "outcome": "ok",
+                "latency_ms": 0.25,
+                "step_id": null,
+                "provider": "rules"
+              },
+              {
+                "node": "scheduler",
+                "outcome": "ok",
+                "latency_ms": 0.07,
+                "step_id": "bbb68e59-b1a8-47e7-b5da-989be9354e55",
+                "provider": "rules"
+              },
+              {
+                "node": "validate",
+                "outcome": "waiting_slot",
+                "latency_ms": 0.44,
+                "step_id": "bbb68e59-b1a8-47e7-b5da-989be9354e55",
+                "provider": "rules"
+              },
+              {
+                "node": "scheduler",
+                "outcome": "ok",
+                "latency_ms": 0.07,
+                "step_id": "bbb68e59-b1a8-47e7-b5da-989be9354e55",
+                "provider": "rules"
+              }
+            ],
+            "task_id": "0666e42f-3097-4154-b74c-374228913ae9",
+            "revision": 1,
+            "observation_available": false,
+            "suspended_tasks": 0,
+            "generation_provider": null,
+            "generation_attempts": []
+          }
+        },
+        {
+          "query": "Phía trước bên phải",
+          "passed": true,
+          "checks": {
+            "status": true,
+            "intent": true,
+            "arguments": true,
+            "state": true,
+            "planner_available": true,
+            "nonempty": true,
+            "answer": true
+          },
+          "actual": {
+            "status": "confirmation_required",
+            "route": "vehicle",
+            "intent": "door.set_open",
+            "arguments": {
+              "zone": "front_passenger",
+              "open": true
+            },
+            "executed": false,
+            "state": {
+              "vehicle_id": "demo-car-1",
+              "state_version": 0,
+              "updated_at": "2026-10-09T08:55:01.793195Z",
+              "temperature_celsius": 23.0,
+              "window_driver_percent": 0,
+              "door_driver_locked": false,
+              "door_driver_open": false,
+              "seat_driver_heat_level": 0,
+              "media_playing": false,
+              "driving": false,
+              "power_state": "off",
+              "battery_percent": 82,
+              "range_km": 328,
+              "tire_pressures_kpa": {
+                "front_left": 250.0,
+                "front_right": 250.0,
+                "rear_left": 250.0,
+                "rear_right": 250.0
+              },
+              "powertrain_temperature_celsius": 45.0,
+              "window_positions": {
+                "driver": 0,
+                "front_passenger": 0,
+                "rear_left": 0,
+                "rear_right": 0
+              },
+              "door_states": {
+                "driver": {
+                  "open": false,
+                  "locked": false
+                },
+                "front_passenger": {
+                  "open": false,
+                  "locked": false
+                },
+                "rear_left": {
+                  "open": false,
+                  "locked": false
+                },
+                "rear_right": {
+                  "open": false,
+                  "locked": false
+                }
+              },
+              "hood_open": false,
+              "trunk_open": false,
+              "seat_heat_levels": {
+                "driver": 0,
+                "front_passenger": 0,
+                "rear_left": 0,
+                "rear_right": 0
+              }
+            }
+          },
+          "message": "Xác nhận mở cửa bên phụ?",
+          "error": null,
+          "diagnostics": {
+            "workflow_version": "unified-3",
+            "prompt_version": "semantic-unified-3",
+            "requested_provider": "google",
+            "effective_provider": "rules",
+            "decision_source": "rules",
+            "provider_attempts": [
+              {
+                "provider": "google",
+                "outcome": "circuit_open",
+                "latency_ms": 0
+              },
+              {
+                "provider": "local",
+                "outcome": "circuit_open",
+                "latency_ms": 0
+              },
+              {
+                "provider": "rules",
+                "outcome": "served",
+                "latency_ms": 0.54
+              }
+            ],
+            "semantic": {
+              "act": "modify",
+              "task_ref": "active",
+              "step_index": null,
+              "actions": [
+                {
+                  "capability": "door.set_open",
+                  "arguments": {
+                    "query": null,
+                    "value_celsius": null,
+                    "position_percent": null,
+                    "open": null,
+                    "locked": null,
+                    "level": null,
+                    "zone": "front_passenger",
+                    "zones": null,
+                    "media_query": null,
+                    "memory_key": null,
+                    "memory_value": null,
+                    "question_kind": null,
+                    "charging_mode": null,
+                    "temperature_delta_celsius": null
+                  },
+                  "excluded_zones": null,
+                  "referenced_target": false
+                }
+              ],
+              "text": "",
+              "negated": false,
+              "conditional": false,
+              "scheduled": false,
+              "conflicting": false,
+              "unresolved": []
+            },
+            "node_spans": [
+              {
+                "node": "context",
+                "outcome": "ok",
+                "latency_ms": 1.87,
+                "step_id": null,
+                "provider": "rules"
+              },
+              {
+                "node": "interpret",
+                "outcome": "rules",
+                "latency_ms": 5.0,
+                "step_id": null,
+                "provider": "rules"
+              },
+              {
+                "node": "reducer",
+                "outcome": "ok",
+                "latency_ms": 1.43,
+                "step_id": null,
+                "provider": "rules"
+              },
+              {
+                "node": "scheduler",
+                "outcome": "ok",
+                "latency_ms": 0.07,
+                "step_id": "bbb68e59-b1a8-47e7-b5da-989be9354e55",
+                "provider": "rules"
+              },
+              {
+                "node": "validate",
+                "outcome": "running",
+                "latency_ms": 5.71,
+                "step_id": "bbb68e59-b1a8-47e7-b5da-989be9354e55",
+                "provider": "rules"
+              },
+              {
+                "node": "capability",
+                "outcome": "waiting_confirmation",
+                "latency_ms": 5.3,
+                "step_id": "bbb68e59-b1a8-47e7-b5da-989be9354e55",
+                "provider": "rules"
+              },
+              {
+                "node": "scheduler",
+                "outcome": "ok",
+                "latency_ms": 0.27,
+                "step_id": "bbb68e59-b1a8-47e7-b5da-989be9354e55",
+                "provider": "rules"
+              }
+            ],
+            "task_id": "0666e42f-3097-4154-b74c-374228913ae9",
+            "revision": 2,
+            "observation_available": false,
+            "suspended_tasks": 0,
+            "generation_provider": null,
+            "generation_attempts": []
+          }
+        },
+        {
+          "query": "Đúng rồi mở đi",
+          "passed": true,
+          "checks": {
+            "status": true,
+            "executed": true,
+            "state": true,
+            "planner_available": true,
+            "nonempty": true,
+            "answer": true
+          },
+          "actual": {
+            "status": "verified",
+            "route": "vehicle",
+            "intent": "door.set_open",
+            "arguments": {
+              "zone": "front_passenger",
+              "open": true
+            },
+            "executed": true,
+            "state": {
+              "vehicle_id": "demo-car-1",
+              "state_version": 1,
+              "updated_at": "2026-10-09T08:55:05.867360Z",
+              "temperature_celsius": 23.0,
+              "window_driver_percent": 0,
+              "door_driver_locked": false,
+              "door_driver_open": false,
+              "seat_driver_heat_level": 0,
+              "media_playing": false,
+              "driving": false,
+              "power_state": "off",
+              "battery_percent": 82,
+              "range_km": 328,
+              "tire_pressures_kpa": {
+                "front_left": 250.0,
+                "front_right": 250.0,
+                "rear_left": 250.0,
+                "rear_right": 250.0
+              },
+              "powertrain_temperature_celsius": 45.0,
+              "window_positions": {
+                "driver": 0,
+                "front_passenger": 0,
+                "rear_left": 0,
+                "rear_right": 0
+              },
+              "door_states": {
+                "driver": {
+                  "open": false,
+                  "locked": false
+                },
+                "front_passenger": {
+                  "open": true,
+                  "locked": false
+                },
+                "rear_left": {
+                  "open": false,
+                  "locked": false
+                },
+                "rear_right": {
+                  "open": false,
+                  "locked": false
+                }
+              },
+              "hood_open": false,
+              "trunk_open": false,
+              "seat_heat_levels": {
+                "driver": 0,
+                "front_passenger": 0,
+                "rear_left": 0,
+                "rear_right": 0
+              }
+            }
+          },
+          "message": "Mình đã mở cửa xe bên phụ.",
+          "error": null,
+          "diagnostics": {
+            "workflow_version": "unified-3",
+            "prompt_version": "semantic-unified-3",
+            "requested_provider": "google",
+            "effective_provider": "rules",
+            "decision_source": "rules",
+            "provider_attempts": [
+              {
+                "provider": "google",
+                "outcome": "circuit_open",
+                "latency_ms": 0
+              },
+              {
+                "provider": "local",
+                "outcome": "circuit_open",
+                "latency_ms": 0
+              },
+              {
+                "provider": "rules",
+                "outcome": "served",
+                "latency_ms": 0.1
+              }
+            ],
+            "semantic": {
+              "act": "confirm",
+              "task_ref": "active",
+              "step_index": null,
+              "actions": [],
+              "text": "",
+              "negated": false,
+              "conditional": false,
+              "scheduled": false,
+              "conflicting": false,
+              "unresolved": []
+            },
+            "node_spans": [
+              {
+                "node": "context",
+                "outcome": "ok",
+                "latency_ms": 3.2,
+                "step_id": null,
+                "provider": "rules"
+              },
+              {
+                "node": "interpret",
+                "outcome": "rules",
+                "latency_ms": 10.04,
+                "step_id": null,
+                "provider": "rules"
+              },
+              {
+                "node": "reducer",
+                "outcome": "ok",
+                "latency_ms": 0.3,
+                "step_id": null,
+                "provider": "rules"
+              },
+              {
+                "node": "scheduler",
+                "outcome": "ok",
+                "latency_ms": 0.24,
+                "step_id": "bbb68e59-b1a8-47e7-b5da-989be9354e55",
+                "provider": "rules"
+              },
+              {
+                "node": "validate",
+                "outcome": "running",
+                "latency_ms": 9.74,
+                "step_id": "bbb68e59-b1a8-47e7-b5da-989be9354e55",
+                "provider": "rules"
+              },
+              {
+                "node": "capability",
+                "outcome": "completed",
+                "latency_ms": 23.93,
+                "step_id": "bbb68e59-b1a8-47e7-b5da-989be9354e55",
+                "provider": "rules"
+              },
+              {
+                "node": "scheduler",
+                "outcome": "ok",
+                "latency_ms": 0.16,
+                "step_id": null,
+                "provider": "rules"
+              }
+            ],
+            "task_id": "0666e42f-3097-4154-b74c-374228913ae9",
+            "revision": 2,
+            "observation_available": true,
+            "suspended_tasks": 0,
+            "generation_provider": null,
+            "generation_attempts": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "correct-capability",
+      "passed": true,
+      "turns": [
+        {
+          "query": "Mở cửa bên ghế phụ",
+          "passed": true,
+          "checks": {
+            "status": true,
+            "state": true,
+            "planner_available": true,
+            "nonempty": true,
+            "answer": true
+          },
+          "actual": {
+            "status": "confirmation_required",
+            "route": "vehicle",
+            "intent": "door.set_open",
+            "arguments": {
+              "zone": "front_passenger",
+              "open": true
+            },
+            "executed": false,
+            "state": {
+              "vehicle_id": "demo-car-1",
+              "state_version": 0,
+              "updated_at": "2026-10-09T08:55:10.035922Z",
+              "temperature_celsius": 23.0,
+              "window_driver_percent": 0,
+              "door_driver_locked": false,
+              "door_driver_open": false,
+              "seat_driver_heat_level": 0,
+              "media_playing": false,
+              "driving": false,
+              "power_state": "off",
+              "battery_percent": 82,
+              "range_km": 328,
+              "tire_pressures_kpa": {
+                "front_left": 250.0,
+                "front_right": 250.0,
+                "rear_left": 250.0,
+                "rear_right": 250.0
+              },
+              "powertrain_temperature_celsius": 45.0,
+              "window_positions": {
+                "driver": 0,
+                "front_passenger": 0,
+                "rear_left": 0,
+                "rear_right": 0
+              },
+              "door_states": {
+                "driver": {
+                  "open": false,
+                  "locked": false
+                },
+                "front_passenger": {
+                  "open": false,
+                  "locked": false
+                },
+                "rear_left": {
+                  "open": false,
+                  "locked": false
+                },
+                "rear_right": {
+                  "open": false,
+                  "locked": false
+                }
+              },
+              "hood_open": false,
+              "trunk_open": false,
+              "seat_heat_levels": {
+                "driver": 0,
+                "front_passenger": 0,
+                "rear_left": 0,
+                "rear_right": 0
+              }
+            }
+          },
+          "message": "Xác nhận mở cửa bên phụ?",
+          "error": null,
+          "diagnostics": {
+            "workflow_version": "unified-3",
+            "prompt_version": "semantic-unified-3",
+            "requested_provider": "google",
+            "effective_provider": "rules",
+            "decision_source": "rules",
+            "provider_attempts": [
+              {
+                "provider": "google",
+                "outcome": "circuit_open",
+                "latency_ms": 0
+              },
+              {
+                "provider": "local",
+                "outcome": "circuit_open",
+                "latency_ms": 0
+              },
+              {
+                "provider": "rules",
+                "outcome": "served",
+                "latency_ms": 0.73
+              }
+            ],
+            "semantic": {
+              "act": "request",
+              "task_ref": null,
+              "step_index": null,
+              "actions": [
+                {
+                  "capability": "door.set_open",
+                  "arguments": {
+                    "query": null,
+                    "value_celsius": null,
+                    "position_percent": null,
+                    "open": true,
+                    "locked": null,
+                    "level": null,
+                    "zone": "front_passenger",
+                    "zones": null,
+                    "media_query": null,
+                    "memory_key": null,
+                    "memory_value": null,
+                    "question_kind": null,
+                    "charging_mode": null,
+                    "temperature_delta_celsius": null
+                  },
+                  "excluded_zones": [],
+                  "referenced_target": false
+                }
+              ],
+              "text": "",
+              "negated": false,
+              "conditional": false,
+              "scheduled": false,
+              "conflicting": false,
+              "unresolved": []
+            },
+            "node_spans": [
+              {
+                "node": "context",
+                "outcome": "ok",
+                "latency_ms": 3.77,
+                "step_id": null,
+                "provider": "rules"
+              },
+              {
+                "node": "interpret",
+                "outcome": "rules",
+                "latency_ms": 17.24,
+                "step_id": null,
+                "provider": "rules"
+              },
+              {
+                "node": "reducer",
+                "outcome": "ok",
+                "latency_ms": 0.64,
+                "step_id": null,
+                "provider": "rules"
+              },
+              {
+                "node": "scheduler",
+                "outcome": "ok",
+                "latency_ms": 0.21,
+                "step_id": "6ea0beb4-fbe9-4f5d-b0e7-5a357d28bba3",
+                "provider": "rules"
+              },
+              {
+                "node": "validate",
+                "outcome": "running",
+                "latency_ms": 7.11,
+                "step_id": "6ea0beb4-fbe9-4f5d-b0e7-5a357d28bba3",
+                "provider": "rules"
+              },
+              {
+                "node": "capability",
+                "outcome": "waiting_confirmation",
+                "latency_ms": 5.78,
+                "step_id": "6ea0beb4-fbe9-4f5d-b0e7-5a357d28bba3",
+                "provider": "rules"
+              },
+              {
+                "node": "scheduler",
+                "outcome": "ok",
+                "latency_ms": 0.12,
+                "step_id": "6ea0beb4-fbe9-4f5d-b0e7-5a357d28bba3",
+                "provider": "rules"
+              }
+            ],
+            "task_id": "98960b73-356a-4426-b316-7d107b70dd5c",
+            "revision": 1,
+            "observation_available": false,
+            "suspended_tasks": 0,
+            "generation_provider": null,
+            "generation_attempts": []
+          }
+        },
+        {
+          "query": "Không, mở cửa kính bên đấy thôi",
+          "passed": true,
+          "checks": {
+            "status": true,
+            "intent": true,
+            "arguments": true,
+            "state": true,
+            "planner_available": true,
+            "nonempty": true,
+            "answer": true
+          },
+          "actual": {
+            "status": "confirmation_required",
+            "route": "vehicle",
+            "intent": "window.set_position",
+            "arguments": {
+              "zone": "front_passenger",
+              "position_percent": 100
+            },
+            "executed": false,
+            "state": {
+              "vehicle_id": "demo-car-1",
+              "state_version": 0,
+              "updated_at": "2026-10-09T08:55:14.174439Z",
+              "temperature_celsius": 23.0,
+              "window_driver_percent": 0,
+              "door_driver_locked": false,
+              "door_driver_open": false,
+              "seat_driver_heat_level": 0,
+              "media_playing": false,
+              "driving": false,
+              "power_state": "off",
+              "battery_percent": 82,
+              "range_km": 328,
+              "tire_pressures_kpa": {
+                "front_left": 250.0,
+                "front_right": 250.0,
+                "rear_left": 250.0,
+                "rear_right": 250.0
+              },
+              "powertrain_temperature_celsius": 45.0,
+              "window_positions": {
+                "driver": 0,
+                "front_passenger": 0,
+                "rear_left": 0,
+                "rear_right": 0
+              },
+              "door_states": {
+                "driver": {
+                  "open": false,
+                  "locked": false
+                },
+                "front_passenger": {
+                  "open": false,
+                  "locked": false
+                },
+                "rear_left": {
+                  "open": false,
+                  "locked": false
+                },
+                "rear_right": {
+                  "open": false,
+                  "locked": false
+                }
+              },
+              "hood_open": false,
+              "trunk_open": false,
+              "seat_heat_levels": {
+                "driver": 0,
+                "front_passenger": 0,
+                "rear_left": 0,
+                "rear_right": 0
+              }
+            }
+          },
+          "message": "Xác nhận đặt cửa sổ bên phụ ở mức 100 phần trăm?",
+          "error": null,
+          "diagnostics": {
+            "workflow_version": "unified-3",
+            "prompt_version": "semantic-unified-3",
+            "requested_provider": "google",
+            "effective_provider": "rules",
+            "decision_source": "rules",
+            "provider_attempts": [
+              {
+                "provider": "google",
+                "outcome": "circuit_open",
+                "latency_ms": 0
+              },
+              {
+                "provider": "local",
+                "outcome": "circuit_open",
+                "latency_ms": 0
+              },
+              {
+                "provider": "rules",
+                "outcome": "served",
+                "latency_ms": 0.59
+              }
+            ],
+            "semantic": {
+              "act": "modify",
+              "task_ref": "active",
+              "step_index": null,
+              "actions": [
+                {
+                  "capability": "window.set_position",
+                  "arguments": {
+                    "query": null,
+                    "value_celsius": null,
+                    "position_percent": 100,
+                    "open": null,
+                    "locked": null,
+                    "level": null,
+                    "zone": null,
+                    "zones": null,
+                    "media_query": null,
+                    "memory_key": null,
+                    "memory_value": null,
+                    "question_kind": null,
+                    "charging_mode": null,
+                    "temperature_delta_celsius": null
+                  },
+                  "excluded_zones": [],
+                  "referenced_target": true
+                }
+              ],
+              "text": "",
+              "negated": false,
+              "conditional": false,
+              "scheduled": false,
+              "conflicting": false,
+              "unresolved": []
+            },
+            "node_spans": [
+              {
+                "node": "context",
+                "outcome": "ok",
+                "latency_ms": 3.36,
+                "step_id": null,
+                "provider": "rules"
+              },
+              {
+                "node": "interpret",
+                "outcome": "rules",
+                "latency_ms": 7.04,
+                "step_id": null,
+                "provider": "rules"
+              },
+              {
+                "node": "reducer",
+                "outcome": "ok",
+                "latency_ms": 8.57,
+                "step_id": null,
+                "provider": "rules"
+              },
+              {
+                "node": "scheduler",
+                "outcome": "ok",
+                "latency_ms": 0.15,
+                "step_id": "6ea0beb4-fbe9-4f5d-b0e7-5a357d28bba3",
+                "provider": "rules"
+              },
+              {
+                "node": "validate",
+                "outcome": "running",
+                "latency_ms": 7.09,
+                "step_id": "6ea0beb4-fbe9-4f5d-b0e7-5a357d28bba3",
+                "provider": "rules"
+              },
+              {
+                "node": "capability",
+                "outcome": "waiting_confirmation",
+                "latency_ms": 7.69,
+                "step_id": "6ea0beb4-fbe9-4f5d-b0e7-5a357d28bba3",
+                "provider": "rules"
+              },
+              {
+                "node": "scheduler",
+                "outcome": "ok",
+                "latency_ms": 0.09,
+                "step_id": "6ea0beb4-fbe9-4f5d-b0e7-5a357d28bba3",
+                "provider": "rules"
+              }
+            ],
+            "task_id": "98960b73-356a-4426-b316-7d107b70dd5c",
+            "revision": 2,
+            "observation_available": false,
+            "suspended_tasks": 0,
+            "generation_provider": null,
+            "generation_attempts": []
+          }
+        },
+        {
+          "query": "Ừ đúng rồi",
+          "passed": true,
+          "checks": {
+            "status": true,
+            "executed": true,
+            "state": true,
+            "planner_available": true,
+            "nonempty": true,
+            "answer": true
+          },
+          "actual": {
+            "status": "verified",
+            "route": "vehicle",
+            "intent": "window.set_position",
+            "arguments": {
+              "zone": "front_passenger",
+              "position_percent": 100
+            },
+            "executed": true,
+            "state": {
+              "vehicle_id": "demo-car-1",
+              "state_version": 1,
+              "updated_at": "2026-10-09T08:55:18.235642Z",
+              "temperature_celsius": 23.0,
+              "window_driver_percent": 0,
+              "door_driver_locked": false,
+              "door_driver_open": false,
+              "seat_driver_heat_level": 0,
+              "media_playing": false,
+              "driving": false,
+              "power_state": "off",
+              "battery_percent": 82,
+              "range_km": 328,
+              "tire_pressures_kpa": {
+                "front_left": 250.0,
+                "front_right": 250.0,
+                "rear_left": 250.0,
+                "rear_right": 250.0
+              },
+              "powertrain_temperature_celsius": 45.0,
+              "window_positions": {
+                "driver": 0,
+                "front_passenger": 100,
+                "rear_left": 0,
+                "rear_right": 0
+              },
+              "door_states": {
+                "driver": {
+                  "open": false,
+                  "locked": false
+                },
+                "front_passenger": {
+                  "open": false,
+                  "locked": false
+                },
+                "rear_left": {
+                  "open": false,
+                  "locked": false
+                },
+                "rear_right": {
+                  "open": false,
+                  "locked": false
+                }
+              },
+              "hood_open": false,
+              "trunk_open": false,
+              "seat_heat_levels": {
+                "driver": 0,
+                "front_passenger": 0,
+                "rear_left": 0,
+                "rear_right": 0
+              }
+            }
+          },
+          "message": "Mình đã đặt cửa sổ bên phụ ở mức 100 phần trăm.",
+          "error": null,
+          "diagnostics": {
+            "workflow_version": "unified-3",
+            "prompt_version": "semantic-unified-3",
+            "requested_provider": "google",
+            "effective_provider": "rules",
+            "decision_source": "rules",
+            "provider_attempts": [
+              {
+                "provider": "google",
+                "outcome": "circuit_open",
+                "latency_ms": 0
+              },
+              {
+                "provider": "local",
+                "outcome": "circuit_open",
+                "latency_ms": 0
+              },
+              {
+                "provider": "rules",
+                "outcome": "served",
+                "latency_ms": 0.19
+              }
+            ],
+            "semantic": {
+              "act": "confirm",
+              "task_ref": "active",
+              "step_index": null,
+              "actions": [],
+              "text": "",
+              "negated": false,
+              "conditional": false,
+              "scheduled": false,
+              "conflicting": false,
+              "unresolved": []
+            },
+            "node_spans": [
+              {
+                "node": "context",
+                "outcome": "ok",
+                "latency_ms": 2.51,
+                "step_id": null,
+                "provider": "rules"
+              },
+              {
+                "node": "interpret",
+                "outcome": "rules",
+                "latency_ms": 7.43,
+                "step_id": null,
+                "provider": "rules"
+              },
+              {
+                "node": "reducer",
+                "outcome": "ok",
+                "latency_ms": 0.24,
+                "step_id": null,
+                "provider": "rules"
+              },
+              {
+                "node": "scheduler",
+                "outcome": "ok",
+                "latency_ms": 0.07,
+                "step_id": "6ea0beb4-fbe9-4f5d-b0e7-5a357d28bba3",
+                "provider": "rules"
+              },
+              {
+                "node": "validate",
+                "outcome": "running",
+                "latency_ms": 6.23,
+                "step_id": "6ea0beb4-fbe9-4f5d-b0e7-5a357d28bba3",
+                "provider": "rules"
+              },
+              {
+                "node": "capability",
+                "outcome": "completed",
+                "latency_ms": 24.63,
+                "step_id": "6ea0beb4-fbe9-4f5d-b0e7-5a357d28bba3",
+                "provider": "rules"
+              },
+              {
+                "node": "scheduler",
+                "outcome": "ok",
+                "latency_ms": 0.13,
+                "step_id": null,
+                "provider": "rules"
+              }
+            ],
+            "task_id": "98960b73-356a-4426-b316-7d107b70dd5c",
+            "revision": 2,
+            "observation_available": true,
+            "suspended_tasks": 0,
+            "generation_provider": null,
+            "generation_attempts": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "half-correction",
+      "passed": true,
+      "turns": [
+        {
+          "query": "Mở kính bên ghế lái",
+          "passed": true,
+          "checks": {
+            "status": true,
+            "state": true,
+            "planner_available": true,
+            "nonempty": true,
+            "answer": true
+          },
+          "actual": {
+            "status": "confirmation_required",
+            "route": "vehicle",
+            "intent": "window.set_position",
+            "arguments": {
+              "zone": "driver",
+              "position_percent": 100
+            },
+            "executed": false,
+            "state": {
+              "vehicle_id": "demo-car-1",
+              "state_version": 0,
+              "updated_at": "2026-10-09T08:55:22.404437Z",
+              "temperature_celsius": 23.0,
+              "window_driver_percent": 0,
+              "door_driver_locked": false,
+              "door_driver_open": false,
+              "seat_driver_heat_level": 0,
+              "media_playing": false,
+              "driving": false,
+              "power_state": "off",
+              "battery_percent": 82,
+              "range_km": 328,
+              "tire_pressures_kpa": {
+                "front_left": 250.0,
+                "front_right": 250.0,
+                "rear_left": 250.0,
+                "rear_right": 250.0
+              },
+              "powertrain_temperature_celsius": 45.0,
+              "window_positions": {
+                "driver": 0,
+                "front_passenger": 0,
+                "rear_left": 0,
+                "rear_right": 0
+              },
+              "door_states": {
+                "driver": {
+                  "open": false,
+                  "locked": false
+                },
+                "front_passenger": {
+                  "open": false,
+                  "locked": false
+                },
+                "rear_left": {
+                  "open": false,
+                  "locked": false
+                },
+                "rear_right": {
+                  "open": false,
+                  "locked": false
+                }
+              },
+              "hood_open": false,
+              "trunk_open": false,
+              "seat_heat_levels": {
+                "driver": 0,
+                "front_passenger": 0,
+                "rear_left": 0,
+                "rear_right": 0
+              }
+            }
+          },
+          "message": "Xác nhận đặt cửa sổ bên tài ở mức 100 phần trăm?",
+          "error": null,
+          "diagnostics": {
+            "workflow_version": "unified-3",
+            "prompt_version": "semantic-unified-3",
+            "requested_provider": "google",
+            "effective_provider": "rules",
+            "decision_source": "rules",
+            "provider_attempts": [
+              {
+                "provider": "google",
+                "outcome": "circuit_open",
+                "latency_ms": 0
+              },
+              {
+                "provider": "local",
+                "outcome": "circuit_open",
+                "latency_ms": 0
+              },
+              {
+                "provider": "rules",
+                "outcome": "served",
+                "latency_ms": 0.25
+              }
+            ],
+            "semantic": {
+              "act": "request",
+              "task_ref": null,
+              "step_index": null,
+              "actions": [
+                {
+                  "capability": "window.set_position",
+                  "arguments": {
+                    "query": null,
+                    "value_celsius": null,
+                    "position_percent": 100,
+                    "open": null,
+                    "locked": null,
+                    "level": null,
+                    "zone": "driver",
+                    "zones": null,
+                    "media_query": null,
+                    "memory_key": null,
+                    "memory_value": null,
+                    "question_kind": null,
+                    "charging_mode": null,
+                    "temperature_delta_celsius": null
+                  },
+                  "excluded_zones": [],
+                  "referenced_target": false
+                }
+              ],
+              "text": "",
+              "negated": false,
+              "conditional": false,
+              "scheduled": false,
+              "conflicting": false,
+              "unresolved": []
+            },
+            "node_spans": [
+              {
+                "node": "context",
+                "outcome": "ok",
+                "latency_ms": 1.29,
+                "step_id": null,
+                "provider": "rules"
+              },
+              {
+                "node": "interpret",
+                "outcome": "rules",
+                "latency_ms": 10.26,
+                "step_id": null,
+                "provider": "rules"
+              },
+              {
+                "node": "reducer",
+                "outcome": "ok",
+                "latency_ms": 0.26,
+                "step_id": null,
+                "provider": "rules"
+              },
+              {
+                "node": "scheduler",
+                "outcome": "ok",
+                "latency_ms": 0.08,
+                "step_id": "7004f38c-f2c3-49ae-89da-e9aec6770313",
+                "provider": "rules"
+              },
+              {
+                "node": "validate",
+                "outcome": "running",
+                "latency_ms": 7.83,
+                "step_id": "7004f38c-f2c3-49ae-89da-e9aec6770313",
+                "provider": "rules"
+              },
+              {
+                "node": "capability",
+                "outcome": "waiting_confirmation",
+                "latency_ms": 6.54,
+                "step_id": "7004f38c-f2c3-49ae-89da-e9aec6770313",
+                "provider": "rules"
+              },
+              {
+                "node": "scheduler",
+                "outcome": "ok",
+                "latency_ms": 0.09,
+                "step_id": "7004f38c-f2c3-49ae-89da-e9aec6770313",
+                "provider": "rules"
+              }
+            ],
+            "task_id": "f2805647-617e-4487-9f27-9ad57aad3d7d",
+            "revision": 1,
+            "observation_available": false,
+            "suspended_tasks": 0,
+            "generation_provider": null,
+            "generation_attempts": []
+          }
+        },
+        {
+          "query": "Mở 1 nửa thôi",
+          "passed": true,
+          "checks": {
+            "status": true,
+            "arguments": true,
+            "state": true,
+            "planner_available": true,
+            "nonempty": true,
+            "answer": true
+          },
+          "actual": {
+            "status": "confirmation_required",
+            "route": "vehicle",
+            "intent": "window.set_position",
+            "arguments": {
+              "zone": "driver",
+              "position_percent": 50
+            },
+            "executed": false,
+            "state": {
+              "vehicle_id": "demo-car-1",
+              "state_version": 0,
+              "updated_at": "2026-10-09T08:55:26.485453Z",
+              "temperature_celsius": 23.0,
+              "window_driver_percent": 0,
+              "door_driver_locked": false,
+              "door_driver_open": false,
+              "seat_driver_heat_level": 0,
+              "media_playing": false,
+              "driving": false,
+              "power_state": "off",
+              "battery_percent": 82,
+              "range_km": 328,
+              "tire_pressures_kpa": {
+                "front_left": 250.0,
+                "front_right": 250.0,
+                "rear_left": 250.0,
+                "rear_right": 250.0
+              },
+              "powertrain_temperature_celsius": 45.0,
+              "window_positions": {
+                "driver": 0,
+                "front_passenger": 0,
+                "rear_left": 0,
+                "rear_right": 0
+              },
+              "door_states": {
+                "driver": {
+                  "open": false,
+                  "locked": false
+                },
+                "front_passenger": {
+                  "open": false,
+                  "locked": false
+                },
+                "rear_left": {
+                  "open": false,
+                  "locked": false
+                },
+                "rear_right": {
+                  "open": false,
+                  "locked": false
+                }
+              },
+              "hood_open": false,
+              "trunk_open": false,
+              "seat_heat_levels": {
+                "driver": 0,
+                "front_passenger": 0,
+                "rear_left": 0,
+                "rear_right": 0
+              }
+            }
+          },
+          "message": "Xác nhận đặt cửa sổ bên tài ở mức 50 phần trăm?",
+          "error": null,
+          "diagnostics": {
+            "workflow_version": "unified-3",
+            "prompt_version": "semantic-unified-3",
+            "requested_provider": "google",
+            "effective_provider": "rules",
+            "decision_source": "rules",
+            "provider_attempts": [
+              {
+                "provider": "google",
+                "outcome": "circuit_open",
+                "latency_ms": 0
+              },
+              {
+                "provider": "local",
+                "outcome": "circuit_open",
+                "latency_ms": 0
+              },
+              {
+                "provider": "rules",
+                "outcome": "served",
+                "latency_ms": 0.12
+              }
+            ],
+            "semantic": {
+              "act": "modify",
+              "task_ref": "active",
+              "step_index": null,
+              "actions": [
+                {
+                  "capability": "window.set_position",
+                  "arguments": {
+                    "query": null,
+                    "value_celsius": null,
+                    "position_percent": 50,
+                    "open": null,
+                    "locked": null,
+                    "level": null,
+                    "zone": null,
+                    "zones": null,
+                    "media_query": null,
+                    "memory_key": null,
+                    "memory_value": null,
+                    "question_kind": null,
+                    "charging_mode": null,
+                    "temperature_delta_celsius": null
+                  },
+                  "excluded_zones": null,
+                  "referenced_target": false
+                }
+              ],
+              "text": "",
+              "negated": false,
+              "conditional": false,
+              "scheduled": false,
+              "conflicting": false,
+              "unresolved": []
+            },
+            "node_spans": [
+              {
+                "node": "context",
+                "outcome": "ok",
+                "latency_ms": 1.47,
+                "step_id": null,
+                "provider": "rules"
+              },
+              {
+                "node": "interpret",
+                "outcome": "rules",
+                "latency_ms": 4.53,
+                "step_id": null,
+                "provider": "rules"
+              },
+              {
+                "node": "reducer",
+                "outcome": "ok",
+                "latency_ms": 8.29,
+                "step_id": null,
+                "provider": "rules"
+              },
+              {
+                "node": "scheduler",
+                "outcome": "ok",
+                "latency_ms": 0.07,
+                "step_id": "7004f38c-f2c3-49ae-89da-e9aec6770313",
+                "provider": "rules"
+              },
+              {
+                "node": "validate",
+                "outcome": "running",
+                "latency_ms": 4.61,
+                "step_id": "7004f38c-f2c3-49ae-89da-e9aec6770313",
+                "provider": "rules"
+              },
+              {
+                "node": "capability",
+                "outcome": "waiting_confirmation",
+                "latency_ms": 4.52,
+                "step_id": "7004f38c-f2c3-49ae-89da-e9aec6770313",
+                "provider": "rules"
+              },
+              {
+                "node": "scheduler",
+                "outcome": "ok",
+                "latency_ms": 0.09,
+                "step_id": "7004f38c-f2c3-49ae-89da-e9aec6770313",
+                "provider": "rules"
+              }
+            ],
+            "task_id": "f2805647-617e-4487-9f27-9ad57aad3d7d",
+            "revision": 2,
+            "observation_available": false,
+            "suspended_tasks": 0,
+            "generation_provider": null,
+            "generation_attempts": []
+          }
+        },
+        {
+          "query": "Xác nhận",
+          "passed": true,
+          "checks": {
+            "status": true,
+            "state": true,
+            "planner_available": true,
+            "nonempty": true,
+            "answer": true
+          },
+          "actual": {
+            "status": "verified",
+            "route": "vehicle",
+            "intent": "window.set_position",
+            "arguments": {
+              "zone": "driver",
+              "position_percent": 50
+            },
+            "executed": true,
+            "state": {
+              "vehicle_id": "demo-car-1",
+              "state_version": 1,
+              "updated_at": "2026-10-09T08:55:38.551972Z",
+              "temperature_celsius": 23.0,
+              "window_driver_percent": 50,
+              "door_driver_locked": false,
+              "door_driver_open": false,
+              "seat_driver_heat_level": 0,
+              "media_playing": false,
+              "driving": false,
+              "power_state": "off",
+              "battery_percent": 82,
+              "range_km": 328,
+              "tire_pressures_kpa": {
+                "front_left": 250.0,
+                "front_right": 250.0,
+                "rear_left": 250.0,
+                "rear_right": 250.0
+              },
+              "powertrain_temperature_celsius": 45.0,
+              "window_positions": {
+                "driver": 50,
+                "front_passenger": 0,
+                "rear_left": 0,
+                "rear_right": 0
+              },
+              "door_states": {
+                "driver": {
+                  "open": false,
+                  "locked": false
+                },
+                "front_passenger": {
+                  "open": false,
+                  "locked": false
+                },
+                "rear_left": {
+                  "open": false,
+                  "locked": false
+                },
+                "rear_right": {
+                  "open": false,
+                  "locked": false
+                }
+              },
+              "hood_open": false,
+              "trunk_open": false,
+              "seat_heat_levels": {
+                "driver": 0,
+                "front_passenger": 0,
+                "rear_left": 0,
+                "rear_right": 0
+              }
+            }
+          },
+          "message": "Mình đã đặt cửa sổ bên tài ở mức 50 phần trăm.",
+          "error": null,
+          "diagnostics": {
+            "workflow_version": "unified-3",
+            "prompt_version": "semantic-unified-3",
+            "requested_provider": "google",
+            "effective_provider": "google",
+            "decision_source": "google",
+            "provider_attempts": [
+              {
+                "provider": "google",
+                "outcome": "served",
+                "latency_ms": 8008.3
+              }
+            ],
+            "semantic": {
+              "act": "confirm",
+              "task_ref": "active",
+              "step_index": null,
+              "actions": [],
+              "text": "",
+              "negated": false,
+              "conditional": false,
+              "scheduled": false,
+              "conflicting": false,
+              "unresolved": []
+            },
+            "node_spans": [
+              {
+                "node": "context",
+                "outcome": "ok",
+                "latency_ms": 2.0,
+                "step_id": null,
+                "provider": "rules"
+              },
+              {
+                "node": "interpret",
+                "outcome": "google",
+                "latency_ms": 8021.04,
+                "step_id": null,
+                "provider": "google"
+              },
+              {
+                "node": "reducer",
+                "outcome": "ok",
+                "latency_ms": 0.37,
+                "step_id": null,
+                "provider": "google"
+              },
+              {
+                "node": "scheduler",
+                "outcome": "ok",
+                "latency_ms": 0.07,
+                "step_id": "7004f38c-f2c3-49ae-89da-e9aec6770313",
+                "provider": "google"
+              },
+              {
+                "node": "validate",
+                "outcome": "running",
+                "latency_ms": 7.32,
+                "step_id": "7004f38c-f2c3-49ae-89da-e9aec6770313",
+                "provider": "google"
+              },
+              {
+                "node": "capability",
+                "outcome": "completed",
+                "latency_ms": 18.73,
+                "step_id": "7004f38c-f2c3-49ae-89da-e9aec6770313",
+                "provider": "google"
+              },
+              {
+                "node": "scheduler",
+                "outcome": "ok",
+                "latency_ms": 0.08,
+                "step_id": null,
+                "provider": "google"
+              }
+            ],
+            "task_id": "f2805647-617e-4487-9f27-9ad57aad3d7d",
+            "revision": 2,
+            "observation_available": true,
+            "suspended_tasks": 0,
+            "generation_provider": null,
+            "generation_attempts": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "lower-windows",
+      "passed": true,
+      "turns": [
+        {
+          "query": "Hạ tất cả cửa kính xuống",
+          "passed": true,
+          "checks": {
+            "status": true,
+            "intent": true,
+            "arguments": true,
+            "state": true,
+            "planner_available": true,
+            "nonempty": true,
+            "answer": true
+          },
+          "actual": {
+            "status": "confirmation_required",
+            "route": "vehicle",
+            "intent": "window.set_position",
+            "arguments": {
+              "zone": "all",
+              "position_percent": 100
+            },
+            "executed": false,
+            "state": {
+              "vehicle_id": "demo-car-1",
+              "state_version": 0,
+              "updated_at": "2026-10-09T08:55:46.379125Z",
+              "temperature_celsius": 23.0,
+              "window_driver_percent": 0,
+              "door_driver_locked": false,
+              "door_driver_open": false,
+              "seat_driver_heat_level": 0,
+              "media_playing": false,
+              "driving": false,
+              "power_state": "off",
+              "battery_percent": 82,
+              "range_km": 328,
+              "tire_pressures_kpa": {
+                "front_left": 250.0,
+                "front_right": 250.0,
+                "rear_left": 250.0,
+                "rear_right": 250.0
+              },
+              "powertrain_temperature_celsius": 45.0,
+              "window_positions": {
+                "driver": 0,
+                "front_passenger": 0,
+                "rear_left": 0,
+                "rear_right": 0
+              },
+              "door_states": {
+                "driver": {
+                  "open": false,
+                  "locked": false
+                },
+                "front_passenger": {
+                  "open": false,
+                  "locked": false
+                },
+                "rear_left": {
+                  "open": false,
+                  "locked": false
+                },
+                "rear_right": {
+                  "open": false,
+                  "locked": false
+                }
+              },
+              "hood_open": false,
+              "trunk_open": false,
+              "seat_heat_levels": {
+                "driver": 0,
+                "front_passenger": 0,
+                "rear_left": 0,
+                "rear_right": 0
+              }
+            }
+          },
+          "message": "Xác nhận đặt tất cả cửa sổ ở mức 100 phần trăm?",
+          "error": null,
+          "diagnostics": {
+            "workflow_version": "unified-3",
+            "prompt_version": "semantic-unified-3",
+            "requested_provider": "google",
+            "effective_provider": "google",
+            "decision_source": "google",
+            "provider_attempts": [
+              {
+                "provider": "google",
+                "outcome": "served",
+                "latency_ms": 3746.8
+              }
+            ],
+            "semantic": {
+              "act": "request",
+              "task_ref": null,
+              "step_index": null,
+              "actions": [
+                {
+                  "capability": "window.set_position",
+                  "arguments": {
+                    "query": null,
+                    "value_celsius": null,
+                    "position_percent": 100,
+                    "open": null,
+                    "locked": null,
+                    "level": null,
+                    "zone": "all",
+                    "zones": null,
+                    "media_query": null,
+                    "memory_key": null,
+                    "memory_value": null,
+                    "question_kind": null,
+                    "charging_mode": null,
+                    "temperature_delta_celsius": null
+                  },
+                  "excluded_zones": null,
+                  "referenced_target": false
+                }
+              ],
+              "text": "",
+              "negated": false,
+              "conditional": false,
+              "scheduled": false,
+              "conflicting": false,
+              "unresolved": []
+            },
+            "node_spans": [
+              {
+                "node": "context",
+                "outcome": "ok",
+                "latency_ms": 1.5,
+                "step_id": null,
+                "provider": "rules"
+              },
+              {
+                "node": "interpret",
+                "outcome": "google",
+                "latency_ms": 3757.2,
+                "step_id": null,
+                "provider": "google"
+              },
+              {
+                "node": "reducer",
+                "outcome": "ok",
+                "latency_ms": 0.13,
+                "step_id": null,
+                "provider": "google"
+              },
+              {
+                "node": "scheduler",
+                "outcome": "ok",
+                "latency_ms": 0.04,
+                "step_id": "8df11c6d-3f59-4ecf-9dc5-305ff9309f72",
+                "provider": "google"
+              },
+              {
+                "node": "validate",
+                "outcome": "running",
+                "latency_ms": 5.73,
+                "step_id": "8df11c6d-3f59-4ecf-9dc5-305ff9309f72",
+                "provider": "google"
+              },
+              {
+                "node": "capability",
+                "outcome": "waiting_confirmation",
+                "latency_ms": 3.31,
+                "step_id": "8df11c6d-3f59-4ecf-9dc5-305ff9309f72",
+                "provider": "google"
+              },
+              {
+                "node": "scheduler",
+                "outcome": "ok",
+                "latency_ms": 0.08,
+                "step_id": "8df11c6d-3f59-4ecf-9dc5-305ff9309f72",
+                "provider": "google"
+              }
+            ],
+            "task_id": "d2d58195-1c6f-479e-8d65-2887c26af6bc",
+            "revision": 1,
+            "observation_available": false,
+            "suspended_tasks": 0,
+            "generation_provider": null,
+            "generation_attempts": []
+          }
+        },
+        {
+          "query": "Xác nhận",
+          "passed": true,
+          "checks": {
+            "status": true,
+            "state": true,
+            "planner_available": true,
+            "nonempty": true,
+            "answer": true
+          },
+          "actual": {
+            "status": "verified",
+            "route": "vehicle",
+            "intent": "window.set_position",
+            "arguments": {
+              "zone": "all",
+              "position_percent": 100
+            },
+            "executed": true,
+            "state": {
+              "vehicle_id": "demo-car-1",
+              "state_version": 1,
+              "updated_at": "2026-10-09T08:55:52.097597Z",
+              "temperature_celsius": 23.0,
+              "window_driver_percent": 100,
+              "door_driver_locked": false,
+              "door_driver_open": false,
+              "seat_driver_heat_level": 0,
+              "media_playing": false,
+              "driving": false,
+              "power_state": "off",
+              "battery_percent": 82,
+              "range_km": 328,
+              "tire_pressures_kpa": {
+                "front_left": 250.0,
+                "front_right": 250.0,
+                "rear_left": 250.0,
+                "rear_right": 250.0
+              },
+              "powertrain_temperature_celsius": 45.0,
+              "window_positions": {
+                "driver": 100,
+                "front_passenger": 100,
+                "rear_left": 100,
+                "rear_right": 100
+              },
+              "door_states": {
+                "driver": {
+                  "open": false,
+                  "locked": false
+                },
+                "front_passenger": {
+                  "open": false,
+                  "locked": false
+                },
+                "rear_left": {
+                  "open": false,
+                  "locked": false
+                },
+                "rear_right": {
+                  "open": false,
+                  "locked": false
+                }
+              },
+              "hood_open": false,
+              "trunk_open": false,
+              "seat_heat_levels": {
+                "driver": 0,
+                "front_passenger": 0,
+                "rear_left": 0,
+                "rear_right": 0
+              }
+            }
+          },
+          "message": "Mình đã đặt cửa sổ tất cả ở mức 100 phần trăm.",
+          "error": null,
+          "diagnostics": {
+            "workflow_version": "unified-3",
+            "prompt_version": "semantic-unified-3",
+            "requested_provider": "google",
+            "effective_provider": "google",
+            "decision_source": "google",
+            "provider_attempts": [
+              {
+                "provider": "google",
+                "outcome": "served",
+                "latency_ms": 1665.59
+              }
+            ],
+            "semantic": {
+              "act": "confirm",
+              "task_ref": "active",
+              "step_index": 0,
+              "actions": [],
+              "text": "",
+              "negated": false,
+              "conditional": false,
+              "scheduled": false,
+              "conflicting": false,
+              "unresolved": []
+            },
+            "node_spans": [
+              {
+                "node": "context",
+                "outcome": "ok",
+                "latency_ms": 3.46,
+                "step_id": null,
+                "provider": "rules"
+              },
+              {
+                "node": "interpret",
+                "outcome": "google",
+                "latency_ms": 1671.47,
+                "step_id": null,
+                "provider": "google"
+              },
+              {
+                "node": "reducer",
+                "outcome": "ok",
+                "latency_ms": 0.23,
+                "step_id": null,
+                "provider": "google"
+              },
+              {
+                "node": "scheduler",
+                "outcome": "ok",
+                "latency_ms": 0.08,
+                "step_id": "8df11c6d-3f59-4ecf-9dc5-305ff9309f72",
+                "provider": "google"
+              },
+              {
+                "node": "validate",
+                "outcome": "running",
+                "latency_ms": 7.05,
+                "step_id": "8df11c6d-3f59-4ecf-9dc5-305ff9309f72",
+                "provider": "google"
+              },
+              {
+                "node": "capability",
+                "outcome": "completed",
+                "latency_ms": 15.68,
+                "step_id": "8df11c6d-3f59-4ecf-9dc5-305ff9309f72",
+                "provider": "google"
+              },
+              {
+                "node": "scheduler",
+                "outcome": "ok",
+                "latency_ms": 0.09,
+                "step_id": null,
+                "provider": "google"
+              }
+            ],
+            "task_id": "d2d58195-1c6f-479e-8d65-2887c26af6bc",
+            "revision": 1,
+            "observation_available": true,
+            "suspended_tasks": 0,
+            "generation_provider": null,
+            "generation_attempts": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "exclusion",
+      "passed": true,
+      "turns": [
+        {
+          "query": "Mở tất cả kính",
+          "passed": true,
+          "checks": {
+            "status": true,
+            "state": true,
+            "planner_available": true,
+            "nonempty": true,
+            "answer": true
+          },
+          "actual": {
+            "status": "confirmation_required",
+            "route": "vehicle",
+            "intent": "window.set_position",
+            "arguments": {
+              "zone": "all",
+              "position_percent": 100
+            },
+            "executed": false,
+            "state": {
+              "vehicle_id": "demo-car-1",
+              "state_version": 0,
+              "updated_at": "2026-10-09T08:55:58.165002Z",
+              "temperature_celsius": 23.0,
+              "window_driver_percent": 0,
+              "door_driver_locked": false,
+              "door_driver_open": false,
+              "seat_driver_heat_level": 0,
+              "media_playing": false,
+              "driving": false,
+              "power_state": "off",
+              "battery_percent": 82,
+              "range_km": 328,
+              "tire_pressures_kpa": {
+                "front_left": 250.0,
+                "front_right": 250.0,
+                "rear_left": 250.0,
+                "rear_right": 250.0
+              },
+              "powertrain_temperature_celsius": 45.0,
+              "window_positions": {
+                "driver": 0,
+                "front_passenger": 0,
+                "rear_left": 0,
+                "rear_right": 0
+              },
+              "door_states": {
+                "driver": {
+                  "open": false,
+                  "locked": false
+                },
+                "front_passenger": {
+                  "open": false,
+                  "locked": false
+                },
+                "rear_left": {
+                  "open": false,
+                  "locked": false
+                },
+                "rear_right": {
+                  "open": false,
+                  "locked": false
+                }
+              },
+              "hood_open": false,
+              "trunk_open": false,
+              "seat_heat_levels": {
+                "driver": 0,
+                "front_passenger": 0,
+                "rear_left": 0,
+                "rear_right": 0
+              }
+            }
+          },
+          "message": "Xác nhận đặt tất cả cửa sổ ở mức 100 phần trăm?",
+          "error": null,
+          "diagnostics": {
+            "workflow_version": "unified-3",
+            "prompt_version": "semantic-unified-3",
+            "requested_provider": "google",
+            "effective_provider": "google",
+            "decision_source": "google",
+            "provider_attempts": [
+              {
+                "provider": "google",
+                "outcome": "served",
+                "latency_ms": 1975.59
+              }
+            ],
+            "semantic": {
+              "act": "request",
+              "task_ref": null,
+              "step_index": null,
+              "actions": [
+                {
+                  "capability": "window.set_position",
+                  "arguments": {
+                    "query": null,
+                    "value_celsius": null,
+                    "position_percent": 100,
+                    "open": null,
+                    "locked": null,
+                    "level": null,
+                    "zone": "all",
+                    "zones": null,
+                    "media_query": null,
+                    "memory_key": null,
+                    "memory_value": null,
+                    "question_kind": null,
+                    "charging_mode": null,
+                    "temperature_delta_celsius": null
+                  },
+                  "excluded_zones": null,
+                  "referenced_target": false
+                }
+              ],
+              "text": "Mở tất cả kính",
+              "negated": false,
+              "conditional": false,
+              "scheduled": false,
+              "conflicting": false,
+              "unresolved": []
+            },
+            "node_spans": [
+              {
+                "node": "context",
+                "outcome": "ok",
+                "latency_ms": 2.55,
+                "step_id": null,
+                "provider": "rules"
+              },
+              {
+                "node": "interpret",
+                "outcome": "google",
+                "latency_ms": 1992.2,
+                "step_id": null,
+                "provider": "google"
+              },
+              {
+                "node": "reducer",
+                "outcome": "ok",
+                "latency_ms": 0.2,
+                "step_id": null,
+                "provider": "google"
+              },
+              {
+                "node": "scheduler",
+                "outcome": "ok",
+                "latency_ms": 0.08,
+                "step_id": "714fef1f-d0f5-47b3-97fc-cd64f5b5ecc6",
+                "provider": "google"
+              },
+              {
+                "node": "validate",
+                "outcome": "running",
+                "latency_ms": 10.73,
+                "step_id": "714fef1f-d0f5-47b3-97fc-cd64f5b5ecc6",
+                "provider": "google"
+              },
+              {
+                "node": "capability",
+                "outcome": "waiting_confirmation",
+                "latency_ms": 6.18,
+                "step_id": "714fef1f-d0f5-47b3-97fc-cd64f5b5ecc6",
+                "provider": "google"
+              },
+              {
+                "node": "scheduler",
+                "outcome": "ok",
+                "latency_ms": 0.12,
+                "step_id": "714fef1f-d0f5-47b3-97fc-cd64f5b5ecc6",
+                "provider": "google"
+              }
+            ],
+            "task_id": "6532ce7a-3f2a-4904-aa19-45b3d418ff8d",
+            "revision": 1,
+            "observation_available": false,
+            "suspended_tasks": 0,
+            "generation_provider": null,
+            "generation_attempts": []
+          }
+        },
+        {
+          "query": "Xác nhận",
+          "passed": true,
+          "checks": {
+            "status": true,
+            "state": true,
+            "planner_available": true,
+            "nonempty": true,
+            "answer": true
+          },
+          "actual": {
+            "status": "verified",
+            "route": "vehicle",
+            "intent": "window.set_position",
+            "arguments": {
+              "zone": "all",
+              "position_percent": 100
+            },
+            "executed": true,
+            "state": {
+              "vehicle_id": "demo-car-1",
+              "state_version": 1,
+              "updated_at": "2026-10-09T08:56:03.577918Z",
+              "temperature_celsius": 23.0,
+              "window_driver_percent": 100,
+              "door_driver_locked": false,
+              "door_driver_open": false,
+              "seat_driver_heat_level": 0,
+              "media_playing": false,
+              "driving": false,
+              "power_state": "off",
+              "battery_percent": 82,
+              "range_km": 328,
+              "tire_pressures_kpa": {
+                "front_left": 250.0,
+                "front_right": 250.0,
+                "rear_left": 250.0,
+                "rear_right": 250.0
+              },
+              "powertrain_temperature_celsius": 45.0,
+              "window_positions": {
+                "driver": 100,
+                "front_passenger": 100,
+                "rear_left": 100,
+                "rear_right": 100
+              },
+              "door_states": {
+                "driver": {
+                  "open": false,
+                  "locked": false
+                },
+                "front_passenger": {
+                  "open": false,
+                  "locked": false
+                },
+                "rear_left": {
+                  "open": false,
+                  "locked": false
+                },
+                "rear_right": {
+                  "open": false,
+                  "locked": false
+                }
+              },
+              "hood_open": false,
+              "trunk_open": false,
+              "seat_heat_levels": {
+                "driver": 0,
+                "front_passenger": 0,
+                "rear_left": 0,
+                "rear_right": 0
+              }
+            }
+          },
+          "message": "Mình đã đặt cửa sổ tất cả ở mức 100 phần trăm.",
+          "error": null,
+          "diagnostics": {
+            "workflow_version": "unified-3",
+            "prompt_version": "semantic-unified-3",
+            "requested_provider": "google",
+            "effective_provider": "google",
+            "decision_source": "google",
+            "provider_attempts": [
+              {
+                "provider": "google",
+                "outcome": "served",
+                "latency_ms": 1359.57
+              }
+            ],
+            "semantic": {
+              "act": "confirm",
+              "task_ref": "active",
+              "step_index": null,
+              "actions": [],
+              "text": "Xác nhận",
+              "negated": false,
+              "conditional": false,
+              "scheduled": false,
+              "conflicting": false,
+              "unresolved": []
+            },
+            "node_spans": [
+              {
+                "node": "context",
+                "outcome": "ok",
+                "latency_ms": 2.3,
+                "step_id": null,
+                "provider": "rules"
+              },
+              {
+                "node": "interpret",
+                "outcome": "google",
+                "latency_ms": 1364.27,
+                "step_id": null,
+                "provider": "google"
+              },
+              {
+                "node": "reducer",
+                "outcome": "ok",
+                "latency_ms": 0.32,
+                "step_id": null,
+                "provider": "google"
+              },
+              {
+                "node": "scheduler",
+                "outcome": "ok",
+                "latency_ms": 0.14,
+                "step_id": "714fef1f-d0f5-47b3-97fc-cd64f5b5ecc6",
+                "provider": "google"
+              },
+              {
+                "node": "validate",
+                "outcome": "running",
+                "latency_ms": 8.16,
+                "step_id": "714fef1f-d0f5-47b3-97fc-cd64f5b5ecc6",
+                "provider": "google"
+              },
+              {
+                "node": "capability",
+                "outcome": "completed",
+                "latency_ms": 8.35,
+                "step_id": "714fef1f-d0f5-47b3-97fc-cd64f5b5ecc6",
+                "provider": "google"
+              },
+              {
+                "node": "scheduler",
+                "outcome": "ok",
+                "latency_ms": 0.1,
+                "step_id": null,
+                "provider": "google"
+              }
+            ],
+            "task_id": "6532ce7a-3f2a-4904-aa19-45b3d418ff8d",
+            "revision": 1,
+            "observation_available": true,
+            "suspended_tasks": 0,
+            "generation_provider": null,
+            "generation_attempts": []
+          }
+        },
+        {
+          "query": "Đóng tất cả cửa sổ trừ cửa ghế lái",
+          "passed": true,
+          "checks": {
+            "status": true,
+            "executed": true,
+            "arguments": true,
+            "state": true,
+            "planner_available": true,
+            "nonempty": true,
+            "answer": true
+          },
+          "actual": {
+            "status": "verified",
+            "route": "vehicle",
+            "intent": "window.set_position",
+            "arguments": {
+              "zones": [
+                "front_passenger",
+                "rear_left",
+                "rear_right"
+              ],
+              "position_percent": 0
+            },
+            "executed": true,
+            "state": {
+              "vehicle_id": "demo-car-1",
+              "state_version": 2,
+              "updated_at": "2026-10-09T08:56:09.405013Z",
+              "temperature_celsius": 23.0,
+              "window_driver_percent": 100,
+              "door_driver_locked": false,
+              "door_driver_open": false,
+              "seat_driver_heat_level": 0,
+              "media_playing": false,
+              "driving": false,
+              "power_state": "off",
+              "battery_percent": 82,
+              "range_km": 328,
+              "tire_pressures_kpa": {
+                "front_left": 250.0,
+                "front_right": 250.0,
+                "rear_left": 250.0,
+                "rear_right": 250.0
+              },
+              "powertrain_temperature_celsius": 45.0,
+              "window_positions": {
+                "driver": 100,
+                "front_passenger": 0,
+                "rear_left": 0,
+                "rear_right": 0
+              },
+              "door_states": {
+                "driver": {
+                  "open": false,
+                  "locked": false
+                },
+                "front_passenger": {
+                  "open": false,
+                  "locked": false
+                },
+                "rear_left": {
+                  "open": false,
+                  "locked": false
+                },
+                "rear_right": {
+                  "open": false,
+                  "locked": false
+                }
+              },
+              "hood_open": false,
+              "trunk_open": false,
+              "seat_heat_levels": {
+                "driver": 0,
+                "front_passenger": 0,
+                "rear_left": 0,
+                "rear_right": 0
+              }
+            }
+          },
+          "message": "Mình đã đặt cửa sổ bên phụ, sau trái, sau phải ở mức 0 phần trăm.",
+          "error": null,
+          "diagnostics": {
+            "workflow_version": "unified-3",
+            "prompt_version": "semantic-unified-3",
+            "requested_provider": "google",
+            "effective_provider": "google",
+            "decision_source": "google",
+            "provider_attempts": [
+              {
+                "provider": "google",
+                "outcome": "served",
+                "latency_ms": 1763.98
+              }
+            ],
+            "semantic": {
+              "act": "request",
+              "task_ref": null,
+              "step_index": null,
+              "actions": [
+                {
+                  "capability": "window.set_position",
+                  "arguments": {
+                    "query": null,
+                    "value_celsius": null,
+                    "position_percent": 0,
+                    "open": null,
+                    "locked": null,
+                    "level": null,
+                    "zone": "all",
+                    "zones": null,
+                    "media_query": null,
+                    "memory_key": null,
+                    "memory_value": null,
+                    "question_kind": null,
+                    "charging_mode": null,
+                    "temperature_delta_celsius": null
+                  },
+                  "excluded_zones": [
+                    "driver"
+                  ],
+                  "referenced_target": false
+                }
+              ],
+              "text": "Đóng tất cả cửa sổ trừ cửa ghế lái",
+              "negated": false,
+              "conditional": false,
+              "scheduled": false,
+              "conflicting": false,
+              "unresolved": []
+            },
+            "node_spans": [
+              {
+                "node": "context",
+                "outcome": "ok",
+                "latency_ms": 1.71,
+                "step_id": null,
+                "provider": "rules"
+              },
+              {
+                "node": "interpret",
+                "outcome": "google",
+                "latency_ms": 1776.14,
+                "step_id": null,
+                "provider": "google"
+              },
+              {
+                "node": "reducer",
+                "outcome": "ok",
+                "latency_ms": 1.43,
+                "step_id": null,
+                "provider": "google"
+              },
+              {
+                "node": "scheduler",
+                "outcome": "ok",
+                "latency_ms": 0.07,
+                "step_id": "d1f530eb-3f3f-49ff-b3b1-4e990e45fe7a",
+                "provider": "google"
+              },
+              {
+                "node": "validate",
+                "outcome": "running",
+                "latency_ms": 7.19,
+                "step_id": "d1f530eb-3f3f-49ff-b3b1-4e990e45fe7a",
+                "provider": "google"
+              },
+              {
+                "node": "capability",
+                "outcome": "completed",
+                "latency_ms": 6.68,
+                "step_id": "d1f530eb-3f3f-49ff-b3b1-4e990e45fe7a",
+                "provider": "google"
+              },
+              {
+                "node": "scheduler",
+                "outcome": "ok",
+                "latency_ms": 0.09,
+                "step_id": null,
+                "provider": "google"
+              }
+            ],
+            "task_id": "3488cf89-671a-498c-8944-73077c621091",
+            "revision": 1,
+            "observation_available": true,
+            "suspended_tasks": 0,
+            "generation_provider": null,
+            "generation_attempts": []
+          }
+        },
+        {
+          "query": "Xác nhận",
+          "passed": true,
+          "checks": {
+            "status": true,
+            "executed": true,
+            "state": true,
+            "planner_available": true,
+            "nonempty": true,
+            "answer": true
+          },
+          "actual": {
+            "status": "clarify",
+            "route": "clarify",
+            "intent": null,
+            "arguments": null,
+            "executed": false,
+            "state": {
+              "vehicle_id": "demo-car-1",
+              "state_version": 0,
+              "updated_at": "2026-10-09T08:56:15.057244Z",
+              "temperature_celsius": 23.0,
+              "window_driver_percent": 0,
+              "door_driver_locked": false,
+              "door_driver_open": false,
+              "seat_driver_heat_level": 0,
+              "media_playing": false,
+              "driving": false,
+              "power_state": "off",
+              "battery_percent": 82,
+              "range_km": 328,
+              "tire_pressures_kpa": {
+                "front_left": 250.0,
+                "front_right": 250.0,
+                "rear_left": 250.0,
+                "rear_right": 250.0
+              },
+              "powertrain_temperature_celsius": 45.0,
+              "window_positions": {
+                "driver": 0,
+                "front_passenger": 0,
+                "rear_left": 0,
+                "rear_right": 0
+              },
+              "door_states": {
+                "driver": {
+                  "open": false,
+                  "locked": false
+                },
+                "front_passenger": {
+                  "open": false,
+                  "locked": false
+                },
+                "rear_left": {
+                  "open": false,
+                  "locked": false
+                },
+                "rear_right": {
+                  "open": false,
+                  "locked": false
+                }
+              },
+              "hood_open": false,
+              "trunk_open": false,
+              "seat_heat_levels": {
+                "driver": 0,
+                "front_passenger": 0,
+                "rear_left": 0,
+                "rear_right": 0
+              }
+            }
+          },
+          "message": "Yêu cầu đó đã hoàn tất.",
+          "error": null,
+          "diagnostics": {
+            "workflow_version": "unified-3",
+            "prompt_version": "semantic-unified-3",
+            "requested_provider": "google",
+            "effective_provider": "google",
+            "decision_source": "google",
+            "provider_attempts": [
+              {
+                "provider": "google",
+                "outcome": "served",
+                "latency_ms": 1591.01
+              }
+            ],
+            "semantic": {
+              "act": "confirm",
+              "task_ref": "active",
+              "step_index": null,
+              "actions": [],
+              "text": "Xác nhận",
+              "negated": false,
+              "conditional": false,
+              "scheduled": false,
+              "conflicting": false,
+              "unresolved": []
+            },
+            "node_spans": [
+              {
+                "node": "context",
+                "outcome": "ok",
+                "latency_ms": 7.67,
+                "step_id": null,
+                "provider": "rules"
+              },
+              {
+                "node": "interpret",
+                "outcome": "google",
+                "latency_ms": 1596.84,
+                "step_id": null,
+                "provider": "google"
+              },
+              {
+                "node": "reducer",
+                "outcome": "clarify",
+                "latency_ms": 0.22,
+                "step_id": null,
+                "provider": "google"
+              },
+              {
+                "node": "scheduler",
+                "outcome": "clarify",
+                "latency_ms": 0.08,
+                "step_id": null,
+                "provider": "google"
+              }
+            ],
+            "task_id": "3488cf89-671a-498c-8944-73077c621091",
+            "revision": 1,
+            "observation_available": false,
+            "suspended_tasks": 0,
+            "generation_provider": null,
+            "generation_attempts": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "cooling-conflict",
+      "passed": true,
+      "turns": [
+        {
+          "query": "Tôi nóng quá tăng điều hoà lên tối đa",
+          "passed": true,
+          "checks": {
+            "status": true,
+            "executed": true,
+            "state": true,
+            "planner_available": true,
+            "nonempty": true,
+            "answer": true
+          },
+          "actual": {
+            "status": "clarify",
+            "route": "clarify",
+            "intent": null,
+            "arguments": null,
+            "executed": false,
+            "state": {
+              "vehicle_id": "demo-car-1",
+              "state_version": 0,
+              "updated_at": "2026-10-09T08:56:20.447868Z",
+              "temperature_celsius": 23.0,
+              "window_driver_percent": 0,
+              "door_driver_locked": false,
+              "door_driver_open": false,
+              "seat_driver_heat_level": 0,
+              "media_playing": false,
+              "driving": false,
+              "power_state": "off",
+              "battery_percent": 82,
+              "range_km": 328,
+              "tire_pressures_kpa": {
+                "front_left": 250.0,
+                "front_right": 250.0,
+                "rear_left": 250.0,
+                "rear_right": 250.0
+              },
+              "powertrain_temperature_celsius": 45.0,
+              "window_positions": {
+                "driver": 0,
+                "front_passenger": 0,
+                "rear_left": 0,
+                "rear_right": 0
+              },
+              "door_states": {
+                "driver": {
+                  "open": false,
+                  "locked": false
+                },
+                "front_passenger": {
+                  "open": false,
+                  "locked": false
+                },
+                "rear_left": {
+                  "open": false,
+                  "locked": false
+                },
+                "rear_right": {
+                  "open": false,
+                  "locked": false
+                }
+              },
+              "hood_open": false,
+              "trunk_open": false,
+              "seat_heat_levels": {
+                "driver": 0,
+                "front_passenger": 0,
+                "rear_left": 0,
+                "rear_right": 0
+              }
+            }
+          },
+          "message": "Bạn nói rõ thao tác muốn thực hiện ngay nhé.",
+          "error": null,
+          "diagnostics": {
+            "workflow_version": "unified-3",
+            "prompt_version": "semantic-unified-3",
+            "requested_provider": "google",
+            "effective_provider": "google",
+            "decision_source": "google",
+            "provider_attempts": [
+              {
+                "provider": "google",
+                "outcome": "served",
+                "latency_ms": 1346.53
+              }
+            ],
+            "semantic": {
+              "act": "clarify",
+              "task_ref": null,
+              "step_index": null,
+              "actions": [],
+              "text": "",
+              "negated": false,
+              "conditional": false,
+              "scheduled": false,
+              "conflicting": true,
+              "unresolved": []
+            },
+            "node_spans": [
+              {
+                "node": "context",
+                "outcome": "ok",
+                "latency_ms": 1.53,
+                "step_id": null,
+                "provider": "rules"
+              },
+              {
+                "node": "interpret",
+                "outcome": "google",
+                "latency_ms": 1357.33,
+                "step_id": null,
+                "provider": "google"
+              },
+              {
+                "node": "reducer",
+                "outcome": "clarify",
+                "latency_ms": 0.08,
+                "step_id": null,
+                "provider": "google"
+              },
+              {
+                "node": "scheduler",
+                "outcome": "clarify",
+                "latency_ms": 0.02,
+                "step_id": null,
+                "provider": "google"
+              }
+            ],
+            "task_id": null,
+            "revision": null,
+            "observation_available": false,
+            "suspended_tasks": 0,
+            "generation_provider": null,
+            "generation_attempts": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "pillar-handbook",
+      "passed": true,
+      "turns": [
+        {
+          "query": "Cột A trên xe là gì",
+          "passed": true,
+          "checks": {
+            "route": true,
+            "intent": true,
+            "executed": true,
+            "state": true,
+            "planner_available": true,
+            "nonempty": true,
+            "answer": true
+          },
+          "actual": {
+            "status": "unsupported",
+            "route": "handbook",
+            "intent": "manual.search",
+            "arguments": null,
+            "executed": false,
+            "state": {
+              "vehicle_id": "demo-car-1",
+              "state_version": 0,
+              "updated_at": "2026-10-09T08:56:27.856792Z",
+              "temperature_celsius": 23.0,
+              "window_driver_percent": 0,
+              "door_driver_locked": false,
+              "door_driver_open": false,
+              "seat_driver_heat_level": 0,
+              "media_playing": false,
+              "driving": false,
+              "power_state": "off",
+              "battery_percent": 82,
+              "range_km": 328,
+              "tire_pressures_kpa": {
+                "front_left": 250.0,
+                "front_right": 250.0,
+                "rear_left": 250.0,
+                "rear_right": 250.0
+              },
+              "powertrain_temperature_celsius": 45.0,
+              "window_positions": {
+                "driver": 0,
+                "front_passenger": 0,
+                "rear_left": 0,
+                "rear_right": 0
+              },
+              "door_states": {
+                "driver": {
+                  "open": false,
+                  "locked": false
+                },
+                "front_passenger": {
+                  "open": false,
+                  "locked": false
+                },
+                "rear_left": {
+                  "open": false,
+                  "locked": false
+                },
+                "rear_right": {
+                  "open": false,
+                  "locked": false
+                }
+              },
+              "hood_open": false,
+              "trunk_open": false,
+              "seat_heat_levels": {
+                "driver": 0,
+                "front_passenger": 0,
+                "rear_left": 0,
+                "rear_right": 0
+              }
+            }
+          },
+          "message": "Mình chưa có thông tin chắc chắn về cột A trên xe.",
+          "error": null,
+          "diagnostics": {
+            "workflow_version": "unified-3",
+            "prompt_version": "semantic-unified-3",
+            "requested_provider": "google",
+            "effective_provider": "google",
+            "decision_source": "google",
+            "provider_attempts": [
+              {
+                "provider": "google",
+                "outcome": "served",
+                "latency_ms": 1848.77
+              }
+            ],
+            "semantic": {
+              "act": "request",
+              "task_ref": null,
+              "step_index": null,
+              "actions": [
+                {
+                  "capability": "manual.search",
+                  "arguments": {
+                    "query": "Cột A trên xe là gì",
+                    "value_celsius": null,
+                    "position_percent": null,
+                    "open": null,
+                    "locked": null,
+                    "level": null,
+                    "zone": null,
+                    "zones": null,
+                    "media_query": null,
+                    "memory_key": null,
+                    "memory_value": null,
+                    "question_kind": null,
+                    "charging_mode": null,
+                    "temperature_delta_celsius": null
+                  },
+                  "excluded_zones": null,
+                  "referenced_target": false
+                }
+              ],
+              "text": "Cột A trên xe là gì",
+              "negated": false,
+              "conditional": false,
+              "scheduled": false,
+              "conflicting": false,
+              "unresolved": []
+            },
+            "node_spans": [
+              {
+                "node": "context",
+                "outcome": "ok",
+                "latency_ms": 1.57,
+                "step_id": null,
+                "provider": "rules"
+              },
+              {
+                "node": "interpret",
+                "outcome": "google",
+                "latency_ms": 1861.45,
+                "step_id": null,
+                "provider": "google"
+              },
+              {
+                "node": "reducer",
+                "outcome": "ok",
+                "latency_ms": 0.23,
+                "step_id": null,
+                "provider": "google"
+              },
+              {
+                "node": "scheduler",
+                "outcome": "ok",
+                "latency_ms": 0.09,
+                "step_id": "bda5a764-af79-4799-a453-bef9b6ffc353",
+                "provider": "google"
+              },
+              {
+                "node": "validate",
+                "outcome": "running",
+                "latency_ms": 9.64,
+                "step_id": "bda5a764-af79-4799-a453-bef9b6ffc353",
+                "provider": "google"
+              },
+              {
+                "node": "capability",
+                "outcome": "blocked",
+                "latency_ms": 1498.77,
+                "step_id": "bda5a764-af79-4799-a453-bef9b6ffc353",
+                "provider": "google"
+              },
+              {
+                "node": "scheduler",
+                "outcome": "ok",
+                "latency_ms": 0.06,
+                "step_id": "bda5a764-af79-4799-a453-bef9b6ffc353",
+                "provider": "google"
+              }
+            ],
+            "task_id": "c4b9fe34-d305-449b-b8a4-d082ffd1d34b",
+            "revision": 1,
+            "observation_available": false,
+            "suspended_tasks": 0,
+            "generation_provider": "google",
+            "generation_attempts": [
+              {
+                "provider": "google",
+                "outcome": "served"
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "no-weather-tool",
+      "passed": true,
+      "turns": [
+        {
+          "query": "Thời tiết ở Hà Nội hôm nay thế nào",
+          "passed": true,
+          "checks": {
+            "executed": true,
+            "state": true,
+            "planner_available": true,
+            "nonempty": true,
+            "answer": true
+          },
+          "actual": {
+            "status": "unsupported",
+            "route": "unsupported",
+            "intent": null,
+            "arguments": null,
+            "executed": false,
+            "state": {
+              "vehicle_id": "demo-car-1",
+              "state_version": 0,
+              "updated_at": "2026-10-09T08:56:33.488897Z",
+              "temperature_celsius": 23.0,
+              "window_driver_percent": 0,
+              "door_driver_locked": false,
+              "door_driver_open": false,
+              "seat_driver_heat_level": 0,
+              "media_playing": false,
+              "driving": false,
+              "power_state": "off",
+              "battery_percent": 82,
+              "range_km": 328,
+              "tire_pressures_kpa": {
+                "front_left": 250.0,
+                "front_right": 250.0,
+                "rear_left": 250.0,
+                "rear_right": 250.0
+              },
+              "powertrain_temperature_celsius": 45.0,
+              "window_positions": {
+                "driver": 0,
+                "front_passenger": 0,
+                "rear_left": 0,
+                "rear_right": 0
+              },
+              "door_states": {
+                "driver": {
+                  "open": false,
+                  "locked": false
+                },
+                "front_passenger": {
+                  "open": false,
+                  "locked": false
+                },
+                "rear_left": {
+                  "open": false,
+                  "locked": false
+                },
+                "rear_right": {
+                  "open": false,
+                  "locked": false
+                }
+              },
+              "hood_open": false,
+              "trunk_open": false,
+              "seat_heat_levels": {
+                "driver": 0,
+                "front_passenger": 0,
+                "rear_left": 0,
+                "rear_right": 0
+              }
+            }
+          },
+          "message": "Mình không hỗ trợ xem dự báo thời tiết nhé.",
+          "error": null,
+          "diagnostics": {
+            "workflow_version": "unified-3",
+            "prompt_version": "semantic-unified-3",
+            "requested_provider": "google",
+            "effective_provider": "google",
+            "decision_source": "google",
+            "provider_attempts": [
+              {
+                "provider": "google",
+                "outcome": "served",
+                "latency_ms": 1584.76
+              }
+            ],
+            "semantic": {
+              "act": "unsupported",
+              "task_ref": null,
+              "step_index": null,
+              "actions": [],
+              "text": "Mình không hỗ trợ xem dự báo thời tiết nhé.",
+              "negated": false,
+              "conditional": false,
+              "scheduled": false,
+              "conflicting": false,
+              "unresolved": []
+            },
+            "node_spans": [
+              {
+                "node": "context",
+                "outcome": "ok",
+                "latency_ms": 1.85,
+                "step_id": null,
+                "provider": "rules"
+              },
+              {
+                "node": "interpret",
+                "outcome": "google",
+                "latency_ms": 1593.87,
+                "step_id": null,
+                "provider": "google"
+              },
+              {
+                "node": "reducer",
+                "outcome": "clarify",
+                "latency_ms": 0.09,
+                "step_id": null,
+                "provider": "google"
+              },
+              {
+                "node": "scheduler",
+                "outcome": "clarify",
+                "latency_ms": 0.03,
+                "step_id": null,
+                "provider": "google"
+              }
+            ],
+            "task_id": null,
+            "revision": null,
+            "observation_available": false,
+            "suspended_tasks": 0,
+            "generation_provider": null,
+            "generation_attempts": []
+          }
+        }
+      ]
+    },
+    {
+      "id": "cabin-scope-correction",
+      "passed": true,
+      "turns": [
+        {
+          "query": "Mở tất cả các cửa",
+          "passed": true,
+          "checks": {
+            "executed": true,
+            "state": true,
+            "planner_available": true,
+            "nonempty": true,
+            "answer": true
+          },
+          "actual": {
+            "status": "confirmation_required",
+            "route": "vehicle",
+            "intent": "body.set_open",
+            "arguments": {
+              "open": true
+            },
+            "executed": false,
+            "state": {
+              "vehicle_id": "demo-car-1",
+              "state_version": 0,
+              "updated_at": "2026-10-09T08:56:39.301236Z",
+              "temperature_celsius": 23.0,
+              "window_driver_percent": 0,
+              "door_driver_locked": false,
+              "door_driver_open": false,
+              "seat_driver_heat_level": 0,
+              "media_playing": false,
+              "driving": false,
+              "power_state": "off",
+              "battery_percent": 82,
+              "range_km": 328,
+              "tire_pressures_kpa": {
+                "front_left": 250.0,
+                "front_right": 250.0,
+                "rear_left": 250.0,
+                "rear_right": 250.0
+              },
+              "powertrain_temperature_celsius": 45.0,
+              "window_positions": {
+                "driver": 0,
+                "front_passenger": 0,
+                "rear_left": 0,
+                "rear_right": 0
+              },
+              "door_states": {
+                "driver": {
+                  "open": false,
+                  "locked": false
+                },
+                "front_passenger": {
+                  "open": false,
+                  "locked": false
+                },
+                "rear_left": {
+                  "open": false,
+                  "locked": false
+                },
+                "rear_right": {
+                  "open": false,
+                  "locked": false
+                }
+              },
+              "hood_open": false,
+              "trunk_open": false,
+              "seat_heat_levels": {
+                "driver": 0,
+                "front_passenger": 0,
+                "rear_left": 0,
+                "rear_right": 0
+              }
+            }
+          },
+          "message": "Xác nhận mở tất cả cửa, nắp capo và cốp sau?",
+          "error": null,
+          "diagnostics": {
+            "workflow_version": "unified-3",
+            "prompt_version": "semantic-unified-3",
+            "requested_provider": "google",
+            "effective_provider": "google",
+            "decision_source": "google",
+            "provider_attempts": [
+              {
+                "provider": "google",
+                "outcome": "served",
+                "latency_ms": 1752.64
+              }
+            ],
+            "semantic": {
+              "act": "request",
+              "task_ref": null,
+              "step_index": null,
+              "actions": [
+                {
+                  "capability": "body.set_open",
+                  "arguments": {
+                    "query": null,
+                    "value_celsius": null,
+                    "position_percent": null,
+                    "open": true,
+                    "locked": null,
+                    "level": null,
+                    "zone": null,
+                    "zones": null,
+                    "media_query": null,
+                    "memory_key": null,
+                    "memory_value": null,
+                    "question_kind": null,
+                    "charging_mode": null,
+                    "temperature_delta_celsius": null
+                  },
+                  "excluded_zones": null,
+                  "referenced_target": false
+                }
+              ],
+              "text": "Mở tất cả các cửa",
+              "negated": false,
+              "conditional": false,
+              "scheduled": false,
+              "conflicting": false,
+              "unresolved": []
+            },
+            "node_spans": [
+              {
+                "node": "context",
+                "outcome": "ok",
+                "latency_ms": 1.47,
+                "step_id": null,
+                "provider": "rules"
+              },
+              {
+                "node": "interpret",
+                "outcome": "google",
+                "latency_ms": 1762.4,
+                "step_id": null,
+                "provider": "google"
+              },
+              {
+                "node": "reducer",
+                "outcome": "ok",
+                "latency_ms": 0.17,
+                "step_id": null,
+                "provider": "google"
+              },
+              {
+                "node": "scheduler",
+                "outcome": "ok",
+                "latency_ms": 0.06,
+                "step_id": "b353bd92-e9bd-4da5-8c4f-f467e4759051",
+                "provider": "google"
+              },
+              {
+                "node": "validate",
+                "outcome": "running",
+                "latency_ms": 5.8,
+                "step_id": "b353bd92-e9bd-4da5-8c4f-f467e4759051",
+                "provider": "google"
+              },
+              {
+                "node": "capability",
+                "outcome": "waiting_confirmation",
+                "latency_ms": 5.39,
+                "step_id": "b353bd92-e9bd-4da5-8c4f-f467e4759051",
+                "provider": "google"
+              },
+              {
+                "node": "scheduler",
+                "outcome": "ok",
+                "latency_ms": 0.08,
+                "step_id": "b353bd92-e9bd-4da5-8c4f-f467e4759051",
+                "provider": "google"
+              }
+            ],
+            "task_id": "10858a25-85e6-4892-b8ee-56365b48f2d4",
+            "revision": 1,
+            "observation_available": false,
+            "suspended_tasks": 0,
+            "generation_provider": null,
+            "generation_attempts": []
+          }
+        },
+        {
+          "query": "Chỉ cửa ra vào xe thôi",
+          "passed": true,
+          "checks": {
+            "status": true,
+            "intent": true,
+            "arguments": true,
+            "state": true,
+            "planner_available": true,
+            "nonempty": true,
+            "answer": true
+          },
+          "actual": {
+            "status": "confirmation_required",
+            "route": "vehicle",
+            "intent": "door.set_open",
+            "arguments": {
+              "zone": "all",
+              "open": true
+            },
+            "executed": false,
+            "state": {
+              "vehicle_id": "demo-car-1",
+              "state_version": 0,
+              "updated_at": "2026-10-09T08:56:45.201704Z",
+              "temperature_celsius": 23.0,
+              "window_driver_percent": 0,
+              "door_driver_locked": false,
+              "door_driver_open": false,
+              "seat_driver_heat_level": 0,
+              "media_playing": false,
+              "driving": false,
+              "power_state": "off",
+              "battery_percent": 82,
+              "range_km": 328,
+              "tire_pressures_kpa": {
+                "front_left": 250.0,
+                "front_right": 250.0,
+                "rear_left": 250.0,
+                "rear_right": 250.0
+              },
+              "powertrain_temperature_celsius": 45.0,
+              "window_positions": {
+                "driver": 0,
+                "front_passenger": 0,
+                "rear_left": 0,
+                "rear_right": 0
+              },
+              "door_states": {
+                "driver": {
+                  "open": false,
+                  "locked": false
+                },
+                "front_passenger": {
+                  "open": false,
+                  "locked": false
+                },
+                "rear_left": {
+                  "open": false,
+                  "locked": false
+                },
+                "rear_right": {
+                  "open": false,
+                  "locked": false
+                }
+              },
+              "hood_open": false,
+              "trunk_open": false,
+              "seat_heat_levels": {
+                "driver": 0,
+                "front_passenger": 0,
+                "rear_left": 0,
+                "rear_right": 0
+              }
+            }
+          },
+          "message": "Xác nhận mở tất cả cửa?",
+          "error": null,
+          "diagnostics": {
+            "workflow_version": "unified-3",
+            "prompt_version": "semantic-unified-3",
+            "requested_provider": "google",
+            "effective_provider": "google",
+            "decision_source": "google",
+            "provider_attempts": [
+              {
+                "provider": "google",
+                "outcome": "served",
+                "latency_ms": 1836.87
+              }
+            ],
+            "semantic": {
+              "act": "modify",
+              "task_ref": "active",
+              "step_index": 0,
+              "actions": [
+                {
+                  "capability": "door.set_open",
+                  "arguments": {
+                    "query": null,
+                    "value_celsius": null,
+                    "position_percent": null,
+                    "open": true,
+                    "locked": null,
+                    "level": null,
+                    "zone": "all",
+                    "zones": null,
+                    "media_query": null,
+                    "memory_key": null,
+                    "memory_value": null,
+                    "question_kind": null,
+                    "charging_mode": null,
+                    "temperature_delta_celsius": null
+                  },
+                  "excluded_zones": null,
+                  "referenced_target": false
+                }
+              ],
+              "text": "Chỉ cửa ra vào xe thôi",
+              "negated": false,
+              "conditional": false,
+              "scheduled": false,
+              "conflicting": false,
+              "unresolved": []
+            },
+            "node_spans": [
+              {
+                "node": "context",
+                "outcome": "ok",
+                "latency_ms": 3.5,
+                "step_id": null,
+                "provider": "rules"
+              },
+              {
+                "node": "interpret",
+                "outcome": "google",
+                "latency_ms": 1840.96,
+                "step_id": null,
+                "provider": "google"
+              },
+              {
+                "node": "reducer",
+                "outcome": "ok",
+                "latency_ms": 9.3,
+                "step_id": null,
+                "provider": "google"
+              },
+              {
+                "node": "scheduler",
+                "outcome": "ok",
+                "latency_ms": 0.07,
+                "step_id": "b353bd92-e9bd-4da5-8c4f-f467e4759051",
+                "provider": "google"
+              },
+              {
+                "node": "validate",
+                "outcome": "running",
+                "latency_ms": 4.22,
+                "step_id": "b353bd92-e9bd-4da5-8c4f-f467e4759051",
+                "provider": "google"
+              },
+              {
+                "node": "capability",
+                "outcome": "waiting_confirmation",
+                "latency_ms": 3.58,
+                "step_id": "b353bd92-e9bd-4da5-8c4f-f467e4759051",
+                "provider": "google"
+              },
+              {
+                "node": "scheduler",
+                "outcome": "ok",
+                "latency_ms": 0.07,
+                "step_id": "b353bd92-e9bd-4da5-8c4f-f467e4759051",
+                "provider": "google"
+              }
+            ],
+            "task_id": "10858a25-85e6-4892-b8ee-56365b48f2d4",
+            "revision": 2,
+            "observation_available": false,
+            "suspended_tasks": 0,
+            "generation_provider": null,
+            "generation_attempts": []
+          }
+        },
+        {
+          "query": "Xác nhận",
+          "passed": true,
+          "checks": {
+            "status": true,
+            "state": true,
+            "planner_available": true,
+            "nonempty": true,
+            "answer": true
+          },
+          "actual": {
+            "status": "verified",
+            "route": "vehicle",
+            "intent": "door.set_open",
+            "arguments": {
+              "zone": "all",
+              "open": true
+            },
+            "executed": true,
+            "state": {
+              "vehicle_id": "demo-car-1",
+              "state_version": 1,
+              "updated_at": "2026-10-09T08:56:51.950074Z",
+              "temperature_celsius": 23.0,
+              "window_driver_percent": 0,
+              "door_driver_locked": false,
+              "door_driver_open": true,
+              "seat_driver_heat_level": 0,
+              "media_playing": false,
+              "driving": false,
+              "power_state": "off",
+              "battery_percent": 82,
+              "range_km": 328,
+              "tire_pressures_kpa": {
+                "front_left": 250.0,
+                "front_right": 250.0,
+                "rear_left": 250.0,
+                "rear_right": 250.0
+              },
+              "powertrain_temperature_celsius": 45.0,
+              "window_positions": {
+                "driver": 0,
+                "front_passenger": 0,
+                "rear_left": 0,
+                "rear_right": 0
+              },
+              "door_states": {
+                "driver": {
+                  "open": true,
+                  "locked": false
+                },
+                "front_passenger": {
+                  "open": true,
+                  "locked": false
+                },
+                "rear_left": {
+                  "open": true,
+                  "locked": false
+                },
+                "rear_right": {
+                  "open": true,
+                  "locked": false
+                }
+              },
+              "hood_open": false,
+              "trunk_open": false,
+              "seat_heat_levels": {
+                "driver": 0,
+                "front_passenger": 0,
+                "rear_left": 0,
+                "rear_right": 0
+              }
+            }
+          },
+          "message": "Mình đã mở cửa xe tất cả.",
+          "error": null,
+          "diagnostics": {
+            "workflow_version": "unified-3",
+            "prompt_version": "semantic-unified-3",
+            "requested_provider": "google",
+            "effective_provider": "google",
+            "decision_source": "google",
+            "provider_attempts": [
+              {
+                "provider": "google",
+                "outcome": "served",
+                "latency_ms": 2702.97
+              }
+            ],
+            "semantic": {
+              "act": "confirm",
+              "task_ref": "active",
+              "step_index": null,
+              "actions": [],
+              "text": "",
+              "negated": false,
+              "conditional": false,
+              "scheduled": false,
+              "conflicting": false,
+              "unresolved": []
+            },
+            "node_spans": [
+              {
+                "node": "context",
+                "outcome": "ok",
+                "latency_ms": 1.96,
+                "step_id": null,
+                "provider": "rules"
+              },
+              {
+                "node": "interpret",
+                "outcome": "google",
+                "latency_ms": 2707.96,
+                "step_id": null,
+                "provider": "google"
+              },
+              {
+                "node": "reducer",
+                "outcome": "ok",
+                "latency_ms": 0.21,
+                "step_id": null,
+                "provider": "google"
+              },
+              {
+                "node": "scheduler",
+                "outcome": "ok",
+                "latency_ms": 0.06,
+                "step_id": "b353bd92-e9bd-4da5-8c4f-f467e4759051",
+                "provider": "google"
+              },
+              {
+                "node": "validate",
+                "outcome": "running",
+                "latency_ms": 6.27,
+                "step_id": "b353bd92-e9bd-4da5-8c4f-f467e4759051",
+                "provider": "google"
+              },
+              {
+                "node": "capability",
+                "outcome": "completed",
+                "latency_ms": 8.53,
+                "step_id": "b353bd92-e9bd-4da5-8c4f-f467e4759051",
+                "provider": "google"
+              },
+              {
+                "node": "scheduler",
+                "outcome": "ok",
+                "latency_ms": 0.08,
+                "step_id": null,
+                "provider": "google"
+              }
+            ],
+            "task_id": "10858a25-85e6-4892-b8ee-56365b48f2d4",
+            "revision": 2,
+            "observation_available": true,
+            "suspended_tasks": 0,
+            "generation_provider": null,
+            "generation_attempts": []
+          }
+        }
+      ]
+    }
+  ]
+}
