@@ -19,4 +19,4 @@ uv pip install --python .venv/bin/python --no-deps \
 .venv/bin/python scripts/prepare_speech_models.py --root models/ai-speech
 mkdir -p models/ai-speech
 touch models/ai-speech/.setup-complete
-echo 'Setup xong. Chạy: bash scripts/test_ai_ui.sh'
+echo 'Setup xong. Chạy: bash scripts/ai_server.sh run'
