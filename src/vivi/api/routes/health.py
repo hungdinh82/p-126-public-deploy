@@ -40,6 +40,15 @@ async def _llm_options() -> list[dict]:
     return options
 
 
+def _fallback_chain(config):
+    if config.jetson_ai_policy == "offline_only" or config.rag_local_only:
+        return ["rules"] if config.llm_provider == "rules" else ["local", "rules"]
+    configured = getattr(runtime.orchestrator, "provider_fallbacks", {})
+    if config.llm_provider in configured:
+        return list(dict.fromkeys([*configured[config.llm_provider], "rules"]))
+    return ["rules"] if config.llm_provider == "rules" else ["local", "rules"] if config.llm_provider == "local" else [config.llm_provider, "local", "rules"]
+
+
 @router.get("/api/v1/health")
 async def health():
     config = runtime.settings
@@ -61,7 +70,7 @@ async def health():
         "orchestration": {
             "engine": "langgraph",
             "workflow_version": "unified-3",
-            "fallback_chain": ["rules"] if config.llm_provider == "rules" else ["local", "rules"] if config.llm_provider == "local" else [config.llm_provider, "local", "rules"],
+            "fallback_chain": _fallback_chain(config),
             "cloud_budget_seconds": config.cloud_budget_seconds,
             "local_budget_seconds": config.local_budget_seconds,
             "turn_timeout_seconds": config.turn_timeout_seconds,
@@ -75,7 +84,7 @@ async def health():
             "retrieval_mode": config.rag_retrieval_mode,
             "handbook_available": config.rag_handbook_db.is_file(),
             "handbook_path": str(config.rag_handbook_db),
-            "local_only": config.rag_local_only,
+            "local_only": config.rag_local_only or config.jetson_ai_policy == "offline_only",
         },
         "llm": {
             "provider": active_provider,

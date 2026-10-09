@@ -160,7 +160,10 @@ async def transcribe_stream(socket: WebSocket, session_id: str, turn_id: str):
 def _tts(request: TTSRequest):
     if request.tts_provider is None:
         return runtime.tts
-    return runtime.tts_engines[request.tts_provider]
+    engine = runtime.tts_engines.get(request.tts_provider)
+    if engine is None:
+        raise HTTPException(status_code=400, detail="TTS provider không khả dụng trong profile này")
+    return engine
 
 
 @router.post("/tts")

@@ -12,9 +12,10 @@ from src.vivi.turn_control import current_control
 
 
 class CapabilityRuntime:
-    def __init__(self, services, ledger=None, generators=None, budgets=None, breaker_seconds=30):
+    def __init__(self, services, ledger=None, generators=None, budgets=None, breaker_seconds=30, provider_chains=None):
         self.services, self.ledger = services, ledger
         self.generators = generators or {"rules" if services.generation_provider == "unknown" else services.generation_provider: services.generator}
+        self.provider_chains = provider_chains or {}
         self.budgets = budgets or {}
         self.generation_breakers = {}
         self.breaker_seconds = breaker_seconds
@@ -113,6 +114,8 @@ class CapabilityRuntime:
                     "grounding_status": "insufficient_evidence", "citations": []}
         attempts = []
         chain = [effective_provider, "local", "rules"] if effective_provider not in {"local", "rules"} else [effective_provider, "rules"]
+        if effective_provider in self.provider_chains:
+            chain = list(dict.fromkeys([*self.provider_chains[effective_provider], "rules"]))
         answer = None
         served = "rules"
         for provider in dict.fromkeys(chain):

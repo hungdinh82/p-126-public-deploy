@@ -81,7 +81,8 @@ class AssistantGraph:
 
 def build_assistant_graph(services, saver, store=None, provider=None, *, resolver=None, generators=None, budgets=None):
     resolver = resolver or SemanticResolver()
-    runtime = CapabilityRuntime(services, store, generators, budgets, resolver.breaker_seconds)
+    runtime = CapabilityRuntime(services, store, generators, budgets, resolver.breaker_seconds,
+                                provider_chains=resolver.fallback_chains)
     profile = services.memory_profile_id
 
     async def context(state):

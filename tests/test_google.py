@@ -4,9 +4,9 @@ from dataclasses import replace
 import httpx
 import pytest
 
-from src.vivi.graphs import build_graph
 from src.vivi.config import Settings
 from src.vivi.domain.models import ConfirmationDecisionRequest, TurnRequest
+from src.vivi.graphs import build_graph
 from src.vivi.providers import configured_llm_providers, llm_models
 from src.vivi.rag.generator import GoogleHandbookGenerator
 from src.vivi.rag.runtime import create_services

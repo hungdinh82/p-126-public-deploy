@@ -185,6 +185,9 @@ def _create_single(provider: str, config: Settings):
 
 
 def create_stt(config: Settings):
+    if config.jetson_ai_policy == "offline_only" and config.stt_provider == "soniox":
+        # The configured on-device fallback becomes the primary in offline mode.
+        return _create_single(config.stt_fallback_provider, config)
     primary = _create_single(config.stt_provider, config)
     fallback = config.stt_fallback_provider
     if config.stt_provider in {"off", fallback} or fallback == "off":

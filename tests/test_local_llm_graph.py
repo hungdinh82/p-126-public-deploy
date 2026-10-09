@@ -4,8 +4,8 @@ import json
 
 import httpx
 
-from src.vivi.graphs import build_graph
 from src.vivi.config import Settings
+from src.vivi.graphs import build_graph
 from src.vivi.history.sqlite import SQLiteConversationHistory
 from src.vivi.orchestration import create_langgraph_orchestrator
 from src.vivi.persistence.event_store import EventStore
