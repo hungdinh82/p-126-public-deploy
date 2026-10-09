@@ -156,3 +156,47 @@ async def test_stt_deletes_temporary_audio_when_retention_is_disabled(client):
     assert response.json()["audio_path"] is None
     assert observed_path is not None
     assert not observed_path.exists()
+
+
+@pytest.mark.asyncio
+async def test_durable_turn_status_and_cancel_api(client, monkeypatch, tmp_path):
+    from src.vivi.api.routes import turns
+    from src.vivi.api.runtime import build_runtime
+    from src.vivi.config import Settings
+    local = build_runtime(Settings(data_dir=tmp_path, rag_history_db=tmp_path / "history.sqlite3",
+        rag_handbook_db=tmp_path / "handbook.sqlite3", rag_retrieval_mode="sqlite",
+        llm_provider="rules", stt_provider="off", tts_provider="off", vehicle_provider="memory", memory_enabled=False))
+    monkeypatch.setattr(turns, "runtime", local)
+    try:
+        created = await client.post("/api/v1/turn", json={"session_id": "driver", "turn_id": "one", "transcript": "đặt nhiệt độ 25 độ"})
+        assert created.status_code == 200
+        status = await client.get("/api/v1/turns/one", params={"session_id": "driver"})
+        assert status.status_code == 200
+        assert status.json()["status"] == "completed"
+        assert status.json()["command"]["status"] == "verified"
+        assert status.json()["response"]["execution"]["executed"] is True
+        missing = await client.get("/api/v1/turns/one", params={"session_id": "another"})
+        assert missing.status_code == 404
+        cancelled = await client.post("/api/v1/turns/one/cancel", json={"session_id": "driver"})
+        assert cancelled.json() == {"cancelled": False, "dispatched": False}
+    finally:
+        local.close()
+
+
+@pytest.mark.asyncio
+async def test_missing_default_model_falls_back_and_reports_actual_provider(client, monkeypatch, tmp_path):
+    from src.vivi.api.routes import turns
+    from src.vivi.api.runtime import build_runtime
+    from src.vivi.config import Settings
+    local = build_runtime(Settings(data_dir=tmp_path, rag_history_db=tmp_path / "history.sqlite3",
+        rag_handbook_db=tmp_path / "handbook.sqlite3", rag_retrieval_mode="sqlite",
+        llm_provider="google", google_api_key="", stt_provider="off", tts_provider="off", vehicle_provider="memory", memory_enabled=False))
+    monkeypatch.setattr(turns, "runtime", local)
+    try:
+        result = await client.post("/api/v1/turn", json={"session_id": "driver", "turn_id": "one", "transcript": "đặt nhiệt độ 30 độ"})
+        assert result.status_code == 200
+        assert result.json()["provider"] == "langgraph/rules"
+        assert result.json()["vehicle_state"]["temperature_celsius"] == 30
+        assert local.vehicle.state_for("driver").temperature_celsius == 30
+    finally:
+        local.close()

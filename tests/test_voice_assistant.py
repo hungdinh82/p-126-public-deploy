@@ -8,14 +8,16 @@ from pathlib import Path
 
 import pytest
 
-from src.vivi.agents.classifier import RulesIntentClassifier, StructuredAPIIntentClassifier
-from src.vivi.agents.graph import build_graph
+from src.vivi.dialogue.contracts import SessionState
+from src.vivi.dialogue.planner import ModelProvider, SemanticResolver
+from src.vivi.graphs import build_graph
 from src.vivi.history.sqlite import SQLiteConversationHistory
 from src.vivi.rag.generator import ExtractiveHandbookGenerator, validate_grounding
 from src.vivi.rag.runtime import HandbookServices
 from src.vivi.rag.schemas import RetrievedChunk
 from src.vivi.vehicle.gateway import VehicleActionGateway
 from src.vivi.vehicle.memory import VehicleSimulator
+from tests.semantic_helpers import parse
 
 CASES = [(case["query"], case["expected_route"], case["expected_intent"])
          for case in (json.loads(line) for line in
@@ -24,9 +26,20 @@ CASES = [(case["query"], case["expected_route"], case["expected_intent"])
 
 
 @pytest.mark.parametrize("text,route,intent", CASES)
-def test_recent_utterances_route_to_the_right_capability(text, route, intent):
-    decision = RulesIntentClassifier().classify_with_context(text, [], {"temperature_celsius": 23})
-    assert (decision.route, decision.intent) == (route, intent)
+def test_recent_utterances_route_to_the_right_capability(tmp_path, text, route, intent):
+    services = HandbookServices(NeverRetrieve() if route in {"action", "unsupported", "conversation"} else EmptyRetrieve(),
+        ExtractiveHandbookGenerator(), SQLiteConversationHistory(tmp_path / "history.sqlite3"), action_gateway=VehicleActionGateway())
+    graph = build_graph(services)
+    try:
+        output = graph.invoke({"session_id": "case", "input_text": text})["output"]
+        assert (output["route"], output["intent"]) == (route, intent)
+    finally:
+        graph.close()
+
+
+class EmptyRetrieve:
+    def retrieve(self, *args):
+        return []
 
 
 def source(content, section="Pin SDI", source_id="source"):
@@ -62,15 +75,17 @@ def test_extractive_preserves_complete_negation_and_rejects_unrelated_evidence()
     assert ExtractiveHandbookGenerator().generate("Mật khẩu wifi là gì?", [chunk], []).insufficient_evidence
 
 
-def test_relative_temperature_uses_observation_and_resolves_short_follow_up():
-    classifier = RulesIntentClassifier()
-    assert classifier.classify_with_context("Tôi hơi lạnh", [], {"temperature_celsius": 29}).arguments.value_celsius == 30
-    assert classifier.classify("Tôi hơi lạnh", []).route == "clarify"
-    history = [{"route": "action", "intent": "climate.set_temperature", "query": "Tôi hơi lạnh"}]
-    assert classifier.classify_with_context("tăng thêm 1", history, {"temperature_celsius": 26}).arguments.value_celsius == 27
-    assert classifier.classify_with_context("tăng thêm 1", [], {"temperature_celsius": 26}).route == "clarify"
-    assert classifier.classify("Mở cửa sổ bên tài 50%", []).arguments.position_percent == 50
-    assert classifier.classify("Phát nhạc thư giãn", []).arguments.media_query == "thư giãn"
+def test_relative_temperature_uses_fresh_observation_and_no_history_task():
+    from src.vivi.dialogue.reducer import reduce_turn
+    from src.vivi.domain.models import VehicleState
+    frame = parse("Tôi hơi lạnh", observation=VehicleState(temperature_celsius=29))
+    assert frame.resolved["value_celsius"] == 30
+    assert parse("Tôi hơi lạnh").error
+    assert parse("Mở cửa sổ bên tài 50%").arguments.position_percent == 50
+    assert parse("Phát nhạc thư giãn").arguments.media_query == "thu gian"
+    session, _ = reduce_turn(SessionState(), parse("Mở cửa sổ").frame)
+    assert parse("bên phụ", session=session).act == "modify"
+    assert parse("bên phụ", history=[{"query": "Mở cửa sổ", "route": "clarify"}]).act == "clarify"
 
 
 class NeverRetrieve:
@@ -90,7 +105,7 @@ def test_status_tool_reads_vehicle_and_speaks_only_requested_values(tmp_path, qu
     vehicle.execute_sync("voice", "prepare", ActionProposal(intent="climate.set_temperature", arguments={"value_celsius": 27}))
     services = HandbookServices(NeverRetrieve(), ExtractiveHandbookGenerator(),
                                 SQLiteConversationHistory(tmp_path / "history.sqlite3"),
-                                classifier=RulesIntentClassifier(), action_gateway=VehicleActionGateway(vehicle))
+                                action_gateway=VehicleActionGateway(vehicle))
     result = build_graph(services).invoke({"session_id": "voice", "turn_id": "status", "input_text": query})
     output = result["output"]
     assert output["intent"] == "vehicle.get_status" and output["status"] == "action_verified"
@@ -99,10 +114,9 @@ def test_status_tool_reads_vehicle_and_speaks_only_requested_values(tmp_path, qu
 
 
 def test_rule_fallback_preserves_tool_reads_and_negation():
-    classifier = RulesIntentClassifier()
-    assert classifier.classify("tình trạng pin hiện tại", []).intent == "vehicle.get_status"
-    assert classifier.classify("Đừng mở cửa", []).route == "conversation"
-    assert classifier.classify("Bạn có thể mở cửa sổ bên tài giúp tôi không?", []).intent == "window.set_position"
+    assert parse("tình trạng pin hiện tại").intent == "vehicle.get_status"
+    assert parse("Đừng mở cửa").route == "conversation"
+    assert parse("Bạn có thể mở cửa sổ bên tài giúp tôi không?").intent == "window.set_position"
 
 
 @pytest.mark.asyncio
@@ -110,14 +124,14 @@ async def test_async_model_router_preserves_live_tool_boundary():
     class ModelClient:
         async def agenerate_json(self, **kwargs):
             assert "điều hoà đang là bao nhiêu độ" in kwargs["user"]
-            return '{"route":"action","intent":"vehicle.get_status"}'
+            return '{"act":"request","actions":[{"capability":"vehicle.get_status"}]}'
 
-    decision = await StructuredAPIIntentClassifier(ModelClient()).aclassify("điều hoà đang là bao nhiêu độ", [])
-    assert decision.intent == "vehicle.get_status"
+    decision, tier, _ = await SemanticResolver({"google": ModelProvider("google", ModelClient(), 1)}).resolve("điều hoà đang là bao nhiêu độ", SessionState(), requested="google")
+    assert tier == "google" and decision.actions[0].capability == "vehicle.get_status"
 
 
 def test_model_prompt_gives_vehicle_persona_and_separates_spoken_answer_from_citations():
-    from src.vivi.agents.prompts import CLASSIFIER_INSTRUCTION
+    from src.vivi.dialogue.planner import SEMANTIC_INSTRUCTION
     from src.vivi.rag.generator import StructuredAPIHandbookGenerator
 
     class CapturingClient:
@@ -130,7 +144,7 @@ def test_model_prompt_gives_vehicle_persona_and_separates_spoken_answer_from_cit
     answer = StructuredAPIHandbookGenerator(client).generate("Dung lượng pin SDI?", [source("Dung lượng sử dụng 82 kWh")], [])
     assert "tiếng nói của chiếc VF8" in client.prompt["system"]
     assert "Không đọc tên nguồn" in client.prompt["system"]
-    assert "vehicle.get_status" in CLASSIFIER_INSTRUCTION
+    assert "vehicle.get_status" in SEMANTIC_INSTRUCTION
     assert answer.citations and "S1" not in answer.answer
 
 
@@ -159,5 +173,5 @@ def test_handbook_follow_up_does_not_bypass_unsafe_scope_guard(tmp_path):
     services = HandbookServices(NeverRetrieve(), ExtractiveHandbookGenerator(), history)
     result = build_graph(services).invoke({"session_id": "follow", "turn_id": "2", "input_text": "Vậy cách hack pin cao áp?",
                                           "model_input": {"intent": "manual.search", "arguments": {"query": "Vậy cách hack pin cao áp?"}}})
-    assert result["output"]["status"] == "out_of_scope"
+    assert result["output"]["status"] == "unsupported"
     assert not result["output"]["citations"]

@@ -295,3 +295,24 @@ class VehicleSimulatorServiceTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ExplicitZoneSubsetTests(unittest.TestCase):
+    def test_subset_changes_only_selected_windows_and_rejects_duplicates(self):
+        from vehicle_simulator.models import VehicleCommand
+        with tempfile.TemporaryDirectory() as directory:
+            engine = VehicleSimulator(Path(directory) / "vehicle.sqlite3")
+            self.addCleanup(engine.close)
+            def apply(arguments):
+                now = datetime.now(UTC)
+                state = engine.get_state("demo-car-1")
+                return engine.execute(VehicleCommand(command_id=str(uuid4()), correlation_id="one",
+                    idempotency_key=str(uuid4()), vehicle_id="demo-car-1", action="window.set_position", arguments=arguments,
+                    issued_at=now, expires_at=now + timedelta(seconds=5), expected_state_version=state.state_version))
+            result = apply({"zones": ["front_passenger", "rear_left", "rear_right"], "position_percent": 100})
+            self.assertEqual(result.ack.status, "applied")
+            self.assertEqual(result.state.window_positions.driver, 0)
+            self.assertEqual(result.state.window_positions.rear_left, 100)
+            rejected = apply({"zones": ["driver", "driver"], "position_percent": 100})
+            self.assertEqual(rejected.ack.status, "rejected")
+            self.assertEqual(rejected.state.window_positions.driver, 0)

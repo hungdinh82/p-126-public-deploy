@@ -10,7 +10,12 @@ Prototype giao diện trợ lý ô tô: bầu trời đêm, lõi sáng, hai dả
 
 ## Chạy ViVi local
 
-Mặc định dùng RAG local: SQLite FTS5 + multilingual-e5-small INT8. Setup tải trọng số embedding một lần; runtime không cần GPU hay API key:
+Runtime dùng một workflow LangGraph thống nhất: model trả semantic event, reducer
+quản lý task trong checkpoint, scheduler chạy tối đa 5 bước tuần tự qua policy.
+Google là tầng mặc định; khi không khả dụng tự chuyển local rồi parser. Không có
+model vẫn tra handbook bằng SQLite FTS5 và trả trích đoạn có nguồn. Xem
+[kiến trúc, migration và rollback](docs/langgraph_unified_runtime.md).
+Setup tải trọng số embedding một lần:
 
 ```bash
 bash scripts/setup.sh
@@ -61,7 +66,7 @@ Thiết lập provider/model trong `config.toml`; khóa API và ghi đè riêng 
 | --- | --- | --- |
 | Text input | luôn bật | gửi thẳng transcript tới `/api/v1/turn` |
 | STT | `stt_provider` trong `config.toml` | `off`, `phowhisper`, `whisper_cpp`, `soniox` |
-| LLM/router | `llm_provider` trong `config.toml` | `rules`, `local` (mặc định local-only) |
+| LLM/router | `llm_provider` trong `config.toml` | `rules`, `local`, `google`, `openai`, `openrouter` |
 | TTS | `tts_provider` trong `config.toml` | `off`, `zerotts` |
 | Handbook retrieval | `rag_retrieval_mode` trong `config.toml` | `sqlite_local` (mặc định), `sqlite`, `lexical` |
 | Vehicle | `vehicle_provider` trong `config.toml` | `memory`, `mqtt` |
@@ -167,12 +172,17 @@ monitor không xoá SQLite history hay long-term memory.
 
 Đặt `llm_provider` trong `config.toml`, sau đó restart backend:
 
-- `rules`: router deterministic và trả lời bằng trích đoạn handbook, chạy offline.
+- `rules`: parser có grammar và trả lời bằng trích đoạn handbook, chạy offline.
 - `local`: SLM tự host, cấu hình `local_llm_base_url` và `local_llm_model`.
 
-Cả hai đi qua LangGraph, SQLite FTS5 + embedding E5 local, grounding và safety graph.
-`rag_local_only = true` là mặc định; UI chỉ hiển thị hai provider này. Gemini RAG và
-Chroma đã được gỡ. OpenAI/OpenRouter chỉ có thể dùng khi chủ động tắt local-only.
+- `google`, `openai`, `openrouter`: semantic planner qua API, cần khóa tương ứng và
+  `rag_local_only = false`. Config repo hiện chọn Google.
+
+Mọi provider và nút điều khiển có kiểu đi qua cùng reducer/scheduler/policy.
+Cloud → local → parser chỉ khi tầng trước lỗi; câu hỏi làm rõ hay policy từ chối
+không gây fallback. Đổi provider giữ nguyên session và pending task. Local chỉ
+được gọi khi đã cấu hình model; đợt refactor này không tải Qwen. Xem
+[workflow, checkpoints và evaluation](docs/langgraph_unified_runtime.md).
 
 Embedding và database đã có trên máy hiện tại. Máy mới cần chạy setup hoặc chép
 `models/multilingual-e5-small-int8/` trước khi chạy `run.py`; runtime không tự tải model.

@@ -6,9 +6,9 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from src.vivi.agents.classifier import StructuredAPIIntentClassifier
-from src.vivi.agents.graph import build_graph
-from src.vivi.agents.tasks import active_task, pending_for_turn, resume_task
+from src.vivi.graphs import build_graph
+from src.vivi.dialogue.contracts import SemanticTurn, SessionState
+from src.vivi.dialogue.reducer import reduce_turn
 from tests.test_long_term_memory import invoke
 from tests.test_long_term_memory import services as _services
 
@@ -19,8 +19,8 @@ services = _services
 def test_offer_acceptance_executes_after_restart_once(services, yes):
     first = invoke(services, "hôm nay tôi buồn quá")
     assert first["output"]["execution"] is None
-    pending = active_task(services.history.recent("driver", 6))
-    assert pending and pending.follow_up.intent == "media.play"
+    pending = first["session"]["active"]
+    assert pending["steps"][0]["status"] == "offer" and pending["steps"][0]["draft"]["capability"] == "media.play"
     # invoke rebuilds the graph: the frame survives because it is persisted.
     second = invoke(services, yes)["output"]
     assert second["intent"] == "media.play" and second["execution"]["verified"]
@@ -45,18 +45,20 @@ def test_offer_is_session_and_profile_scoped(services):
 
 
 def test_expired_or_untyped_prose_never_authorizes_a_tool(services):
-    invoke(services, "hôm nay tôi buồn quá")
-    history = services.history.recent("driver", 6)
-    frame = history[-1]["diagnostics"]["pending_task"]
-    frame["expires_at"] = (datetime.now(UTC) - timedelta(seconds=1)).isoformat()
-    assert resume_task("có", history) == {"task_resolution": "expired"}
-    assert resume_task("có", [{"answer": "Mình mở cửa nhé?"}]) == {}
+    first = invoke(services, "hôm nay tôi buồn quá")
+    session = SessionState.model_validate(first["session"])
+    session.active.expires_at = datetime.now(UTC) - timedelta(seconds=1)
+    state, message = reduce_turn(session, SemanticTurn(act="confirm", task_ref="active"))
+    assert state.active is None and message
+    # An old history record or prose cannot create a task in a new checkpoint.
+    services.history.save({"session_id": "prose", "turn_id": "old", "query": "Mở cửa", "answer": "Mình mở cửa nhé?"})
+    assert invoke(services, "có", session="prose")["execution"] is None
 
 
 def test_slot_completion_preserves_parameters_then_uses_real_confirmation(services):
-    invoke(services, "mở cửa sổ 50%")
-    pending = active_task(services.history.recent("driver", 6))
-    assert pending.kind == "slot" and pending.follow_up.arguments.position_percent == 50
+    first = invoke(services, "mở cửa sổ 50%")
+    pending = first["session"]["active"]["steps"][0]
+    assert pending["status"] == "waiting_slot" and pending["draft"]["arguments"]["position_percent"] == 50
     second = invoke(services, "bên tài")["output"]
     assert second["status"] == "confirmation_required"
     third = invoke(services, "đồng ý")["output"]
@@ -68,7 +70,7 @@ def test_vehicle_confirmation_rechecks_current_safety(services):
     invoke(services, "mở cửa sổ bên tài")
     services.action_gateway.vehicle.set_driving("driver", True)
     result = invoke(services, "có")["output"]
-    assert not result["execution"]["executed"]
+    assert result["status"] == "blocked" and not (result.get("execution") or {}).get("executed")
 
 
 def test_temperature_slot_accepts_number_and_preserves_limits(services):
@@ -84,10 +86,10 @@ def test_temperature_slot_accepts_number_and_preserves_limits(services):
 def test_personal_memory_never_retrieves_and_reset_requires_acceptance(services):
     invoke(services, "Từ nay gọi tôi là Nam")
     result = invoke(services, "bạn biết mình thích gì không?")["output"]
-    assert result["route"] == "conversation" and "sở thích" in result["response_text"]
+    assert result["route"] == "conversation" and "chưa" in result["response_text"]
     assert "Nam" not in result["response_text"]
     result = invoke(services, "xoá trí của bạn về tôi")["output"]
-    assert result["route"] == "clarify" and services.memory.list("default")
+    assert result["status"] == "confirmation_required" and services.memory.list("default")
     invoke(services, "không")
     assert services.memory.list("default")
     invoke(services, "xoá ghi nhớ của bạn về tôi")
@@ -106,10 +108,10 @@ def test_latest_complaint_is_request_not_negation_and_filler_is_not_song(service
 def test_model_memory_tools_execute_instead_of_trusting_response_text(services):
     class Client:
         def generate_json(self, **kwargs):
-            return json.dumps({"route": "conversation", "intent": "memory.remember",
-                               "arguments": {"memory_key": "preferred_music", "memory_value": "jazz"},
-                               "response_text": "Tôi đã mở cửa xe."})
-    model_services = replace(services, classifier=StructuredAPIIntentClassifier(Client()))
+            return json.dumps({"act": "request", "actions": [{"capability": "memory.remember",
+                               "arguments": {"memory_key": "preferred_music", "memory_value": "jazz"}}],
+                               "text": "Tôi đã mở cửa xe."})
+    model_services = replace(services, semantic_client=Client())
     result = invoke(model_services, "Lưu sở thích nhạc jazz cho mình nhé")["output"]
     assert result["execution"] is None and "mở cửa" not in result["response_text"]
     assert services.memory.list("default")[0]["value"] == "jazz"
@@ -119,20 +121,22 @@ def test_model_reset_tool_only_creates_confirmation(services):
     invoke(services, "Từ nay gọi tôi là Nam")
     class Client:
         def generate_json(self, **kwargs):
-            return '{"route":"conversation","intent":"memory.reset"}'
-    model_services = replace(services, classifier=StructuredAPIIntentClassifier(Client()))
+            if "đồng ý" in kwargs["user"]:
+                return '{"act":"confirm","task_ref":"active"}'
+            return '{"act":"request","actions":[{"capability":"memory.reset"}]}'
+    model_services = replace(services, semantic_client=Client())
     result = invoke(model_services, "Bỏ hết những gì đã lưu về mình nhé")["output"]
-    assert result["route"] == "clarify" and services.memory.list("default")
+    assert result["status"] == "confirmation_required" and services.memory.list("default")
     invoke(model_services, "đồng ý")
     assert not services.memory.list("default")
 
 
-def test_invalid_offer_cannot_become_an_executable_frame():
-    state = {"turn_id": "one", "route": "conversation", "decision": {
-        "follow_up": {"intent": "door.set_open", "arguments": {"open": True}}}}
-    assert pending_for_turn(state) is None  # Missing zone.
-    state["decision"]["follow_up"] = {"intent": "memory.reset"}
-    assert pending_for_turn(state) is None  # Only the memory executor can propose reset.
+def test_invalid_offer_cannot_execute_without_validation():
+    from src.vivi.capabilities.registry import REGISTRY
+    from src.vivi.dialogue.contracts import ActionDraft
+    state, _ = reduce_turn(SessionState(), SemanticTurn(act="offer", actions=[ActionDraft(capability="door.set_open", arguments={"open": True})]))
+    state, _ = reduce_turn(state, SemanticTurn(act="confirm", task_ref="active"))
+    assert REGISTRY["door.set_open"].validate(state.active.steps[0].draft)[1]
 
 
 @pytest.mark.asyncio
