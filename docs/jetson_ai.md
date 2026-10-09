@@ -64,18 +64,109 @@ git switch --track origin/feat/jetson-ai-pipeline
 
 Nếu đã có nhánh local cùng tên, dùng `git switch feat/jetson-ai-pipeline` rồi `git pull --ff-only`. Giữ các thay đổi cấu hình cục bộ của bạn; nhánh không chỉnh `config.toml`.
 
-## Setup và run trên Jetson
+## Thực hiện trên Jetson: cài một lần, setup và run
 
-Yêu cầu: AGX Xavier aarch64 với L4T R35.x, CUDA toolkit 11.4, cuDNN 8, mount `/mnt/jetson-data` còn ít nhất 15 GiB cho lần build đầu; `uv`, compiler C++, `git`, `curl`, `openssl` và mạng để tải artifact. Script chuẩn bị Python 3.10 và CMake trong môi trường riêng, không thay `.venv` repo hay CUDA hệ thống. Venv, cache, model, source và log nằm tại `/mnt/jetson-data/vivi-ai`.
+Các thay đổi này chưa commit/push. Không dùng `git pull` để lấy bản mới cho đến khi bạn quyết định đẩy nhánh. Có thể chuyển riêng các file bằng gói `data/jetson-ai-profile.tar.gz` được tạo ở máy phát triển; gói không chứa token, model hay cấu hình cá nhân.
+
+Từ **PowerShell trên máy đã có SSH alias `jetson`**, chạy (đổi tên distro/path nếu checkout của bạn ở nơi khác):
+
+```powershell
+scp "\\wsl.localhost\Ubuntu-22.04\home\kah\vinai\P-126\data\jetson-ai-profile.tar.gz" jetson:/tmp/
+ssh jetson
+```
+
+Sau đó trong **terminal Jetson**:
 
 ```bash
+cd ~/vinai/P-126
+# Kiểm tra các đường dẫn trong gói trước khi giải nén.
+tar -tzf /tmp/jetson-ai-profile.tar.gz
+# Sao lưu các file tương ứng hiện có để có thể phục hồi launcher cũ.
+tar -tzf /tmp/jetson-ai-profile.tar.gz | while IFS= read -r path; do
+  [ ! -f "$path" ] || printf '%s\n' "$path"
+done > /tmp/vivi-existing-files.txt
+tar -czf /tmp/vivi-before-profile.tar.gz -T /tmp/vivi-existing-files.txt
+tar -xzf /tmp/jetson-ai-profile.tar.gz
+
+bash scripts/jetson_system.sh install
 bash scripts/jetson_ai.sh setup --profile agx
 bash scripts/jetson_ai.sh run
 ```
 
-`setup` build llama.cpp `b11447`, whisper.cpp `v1.7.6` cho CUDA kiến trúc Xavier `sm_72`, tải speech model theo revision cố định và kiểm tra SHA256 GGUF. TTS dùng ONNX Runtime CUDA 1.16.3 build native cho CUDA 11.4/cuDNN 8, hoặc wheel riêng qua `JETSON_AI_ORT_WHEEL`. Lần build ONNX Runtime đầu có thể mất nhiều thời gian; lần sau dùng lại binary/wheel. Nếu có venv service Python 3.12 từ mốc LLM cũ, script giữ bản đó với tên `venv-before-speech-*` rồi tạo venv 3.10.
+Chỉ chạy lệnh tiếp theo khi lệnh trước thành công. `install` cần nhập mật khẩu sudo của user Jetson trong terminal; phiên SSH tự động không có mật khẩu nên chưa thực hiện phần này.
 
-**Điểm cần xác minh trên Xavier:** ZeroTTS 0.1.5 khai báo ONNX Runtime >=1.17. Profile CUDA 11.4 thử bản 1.16.3 riêng và chỉ đánh dấu setup hoàn tất khi nạp CUDA và tạo WAV thật thành công. Chưa chạy phép kiểm này trên AGX; không coi runtime này đã được nghiệm thu. Kiểm tra CPU 1.16.3 không chạy được export FP16 do kernel ArgMax; không dùng CPU đó làm fallback cho TTS. Lý do tránh lấy bản ORT mới tùy ý: [hướng dẫn build chính thức](https://onnxruntime.ai/docs/build/eps.html) yêu cầu CUDA >=11.8 cho JetPack 5 từ ORT 1.17. Khi CUDA build/smoke lỗi, setup dừng và báo bước lỗi; không tự chuyển sang CPU.
+| Chạy ở đâu / khi nào | Script làm gì |
+| --- | --- |
+| SSH Jetson, một lần: `jetson_system.sh install` | Thêm repository CUDA arm64 chính thức, kiểm tra fingerprint, mô phỏng APT và dung lượng; cài GCC/G++ 10.5, các package CUDA 11.8/compat được pin và thư viện hệ thống. Giữ cuDNN 8.6 có sẵn, OS/JetPack và lựa chọn CUDA mặc định. |
+| Jetson, user thường: `jetson_ai.sh setup --profile agx` | Tạo Python 3.12.15 + venv mới; cài dependency lock có hash; build llama.cpp, whisper.cpp và ORT 1.20.1 GPU; tải model gốc; kiểm tra CUDA và chạy suy luận thật cả ba engine cùng nạp. Thành công mới tạo token/manifest/marker. |
+| Jetson, mỗi lần bật service: `jetson_ai.sh run` | Kiểm tra profile/manifest và khởi động STT, SLM, TTS cùng gateway/giao diện `/test`. Không tải model hay nâng dependency. |
+
+Venv mới: `/mnt/jetson-data/vivi-ai/envs/agx-cu118-ort1201-py312/venv`. `.venv` repo và venv AI 3.10 cũ vẫn được giữ. Thư mục build CUDA mới là `build-cu118-gcc10`; model/cache trên mount dữ liệu được dùng lại khi phù hợp.
+
+Lần đầu setup phải biên dịch native, có thể lâu hàng giờ tùy máy. Chạy lại dùng cache; lỗi bước nào thì xem thông báo bước đó, không tạo token thủ công để bỏ qua smoke. Nếu APT báo thiếu root space, dừng và giải phóng dung lượng trước; không chuyển sang cài trong root khi ổ dữ liệu chưa mount.
+
+Sau reboot hoặc khi cần kiểm tra:
+
+```bash
+bash scripts/jetson_system.sh check
+bash scripts/jetson_ai.sh doctor
+```
+
+`check` chỉ đọc các prerequisite hệ thống, `doctor` kiểm tra venv/runtime và CUDA thực tế; không tự sửa môi trường. `uv` đã có ở `$HOME/.local/bin` trên Jetson hiện tại. Trên máy khác thiếu `uv`, cần cài trước khi chạy setup. Mở URL `/test` mà `run` in ra, đợi ba model `ready`, rồi thử text/audio. Smoke setup xác nhận engine chạy được; độ chính xác tiếng Việt và latency mục tiêu cần đánh giá riêng.
+
+## Môi trường mục tiêu trên AGX Xavier
+
+**Quyết định ngày 09/10/2026:** giữ nguyên OS và JetPack; ưu tiên Python 3.12; giữ graph ZeroTTS nguyên bản. Không dùng bản vá ArgMax. Đây là bộ mục tiêu đã kiểm tra compatibility và một phần bằng model thật, chưa được nghiệm thu CUDA trên Xavier. Script trong workspace đã chuyển sang profile `agx-cu118-ort1201-py312`; phần cài hệ thống nằm riêng trong `jetson_system.sh`. Chưa cài bộ mới và chưa nghiệm thu GPU trên Jetson.
+
+### Snapshot SSH, không thay đổi máy
+
+SSH qua alias `jetson` trên Windows đã xác nhận:
+
+- Ubuntu 20.04.6, L4T R35.6.5 (`nvidia-l4t-core` 35.6.5-20260701022834); giữ nguyên OS/kernel/BSP và source `r35.6`.
+- CUDA 11.4.315, cuDNN runtime + dev 8.6.0.166-1+cuda11.4, GCC 9.4.
+- Python hệ thống 3.8.10 và 3.9.5; Python managed 3.12.15 ở `/home/p126/.local/share/uv/python/cpython-3.12.15-linux-aarch64-gnu/bin/python3.12` đang được `.venv` repo dùng. Service AI cũ dùng 3.10.22 ở `/mnt/jetson-data/vivi-ai/venv`. `python3.10`/`python3.12` không có trực tiếp trong PATH; điều đó không có nghĩa các interpreter chưa tồn tại.
+- Root còn 3.5 GiB; mount `/mnt/jetson-data` trên `/dev/mmcblk1p1` còn 46 GiB. GCC 10 chưa cài nhưng APT có candidate 10.5.0-1ubuntu1~20.04. Repository hiện chưa có candidate CUDA 11.8.
+
+### Bộ phiên bản chọn
+
+| Thành phần | Phiên bản / cách sử dụng |
+| --- | --- |
+| OS / BSP | Ubuntu 20.04.6 / L4T R35.6.5 hiện có; không flash hay dist-upgrade |
+| CUDA cho AI | CUDA 11.8.0, nvcc 11.8.89, cài toolkit + `cuda-compat-11-8` chính thức song song CUDA 11.4 |
+| cuDNN | Giữ runtime + headers 8.6.0.166 của JetPack |
+| Python AI | CPython 3.12.15 managed, venv riêng dưới mount dữ liệu |
+| Compiler | GCC/G++ 10.5.0, chọn bằng CC/CXX/CMAKE_CUDA_HOST_COMPILER riêng cho build |
+| CMake | 3.28.4 trong môi trường build riêng |
+| NumPy | 1.26.4 |
+| ONNX Runtime | 1.20.1 GPU, wheel cp312/aarch64 build với CUDA 11.8, cuDNN 8.6, sm_72 |
+| TTS | ZeroTTS 0.1.5, model revision `c2bfbd67dc648cac455077333f7cf5c18a2e3bb4`, VIVI; graph nguyên bản |
+| STT | whisper.cpp v1.7.6 + Whisper-base, CUDA sm_72; không thêm PyTorch vào service Xavier |
+| SLM | llama.cpp b11447 + Qwen3-1.7B Q4_K_M đang pin; build cho CUDA 11.8/sm_72 |
+
+[Cơ chế NVIDIA upgrade CUDA trên JetPack 5](https://developer.nvidia.com/blog/simplifying-cuda-upgrades-for-nvidia-jetson-users/) giữ nguyên Jetson Linux BSP. [Hướng dẫn build ORT](https://onnxruntime.ai/docs/build/eps.html#nvidia-jetson-tx1tx2nanoxavierorin) yêu cầu CUDA >=11.8 và GCC >9.4 cho ORT >=1.17 trên JetPack 5. [cuDNN 8.6 support matrix](https://docs.nvidia.com/deeplearning/cudnn/archives/cudnn-860/support-matrix/index.html) hỗ trợ CUDA 11.8 và cuDNN CUDA 11.x có dynamic-link compatibility trong họ 11.x.
+
+Chọn native + môi trường AI riêng để phù hợp launcher đang có và tránh thêm lớp Docker trong lần chuyển đổi này. Để các máy sau setup đơn giản, build/kiểm thử wheel và native binary một lần trên Xavier rồi đóng gói artifact có SHA256; setup bình thường tải và xác minh artifact, không phải biên dịch lại mỗi lần.
+
+### Kiểm tra đã làm và giới hạn
+
+- Trong venv tạm local Python **3.12.13**, NumPy 1.26.4, ORT **1.20.1 CPU**, cả 5 graph model gốc nạp thành công, ZeroTTS + VIVI tạo WAV thật. Phép thử Python 3.10 cũng thành công. Interpreter mục tiêu trên Jetson là 3.12.15; chưa chạy phép thử GPU này trên ARM.
+- [Bảng kernel ORT 1.20.1](https://github.com/microsoft/onnxruntime/blob/v1.20.1/docs/OperatorKernels.md) hỗ trợ ArgMax(13) INT64 trên CPU, CUDA ArgMax vẫn giới hạn opset 1–11. Cho phép partition vài node sang CPU trong session CUDA là hoạt động bình thường; không mô tả TTS là mọi node đều chạy GPU. Nghiệm thu phải kiểm tra profiling và latency, không chỉ `get_available_providers()`.
+- ORT 1.16.3 đã build trên Xavier nhưng model gốc không nạp được vì ArgMax(13) INT64; loại bộ đó khỏi đường setup mục tiêu. Đổi Python riêng lẻ không giải quyết lỗi kernel này.
+- Chưa cài CUDA 11.8/GCC 10, chưa build wheel GPU 1.20.1, chưa sửa OS/JetPack trên Jetson.
+
+### Các kiểm tra trong đường setup mới
+
+1. Preflight kiểm tra AGX/aarch64/sm_72, L4T/Ubuntu, mount + free space, phiên bản thực tế, quyền cài package. Báo toàn bộ thiếu sót trước khi tải/build nặng. Dùng filesystem UUID để ổ dữ liệu tự mount sau reboot.
+2. Cài compiler và toolkit NVIDIA đúng version/package architecture **aarch64-Jetson**, kiểm tra chữ ký package. Không dùng package SBSA/x86, meta-package `cuda` không pin, `dist-upgrade` hay đổi Python hệ thống. Tính dung lượng theo simulation APT trước khi cài; đặt cache APT trên mount dữ liệu vì root chỉ còn 3.5 GiB.
+3. Giữ CUDA 11.4 và lựa chọn `/usr/local/cuda` của các module khác. AI chọn rõ `/usr/local/cuda-11.8`, compat driver, CC/CXX; chỉ thiết lập loader/PATH cho process AI, không ghi đè cấu hình shell toàn máy.
+4. Tạo venv **mới** cho Python 3.12.15 + ORT 1.20.1, giữ nguyên `.venv` repo và venv AI 3.10 cũ để rollback. Không cài đồng thời hai distribution `onnxruntime` và `onnxruntime-gpu` vào cùng namespace. Cài đủ dependency ZeroTTS; `--no-deps` nếu dùng để tránh CPU wheel phải có kiểm tra dependency riêng, không dùng để bỏ qua yêu cầu phiên bản.
+5. Lock dependency Python trực tiếp và gián tiếp theo Python 3.12/aarch64. Pin source commit/revision, package version, wheel/binary/model SHA256. ORT 1.20.1 vẫn có Eigen ZIP checksum cũ trong deps.txt: xử lý metadata checksum đã xác minh trước build, giữ kiểm tra integrity, không vá source toán tử/model. ZIP SHA1 hiện tại `32b145f525a8308d7ab1c09388b2e288312d8eba` đã được đối chiếu 1.784 file với đúng Eigen commit `e7248b26a1ed53fa030c5c459f7ea095dfd276ac`, không thiếu/thừa/khác nội dung.
+6. Build trong thư mục riêng cho profile mới; không dùng nhầm CMake cache/binary CUDA 11.4. Tắt build unit-test executable ORT trong bộ deploy bằng `onnxruntime_BUILD_UNIT_TESTS=OFF`; vẫn bắt buộc smoke runtime/API. Build artifact một lần rồi xuất gói đã kiểm chứng để setup máy khác không phải build lại.
+7. Tải model gốc theo revision/hash; nếu từng chạy patch thì phục hồi artifact gốc trước smoke. Không sửa graph ArgMax, không tự đổi model/fallback CPU cả engine khi lỗi.
+8. Smoke actual CUDA driver/runtime, SLM generate, STT WAV, TTS tạo WAV với model nguyên bản, sau đó chạy chung ba engine để kiểm tra RAM/GPU và gọi API. Ghi provider/node placement thật, latency, phiên bản vào manifest; thiếu CUDA hoặc lỗi bất kỳ engine nào thì setup chưa hoàn tất.
+9. Chỉ ghi marker/profile manifest và tạo token khi mọi check đã qua. `run` đọc manifest và từ chối profile lệch version; lỗi setup phải chỉ rõ bước lỗi thay vì chỉ báo missing token. Khi chạy không tự tải hay nâng package. Cung cấp `doctor` đọc-only để kiểm tra môi trường sau reboot.
+
+Đường setup mới thực hiện preflight, lock/hash, build và smoke chung ba engine trước khi ghi marker hoàn tất. Phân phối binary/wheel đã nghiệm thu cho máy khác và profiling placement từng node TTS vẫn là công việc tiếp theo; hiện lần đầu setup sẽ build native trên Xavier. Kết quả inference/latency nằm trong `logs/setup-smoke.json`, phiên bản và checksum trong manifest profile.
 
 `run` ưu tiên địa chỉ Tailscale của Jetson, hoặc localhost nếu không có Tailscale. Muốn Laptop kết nối qua LAN, đặt `JETSON_AI_BIND` bằng IP LAN riêng của Jetson trước khi chạy. llama-server và whisper-server chỉ lắng nghe loopback; gateway dùng Bearer token trong `/mnt/jetson-data/vivi-ai/service.env` (quyền 0600). `Ctrl+C` dừng gateway và model process. Muốn đổi mount, dùng `JETSON_AI_DATA_DIR` trong cả hai lệnh. Không cần chạy Docker hay ba lệnh model riêng.
 
@@ -95,7 +186,7 @@ Mở terminal khác tại repo, dùng đúng URL mà `run` đã in:
 set -a
 source /mnt/jetson-data/vivi-ai/service.env
 set +a
-/mnt/jetson-data/vivi-ai/venv/bin/python scripts/test_pipeline.py \
+/mnt/jetson-data/vivi-ai/envs/agx-cu118-ort1201-py312/venv/bin/python scripts/test_pipeline.py \
   --mode jetson --target llm --jetson-url http://<jetson-private-ip>:8789
 ```
 
@@ -134,4 +225,4 @@ export JETSON_AI_POLICY=prefer_local
 
 Sau đó chạy Laptop bằng entrypoint hiện tại. `JETSON_AI_POLICY` mặc định `disabled`. Với provider yêu cầu là `local`, `prefer_local` chọn Jetson nếu LLM `ready`; nếu không thì chọn cloud provider đã cấu hình, sau cùng là `rules`. `offline_only` chỉ chọn Jetson hoặc `rules`, từ chối khi client chỉ định cloud; Soniox được thay bằng STT fallback local (hoặc tắt), VieNeu bị tắt và không còn trong danh sách voice chọn được. `allow_cloud` hiện có cùng thứ tự chọn fallback như `prefer_local`; chưa có chính sách lọc dữ liệu riêng cho từng provider. Giữ voice provider hiện có ở Laptop: **remote STT/TTS adapter chưa được nối vào public `/api/v1`**. Server đã có endpoint STT/TTS độc lập để test trên Jetson; không tự chuyển luồng voice đang dùng bởi các thành viên khác. `RAG_RETRIEVAL_MODE=sqlite_local` vẫn truy xuất trên Laptop; khi model E5 thiếu hoặc lỗi nạp, retriever dùng FTS5 trên **cùng handbook SQLite**. Index hỏng hoặc handbook mất vẫn là lỗi, không bị che bằng fallback.
 
-Router chỉ kiểm tra Jetson trước khi bắt đầu lượt. Nó chưa thử lại nếu Jetson/cloud mất giữa lượt; không replay graph vì có thể đã có side effect. Khi cả Jetson và Internet đều mất, `offline_only` đảm bảo rules/RAG text; `prefer_local` chưa tự xác nhận cloud mất mạng trước khi chọn cloud. Lệnh `setup` và model thật **chưa được smoke trên AGX**. Smoke GPU x86 local đã nạp cùng lúc ba model, tạo WAV và nhận dạng qua API; đây không xác nhận tương thích ARM/CUDA 11.4. Whisper-base đã nhận sai vài từ tiếng Việt trong mẫu tổng hợp ngắn, cần eval/thay model trước nghiệm thu giọng nói. Chỉ chuyển mặc định sang topology mới sau smoke trên Xavier và các fault test trong [kế hoạch migration](LAPTOP_JETSON_MIGRATION_PLAN.md).
+Router chỉ kiểm tra Jetson trước khi bắt đầu lượt. Nó chưa thử lại nếu Jetson/cloud mất giữa lượt; không replay graph vì có thể đã có side effect. Khi cả Jetson và Internet đều mất, `offline_only` đảm bảo rules/RAG text; `prefer_local` chưa tự xác nhận cloud mất mạng trước khi chọn cloud. Lệnh `setup` và model thật **chưa được smoke trên AGX**. Smoke GPU x86 local đã nạp cùng lúc ba model, tạo WAV và nhận dạng qua API; đây không xác nhận tương thích ARM/CUDA 11.8 của profile mới. Whisper-base đã nhận sai vài từ tiếng Việt trong mẫu tổng hợp ngắn, cần eval/thay model trước nghiệm thu giọng nói. Chỉ chuyển mặc định sang topology mới sau smoke trên Xavier và các fault test trong [kế hoạch migration](LAPTOP_JETSON_MIGRATION_PLAN.md).

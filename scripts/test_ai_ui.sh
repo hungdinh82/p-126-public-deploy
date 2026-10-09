@@ -4,7 +4,8 @@ TASK_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$TASK_ROOT"
 if [[ "$(uname -m)" == aarch64 ]]; then
   [[ $# == 0 ]] || { echo 'Trên Xavier, chọn port/device bằng JETSON_AI_* env.' >&2; exit 2; }
-  [[ -f "${JETSON_AI_DATA_DIR:-/mnt/jetson-data/vivi-ai}/speech-setup-complete" ]] || \
+  source scripts/jetson_profile.sh
+  [[ -f "$VIVI_COMPLETE" ]] || \
     bash scripts/jetson_ai.sh setup --profile agx
   exec bash scripts/jetson_ai.sh run
 fi

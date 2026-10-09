@@ -8,4 +8,15 @@ huggingface-hub>=0.23,<1
 tokenizers>=0.20,<1
 soundfile>=0.12,<1
 scipy>=1.10,<2
+sounddevice==0.5.6
+# Native ORT build tools and its runtime dependencies. ZeroTTS's declared
+# dependencies are validated against the GPU distribution by setup.
+cmake==3.28.4
+setuptools==75.8.0
+wheel==0.45.1
+packaging>=24,<27
+coloredlogs==15.0.1
+flatbuffers>=24,<26
+protobuf>=4.25,<5
+sympy>=1.13,<2
 # ZeroTTS and CUDA ONNX Runtime are installed separately by setup.
