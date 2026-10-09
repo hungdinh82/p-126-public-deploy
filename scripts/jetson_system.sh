@@ -11,7 +11,7 @@ system_install() (
   done
   local available
   available="$(df -Pk / | awk 'NR==2 {print $4}')"
-  (( available >= 3145728 )) || { echo 'Need at least 3 GiB free on root before SDK install; APT downloads use data mount.' >&2; exit 1; }
+  (( available >= 786432 )) || { echo 'Need at least 768 MiB free on root before SDK install; resolved package space is checked below.' >&2; exit 1; }
   mkdir -p "$VIVI_DATA/cache/system" "$VIVI_DATA/cache/apt/partial"
   local work="$VIVI_DATA/cache/system" original_cuda original_cuda11
   original_cuda="$(readlink -f /usr/local/cuda || true)"
@@ -53,7 +53,8 @@ system_install() (
     build-essential git curl openssl libportaudio2 \
     cuda-nvcc-11-8=11.8.89-1 cuda-nvrtc-dev-11-8=11.8.89-1 \
     libcublas-dev-11-8=11.11.3.6-1 libcurand-dev-11-8=10.3.0.86-1 \
-    libcufft-dev-11-8=10.9.0.58-1 cuda-compat-11-8=11.8.31339915-1)
+    libcufft-dev-11-8=10.9.0.58-1 libcusparse-dev-11-8=11.7.5.86-1 \
+    cuda-compat-11-8=11.8.31339915-1)
   # Show APT's plan and reject removals before making package changes.
   sudo apt-get --simulate --no-install-recommends install "${packages[@]}" > "$work/apt-plan.txt"
   cat "$work/apt-plan.txt"

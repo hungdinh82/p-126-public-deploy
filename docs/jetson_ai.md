@@ -114,6 +114,19 @@ bash scripts/jetson_ai.sh doctor
 
 `check` chỉ đọc các prerequisite hệ thống, `doctor` kiểm tra venv/runtime và CUDA thực tế; không tự sửa môi trường. `uv` đã có ở `$HOME/.local/bin` trên Jetson hiện tại. Trên máy khác thiếu `uv`, cần cài trước khi chạy setup. Mở URL `/test` mà `run` in ra, đợi ba model `ready`, rồi thử text/audio. Smoke setup xác nhận engine chạy được; độ chính xác tiếng Việt và latency mục tiêu cần đánh giá riêng.
 
+### Nếu bản installer trước báo thiếu `cusparse.h` khi build ORT
+
+Installer trước đã thiếu `libcusparse-dev-11-8`. Bản hiện tại bổ sung package pin `11.7.5.86-1` và kiểm tra các header CUDA trước khi build. Trên máy đã chạy bản cũ, cài bổ sung rồi tiếp tục setup, không xóa build/cache:
+
+```bash
+sudo apt-get -o Dir::Cache::archives=/mnt/jetson-data/vivi-ai/cache/apt \
+  install --no-install-recommends libcusparse-dev-11-8=11.7.5.86-1
+test -r /usr/local/cuda-11.8/include/cusparse.h && echo 'cuSPARSE header OK'
+bash scripts/jetson_ai.sh setup --profile agx
+```
+
+APT sẽ cài cả thư viện runtime cuSPARSE phụ thuộc và báo dung lượng cần thêm trước khi xác nhận. Đây là bổ sung thư viện cho CUDA 11.8, không thay Python/model.
+
 ## Môi trường mục tiêu trên AGX Xavier
 
 **Quyết định ngày 09/10/2026:** giữ nguyên OS và JetPack; ưu tiên Python 3.12; giữ graph ZeroTTS nguyên bản. Không dùng bản vá ArgMax. Đây là bộ mục tiêu đã kiểm tra compatibility và một phần bằng model thật, chưa được nghiệm thu CUDA trên Xavier. Script trong workspace đã chuyển sang profile `agx-cu118-ort1201-py312`; phần cài hệ thống nằm riêng trong `jetson_system.sh`. Chưa cài bộ mới và chưa nghiệm thu GPU trên Jetson.

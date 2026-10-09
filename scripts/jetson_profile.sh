@@ -32,6 +32,14 @@ jetson_sdk_check() {
   fi
   [[ -r "$VIVI_CUDA/compat/libcuda.so.1" ]] \
     || { echo 'Missing cuda-compat-11-8 driver libraries' >&2; missing=1; }
+  # ORT's full CUDA provider includes cuSPARSE even without linking its API.
+  # Check all required SDK headers before spending hours on a native build.
+  local header
+  for header in cuda.h cuda_runtime.h cuda_fp16.h cublas_v2.h cublasLt.h \
+      cusparse.h curand.h cufft.h nvrtc.h; do
+    [[ -r "$VIVI_CUDA/include/$header" ]] \
+      || { echo "Missing CUDA 11.8 header: $header (run jetson_system.sh install)" >&2; missing=1; }
+  done
   for tool in gcc-10 g++-10; do
     if [[ ! -x "/usr/bin/$tool" ]] || \
        [[ "$(/usr/bin/"$tool" -dumpfullversion 2>/dev/null)" != 10.5.0 ]]; then
