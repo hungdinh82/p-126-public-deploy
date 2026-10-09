@@ -135,6 +135,9 @@ class Settings(BaseSettings):
         "AI_SERVER_TOKEN", "JETSON_AI_TOKEN", "ai_server_token", "jetson_ai_token"
     ))
     jetson_ai_probe_timeout_seconds: float = Field(default=0.75, gt=0, le=5)
+    ai_server_auth_required: bool = Field(default=True, validation_alias=AliasChoices(
+        "AI_SERVER_AUTH_REQUIRED", "JETSON_AI_AUTH_REQUIRED", "ai_server_auth_required"
+    ))
 
     @model_validator(mode="after")
     def configure_ai_server(self) -> Settings:
@@ -150,7 +153,10 @@ class Settings(BaseSettings):
                 raise ValueError("AI_SERVER_URL must be an HTTP(S) gateway URL without credentials, query or fragment")
             self.jetson_ai_url = url
             self.local_llm_base_url = url + "/v1"
-            if self.jetson_ai_token:
+            if not self.ai_server_auth_required:
+                self.local_llm_api_key = ""
+                self.jetson_ai_token = ""
+            elif self.jetson_ai_token:
                 self.local_llm_api_key = self.jetson_ai_token
             elif self.local_llm_api_key and self.local_llm_api_key != "local":
                 self.jetson_ai_token = self.local_llm_api_key

@@ -21,10 +21,11 @@
 <p><small>Trang này kiểm thử inference STT/SLM/TTS. RAG, LangGraph và tool xe vẫn chạy trên Laptop; test các nhánh đó bằng scripts/test_pipeline.py.</small></p>
 <script>
 const localToken=__LOCAL_TOKEN_JSON__;
+const authRequired=__AUTH_REQUIRED_JSON__;
 const $=id=>document.getElementById(id);
 const callId=()=>crypto.randomUUID?crypto.randomUUID():Array.from(crypto.getRandomValues(new Uint8Array(16)),v=>v.toString(16).padStart(2,'0')).join('');
 let token=localToken||sessionStorage.getItem('vivi-ai-test-token')||'', busy=false, recorder=null, micStream=null, audioUrl=null, traces=[];
-$('token').value=token;if(localToken)$('auth').hidden=true;
+$('token').value=token;if(localToken||!authRequired)$('auth').hidden=true;
 const fields=[['model_id','Model'],['model_path','Model load từ'],['api_url','Model API'],['location','Chạy tại'],['device','Thiết bị thực tế'],['load_ms','Thời gian load'],['last_latency_ms','Lần xử lý gần nhất']];
 for(const name of ['stt','llm','tts']){
  const c=document.createElement('div');c.className='card';c.id='card-'+name;
@@ -35,7 +36,7 @@ for(const name of ['stt','llm','tts']){
 function seconds(ms){return ms==null?'—':(Number(ms)/1000).toFixed(2)+' s'}
 async function api(path,options={}){
  const start=performance.now();
- const response=await fetch(path,{...options,headers:{Authorization:'Bearer '+token,...options.headers}});
+ const response=await fetch(path,{...options,headers:{...(authRequired?{Authorization:'Bearer '+token}:{}),...options.headers}});
  if(path!='/v1/capabilities'){
   let request=null;if(typeof options.body==='string'){try{request=JSON.parse(options.body)}catch{request=options.body}}else if(options.body instanceof FormData){request=Object.fromEntries([...options.body.entries()].map(([k,v])=>[k,v instanceof File?{filename:v.name,bytes:v.size,content_type:v.type}:v]))}
   let result;try{result=response.headers.get('Content-Type')?.includes('json')?await response.clone().json():{content_type:response.headers.get('Content-Type'),bytes:(await response.clone().arrayBuffer()).byteLength,model:response.headers.get('X-Model-Id'),sample_rate:response.headers.get('X-Audio-Sample-Rate'),latency_ms:response.headers.get('X-ViVi-Latency-Ms')}}catch{result='Không đọc được response'}

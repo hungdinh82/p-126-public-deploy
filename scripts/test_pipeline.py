@@ -10,10 +10,13 @@ import os
 from pathlib import Path
 import sys
 import subprocess
+import tomllib
 from tempfile import TemporaryDirectory
 from uuid import uuid4
 
 import httpx
+from dotenv import dotenv_values
+
 
 ROOT = Path(__file__).resolve().parents[1]
 HELP = """Nhập câu hỏi/lệnh xe; Enter để gửi.
@@ -29,6 +32,8 @@ HELP = """Nhập câu hỏi/lệnh xe; Enter để gửi.
 
 def configure(args: argparse.Namespace, directory: Path) -> None:
     """Override only this process; use isolated history and a simulated vehicle."""
+    from jetson_ai.config import auth_required
+
     os.environ.update({
         "APP_ENV": "test", "VIVI_RUNTIME_PROFILE": "test",
         "VIVI_VEHICLE_PROVIDER": "memory", "VIVI_MEMORY_ENABLED": "false",
@@ -47,12 +52,21 @@ def configure(args: argparse.Namespace, directory: Path) -> None:
             "OPENROUTER_API_KEY": "",
         })
     else:
-        url = args.jetson_url or os.environ.get("JETSON_AI_URL", "")
-        token = os.environ.get("JETSON_AI_TOKEN", "")
-        if not url or not token:
-            raise ValueError("Chế độ jetson cần --jetson-url (hoặc JETSON_AI_URL) và JETSON_AI_TOKEN.")
+        values = {**dotenv_values(ROOT / ".env"), **os.environ}
+        config = tomllib.loads((ROOT / "config.toml").read_text(encoding="utf-8"))
+        url = args.jetson_url or values.get("AI_SERVER_URL") or values.get("JETSON_AI_URL") or config.get("ai_server_url", config.get("jetson_ai_url", ""))
+        token = values.get("AI_SERVER_TOKEN") or values.get("JETSON_AI_TOKEN", "")
+        for name in ("AI_SERVER_AUTH_REQUIRED", "JETSON_AI_AUTH_REQUIRED"):
+            if values.get(name) is not None:
+                os.environ[name] = values[name]
+        if not url or (auth_required() and not token):
+            raise ValueError("Cần URL AI server; chỉ cần token khi ai_server_auth_required = true.")
+        url = url.rstrip("/")
+        if url.endswith("/v1"):
+            url = url[:-3]
         os.environ.update({
             "LLM_PROVIDER": "local", "JETSON_AI_URL": url.rstrip("/"),
+            "AI_SERVER_URL": url, "AI_SERVER_TOKEN": token, "JETSON_AI_TOKEN": token,
             "JETSON_AI_POLICY": args.policy,
             "LOCAL_LLM_BASE_URL": url.rstrip("/") + "/v1",
             "LOCAL_LLM_API_KEY": token,
@@ -189,8 +203,10 @@ async def run(args: argparse.Namespace) -> int:
 
 async def run_llm(args: argparse.Namespace) -> int:
     """Call the actual Jetson model API directly, without the workflow classifier."""
+    from jetson_ai.config import auth_required
+
     url = os.environ["JETSON_AI_URL"].rstrip("/")
-    headers = {"Authorization": "Bearer " + os.environ["JETSON_AI_TOKEN"]}
+    headers = {"Authorization": "Bearer " + os.environ["JETSON_AI_TOKEN"]} if auth_required() else {}
     messages = [{"role": "system", "content": "Bạn là trợ lý hữu ích. Trả lời bằng tiếng Việt, ngắn gọn."}]
     failures = 0
     async with httpx.AsyncClient(timeout=args.timeout, trust_env=False, headers=headers) as client:
@@ -252,7 +268,7 @@ def main() -> int:
     parser.add_argument("--mode", choices=("rules", "local", "jetson"), default="rules")
     parser.add_argument("--target", choices=("pipeline", "llm"), default="pipeline",
                         help="pipeline: RAG/tool; llm: hỏi trực tiếp model API")
-    parser.add_argument("--jetson-url", help="Ví dụ http://100.x.x.x:8789; token lấy từ JETSON_AI_TOKEN")
+    parser.add_argument("--jetson-url", help="URL AI server; mặc định lấy từ config.toml hoặc .env")
     parser.add_argument("--policy", choices=("offline_only", "prefer_local"), default="offline_only")
     parser.add_argument("--retrieval", choices=("sqlite", "sqlite_local"), default="sqlite")
     parser.add_argument("--text", action="append", help="Gửi một input; lặp --text để thử nhiều lượt, hỗ trợ /approve")

@@ -180,13 +180,15 @@ run() {
   [[ -x "$VIVI_DATA/build/llama.cpp/$VIVI_NATIVE_BUILD/bin/llama-server" ]] || fail "Run setup first: missing llama-server"
   [[ -f "$VIVI_COMPLETE" ]] || fail "Setup incomplete for $VIVI_PROFILE; run setup --profile agx"
   "$VIVI_VENV/bin/python" "$VIVI_REPO/scripts/check_jetson_runtime.py" --check-manifest "$VIVI_MANIFEST"
-  [[ -r "$VIVI_DATA/service.env" ]] || fail "Setup incomplete: missing service token"
+  local auth_required
+  auth_required="$(cd "$VIVI_REPO" && "$VIVI_VENV/bin/python" -c 'from jetson_ai.config import auth_required; print(int(auth_required()))')"
+  [[ "$auth_required" == 0 || -r "$VIVI_DATA/service.env" ]] || fail "Setup incomplete: missing service token"
   [[ -x "$VIVI_DATA/build/whisper.cpp/$VIVI_NATIVE_BUILD/bin/whisper-server" ]] || fail "Run setup again: missing STT server"
   [[ -f "$VIVI_DATA/models/speech/whisper/ggml-base.bin" ]] || fail "Run setup again: missing speech weights"
   echo "$VIVI_MODEL_SHA  $VIVI_MODEL" | sha256sum -c --status || fail "Model missing or checksum mismatch"
   set -a
   # Created only by setup and readable by the service user.
-  source "$VIVI_DATA/service.env"
+  if [[ -r "$VIVI_DATA/service.env" ]]; then source "$VIVI_DATA/service.env"; fi
   set +a
   export JETSON_AI_LLM_URL="http://127.0.0.1:$VIVI_BACKEND_PORT"
   local bind="${JETSON_AI_BIND:-}"

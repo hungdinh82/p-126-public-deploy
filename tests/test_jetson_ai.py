@@ -22,6 +22,32 @@ def fake_backend():
 
 
 @pytest.mark.anyio
+async def test_gateway_without_auth_accepts_requests_and_hides_token(fake_backend):
+    _, backend = fake_backend
+    app = create_app(ServiceConfig(token="old-secret" * 4, auth_required=False), transport=backend)
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://localhost") as client:
+        assert (await client.get("/v1/capabilities")).status_code == 200
+        response = await client.post("/v1/chat/completions", json={
+            "messages": [{"role": "user", "content": "hello"}], "max_tokens": 32})
+        assert response.status_code == 200
+        page = (await client.get("/test")).text
+        assert "const authRequired=false;" in page
+        assert "old-secret" not in page
+
+
+def test_gateway_config_can_start_without_token(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    for name in ("JETSON_AI_TOKEN", "AI_SERVER_TOKEN", "AI_SERVER_AUTH_REQUIRED", "JETSON_AI_AUTH_REQUIRED"):
+        monkeypatch.delenv(name, raising=False)
+    (tmp_path / "config.toml").write_text("ai_server_auth_required = false\n")
+    config = ServiceConfig.from_env()
+    assert config.token == "" and config.auth_required is False
+    monkeypatch.setenv("AI_SERVER_AUTH_REQUIRED", "true")
+    with pytest.raises(RuntimeError, match="TOKEN"):
+        ServiceConfig.from_env()
+
+
+@pytest.mark.anyio
 async def test_private_gateway_contract_and_legacy_chat(fake_backend):
     calls, backend = fake_backend
     config = ServiceConfig(token="a" * 32)

@@ -18,7 +18,7 @@ class JetsonProviderRouter:
         self._lock = asyncio.Lock()
 
     async def _ready(self) -> bool:
-        if not self.config.jetson_ai_url or not self.config.jetson_ai_token:
+        if not self.config.jetson_ai_url or (self.config.ai_server_auth_required and not self.config.jetson_ai_token):
             return False
         if time.monotonic() < self._cached_until:
             return self._cached_ready
@@ -30,7 +30,8 @@ class JetsonProviderRouter:
                                              transport=self.transport) as client:
                     response = await client.get(
                         self.config.jetson_ai_url.rstrip("/") + "/v1/capabilities",
-                        headers={"Authorization": f"Bearer {self.config.jetson_ai_token}"},
+                        headers={"Authorization": f"Bearer {self.config.jetson_ai_token}"}
+                        if self.config.ai_server_auth_required else {},
                     )
                 response.raise_for_status()
                 payload = response.json()

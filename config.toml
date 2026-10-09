@@ -53,8 +53,9 @@ local_llm_max_tokens = 512
 # Private AI gateway: can run on Jetson, this PC, or another reachable server.
 # Change only this URL; /v1 and the shared authentication are wired automatically.
 # Docker: use the server's LAN/Tailscale IP, or host.docker.internal for the host PC.
-# Put AI_SERVER_TOKEN in .env (token from the AI server's service.env).
+# Authentication is optional for personal testing on a private network.
 ai_server_url = "http://127.0.0.1:8789"
+ai_server_auth_required = false
 jetson_ai_policy = "prefer_local"
 # To use a standalone LM Studio/llama.cpp server instead, set policy = "disabled"
 # and configure local_llm_base_url / local_llm_api_key above.

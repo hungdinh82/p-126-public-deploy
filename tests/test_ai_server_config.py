@@ -54,3 +54,11 @@ def test_invalid_gateway_url_rejected(url, monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
     with pytest.raises(ValidationError, match="AI_SERVER_URL"):
         Settings(_env_file=None, jetson_ai_policy="prefer_local", ai_server_url=url)
+
+
+def test_disabled_auth_does_not_send_old_token(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+    config = Settings(_env_file=None, jetson_ai_policy="prefer_local",
+                      ai_server_url="http://gpu.test:8789", ai_server_auth_required=False,
+                      jetson_ai_token="old-token", local_llm_api_key="old-key")
+    assert config.local_llm_api_key == config.jetson_ai_token == ""

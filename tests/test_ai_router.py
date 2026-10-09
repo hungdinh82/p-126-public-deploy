@@ -14,6 +14,20 @@ def settings(policy: str, *, local_only: bool = False) -> Settings:
 
 
 @pytest.mark.anyio
+async def test_router_selects_ready_gateway_without_token():
+    def ready(request: httpx.Request) -> httpx.Response:
+        assert "authorization" not in request.headers
+        return httpx.Response(200, json={"contract_version": "1.0", "capabilities": {
+            "llm": {"status": "ready", "model_id": "vivi-qwen3-1.7b"}}})
+
+    config = settings("prefer_local")
+    config.ai_server_auth_required = False
+    config.jetson_ai_token = ""
+    router = JetsonProviderRouter(config, transport=httpx.MockTransport(ready))
+    assert await router.select("local", {"local", "rules"}) == "local"
+
+
+@pytest.mark.anyio
 async def test_router_selects_ready_jetson_before_graph():
     def ready(_request: httpx.Request) -> httpx.Response:
         return httpx.Response(200, json={"contract_version": "1.0", "capabilities": {

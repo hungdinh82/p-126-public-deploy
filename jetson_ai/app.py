@@ -17,6 +17,7 @@ import httpx
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 
+from jetson_ai.config import auth_required
 from jetson_ai.speech import SpeechModels
 
 VERSION = "1.0"
@@ -35,17 +36,20 @@ class ServiceConfig:
     enable_speech: bool = False
     llm_model_path: str = ""
     llm_log_path: str = ""
+    auth_required: bool = True
 
     @classmethod
     def from_env(cls) -> ServiceConfig:
-        token = os.environ.get("JETSON_AI_TOKEN", "")
-        if len(token) < 32:
+        token = os.environ.get("AI_SERVER_TOKEN") or os.environ.get("JETSON_AI_TOKEN", "")
+        required = auth_required()
+        if required and len(token) < 32:
             raise RuntimeError("JETSON_AI_TOKEN must contain at least 32 characters")
         concurrency = int(os.environ.get("JETSON_AI_MAX_CONCURRENT", "1"))
         if concurrency < 1 or concurrency > 4:
             raise RuntimeError("JETSON_AI_MAX_CONCURRENT must be between 1 and 4")
         return cls(
             token=token,
+            auth_required=required,
             model_id=os.environ.get("JETSON_AI_MODEL_ID", "vivi-qwen3-1.7b"),
             backend_url=os.environ.get("JETSON_AI_LLM_URL", "http://127.0.0.1:1235"),
             backend_id=os.environ.get("JETSON_AI_BACKEND_ID", "jetson-xavier"),
@@ -112,7 +116,7 @@ def create_app(config: ServiceConfig, *, transport: httpx.AsyncBaseTransport | N
         if request.url.path in {"/health/live", "/", "/test"}:
             return await call_next(request)
         supplied = request.headers.get("authorization", "")
-        if not hmac.compare_digest(supplied, f"Bearer {config.token}"):
+        if config.auth_required and not hmac.compare_digest(supplied, f"Bearer {config.token}"):
             response = error("UNAUTHORIZED", "Invalid service token", 401, request=request)
         else:
             response = await call_next(request)
@@ -133,7 +137,8 @@ def create_app(config: ServiceConfig, *, transport: httpx.AsyncBaseTransport | N
         local = request.client and request.client.host in {"127.0.0.1", "::1"}
         trusted_host = request.url.hostname in {"127.0.0.1", "localhost", "::1"}
         # LAN clients enter their token. Never trust Host or proxy headers alone.
-        bootstrap = json.dumps(config.token).replace("<", "\\u003c") if local and trusted_host else '""'
+        bootstrap = json.dumps(config.token).replace("<", "\\u003c") if config.auth_required and local and trusted_host else '""'
+        html = html.replace("__AUTH_REQUIRED_JSON__", json.dumps(config.auth_required))
         return HTMLResponse(html.replace("__LOCAL_TOKEN_JSON__", bootstrap),
                             headers={"Cache-Control": "no-store"})
 
@@ -379,4 +384,4 @@ def create_app(config: ServiceConfig, *, transport: httpx.AsyncBaseTransport | N
     return app
 
 
-app = create_app(ServiceConfig.from_env()) if os.environ.get("JETSON_AI_TOKEN") else None
+app = create_app(ServiceConfig.from_env()) if (os.environ.get("JETSON_AI_TOKEN") or os.environ.get("AI_SERVER_TOKEN") or not auth_required()) else None
