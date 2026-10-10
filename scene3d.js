@@ -1304,7 +1304,7 @@ export function createScene(canvas, options = {}) {
     state.displaySpeed = ease(state.displaySpeed, driving ? state.speed : 0, 1.6, dt);
     // The car is lit up gently once the model has loaded.
     state.reveal = vehicle ? (state.reduced ? 1 : ease(state.reveal, 1, 1.4, dt)) : 0;
-    const metersPerSecond = state.displaySpeed / 3.6;
+    const metersPerSecond = driving ? state.displaySpeed / 3.6 : 0;
     // On a planned route the road keeps pace with the map's simulation; otherwise
     // scenery scrolls a bit faster than real speed so city pace reads as motion.
     // A paused route stays on screen while the road fades out.

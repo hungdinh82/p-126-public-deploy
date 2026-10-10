@@ -5,12 +5,13 @@ import random
 import re
 import time
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, nullcontext
 from typing import Any
 from uuid import uuid4
 
 from src.vivi.agents.contracts import AssistantOutput
 from src.vivi.config import get_settings
+from src.vivi.graphs.assistant import CONTROL_EVENTS
 from src.vivi.persistence.event_store import EventStore
 from src.vivi.persistence.runtime_store import RuntimeStore
 from src.vivi.providers import configured_llm_providers
@@ -75,7 +76,7 @@ class LangGraphOrchestrator:
         key = (request.session_id, request.turn_id)
         try:
             async with asyncio.timeout(self.timeout_seconds):
-                async with lock:
+                async with nullcontext() if (request.navigation_event or {}).get("kind") in CONTROL_EVENTS else lock:
                     cached = (
                         await asyncio.to_thread(
                             self.ledger.reserve_turn,
@@ -162,12 +163,26 @@ class LangGraphOrchestrator:
             return response
 
     async def run_stream(self, request: TurnRequest, provider: str | None = None) -> AsyncIterator[dict]:
+        if (request.navigation_event or {}).get("kind") in CONTROL_EVENTS:
+            response = await self.run(request, provider)
+            yield {
+                "type": "final",
+                "streamed_speech": False,
+                "response": response.model_dump(mode="json"),
+                "runtime_epoch": response.runtime_epoch,
+                "snapshot_sequence": response.snapshot_sequence,
+                "event_id": response.event_id,
+            }
+            return
         provider, _ = self._graph(provider)
         sequence = 0
         async with self.turn_scope(request, provider) as cached:
             if cached:
                 yield {
                     "type": "final",
+                    "runtime_epoch": cached.get("runtime_epoch"),
+                    "snapshot_sequence": cached.get("snapshot_sequence", 0),
+                    "event_id": cached.get("event_id"),
                     "streamed_speech": False,
                     "response": cached,
                     "session_id": request.session_id,
@@ -178,6 +193,17 @@ class LangGraphOrchestrator:
                 }
                 return
             async for event in self._stream(request, provider):
+                metadata = event.get("response") or {}
+                epoch = metadata.get("runtime_epoch") or getattr(self.graphs[provider], "runtime_epoch", None)
+                if epoch:
+                    event = {
+                        **event,
+                        "runtime_epoch": epoch,
+                        "snapshot_sequence": metadata.get("snapshot_sequence"),
+                        "event_id": metadata.get(
+                            "event_id", (request.navigation_event or {}).get("id", request.turn_id)
+                        ),
+                    }
                 if self.ledger:
                     sequence += 1
                     event = {
@@ -219,16 +245,26 @@ class LangGraphOrchestrator:
                     if result.get("trip_plan_update"):
                         yield {
                             "type": "trip_plan",
+                            "committed": False,
                             "trip_plan": (update.get("session") or {}).get("trip_plan", result["trip_plan_update"]),
                             "ui_events": result.get("ui_events", []),
                             "provider": turn.get("effective_provider"),
                             "step_id": result["step_id"],
                         }
                     if result.get("navigation_update"):
-                        navigation = (update.get("session") or {}).get("navigation", result["navigation_update"])
+                        from src.vivi.dialogue.contracts import SessionState
+
+                        projected = SessionState.model_validate(update["session"]) if update.get("session") else None
+                        navigation = (
+                            projected.navigation.model_dump(mode="json") if projected else result["navigation_update"]
+                        )
                         yield {
                             "type": "navigation",
+                            "committed": False,
                             "navigation": navigation,
+                            "navigation_workspace": projected.navigation_workspace.model_dump(mode="json")
+                            if projected
+                            else None,
                             "ui_events": result.get("ui_events", []),
                             "provider": turn.get("effective_provider"),
                             "step_id": result["step_id"],
@@ -326,12 +362,16 @@ class LangGraphOrchestrator:
             for stage, latency in output.timings.items()
         ]
         response = TurnResponse(
+            runtime_epoch=output.runtime_epoch,
+            snapshot_sequence=output.snapshot_sequence,
+            event_id=output.event_id,
             session_id=output.session_id,
             turn_id=output.turn_id,
             trace_id=str(uuid4()),
             transcript=request.transcript,
             provider=f"langgraph/{output.diagnostics.get('effective_provider', provider)}",
             steps=output.steps,
+            navigation_workspace=output.navigation_workspace,
             navigation=output.navigation,
             trip_plan=output.trip_plan,
             ui_events=output.ui_events,
@@ -350,8 +390,13 @@ class LangGraphOrchestrator:
             trace=trace,
             diagnostics=output.diagnostics,
         )
-        self.store.append_event({"event_type": "turn", **response.model_dump(mode="json")})
+        if (request.navigation_event or {}).get("kind") not in {"progress", "charge"}:
+            self.store.append_event({"event_type": "turn", **response.model_dump(mode="json")})
         return response
+
+    async def navigation_snapshot(self, session_id):
+        _, graph = self._graph(None)
+        return await graph.snapshot(session_id)
 
     @staticmethod
     def _trace_stage(stage: str) -> str:
@@ -446,12 +491,15 @@ def create_langgraph_orchestrator(
             errors[name] = str(exc)
     fallback_chains = {}
     if config.jetson_ai_policy != "disabled":
-        cloud = [] if config.jetson_ai_policy == "offline_only" or config.rag_local_only else [
-            name for name in ("google", "openai", "openrouter") if name in providers
-        ]
+        cloud = (
+            []
+            if config.jetson_ai_policy == "offline_only" or config.rag_local_only
+            else [name for name in ("google", "openai", "openrouter") if name in providers]
+        )
         fallback_chains["local"] = ["local", *cloud]
-    resolver = SemanticResolver(providers, breaker_seconds=config.provider_breaker_seconds,
-                                fallback_chains=fallback_chains)
+    resolver = SemanticResolver(
+        providers, breaker_seconds=config.provider_breaker_seconds, fallback_chains=fallback_chains
+    )
     saver = ThreadedSqliteSaver(config.data_dir / "runtime" / "conversation-v3.sqlite3")
     graph = build_assistant_graph(
         services,

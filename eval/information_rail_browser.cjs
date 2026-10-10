@@ -11,6 +11,7 @@ for(const size of [{width:1440,height:900},{width:1024,height:768},{width:390,he
  const page=await browser.newPage({viewport:size});const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.goto(`http://127.0.0.1:${server.address().port}`);
  await page.addScriptTag({content:fs.readFileSync(root+'/journey.js','utf8').replace(/export /g,'')});
  await page.evaluate(()=>{window.commands=[];hooks={command:(...args)=>commands.push(args),event(){},announce(){},progress(){},route(){},travel(){}};ensureMap=async()=>{map={resize(){},easeTo(){},getSource(){return{setData(){}}}};};window.vietmapgl=null;});
+ await page.evaluate(async()=>{await document.fonts.ready;});
  const initialLayout=await page.evaluate(()=>{const box=s=>{const r=document.querySelector(s).getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height};};return {scene:box('.space'),assistant:box('.assistant'),dock:box('.dock')};});
  assert.equal(initialLayout.scene.width,size.width,'full-width scene before choices');
  assert.ok(Math.abs(initialLayout.assistant.x+initialLayout.assistant.width/2-size.width/2)<2,'centered assistant');
@@ -34,6 +35,7 @@ for(const size of [{width:1440,height:900},{width:1024,height:768},{width:390,he
  await page.getByRole('button',{name:'Ẩn địa điểm',exact:true}).click();assert.equal(await page.locator('#destination-choices').isVisible(),false);
  await page.getByRole('button',{name:'Địa điểm',exact:true}).click();
  await page.getByRole('button',{name:'Tìm địa điểm khác',exact:true}).click();assert.equal(await page.evaluate(()=>commands.at(-1)[1].arguments.reject_candidates),true);
+ const headingBox=await page.locator('#destination-choices .information-heading').boundingBox();const railBox=await page.locator('#information-rail').boundingBox();assert.ok(headingBox.y>=railBox.y && headingBox.y+headingBox.height<=railBox.y+railBox.height,'hide control remains visible after scrolling');
  assert.deepEqual(errors,[]);await page.screenshot({path:`${screenshots}/layout-${size.width}-${size.height}.png`});console.log('PASS',size.width,size.height,'full scene/stable controls/hide/reopen/map scroll');await page.close();
 }
 }finally{await browser.close();server.close();}})().catch(e=>{console.error(e);server.close();process.exitCode=1});

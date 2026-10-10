@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import math
 
 from src.vivi.dialogue.contracts import ActionDraft, NavigationState, TripPlanState
 from src.vivi.navigation.presentation import route_summary
-from src.vivi.navigation.workflow import NavigationWorkflow, coordinates, route_position
+from src.vivi.navigation.vietmap import VietMapError
+from src.vivi.navigation.workflow import NavigationWorkflow, coordinates, current_origin
 from src.vivi.persistence.runtime_store import fingerprint
+
+logger = logging.getLogger(__name__)
 
 
 class TripWorkflow(NavigationWorkflow):
@@ -24,8 +28,9 @@ class TripWorkflow(NavigationWorkflow):
     def project(plan, result):
         update = result.pop("navigation_update", None)
         if update:
-            for field in NavigationState.model_fields:
-                setattr(plan, field, update[field])
+            for field in plan.model_fields:
+                if field in update:
+                    setattr(plan, field, update[field])
         complete = bool((plan.energy or {}).get("selected_plan")) and not plan.clarification
         plan.calculation_status = (
             "ready" if complete else "draft" if plan.clarification or not plan.selected else "incomplete"
@@ -97,9 +102,7 @@ class TripWorkflow(NavigationWorkflow):
             # A new request gets a new identity; slot resumption retains its draft.
             resuming = step.result and step.result.get("status") == "waiting_slot"
             if not resuming:
-                plan = TripPlanState(origin=event.position or session.navigation.origin)
-                if session.navigation.status in {"running", "charging"} and session.navigation.route:
-                    plan.origin = route_position(session.navigation.route, session.navigation.progress_m)
+                plan = TripPlanState(origin=event.position or await current_origin(session.navigation))
         if not plan.origin and session.navigation.origin:
             plan.origin = session.navigation.origin
         scratch = session.model_copy(deep=True)
@@ -144,9 +147,7 @@ class TripWorkflow(NavigationWorkflow):
                 "error_code": "plan_not_ready",
             }
         observed = await self.services.action_gateway.vehicle.get_state(event.session_id)
-        origin = event.position or session.navigation.origin or plan.origin
-        if session.navigation.status in {"running", "charging"} and session.navigation.route:
-            origin = route_position(session.navigation.route, session.navigation.progress_m)
+        origin = event.position or await current_origin(session.navigation) or plan.origin
         moved = (
             origin
             and math.hypot((origin["lat"] - plan.origin["lat"]) * 111000, (origin["lng"] - plan.origin["lng"]) * 103000)
@@ -179,7 +180,10 @@ class TripWorkflow(NavigationWorkflow):
                 result["message"] = "Vị trí hoặc pin đã thay đổi; mình cập nhật kế hoạch. " + result["message"]
                 plan.calculation_basis = self.calculation_basis()
                 return self.project(plan, result)
-            except Exception:
+            except (VietMapError, TimeoutError):
+                logger.warning(
+                    "Trip replan unavailable session=%s turn=%s", event.session_id, event.turn_id, exc_info=True
+                )
                 plan.calculation_status, plan.offer = "incomplete", None
                 return {
                     "status": "completed",
@@ -201,7 +205,14 @@ class TripWorkflow(NavigationWorkflow):
         nav = NavigationState.model_validate(plan.model_dump(include=set(NavigationState.model_fields)))
         # Navigation revisions are independent of the plan's revision.
         nav.revision = session.navigation.revision + 1
-        result = await super().start(event, nav, stable_command, arguments, "trip.start")
+        result = await super().start(
+            event,
+            nav,
+            stable_command,
+            arguments,
+            "trip.start",
+            keep_parked=session.navigation.status == "paused" and session.navigation.resume_status is not None,
+        )
         if result["status"] == "completed":
             plan.started_revision = plan.revision
             plan.offer["status"] = "accepted"

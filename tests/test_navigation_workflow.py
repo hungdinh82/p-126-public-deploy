@@ -8,7 +8,7 @@ import pytest
 from src.vivi.dialogue.contracts import ActionDraft, SemanticTurn, SessionState
 from src.vivi.dialogue.reducer import record_step, reduce_turn
 from src.vivi.navigation.energy import ChargeBand, ChargingStation, EnergyPlanner, EnergyProfile
-from src.vivi.navigation.vietmap import Place, Route
+from src.vivi.navigation.vietmap import Place, Route, VietMapError
 from tests.test_dialogue_v2 import ScriptedModel, build, invoke
 from tests.test_long_term_memory import services as services
 
@@ -35,7 +35,7 @@ class IntercityMaps:
         distances = {(HANOI, HAIPHONG): 120000, (HANOI, STOP): 50000, (STOP, HAIPHONG): 70000}
         distance = distances.get((a, b))
         if distance is None:
-            raise RuntimeError("No verified road fixture")
+            raise VietMapError("No verified road fixture")
         return Route(distance_m=distance, duration_s=distance / 20, coordinates=[[a[1], a[0]], [b[1], b[0]]], steps=[])
 
 
@@ -65,7 +65,7 @@ async def test_hanoi_haiphong_energy_and_simulation_checkpoint(services, tmp_pat
         {
             "session_id": "driver",
             "turn_id": "plan",
-            "input_text": "đường đi và lộ trình sạc tới Hải Phòng",
+            "input_text": "chỉ đường tới Hải Phòng TEST",
             "position": {"lat": HANOI[0], "lng": HANOI[1], "simulated": True},
         }
     )
@@ -73,7 +73,7 @@ async def test_hanoi_haiphong_energy_and_simulation_checkpoint(services, tmp_pat
     result = await invoke(graph, "chỗ đầu tiên", "select")
     plan = result["navigation"]["energy"]["selected_plan"]
     assert len(plan["stops"]) == stops and plan["arrival_soc"] >= 15
-    assert plan["simulated"] and result["status"] == "confirmation_required"
+    assert plan["simulated"] and result["status"] == "answered"
     if stops:
         assert plan["stops"][0]["arrival_soc"] == pytest.approx(23.33, abs=0.01)
         assert plan["stops"][0]["charge_minutes"] == pytest.approx(10.4)
@@ -106,7 +106,7 @@ async def test_hanoi_haiphong_energy_and_simulation_checkpoint(services, tmp_pat
 
 @pytest.mark.asyncio
 async def test_pending_destination_keeps_running_route_until_confirmation(services, tmp_path):
-    services = replace(services, navigation=Maps())
+    services = replace(services, navigation=Maps(), energy_planner=EnergyPlanner(profile()))
     graph, _, _ = build(services, tmp_path)
     await graph.ainvoke(
         {
@@ -117,7 +117,7 @@ async def test_pending_destination_keeps_running_route_until_confirmation(servic
         }
     )
     selected = await invoke(graph, "chỗ đầu tiên", "choose")
-    assert selected["status"] == "confirmation_required"
+    assert selected["status"] == "answered"
     started = await invoke(graph, "đồng ý", "start")
     before = started["navigation"]
     result = await progress(
@@ -125,10 +125,26 @@ async def test_pending_destination_keeps_running_route_until_confirmation(servic
     )
     nav = result["navigation"]
     assert nav["status"] == "running" and nav["route"] == before["route"]
+    assert nav["pending"], result
     assert nav["pending"]["navigation"]["selected"]["name"] == "Điểm TEST"
-    assert result["status"] == "confirmation_required"
+    assert result["status"] == "answered"
+    stale = await graph.ainvoke(
+        {
+            "session_id": "driver",
+            "turn_id": "stale-point",
+            "navigation_event": {
+                "id": "stale-point",
+                "revision": before["revision"],
+                "kind": "point",
+                "position": {"lat": 21, "lng": 107, "label": "Điểm cũ"},
+            },
+        }
+    )
+    assert stale["navigation"] == nav
+    assert stale["session"]["active"]["steps"][0]["confirmation"] == result["confirmation"]
     cancelled = await invoke(graph, "không", "cancel")
-    assert cancelled["navigation"]["status"] == "running" and not cancelled["navigation"]["pending"]
+    assert cancelled["navigation"]["status"] == "running"
+    assert cancelled["navigation"]["pending"]["navigation"]["offer"]["status"] == "declined"
     result = await progress(
         graph,
         cancelled["navigation"],
@@ -155,7 +171,7 @@ async def test_select_energy_alternative_reissues_grant_before_route_change(serv
         {
             "session_id": "driver",
             "turn_id": "plan",
-            "input_text": "lập lộ trình tới Hải Phòng",
+            "input_text": "chỉ đường tới Hải Phòng TEST",
             "position": {"lat": HANOI[0], "lng": HANOI[1], "simulated": True},
         }
     )
@@ -164,7 +180,7 @@ async def test_select_energy_alternative_reissues_grant_before_route_change(serv
     alternative = next(p for p in nav["alternatives"] if p["strategy"] == "higher_reserve")
     selected = await progress(graph, nav, "alternative", kind="select_plan", plan_id=alternative["id"])
     assert (
-        selected["status"] == "confirmation_required"
+        selected["status"] == "answered"
         and selected["confirmation"]["confirmation_id"] != result["confirmation"]["confirmation_id"]
     )
     assert not (await services.action_gateway.vehicle.get_state("driver")).driving
@@ -183,7 +199,7 @@ async def test_select_energy_alternative_reissues_grant_before_route_change(serv
     revised = await progress(
         graph, pending["navigation"], "pending-alternative", kind="select_plan", plan_id=other["id"]
     )
-    assert revised["navigation"]["status"] == "running" and revised["status"] == "confirmation_required"
+    assert revised["navigation"]["status"] == "running" and revised["status"] == "answered"
     assert revised["navigation"]["energy"]["selected_plan"]["id"] == alternative["id"]
     accepted = await invoke(graph, "đồng ý", "approve-new-plan")
     assert accepted["navigation"]["energy"]["selected_plan"]["id"] == other["id"]
@@ -242,10 +258,12 @@ async def test_simulator_process_restart_restores_checkpoint_energy_without_repl
     assert not (await restarted.action_gateway.vehicle.get_state("driver")).driving
     graph, _, _ = build(restarted, tmp_path, store=ledger)
     after = await progress(graph, before["navigation"], "after-restart", kind="progress", distance_m=6000)
-    assert after["navigation"]["simulated_soc"] == pytest.approx(
-        before["navigation"]["simulated_soc"] - EnergyPlanner(profile()).soc_cost(1000)
-    )
-    assert after["vehicle_state"]["driving"] and not after["navigation"]["alerts"]
+    assert after["navigation"]["status"] == "paused"
+    assert after["navigation"]["simulated_soc"] == before["navigation"]["simulated_soc"]
+    assert after["navigation"]["progress_m"] == 5000
+    assert not (await restarted.action_gateway.vehicle.get_state("driver")).driving
+    resumed = await progress(graph, after["navigation"], "resume-after-restart", kind="resume")
+    assert resumed["navigation"]["status"] == "running"
     graph.close()
 
 
@@ -316,7 +334,7 @@ async def test_voice_navigation_through_http_stream_confirmation_and_progress(se
     assert choice.status_code == 200
     preview = choice.json()
     assert (
-        preview["status"] == "confirmation_required"
+        preview["status"] == "verified"
         and not (await services.action_gateway.vehicle.get_state("driver")).driving
     )
     approved = await client.post(
@@ -550,7 +568,13 @@ class Maps:
         ]
 
     async def route(self, a, b):
-        return Route(**route(abs(b[1] - a[1]) * 1000000))
+        distance = abs(b[1] - a[1]) * 1000000
+        return Route(
+            distance_m=distance,
+            duration_s=distance / 20,
+            coordinates=[[a[1], a[0]], [b[1], b[0]]],
+            steps=[],
+        )
 
     async def place(self, ref):
         return Place(ref_id=ref, name="Nhà thuốc TEST", lat=21, lng=105.9)
@@ -575,7 +599,7 @@ async def test_navigation_preview_restart_consent_and_replay(services, tmp_path)
     assert len(nav["candidates"]) == 1 and nav["candidates"][0]["name"] == "Nhà thuốc TEST"
     assert services.navigation.queries[0][1] == (21, 105.8)
     result = await invoke(graph, "chỗ đầu tiên", "2")
-    assert result["status"] == "confirmation_required" and not result.get("vehicle_state"), result["output"]
+    assert result["status"] == "answered" and not result.get("vehicle_state"), result["output"]
     assert result["navigation"]["status"] == "preview"
     graph.close()
     graph, _, _ = build(services, tmp_path, store=store)
@@ -599,7 +623,7 @@ async def test_navigation_preview_restart_consent_and_replay(services, tmp_path)
 
 @pytest.mark.asyncio
 async def test_origin_event_resumes_original_request(services, tmp_path):
-    services = replace(services, navigation=Maps())
+    services = replace(services, navigation=Maps(), energy_planner=EnergyPlanner(profile()))
     graph, _, _ = build(services, tmp_path)
     result = await invoke(graph, "dẫn tôi đến hiệu thuốc gần nhất", "1")
     assert result["status"] == "clarify", result["output"]
@@ -618,5 +642,5 @@ async def test_origin_event_resumes_original_request(services, tmp_path):
     )
     assert result["status"] == "clarify" and result["navigation"]["status"] == "selecting"
     selected = await invoke(graph, "chỗ đầu tiên", "choose")
-    assert selected["status"] == "confirmation_required" and selected["navigation"]["status"] == "preview"
+    assert selected["status"] == "answered" and selected["navigation"]["status"] == "preview"
     graph.close()

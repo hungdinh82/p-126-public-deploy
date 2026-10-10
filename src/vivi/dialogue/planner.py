@@ -14,7 +14,7 @@ from src.vivi.dialogue.contracts import SemanticTurn, SessionState, semantic_sch
 from src.vivi.dialogue.parser import OfflineParser
 from src.vivi.structured_llm import strict_schema
 
-PROMPT_VERSION = "semantic-unified-14"
+PROMPT_VERSION = "semantic-unified-15"
 SEMANTIC_INSTRUCTION = """
 You interpret the complete CURRENT Vietnamese utterance into SemanticTurn JSON.
 Propose meaning; server code owns task IDs, scheduling, slot collection, consent,
@@ -155,6 +155,16 @@ Specs/part locations/how-to -> manual.search, not navigation or live observation
 Explicit vehicle/edition -> requested_vehicle_model/year. Charging duration in the
 handbook requires question_kind=charging_duration and charging_mode null unless
 AC/DC was supplied; let the server collect it. Live status -> vehicle.get_status.
+
+NAVIGATION QUESTION OWNERSHIP
+pending_navigation_question identifies what a short yes/no answers. accept_place
+selects that candidate; change_destination yes asks for another destination and no
+keeps the verified center. Neither grants start consent. start_plan accepts only
+the current offer. Plans have no driving progress; the active journey continues
+until its replacement is accepted. navigation.stop pauses; navigation.end ends.
+Do not revive a completed planning step to start: use navigation.start with the
+current revision, or trip.start with its ID/revision. Never pick an old plan just
+because its map was viewed. Opening/hiding a map changes no journey or gear.
 
 SPEECH
 text is only a short Vietnamese user-facing reply, offer or clarification. Never
@@ -305,6 +315,7 @@ class SemanticResolver:
             }
 
         return {
+            "pending_navigation_question": session.pending_question(),
             "active": task(session.active, "active"),
             "clarification": session.clarification.model_dump(mode="json") if session.clarification else None,
             "navigation": semantic_navigation_context(session.navigation.model_dump(mode="json")),

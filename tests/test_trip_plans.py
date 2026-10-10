@@ -7,7 +7,7 @@ import pytest
 from src.vivi.dialogue.contracts import SessionState
 from src.vivi.dialogue.parser import OfflineParser
 from src.vivi.navigation.energy import EnergyPlanner
-from src.vivi.navigation.vietmap import Place, Route
+from src.vivi.navigation.vietmap import Place, Route, VietMapError
 from tests.test_dialogue_v2 import ScriptedModel, build, invoke
 from tests.test_long_term_memory import services as services
 from tests.test_navigation_workflow import profile, station
@@ -375,7 +375,7 @@ async def test_missing_return_route_never_reports_no_charging(services, tmp_path
 
     async def no_return(a, b):
         if a == DEST and b == ORIGIN:
-            raise RuntimeError("Missing return route fixture")
+            raise VietMapError("Missing return route fixture")
         return await original_route(a, b)
 
     maps.route = no_return
@@ -426,7 +426,7 @@ async def test_trip_plan_does_not_overwrite_running_navigation(services, tmp_pat
 
 
 @pytest.mark.asyncio
-async def test_cancel_default_plan_cancels_remaining_steps_without_stopping_active_route(services, tmp_path):
+async def test_cancel_default_plan_preserves_unrelated_steps_without_starting_a_route(services, tmp_path):
     services, _ = runtime(services)
     graph, _, gateway = build(services, tmp_path)
     try:
@@ -450,8 +450,10 @@ async def test_cancel_default_plan_cancels_remaining_steps_without_stopping_acti
             }
         )
         assert cancelled["trip_plan"]["calculation_status"] == "cancelled"
-        assert all(s["status"] == "cancelled" for s in cancelled["steps"])
-        assert not gateway.vehicle.state_for("driver").media_playing
+        assert cancelled["steps"][0]["status"] == "cancelled"
+        assert cancelled["steps"][1]["capability"] == "media.play"
+        assert cancelled["steps"][1]["status"] == "completed"
+        assert gateway.vehicle.state_for("driver").media_playing
     finally:
         graph.close()
 
@@ -544,7 +546,7 @@ async def test_log_986_to_989_center_other_single_match_and_preview(services, tm
                 },
             }
         )
-        assert preview["status"] == "confirmation_required"
+        assert preview["status"] == "answered"
         assert not gateway.vehicle.state_for("driver").driving
     finally:
         graph.close()

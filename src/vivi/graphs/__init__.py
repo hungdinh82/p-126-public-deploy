@@ -1,4 +1,5 @@
 """Public construction entry for the single conversation workflow."""
+
 from __future__ import annotations
 
 from src.vivi.dialogue.planner import ModelProvider, SemanticResolver
@@ -23,7 +24,18 @@ def build_graph(services=None):
     provider = services.generation_provider
     client = services.semantic_client
     provider = "model" if client and provider == "unknown" else provider
-    resolver = SemanticResolver({provider: ModelProvider(provider, client, 12 if provider == "local" else 10)} if client else {})
-    graph = build_assistant_graph(services, saver, ledger, resolver=resolver, generators={provider: services.generator, "rules": services.generator if not client else ExtractiveHandbookGenerator()})
+    resolver = SemanticResolver(
+        {provider: ModelProvider(provider, client, 12 if provider == "local" else 10)} if client else {}
+    )
+    graph = build_assistant_graph(
+        services,
+        saver,
+        ledger,
+        resolver=resolver,
+        generators={
+            provider: services.generator,
+            "rules": services.generator if not client else ExtractiveHandbookGenerator(),
+        },
+    )
     graph.default_provider = provider if client else "rules"
     return graph

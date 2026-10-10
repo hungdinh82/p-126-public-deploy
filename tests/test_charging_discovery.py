@@ -13,7 +13,7 @@ from src.vivi.dialogue.parser import OfflineParser, charging_poi_info
 from src.vivi.dialogue.planner import SemanticResolver
 from src.vivi.navigation.charging import VietMapChargingDiscovery, distance, route_context, sample_points
 from src.vivi.navigation.energy import EnergyPlanner
-from src.vivi.navigation.vietmap import Place, Route, VietMapClient
+from src.vivi.navigation.vietmap import Place, Route, VietMapClient, VietMapError
 from src.vivi.navigation.workflow import NavigationWorkflow
 from src.vivi.text import normalize_text
 from tests.test_dialogue_v2 import build, invoke
@@ -91,7 +91,7 @@ class Maps:
     async def route(self, a, b):
         self.roads.append((a, b))
         if self.missing_leg and (a, b) == (STOP, DEST):
-            raise RuntimeError("no access road")
+            raise VietMapError("no access road")
         lengths = {
             (ORIGIN, DEST): 180000,
             (ORIGIN, STOP): 70000,

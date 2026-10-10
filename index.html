@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#04050a" />
   <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"}}</script>
   <title>ViVi — Không gian của bạn</title>
-  <link rel="stylesheet" href="./style.css?v=15" />
+  <link rel="stylesheet" href="./style.css?v=19" />
 </head>
 <body>
   <svg class="icon-library" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
@@ -52,6 +52,8 @@
   </section>
 
   <aside id="information-rail" class="information-rail" aria-label="Địa điểm, kế hoạch và cảnh báo">
+
+    <div id="planning-controls" class="planning-controls" aria-label="Huỷ kế hoạch hoặc tuyến đang lập" hidden></div>
     <div id="information-tabs" class="information-tabs"></div>
   <section id="maneuver" class="maneuver" aria-live="polite" hidden>
     <b id="maneuver-icon">↑</b>
@@ -161,6 +163,7 @@
     <div class="journey-panel">
       <div class="journey-head"><div class="eyebrow"><span></span> HÀNH TRÌNH · VIETMAP</div><button id="journey-close" class="journey-close" aria-label="Đóng hành trình">×</button></div>
       <h2>Hôm nay, mình đi đâu?</h2>
+    <div id="journey-toolbar" class="journey-toolbar" hidden><span id="journey-state"></span><div><button id="journey-visibility" type="button">Ẩn bản đồ &amp; kế hoạch</button><button id="journey-clear" type="button" title="Kết thúc hành trình hiện tại">Kết thúc hành trình</button></div></div>
       <div class="journey-points">
         <div class="journey-point origin"><i></i><div><span>XUẤT PHÁT</span><strong id="journey-origin">Đang xác định vị trí…</strong></div><button id="journey-locate" class="journey-icon-button" aria-label="Lấy lại vị trí hiện tại" title="Lấy lại vị trí hiện tại"><svg><use href="#i-locate"/></svg></button></div>
         <div class="journey-point destination"><i></i><div class="journey-search"><span>ĐIỂM ĐẾN</span><label><svg><use href="#i-search"/></svg><input id="journey-search" placeholder="Tìm địa điểm, địa chỉ…" autocomplete="off" maxlength="200" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="journey-results"></label><ul id="journey-results" class="journey-results" role="listbox" hidden></ul></div></div>
@@ -173,12 +176,13 @@
       </div>
       <div id="journey-next" class="journey-next" aria-live="polite" hidden><b id="journey-next-icon">↑</b><div><strong id="journey-next-text"></strong><span id="journey-next-distance"></span></div></div>
       <div id="journey-controls" class="journey-controls" hidden>
-        <button id="journey-start" class="journey-start"><svg><use href="#i-car"/></svg><span>Bắt đầu mô phỏng</span></button>
+        <button id="journey-start" class="journey-start"><svg><use href="#i-car"/></svg><span>Bắt đầu hành trình</span></button>
         <div class="journey-speed" role="group" aria-label="Tốc độ mô phỏng"><button data-speed="1" aria-pressed="false">1×</button><button data-speed="5" aria-pressed="true">5×</button><button data-speed="15" aria-pressed="false">15×</button></div>
       </div>
       <div class="journey-scroll" id="journey-scroll" tabindex="0" aria-label="Chi tiết hành trình">
         <div id="journey-destination-choices" class="destination-choice-list" hidden></div>
         <div id="journey-energy" class="journey-energy" hidden></div>
+        <details id="journey-history" hidden></details>
         <ol id="journey-steps" class="journey-steps"></ol>
       </div>
     </div>
@@ -187,6 +191,6 @@
   </section>
 
   <dialog id="info-dialog"><div class="dialog-top"><span class="eyebrow">VIVI / SPACE CONCEPT</span><button id="close-dialog" aria-label="Đóng">×</button></div><div id="dialog-content"></div></dialog>
-  <script type="module" src="./app.js?v=68"></script>
+  <script type="module" src="./app.js?v=73"></script>
 </body>
 </html>

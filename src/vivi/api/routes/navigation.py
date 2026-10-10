@@ -10,6 +10,11 @@ from src.vivi.navigation import Place, Route, VietMapClient, VietMapError
 router = APIRouter(prefix="/api/v1/navigation")
 
 
+@router.get("/snapshot")
+async def navigation_snapshot(session_id: str = Query(min_length=1, max_length=100)):
+    return await runtime.orchestrator.navigation_snapshot(session_id)
+
+
 def _client() -> VietMapClient:
     client = VietMapClient(runtime.settings)
     if not client.available:

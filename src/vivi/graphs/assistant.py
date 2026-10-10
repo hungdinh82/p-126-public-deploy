@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
+from contextlib import aclosing, nullcontext
 from datetime import UTC, datetime
 from typing import TypedDict
 from uuid import uuid4
+from weakref import WeakValueDictionary
 
 from langgraph.graph import END, START, StateGraph
 from langgraph.types import Command, interrupt
@@ -17,6 +20,7 @@ from src.vivi.capabilities.registry import REGISTRY, catalog
 from src.vivi.dialogue.contracts import SemanticTurn, SessionState, TurnEvent
 from src.vivi.dialogue.planner import PROMPT_VERSION, SemanticResolver
 from src.vivi.dialogue.reducer import (
+    clear_journey,
     expire,
     prepare_step,
     record_navigation,
@@ -25,11 +29,14 @@ from src.vivi.dialogue.reducer import (
     reduce_turn,
     upgrade_contract,
 )
+from src.vivi.graphs.concurrency import PriorityLock, SupersededTurnError, event_priority, external_read, writer_context
 from src.vivi.navigation.presentation import result_messages
 from src.vivi.navigation.trips import TripWorkflow
 from src.vivi.navigation.workflow import NavigationWorkflow
 from src.vivi.persistence.runtime_store import fingerprint
 from src.vivi.turn_control import current_control
+
+CONTROL_EVENTS = {"gear", "pause", "resume", "end", "clear", "history_clear", "progress", "charge"}
 
 
 class DialogueState(TypedDict, total=False):
@@ -39,10 +46,23 @@ class DialogueState(TypedDict, total=False):
     output: dict
 
 
+logger = logging.getLogger(__name__)
+
+
 class AssistantGraph:
-    def __init__(self, compiled, saver, profile):
+    def __init__(self, compiled, saver, profile, control, vehicle, runtime_epoch, energy):
         self.compiled, self.saver, self.profile = compiled, saver, profile
+        self.control, self.vehicle, self.runtime_epoch = control, vehicle, runtime_epoch
+        self.energy = energy
+        self._generations = {}
+        self._latest_sessions = {}
+        self._pending_telemetry = {}
+        self._gear_requests = {}
         self.default_provider = "rules"
+        # Hold the lock from checkpoint read through the final checkpoint write.
+        # Weak values discard idle session locks; provider aliases share this graph.
+        self._thread_locks = WeakValueDictionary()
+        self._dialogue_locks = WeakValueDictionary()
 
     def event(self, state):
         if "text" in state:
@@ -80,9 +100,129 @@ class AssistantGraph:
     def invoke(self, state):
         return asyncio.run(self.ainvoke(state))
 
+    def thread_lock(self, config):
+        return self._thread_locks.setdefault(config["configurable"]["thread_id"], PriorityLock())
+
+    def generation(self, config):
+        return self._generations.get(config["configurable"]["thread_id"], 0)
+
+    def dialogue_lock(self, config):
+        return self._dialogue_locks.setdefault(config["configurable"]["thread_id"], asyncio.Lock())
+
+    async def reconcile_vehicle(self, session, session_id):
+        nav = session.navigation
+        vehicle = await self.vehicle.get_state(session_id)
+        if nav.status == "running" and not vehicle.driving:
+            if (
+                vehicle.state_version == 0
+                and nav.simulated_soc is not None
+                and self.energy.profile
+                and hasattr(self.vehicle, "set_energy")
+            ):
+                await asyncio.to_thread(
+                    self.vehicle.set_energy,
+                    session_id,
+                    nav.simulated_soc,
+                    nav.simulated_soc / self.energy.soc_cost(1000),
+                )
+            nav.resume_status, nav.status = nav.status, "paused"
+            session = record_navigation(session, nav.model_dump(mode="json"))
+        return session
+
+    async def snapshot(self, session_id):
+        config = self.config({"session_id": session_id})
+        async with self.thread_lock(config):
+            snapshot = await self.compiled.aget_state(config)
+            session = SessionState.model_validate(snapshot.values.get("session") or {})
+            observed = await self.reconcile_vehicle(session, session_id)
+            if observed is not session:
+                session = observed
+                session.snapshot_sequence += 1
+                await self.compiled.aupdate_state(
+                    config, {"session": session.model_dump(mode="json")}, as_node="await_input"
+                )
+                self._generations[config["configurable"]["thread_id"]] = self.generation(config) + 1
+            return {
+                "runtime_epoch": self.runtime_epoch,
+                "snapshot_sequence": session.snapshot_sequence,
+                "event_id": None,
+                "vehicle_state": (await self.vehicle.get_state(session_id)).model_dump(mode="json"),
+                "navigation": session.navigation.model_dump(mode="json"),
+                "navigation_workspace": session.navigation_workspace.model_dump(mode="json"),
+                "trip_plan": session.trip_plan.model_dump(mode="json") if session.trip_plan else None,
+                "ui_events": [],
+                "control_receipts": session.control_receipts,
+            }
+
     async def ainvoke(self, state):
         event = self.event(state)
         config = self.config(event)
+        queued = time.perf_counter()
+        value = event.get("navigation_event") or {}
+        gear_order = None
+        if value.get("kind") == "gear":
+            key = config["configurable"]["thread_id"]
+            prior = self._gear_requests.get(key)
+            gear_order = prior[0] if prior and prior[2] == value["id"] else prior[0] + 1 if prior else 1
+            self._gear_requests[key] = (gear_order, value.get("gear"), value["id"])
+        telemetry_key = (config["configurable"]["thread_id"], value.get("kind"))
+        batch = None
+        if value.get("kind") in {"progress", "charge"}:
+            batch = self._pending_telemetry.get(telemetry_key)
+            if batch is None:
+                batch = {
+                    "event": event,
+                    "count": 1,
+                    "result": None,
+                    "ids": {value["id"]},
+                    "elapsed": {value["id"]: value.get("elapsed_s") or 0},
+                }
+                self._pending_telemetry[telemetry_key] = batch
+            else:
+                if value["id"] not in batch["ids"]:
+                    batch["event"] = event
+                    batch["elapsed"][value["id"]] = value.get("elapsed_s") or 0
+                batch["ids"].add(value["id"])
+                batch["count"] += 1
+        priority_token = event_priority.set(
+            0
+            if value.get("gear") == "P"
+            else 3
+            if value.get("kind") in {"progress", "charge"}
+            else 1
+            if value.get("kind") in CONTROL_EVENTS
+            else 2
+        )
+        lock = self.thread_lock(config)
+        try:
+            async with nullcontext() if value.get("kind") in CONTROL_EVENTS else self.dialogue_lock(config), lock:
+                token = writer_context.set((self, config, lock))
+                try:
+                    if batch:
+                        if batch["result"] is None:
+                            if self._pending_telemetry.get(telemetry_key) is batch:
+                                self._pending_telemetry.pop(telemetry_key)
+                            batch["result"] = await self._invoke_locked(
+                                batch["event"],
+                                config,
+                                queued,
+                                coalesced_ids=batch["ids"],
+                                coalesced_elapsed=batch["elapsed"],
+                            )
+                        result = dict(batch["result"])
+                        result["output"] = {**result["output"], "turn_id": event["turn_id"]}
+                        result["output"]["diagnostics"] = {
+                            **result["output"]["diagnostics"],
+                            "coalesced_events": batch["count"],
+                        }
+                        return self.project(result)
+                    return await self._invoke_locked(event, config, queued, gear_order)
+                finally:
+                    writer_context.reset(token)
+        finally:
+            event_priority.reset(priority_token)
+
+    async def _invoke_locked(self, event, config, queued, gear_order=None, coalesced_ids=None, coalesced_elapsed=None):
         snapshot = await self.compiled.aget_state(config)
         old = snapshot.values.get("event", {})
         if (
@@ -92,15 +232,85 @@ class AssistantGraph:
             if old != event:
                 raise ValueError("turn_id đã được dùng cho một yêu cầu khác.")
             return self.project(snapshot.values)
-        return self.project(await self.compiled.ainvoke(await self.input(event, config), config, durability="sync"))
+        if (event.get("navigation_event") or {}).get("kind") in CONTROL_EVENTS:
+            original_event = event
+            previous = dict(snapshot.values)
+            previous["session"] = (
+                await self.reconcile_vehicle(
+                    SessionState.model_validate(previous.get("session") or {}), event["session_id"]
+                )
+            ).model_dump(mode="json")
+            if event["navigation_event"]["kind"] == "charge" and coalesced_elapsed:
+                applied = set(previous["session"]["navigation_workspace"]["applied_events"])
+                remaining = {key: elapsed for key, elapsed in coalesced_elapsed.items() if key not in applied}
+                if remaining:
+                    event = {
+                        **event,
+                        "navigation_event": {
+                            **event["navigation_event"],
+                            "id": next(reversed(remaining)),
+                            "elapsed_s": min(30, sum(remaining.values())),
+                        },
+                    }
+            latest_gear = self._gear_requests.get(config["configurable"]["thread_id"])
+            superseded = bool(
+                gear_order
+                and event["navigation_event"].get("gear") == "D"
+                and latest_gear
+                and latest_gear[1] == "P"
+                and latest_gear[0] > gear_order
+            )
+            result = await self.control(event, previous, queued, superseded=superseded)
+            result["event"] = original_event
+            if coalesced_ids:
+                applied = result["session"]["navigation_workspace"]["applied_events"]
+                result["session"]["navigation_workspace"]["applied_events"] = list(
+                    dict.fromkeys([*applied, *sorted(coalesced_ids)])
+                )[-100:]
+                result["output"]["navigation"]["applied_events"] = result["session"]["navigation_workspace"][
+                    "applied_events"
+                ]
+                result["output"]["navigation_workspace"] = result["session"]["navigation_workspace"]
+            await self.compiled.aupdate_state(config, result, as_node="await_input")
+            key = config["configurable"]["thread_id"]
+            self._latest_sessions[key] = result["session"]
+            telemetry = event["navigation_event"]["kind"] in {"progress", "charge"}
+            before = SessionState.model_validate(snapshot.values.get("session") or {}).navigation.status
+            after = SessionState.model_validate(result["session"]).navigation.status
+            if not telemetry or before != after:
+                self._generations[key] = self.generation(config) + 1
+            return self.project(result)
+        try:
+            result = await self.compiled.ainvoke(await self.input(event, config), config, durability="sync")
+        except SupersededTurnError:
+            latest = await self.compiled.aget_state(config)
+            result = await self.control(event, latest.values, queued, superseded=True)
+            await self.compiled.aupdate_state(config, result, as_node="await_input")
+        self._generations[config["configurable"]["thread_id"]] = self.generation(config) + 1
+        return self.project(result)
 
     async def astream(self, state, stream_mode):
         event = self.event(state)
         config = self.config(event)
-        async for item in self.compiled.astream(
-            await self.input(event, config), config, stream_mode=stream_mode, durability="sync"
-        ):
-            yield item
+        lock = self.thread_lock(config)
+        async with self.dialogue_lock(config), lock:
+            token = writer_context.set((self, config, lock))
+            try:
+                async with aclosing(
+                    self.compiled.astream(
+                        await self.input(event, config), config, stream_mode=stream_mode, durability="sync"
+                    )
+                ) as stream:
+                    async for item in stream:
+                        yield item
+            except SupersededTurnError:
+                latest = await self.compiled.aget_state(config)
+                result = await self.control(event, latest.values, time.perf_counter(), superseded=True)
+                await self.compiled.aupdate_state(config, result, as_node="await_input")
+                yield ("values", result)
+            finally:
+                writer_context.reset(token)
+            self._generations[config["configurable"]["thread_id"]] = self.generation(config) + 1
 
     @staticmethod
     def project(state):
@@ -121,9 +331,11 @@ class AssistantGraph:
 
 
 def build_assistant_graph(services, saver, store=None, provider=None, *, resolver=None, generators=None, budgets=None):
+    runtime_epoch = str(uuid4())
     resolver = resolver or SemanticResolver()
-    runtime = CapabilityRuntime(services, store, generators, budgets, resolver.breaker_seconds,
-                                provider_chains=resolver.fallback_chains)
+    runtime = CapabilityRuntime(
+        services, store, generators, budgets, resolver.breaker_seconds, provider_chains=resolver.fallback_chains
+    )
     navigation = NavigationWorkflow(services, store, resolver)
     trips = TripWorkflow(services, store, resolver)
     profile = services.memory_profile_id
@@ -132,7 +344,39 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
         event = TurnEvent.model_validate(state["event"])
         previous = SessionState.model_validate(state.get("session") or {})
         session = expire(previous)
+        legacy = state.get("session") or {}
+        if "navigation" in legacy and "navigation_workspace" not in legacy:
+            nav = session.navigation
+            nav.pending, nav.clarification, nav.candidates, nav.offer = None, None, [], None
+            if nav.status in {"running", "charging"}:
+                nav.resume_status, nav.status = nav.status, "paused"
+            session.navigation = nav
+            if session.trip_plan:
+                session.trip_plan.offer = None
+            for task in [session.active, *session.suspended]:
+                if task:
+                    for step in task.steps:
+                        if step.draft.capability.startswith(("navigation.", "trip.")) and step.status != "completed":
+                            step.status, step.confirmation = "cancelled", None
         session = upgrade_contract(session)
+        nav = session.navigation
+        if nav.status == "running":
+            observed = await services.action_gateway.vehicle.get_state(event.session_id)
+            if not observed.driving:
+                if (
+                    observed.state_version == 0
+                    and hasattr(services.action_gateway.vehicle, "set_energy")
+                    and nav.simulated_soc is not None
+                    and navigation.energy.profile
+                ):
+                    await asyncio.to_thread(
+                        services.action_gateway.vehicle.set_energy,
+                        event.session_id,
+                        nav.simulated_soc,
+                        nav.simulated_soc / navigation.energy.soc_cost(1000),
+                    )
+                nav.status, nav.resume_status = "paused", "running"
+                session = record_navigation(session, nav.model_dump(mode="json"))
         expired_id = None
         if previous.active and session.active is None:
             index = previous.active.current_index()
@@ -224,7 +468,24 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
             task = session.active
             index = task.current_index() if task else None
             grant = task.steps[index].confirmation if index is not None else None
-            if grant is None or event.confirmation_id != grant["confirmation_id"]:
+            nav = session.navigation
+            candidate = (nav.pending or {}).get("navigation") or nav.model_dump(mode="json")
+            offer = candidate.get("offer") or {}
+            if event.confirmation_id == (offer.get("grant") or {}).get(
+                "confirmation_id"
+            ) and event.confirmation_decision in {"approve", "deny"}:
+                semantic = SemanticTurn(
+                    act="request",
+                    actions=[
+                        {
+                            "capability": "navigation.start"
+                            if event.confirmation_decision == "approve"
+                            else "navigation.cancel",
+                            "arguments": {"route_revision": nav.revision},
+                        }
+                    ],
+                )
+            elif grant is None or event.confirmation_id != grant["confirmation_id"]:
                 semantic = SemanticTurn(
                     act="clarify", text="Xác nhận không hợp lệ hoặc không còn thuộc yêu cầu hiện tại."
                 )
@@ -246,13 +507,15 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
         elif event.kind == "action" and event.action:
             semantic, served, attempts = SemanticTurn(act="request", actions=[event.action]), "event", []
         else:
-            semantic, served, attempts = await resolver.resolve(
-                event.text,
-                session,
-                requested=event.provider,
-                history=turn["history"],
-                memory=turn["memory"],
-                catalog=catalog(services.navigation is not None),
+            semantic, served, attempts = await external_read(
+                resolver.resolve(
+                    event.text,
+                    session,
+                    requested=event.provider,
+                    history=turn["history"],
+                    memory=turn["memory"],
+                    catalog=catalog(services.navigation is not None),
+                )
             )
         # Domain invalidity is a clarification, never a reason to ask a weaker model.
         if any(action.capability not in REGISTRY for action in semantic.drafts()):
@@ -263,13 +526,20 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
     async def transition(state):
         previous = SessionState.model_validate(state["session"])
         semantic = SemanticTurn.model_validate(state["turn"]["semantic"])
+        reducer_input = previous
+        # A typed map event can create a handle and request its selection in
+        # the same turn. Validate that action against the accepted event state,
+        # not the candidate list from before the event.
+        update = state["turn"].get("navigation_result", {})
+        if update.get("navigation_update"):
+            reducer_input = record_navigation(previous, update["navigation_update"])
+        if update.get("clear_navigation_history"):
+            reducer_input.navigation_workspace.history = []
+        if update.get("clear_journey"):
+            reducer_input = clear_journey(reducer_input)
         session, message = reduce_turn(
-            previous, semantic, revoke_consent_on_clarify=state["event"]["kind"] == "utterance"
+            reducer_input, semantic, revoke_consent_on_clarify=state["event"]["kind"] == "utterance"
         )
-        if state["turn"].get("navigation_result"):
-            update = state["turn"]["navigation_result"]
-            if update.get("navigation_update"):
-                session = record_navigation(session, update["navigation_update"])
         if semantic.act == "clarify" and session.clarification:
             session.clarification.source_text = (
                 previous.clarification.source_text if previous.clarification else state["event"]["text"]
@@ -281,10 +551,18 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
         ):
             session.active.source_text = state["event"]["text"]
         old, new = previous.active, session.active
-        if old and (
-            new is None or old.id != new.id or old.revision != new.revision or semantic.act in {"cancel", "deny"}
+        if (
+            old
+            and old.current_index() is not None
+            and (new is None or old.id != new.id or old.revision != new.revision or semantic.act in {"cancel", "deny"})
         ):
-            await asyncio.to_thread(services.action_gateway.confirmations.cancel, state["event"]["session_id"])
+            for step in old.steps:
+                if step.confirmation and step.status in {"waiting_confirmation", "approved"}:
+                    await asyncio.to_thread(
+                        services.action_gateway.confirmations.cancel,
+                        state["event"]["session_id"],
+                        step.confirmation["confirmation_id"],
+                    )
         turn = {
             **state["turn"],
             "message": message,
@@ -376,16 +654,34 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
             elif spec.executor == "memory":
                 result = await runtime.memory(event, step, arguments, command_id)
             elif spec.executor == "handbook":
-                result = await runtime.handbook(event, arguments, turn["effective_provider"], turn["history"])
+                result = await external_read(
+                    runtime.handbook(event, arguments, turn["effective_provider"], turn["history"])
+                )
             else:
                 workflow = trips if step.draft.capability.startswith("trip.") else navigation
-                result = await workflow.execute(event, session, step, arguments, command_id, turn["effective_provider"])
+                call = workflow.execute(event, session, step, arguments, command_id, turn["effective_provider"])
+                result = (
+                    await external_read(call)
+                    if step.draft.capability.rsplit(".", 1)[-1] in {"plan", "search", "select", "refine"}
+                    else await call
+                )
+        except SupersededTurnError:
+            raise
         except Exception as exc:
+            logger.exception(
+                "Capability failed session=%s turn=%s capability=%s",
+                event.session_id,
+                event.turn_id,
+                step.draft.capability,
+            )
             result = {
                 "status": "unknown",
                 "message": "Mình chưa xác minh được kết quả bước này. Bạn kiểm tra trước khi yêu cầu lại nhé.",
             }
-            turn["errors"] = [*turn["errors"], {"stage": "capability", "message": str(exc)}]
+            turn["errors"] = [
+                *turn["errors"],
+                {"stage": "capability", "error_type": type(exc).__name__, "message": str(exc)},
+            ]
         session = record_step(
             session,
             index,
@@ -408,6 +704,7 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
     async def response(state):
         event = TurnEvent.model_validate(state["event"])
         session = SessionState.model_validate(state["session"])
+        session.snapshot_sequence += 1
         turn = state["turn"]
         semantic = SemanticTurn.model_validate(turn["semantic"])
         results = turn["results"]
@@ -474,7 +771,7 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
             or (semantic.unresolved and semantic.act != "unsupported")
         ):
             status, route = "clarify", "clarify"
-        if last.get("status") == "completed" and current is not None:
+        if last.get("status") == "completed" and current is not None and event.kind != "navigation":
             status = "clarify"  # Never report whole-task completion for a partial chain.
         message = (
             turn["message"]
@@ -514,6 +811,9 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
             "generation_attempts": last.get("generation_attempts", []),
         }
         output = AssistantOutput(
+            runtime_epoch=runtime_epoch,
+            snapshot_sequence=session.snapshot_sequence,
+            event_id=(event.navigation_event or {}).get("id", event.turn_id),
             session_id=event.session_id,
             turn_id=event.turn_id,
             route=route,
@@ -541,11 +841,91 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
             timings=turn["timings"],
             diagnostics=diagnostics,
             steps=steps,
+            navigation_workspace=session.navigation_workspace.model_dump(mode="json"),
             navigation=session.navigation.model_dump(mode="json"),
             trip_plan=session.trip_plan.model_dump(mode="json") if session.trip_plan else None,
             ui_events=[item for result in results for item in result.get("ui_events", [])],
         )
-        return {"output": output.model_dump(mode="json")}
+        return {"output": output.model_dump(mode="json"), "session": session.model_dump(mode="json")}
+
+    async def control(event_data, previous, queued, superseded=False):
+        started = time.perf_counter()
+        event = TurnEvent.model_validate(event_data)
+        session = SessionState.model_validate(previous.get("session") or {})
+        before = session.navigation.status
+        if superseded:
+            for task in [session.active, *session.suspended]:
+                if task:
+                    for step in task.steps:
+                        if step.status == "running" and step.draft.capability.startswith(("navigation.", "trip.")):
+                            step.status, step.command_id = "pending", None
+            result = {
+                "status": "blocked",
+                "message": "Trạng thái hành trình vừa thay đổi. Bạn yêu cầu lại nhé.",
+                "error_code": "superseded_turn",
+            }
+        else:
+            result = await navigation.event(event, session)
+            if result.get("navigation_update"):
+                session = record_navigation(session, result["navigation_update"])
+            if result.get("clear_journey"):
+                session = clear_journey(session)
+            if result.get("clear_navigation_history"):
+                session.navigation_workspace.history = []
+        if event.navigation_event and event.navigation_event.get("kind") not in {"progress", "charge"}:
+            session.control_receipts = [
+                *session.control_receipts[-31:],
+                {
+                    "event_id": event.navigation_event["id"],
+                    "kind": event.navigation_event["kind"],
+                    "gear": event.navigation_event.get("gear"),
+                    "status": result["status"],
+                    "snapshot_sequence": session.snapshot_sequence + 1,
+                },
+            ]
+        result["vehicle_state"] = (await services.action_gateway.vehicle.get_state(event.session_id)).model_dump(
+            mode="json"
+        )
+        elapsed = round((time.perf_counter() - started) * 1000, 2)
+        queue_ms = round((started - queued) * 1000, 2)
+        turn = {
+            "semantic": SemanticTurn(act="reply").model_dump(mode="json"),
+            "results": [],
+            "navigation_result": result,
+            "message": result.get("message", ""),
+            "errors": [],
+            "timings": {"queue": queue_ms, "control": elapsed},
+            "spans": [],
+            "effective_provider": "event",
+            "history_session": event.session_id if profile == "default" else f"profile:{profile}:{event.session_id}",
+        }
+        state = {"event": event_data, "session": session.model_dump(mode="json"), "turn": turn}
+        state.update(await response(state))
+        state["output"]["diagnostics"]["navigation_control"] = {
+            "event_id": (event.navigation_event or {}).get("id"),
+            "kind": (event.navigation_event or {}).get("kind"),
+            "requested_gear": (event.navigation_event or {}).get("gear"),
+            "before": before,
+            "after": session.navigation.status,
+            "queue_ms": queue_ms,
+            "control_ms": elapsed,
+            "reason": result.get("error_code"),
+        }
+        logger.info(
+            "navigation_control session=%s event=%s kind=%s gear=%s before=%s after=%s queue_ms=%s control_ms=%s reason=%s",
+            event.session_id,
+            (event.navigation_event or {}).get("id"),
+            (event.navigation_event or {}).get("kind"),
+            (event.navigation_event or {}).get("gear"),
+            before,
+            session.navigation.status,
+            queue_ms,
+            elapsed,
+            result.get("error_code"),
+        )
+        if not superseded:
+            await persist(state)
+        return state
 
     async def persist(state):
         event, output = state["event"], state["output"]
@@ -578,6 +958,26 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
         async def node(state):
             started = time.perf_counter()
             result = await function(state)
+            context = writer_context.get()
+            if context:
+                owner, config, _ = context
+                latest = owner._latest_sessions.get(config["configurable"]["thread_id"])
+                if latest:
+                    current = SessionState.model_validate(latest)
+                    updated = SessionState.model_validate(result.get("session", state.get("session", {})))
+                    if current.snapshot_sequence > updated.snapshot_sequence:
+                        old_journey, new_journey = (
+                            current.navigation_workspace.journey,
+                            updated.navigation_workspace.journey,
+                        )
+                        if old_journey and new_journey and old_journey.route_id == new_journey.route_id:
+                            updated.navigation_workspace.journey = old_journey.model_copy(deep=True)
+                        updated.navigation_workspace.event_sequence = max(
+                            updated.navigation_workspace.event_sequence, current.navigation_workspace.event_sequence
+                        )
+                        updated.snapshot_sequence = current.snapshot_sequence
+                        updated.control_receipts = current.control_receipts
+                        result["session"] = updated.model_dump(mode="json")
             turn = dict(result.get("turn", state.get("turn", {})))
             elapsed = round((time.perf_counter() - started) * 1000, 2)
             turn["timings"] = {**turn.get("timings", {}), name: turn.get("timings", {}).get(name, 0) + elapsed}
@@ -642,4 +1042,12 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
     graph.add_edge("response", "persist")
     graph.add_conditional_edges("persist", waiting, {"await_input": "await_input", END: END})
     graph.add_edge("await_input", "context")
-    return AssistantGraph(graph.compile(checkpointer=saver), saver, profile)
+    return AssistantGraph(
+        graph.compile(checkpointer=saver),
+        saver,
+        profile,
+        control,
+        services.action_gateway.vehicle,
+        runtime_epoch,
+        navigation.energy,
+    )

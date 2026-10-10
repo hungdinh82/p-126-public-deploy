@@ -43,10 +43,10 @@ class ConfirmationStore:
         self._active_by_session: dict[str, str] = {}
         self._lock = threading.Lock()
 
-    def cancel(self, session_id: str) -> None:
+    def cancel(self, session_id: str, confirmation_id: str | None = None) -> None:
         with self._lock:
-            identifier = self._active_by_session.pop(session_id, None)
-            if identifier in self._pending:
+            identifier = confirmation_id or self._active_by_session.pop(session_id, None)
+            if identifier in self._pending and self._pending[identifier].session_id == session_id:
                 self._pending[identifier].used = True
 
     def create(
@@ -102,8 +102,7 @@ class ConfirmationStore:
             if decision != "approve":
                 return ConfirmationResolution("denied", "Đã hủy thao tác theo lựa chọn của bạn.")
             if vehicle_state is not None and (
-                vehicle_state.vehicle_id != item.vehicle_id
-                or vehicle_state.state_version != item.state_version
+                vehicle_state.vehicle_id != item.vehicle_id or vehicle_state.state_version != item.state_version
             ):
                 return ConfirmationResolution(
                     "denied",

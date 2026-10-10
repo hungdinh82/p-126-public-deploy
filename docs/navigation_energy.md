@@ -225,3 +225,77 @@ UI state và VietMap adapter. Mốc 3 có bộ tính và E2E **mô phỏng** đ�
 nhiều trạm, restart/sạc/replay/cảnh báo. Lộ trình sạc thật chưa được nghiệm thu vì
 chưa có hồ sơ xe và kho trạm thực đủ nguồn; Qwen thật, GPS, browser tile rendering,
 microphone/speaker và xe vật lý vẫn cần kiểm thử trên thiết bị.
+
+
+## Runtime review: concurrency and routing errors
+
+The API already serializes turns by profile/session. `AssistantGraph` also holds
+one in-process lock per checkpoint thread, from snapshot read through execution
+and checkpoint write, for both `ainvoke` and `astream`. Closing/cancelling a stream
+closes the compiled iterator before releasing that lock. Unrelated session threads
+can progress independently. This is for the existing single-worker deployment;
+separate graph instances/processes do not share these in-memory locks.
+
+`route_position` is async and offloads linear geometry interpolation to a worker
+thread. Its worker reads the route without mutating checkpoint state. Cancelling
+the await may leave the read-only calculation finishing in the worker.
+
+Route/charging replans handle `VietMapError` and `TimeoutError` as availability
+failures, log their cause, and retain typed incomplete results. Programming errors
+propagate to the capability boundary (unknown result plus error type and logged
+traceback). Charging-leg batches use `TaskGroup`, cancelling other in-flight legs
+when an unexpected error occurs. `tests/test_navigation_runtime_review.py` covers
+concurrent selection, independent sessions, invoke/stream cancellation, dense route
+geometry, upstream return-route failure, programming errors and sibling cleanup.
+
+## Review vị trí hiện tại, đổi tuyến và xác nhận
+
+Yêu cầu mới lấy vị trí GPS được gửi trong lượt trước tiên; nếu không có thì lấy
+vị trí trên tuyến đang chạy, đang sạc, đã dừng hoặc đã hoàn tất. Điểm xuất phát gốc
+vẫn được giữ để tính chiều về. Chọn tuyến mới xoá SOC và thời gian sạc mô phỏng
+của tuyến cũ, tránh cộng sai mức pin ở lượt cập nhật đầu tiên.
+
+Khi xác nhận dẫn đường, backend đọc lại vị trí và pin. Di chuyển hơn 100 m hoặc
+pin thay đổi ít nhất 1 điểm phần trăm làm tuyến được tính lại, tăng revision và
+yêu cầu xác nhận mới; không đủ dự phòng thì không bắt đầu. Đề xuất sạc khi đang
+chạy khứ hồi tính lại cả hai chiều nếu chưa qua đích, hoặc chỉ phần đường về nếu
+đã qua đích. Tuyến đang chạy được giữ đến khi người dùng chấp nhận đề xuất.
+
+Sự kiện chọn điểm trên bản đồ được kiểm tra revision trước khi tạo handle. Reducer
+nhận trạng thái sự kiện đã được chấp nhận trước khi kiểm tra handle mới; sự kiện
+thuộc revision cũ không được thay địa điểm hay grant đang chờ. Frontend kiểm tra
+lại trạng thái sau khi tải bản đồ bất đồng bộ, tránh mở lại tuyến đã huỷ.
+
+Khi bắt đầu, frontend tải bản đồ cần thiết rồi chuyển sang màn hình xe 3D với
+bản đồ nhỏ. Phản hồi bắt đầu lặp hoặc cập nhật tiến trình không tự mở lại bản đồ
+toàn màn hình; người dùng vẫn có thể mở bản đồ thủ công. Thẻ kế hoạch vừa bắt đầu
+được thu gọn, có thể mở lại để xem. Màn hình chờ có nút huỷ riêng, vẫn hiện khi
+ẩn thẻ và khi yêu cầu đang thiếu vị trí. Huỷ tuyến xem trước xoá tuyến khỏi UI;
+huỷ đề xuất đổi tuyến không dừng hành trình đang chạy. Regression frontend dùng
+DOM/map mock, chưa xác minh trực quan WebGL trên trình duyệt thật.
+
+## Vòng đời hành trình và chế độ P/D
+
+| Trạng thái | Ý nghĩa và chuyển tiếp |
+| --- | --- |
+| `idle` | Không có tuyến; yêu cầu mới chuyển sang chọn điểm hoặc xem trước. |
+| `selecting` | Đang chọn điểm; xe chưa bắt đầu hành trình mới. |
+| `preview` | Tuyến đã tính, chờ xác nhận trước khi chạy. |
+| `running` | Chạy tuyến đã được xác nhận. Tuyến mới trong `pending` là đề xuất riêng. |
+| `charging` | Đang dừng sạc theo kế hoạch. |
+| `paused` | Về P: giữ tiến trình, trạng thái chạy/sạc cần tiếp tục và đề xuất đang chờ. |
+| `completed` | Đã tới đích; không tự chạy lại tuyến. |
+
+Nút P/D gửi `pause`/`resume` qua graph thay vì chỉ đổi fixture xe. P dừng animation
+ngay; D kiểm tra cửa và pin, tiếp tục từ tiến trình checkpoint, không phát lại lệnh
+bắt đầu cũ. Checkpoint cũ thiếu bằng chứng đã bắt đầu cần xác nhận lại. Mỗi tuyến
+có `route_id`; frontend còn đối chiếu nội dung tuyến để tương thích checkpoint cũ.
+Tuyến đang chạy và tuyến chờ xác nhận dùng source bản đồ riêng; đổi tuyến xoá vệt
+đã đi và mạng đường 3D của tuyến cũ.
+
+`clear` chỉ được dùng khi xe ở P: xoá tuyến, kế hoạch và tham chiếu tác vụ hành
+trình trong checkpoint của phiên, tăng revision để chặn sự kiện cũ. History hội
+thoại và ledger hiệu ứng được giữ để điều tra và chống gửi lệnh trùng; đây không
+phải thao tác xoá log SQLite. `Ẩn thông tin` chỉ thay đổi UI, ẩn cả bản đồ nhỏ,
+thẻ, nút huỷ và nút mở lại kế hoạch. Cảnh báo xe vẫn hiện; nút Hành trình trên dock
+cho phép mở lại thông tin chủ động.
