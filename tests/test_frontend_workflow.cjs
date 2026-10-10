@@ -12,6 +12,7 @@ function harness(events) {
     {capability: 'door.set_open', status: 'pending'}
   ]};
   const sandbox = { AbortController, TextDecoder, Uint8Array,
+    currentNavigationRevision: 0, getJourneyPosition: () => null, applyNavigation: async () => {},
     state: {busy: false, sound: false, llmProvider: 'google'}, API_BASE: 'http://test', sessionId: 'driver', DOCK_BY_INTENT: {},
     document: {createElement: () => ({}), body: {classList: {remove() {}}}},
     $: selector => selector === '#turn-steps' ? container : {value: ''},
@@ -19,6 +20,7 @@ function harness(events) {
     setPhase: (...args) => phases.push(args), updateModelStatus() {}, say() {},
     applyBackendState() {throw new Error('No new observation must preserve UI car state');},
     speak: async text => speech.push(text), wait: async () => {},
+    createTtsPlayback: () => ({}), finishTtsPlayback: async () => {},
     fetch: async (url, options) => {
       requests.push(JSON.parse(options.body));
       let sent = false;
@@ -53,4 +55,43 @@ test('old turn speech and duplicate sequence are ignored after barge-in', async 
   ]);
   await vm.runInContext("runBackendCommand('Mở kính', 'new')", h.sandbox);
   assert.deepEqual(h.speech, ['Chờ xác nhận cửa kính']);
+});
+
+test('streamed answer is spoken once without replaying the final payload', async () => {
+  const h = harness([
+    {type: 'speech', text: 'Chờ xác nhận', turn_id: 'new', sequence: 1},
+    {type: 'speech', text: 'cửa kính', turn_id: 'new', sequence: 2}
+  ]);
+  h.sandbox.state.sound = true;
+  h.sandbox.state.ttsAvailable = true;
+  await vm.runInContext("runBackendCommand('Mở kính', 'new')", h.sandbox);
+  assert.deepEqual(h.speech, ['Chờ xác nhận', 'cửa kính']);
+});
+
+test('progress audio does not suppress the final answer when speech events are absent', async () => {
+  const h = harness([{type: 'progress', text: 'Mình đang tìm', turn_id: 'new', sequence: 1}]);
+  h.sandbox.state.sound = true;
+  h.sandbox.state.ttsAvailable = true;
+  await vm.runInContext("runBackendCommand('Mở kính', 'new')", h.sandbox);
+  assert.deepEqual(h.speech, ['Mình đang tìm', 'Chờ xác nhận cửa kính']);
+});
+
+test('browser voice fallback reads the final response once despite streamed clauses', async () => {
+  const h = harness([
+    {type: 'speech', text: 'Chờ xác nhận', turn_id: 'new', sequence: 1},
+    {type: 'speech', text: 'cửa kính', turn_id: 'new', sequence: 2}
+  ]);
+  h.sandbox.state.sound = true;
+  h.sandbox.state.ttsAvailable = false;
+  await vm.runInContext("runBackendCommand('Mở kính', 'new')", h.sandbox);
+  assert.deepEqual(h.speech, ['Chờ xác nhận cửa kính']);
+});
+
+test('audio interrupted by an urgent announcement does not replay old answer audio', async () => {
+  const h = harness([{type: 'speech', text: 'OLD AUDIO', turn_id: 'new', sequence: 1}]);
+  h.sandbox.state.sound = true;
+  h.sandbox.state.ttsAvailable = true;
+  h.sandbox.speak = async text => { h.speech.push(text); h.sandbox.state.audioEpoch = 1; };
+  await vm.runInContext("runBackendCommand('Mở kính', 'new')", h.sandbox);
+  assert.deepEqual(h.speech, ['OLD AUDIO']);
 });

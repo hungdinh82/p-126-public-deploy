@@ -1,0 +1,16 @@
+[
+  {
+    "id": "synthetic-stop-1",
+    "name": "Trạm sạc TEST ONLY — không phải trạm thực tế",
+    "lat": 21.0,
+    "lng": 106.2,
+    "network": "vgreen",
+    "connector": "CCS2",
+    "power_kw": 100,
+    "max_soc": 100,
+    "accessible": true,
+    "source": "Synthetic fixture, not a verified V-Green station",
+    "updated_at": "2026-10-09",
+    "simulated": true
+  }
+]

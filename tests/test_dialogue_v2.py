@@ -30,6 +30,8 @@ class ScriptedModel:
         self.prompts = []
 
     async def agenerate_json(self, **kwargs):
+        if kwargs.get("schema_name") == "destination_choice":
+            return json.dumps({"mode": "clarify", "handle": None, "reason": "ambiguous"})
         self.prompts.append(kwargs["user"])
         reply = next(self.replies)
         if isinstance(reply, Exception):

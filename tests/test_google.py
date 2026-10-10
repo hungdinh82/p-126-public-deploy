@@ -15,11 +15,16 @@ from tests.test_local_llm_graph import _Retriever
 
 
 def configuration(tmp_path, **overrides):
-    defaults = dict(llm_provider="google", google_api_key="google-test",
-                    google_model="gemini-3.5-flash-lite",
-                    rag_local_only=False, rag_retrieval_mode="sqlite",
-                    rag_handbook_db=tmp_path / "book.sqlite3",
-                    rag_history_db=tmp_path / "history.sqlite3", memory_enabled=False)
+    defaults = dict(
+        llm_provider="google",
+        google_api_key="google-test",
+        google_model="gemini-3.5-flash-lite",
+        rag_local_only=False,
+        rag_retrieval_mode="sqlite",
+        rag_handbook_db=tmp_path / "book.sqlite3",
+        rag_history_db=tmp_path / "history.sqlite3",
+        memory_enabled=False,
+    )
     return Settings(**{**defaults, **overrides})
 
 
@@ -31,7 +36,10 @@ def test_google_provider_catalog_and_http_request_validation(tmp_path):
     assert "google" not in llm_models(configuration(tmp_path, rag_local_only=True))
     assert "google" not in configured_llm_providers(configuration(tmp_path, rag_local_only=True))
     assert TurnRequest(transcript="chào", session_id="s", turn_id="t", llm_provider="google").llm_provider == "google"
-    assert ConfirmationDecisionRequest(session_id="s", turn_id="t", decision="approve", llm_provider="google").llm_provider == "google"
+    assert (
+        ConfirmationDecisionRequest(session_id="s", turn_id="t", decision="approve", llm_provider="google").llm_provider
+        == "google"
+    )
 
 
 def test_google_credentials_accept_gemini_alias(monkeypatch):
@@ -57,11 +65,13 @@ def test_google_rejects_missing_key_and_offline_mode(tmp_path):
 
 def test_google_has_independent_credentials_budget_and_endpoint(tmp_path):
     captured = {}
+
     def handler(request):
         captured["url"] = str(request.url)
         captured["body"] = json.loads(request.content)
         assert request.headers["authorization"] == "Bearer google-test"
         return httpx.Response(200, json={"choices": [{"message": {"content": "{}"}}]})
+
     client = google_client(configuration(tmp_path, openai_api_key="different-key", google_max_tokens=2048))
     client.transport = httpx.MockTransport(handler)
     client.generate_json(system="ViVi", user="chào", schema={"type": "object"}, schema_name="test")
@@ -72,24 +82,53 @@ def test_google_has_independent_credentials_budget_and_endpoint(tmp_path):
     assert captured["body"]["response_format"]["type"] == "json_schema"
 
 
+def test_google_portable_schema_keeps_semantic_validation(tmp_path):
+    from pydantic import ValidationError
+
+    from src.vivi.dialogue.contracts import SemanticTurn, semantic_schema
+
+    client = google_client(configuration(tmp_path))
+    original = semantic_schema()
+    payload = client._request_payload("ViVi", "test", original, "vivi_semantic_turn")
+    schema = payload["response_format"]["json_schema"]["schema"]
+    arguments = schema["$defs"]["Arguments"]["properties"]
+    assert "minimum" not in arguments["route_revision"]["anyOf"][0]
+    assert schema["additionalProperties"] is False
+    assert schema["$defs"]["ActionDraft"]["properties"]["capability"]["enum"]
+    assert original["$defs"]["Arguments"]["properties"]["route_revision"]["anyOf"][0]["minimum"] == 1
+    with pytest.raises(ValidationError):
+        SemanticTurn.model_validate(
+            {"act": "request", "actions": [{"capability": "navigation.start", "arguments": {"route_revision": -1}}]}
+        )
+
+
 @pytest.mark.asyncio
 async def test_google_graph_calls_intent_and_grounded_answer(tmp_path):
     requests = []
+
     def handler(request):
         body = json.loads(request.content)
         name = body["response_format"]["json_schema"]["name"]
         requests.append(name)
         if name == "vivi_semantic_turn":
-            result = {"act": "question", "actions": [{"capability": "manual.search", "arguments": {"query": "Sạc AC thế nào?"}}]}
+            result = {
+                "act": "question",
+                "actions": [{"capability": "manual.search", "arguments": {"query": "Sạc AC thế nào?"}}],
+            }
         else:
-            result = {"answer": "Dừng xe ở vị trí an toàn trước khi kết nối cáp sạc.",
-                      "claims": [{"text": "Dừng xe ở vị trí an toàn trước khi kết nối cáp sạc.", "source_ids": ["S1"]}]}
+            result = {
+                "answer": "Dừng xe ở vị trí an toàn trước khi kết nối cáp sạc.",
+                "claims": [{"text": "Dừng xe ở vị trí an toàn trước khi kết nối cáp sạc.", "source_ids": ["S1"]}],
+            }
         return httpx.Response(200, json={"choices": [{"message": {"content": json.dumps(result)}}]})
+
     services = replace(create_services(configuration(tmp_path)), retriever=_Retriever())
     services.semantic_client.transport = httpx.MockTransport(handler)
-    output = (await build_graph(services).ainvoke({
-        "session_id": "google-rag", "turn_id": "one", "input_text": "Sạc AC thế nào?"
-    }))["output"]
+    output = (
+        await build_graph(services).ainvoke(
+            {"session_id": "google-rag", "turn_id": "one", "input_text": "Sạc AC thế nào?"}
+        )
+    )["output"]
     assert requests == ["vivi_semantic_turn", "vivi_grounded_answer"]
     assert output["route"] == "handbook" and output["grounding_status"] == "supported"
     assert output["citations"][0]["source_id"] == "vf-local-charge"

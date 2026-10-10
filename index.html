@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#04050a" />
   <script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"}}</script>
   <title>ViVi — Không gian của bạn</title>
-  <link rel="stylesheet" href="./style.css?v=13" />
+  <link rel="stylesheet" href="./style.css?v=15" />
 </head>
 <body>
   <svg class="icon-library" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
@@ -51,16 +51,24 @@
     <div class="hud-meta"><span id="hud-range">328 km</span><span id="hud-cabin">Cabin 23°</span></div>
   </section>
 
+  <aside id="information-rail" class="information-rail" aria-label="Địa điểm, kế hoạch và cảnh báo">
+    <div id="information-tabs" class="information-tabs"></div>
   <section id="maneuver" class="maneuver" aria-live="polite" hidden>
     <b id="maneuver-icon">↑</b>
     <div><strong id="maneuver-distance"></strong><span id="maneuver-text"></span></div>
     <small id="maneuver-eta"></small>
   </section>
 
+    <section id="destination-choices" class="destination-choices" aria-label="Chọn điểm đến" hidden></section>
+    <section id="trip-plan-card" class="trip-plan-card" aria-label="Kế hoạch chuyến đi" hidden></section>
+    <div id="mini-map-slot" class="mini-map-slot"></div>
+
   <section id="alert-panel" class="alert-panel" aria-label="Cảnh báo xe" aria-live="polite" hidden>
     <div class="alert-panel-heading"><span>CẢNH BÁO CHỦ ĐỘNG</span><strong id="alert-count"></strong></div>
     <div id="alert-list" class="alert-list"></div>
   </section>
+
+  </aside>
 
   <section class="assistant" aria-label="Trò chuyện với ViVi">
     <div class="response" id="response" role="status" aria-live="polite"><span id="orb-state" class="assistant-state">ViVi đang ở đây</span><p id="response-text">Chạm vào sóng và nói điều bạn cần.</p><ol id="turn-steps" class="turn-steps" hidden aria-label="Các bước thực hiện"></ol></div>
@@ -168,13 +176,17 @@
         <button id="journey-start" class="journey-start"><svg><use href="#i-car"/></svg><span>Bắt đầu mô phỏng</span></button>
         <div class="journey-speed" role="group" aria-label="Tốc độ mô phỏng"><button data-speed="1" aria-pressed="false">1×</button><button data-speed="5" aria-pressed="true">5×</button><button data-speed="15" aria-pressed="false">15×</button></div>
       </div>
-      <ol id="journey-steps" class="journey-steps"></ol>
+      <div class="journey-scroll" id="journey-scroll" tabindex="0" aria-label="Chi tiết hành trình">
+        <div id="journey-destination-choices" class="destination-choice-list" hidden></div>
+        <div id="journey-energy" class="journey-energy" hidden></div>
+        <ol id="journey-steps" class="journey-steps"></ol>
+      </div>
     </div>
     <button id="journey-expand" class="journey-expand" aria-label="Mở rộng bản đồ hành trình" title="Mở rộng bản đồ"><svg><use href="#i-expand"/></svg></button>
     <button id="journey-recenter" class="journey-recenter" aria-label="Về vị trí xe" title="Về vị trí xe"><svg><use href="#i-locate"/></svg></button>
   </section>
 
   <dialog id="info-dialog"><div class="dialog-top"><span class="eyebrow">VIVI / SPACE CONCEPT</span><button id="close-dialog" aria-label="Đóng">×</button></div><div id="dialog-content"></div></dialog>
-  <script type="module" src="./app.js?v=67"></script>
+  <script type="module" src="./app.js?v=68"></script>
 </body>
 </html>

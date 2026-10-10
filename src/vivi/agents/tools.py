@@ -32,7 +32,9 @@ class Temperature(Parameters):
 
 class ZonedParameters(Parameters):
     zone: Zone | None = None
-    zones: list[Literal["driver", "front_passenger", "rear_left", "rear_right"]] | None = Field(default=None, min_length=1, max_length=4)
+    zones: list[Literal["driver", "front_passenger", "rear_left", "rear_right"]] | None = Field(
+        default=None, min_length=1, max_length=4
+    )
 
     @model_validator(mode="after")
     def one_target(self):
@@ -44,7 +46,11 @@ class ZonedParameters(Parameters):
 
 
 class Window(ZonedParameters):
-    position_percent: StrictInt = Field(ge=0, le=100, description="Độ mở, không phải chiều cao kính: 0 = nâng kính lên/đóng; 100 = hạ kính xuống/mở. Hạ kính không nói mức nghĩa là 100, không phải 0.")
+    position_percent: StrictInt = Field(
+        ge=0,
+        le=100,
+        description="Độ mở, không phải chiều cao kính: 0 = nâng kính lên/đóng; 100 = hạ kính xuống/mở. Hạ kính không nói mức nghĩa là 100, không phải 0.",
+    )
 
 
 class DoorOpen(ZonedParameters):
@@ -64,8 +70,11 @@ class SeatHeat(ZonedParameters):
 
 
 class MediaPlay(Parameters):
-    media_query: str | None = Field(default=None, max_length=200, description="Requested song, artist or genre only. Omit for generic music; đi/nhé/nhạc are not search terms.")
-
+    media_query: str | None = Field(
+        default=None,
+        max_length=200,
+        description="Requested song, artist or genre only. Omit for generic music; đi/nhé/nhạc are not search terms.",
+    )
 
 
 class SearchQuery(Parameters):
@@ -80,11 +89,16 @@ class ManualSearch(SearchQuery):
 
 
 class StatusRead(Parameters):
-    query: str | None = Field(default=None, pattern=r"^(?:summary|temperature|battery|tires|range|range_time|body|diagnostics)(?:,(?:temperature|battery|tires|range|range_time|body|diagnostics))*$")
+    query: str | None = Field(
+        default=None,
+        pattern=r"^(?:summary|temperature|battery|tires|range|range_time|body|diagnostics)(?:,(?:temperature|battery|tires|range|range_time|body|diagnostics))*$",
+    )
 
 
 class MemoryRecall(Parameters):
-    memory_key: str | None = Field(default=None, description="Khoá đã lưu; preferences để chỉ đọc sở thích; bỏ trống để đọc tất cả.")
+    memory_key: str | None = Field(
+        default=None, description="Khoá đã lưu; preferences để chỉ đọc sở thích; bỏ trống để đọc tất cả."
+    )
 
 
 class MemoryForget(Parameters):
@@ -93,6 +107,47 @@ class MemoryForget(Parameters):
 
 class MemoryRemember(MemoryForget):
     memory_value: str = Field(min_length=1, max_length=700)
+
+
+class NavigationSearch(Parameters):
+    query: str = Field(min_length=2, max_length=200)
+    category: Literal["pharmacy", "charging"] | None = None
+    nearest: bool = False
+    destination_scope: Literal["place", "region"] = "place"
+
+
+class NavigationSelect(Parameters):
+    place_handle: str = Field(min_length=1, max_length=80)
+
+
+class NavigationRefine(Parameters):
+    reject_candidates: bool | None = None
+    choice_handle: str | None = Field(default=None, min_length=1, max_length=80)
+    query: str | None = Field(default=None, min_length=2, max_length=200)
+
+    @model_validator(mode="after")
+    def choice_or_query(self):
+        if sum((bool(self.choice_handle), bool(self.query), self.reject_candidates is True)) != 1:
+            raise ValueError("Provide exactly one choice, query, or reject_candidates=true")
+        return self
+
+
+class NavigationPlan(NavigationSearch):
+    trip_kind: Literal["one_way", "round_trip"] = "one_way"
+    origin_query: str | None = Field(default=None, min_length=2, max_length=200)
+    query: str | None = Field(default=None, min_length=2, max_length=200)
+    use_search_results: bool = False
+
+    @model_validator(mode="after")
+    def destination(self):
+        if not self.query and not self.use_search_results:
+            raise ValueError("A destination query or preceding search is required")
+        return self
+
+
+class NavigationStart(Parameters):
+    route_revision: StrictInt = Field(ge=1)
+    plan_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -113,14 +168,31 @@ class ToolSpec:
 
 
 TOOLS = (
-    ToolSpec("memory.recall", "Đọc thông tin người dùng đã yêu cầu lưu. Không suy diễn từ lịch sử.",
-             MemoryRecall, "Bạn muốn xem thông tin nào đã nhớ?", True),
-    ToolSpec("memory.remember", "Lưu khi người dùng yêu cầu ghi nhớ rõ ràng; key display_name, preferred_music, preferred_temperature, response_style hoặc note.*.",
-             MemoryRemember, "Bạn muốn mình ghi nhớ điều gì?"),
-    ToolSpec("memory.forget", "Xoá một mục đã lưu theo đúng memory_key có trong bộ nhớ.",
-             MemoryForget, "Bạn muốn mình quên thông tin nào?"),
-    ToolSpec("memory.reset", "Đề nghị xoá mọi thông tin cá nhân đã nhớ; hệ thống sẽ hỏi xác nhận trước khi xoá.",
-             Parameters, "Bạn muốn xoá toàn bộ thông tin mình đã nhớ về bạn phải không?"),
+    ToolSpec(
+        "memory.recall",
+        "Đọc thông tin người dùng đã yêu cầu lưu. Không suy diễn từ lịch sử.",
+        MemoryRecall,
+        "Bạn muốn xem thông tin nào đã nhớ?",
+        True,
+    ),
+    ToolSpec(
+        "memory.remember",
+        "Lưu khi người dùng yêu cầu ghi nhớ rõ ràng; key display_name, preferred_music, preferred_temperature, response_style hoặc note.*.",
+        MemoryRemember,
+        "Bạn muốn mình ghi nhớ điều gì?",
+    ),
+    ToolSpec(
+        "memory.forget",
+        "Xoá một mục đã lưu theo đúng memory_key có trong bộ nhớ.",
+        MemoryForget,
+        "Bạn muốn mình quên thông tin nào?",
+    ),
+    ToolSpec(
+        "memory.reset",
+        "Đề nghị xoá mọi thông tin cá nhân đã nhớ; hệ thống sẽ hỏi xác nhận trước khi xoá.",
+        Parameters,
+        "Bạn muốn xoá toàn bộ thông tin mình đã nhớ về bạn phải không?",
+    ),
     ToolSpec(
         "manual.search",
         "Giải thích tính năng, cách dùng, thông số và xử lý sự cố VF8 từ cẩm nang. Không đọc trạng thái hiện tại, không thực hiện thao tác.",
@@ -187,8 +259,112 @@ TOOLS = (
     ToolSpec("media.pause", "Dừng phát âm thanh.", Parameters, "Bạn muốn dừng nhạc phải không?"),
 )
 TOOL_REGISTRY = {tool.name: tool for tool in TOOLS}
-NAVIGATION_TOOL = ToolSpec("navigation.search", "Tìm địa điểm qua VietMap; không giả định GPS hoặc tự bắt đầu dẫn đường.", SearchQuery, "Bạn muốn tìm địa điểm nào?", True)
-TOOL_REGISTRY[NAVIGATION_TOOL.name] = NAVIGATION_TOOL
+NAVIGATION_TOOLS = (
+    ToolSpec(
+        "navigation.search",
+        "Tìm địa điểm. pharmacy/charging là loại địa điểm, nearest cần vị trí và khoảng cách lái xe. Luôn chờ chọn kết quả.",
+        NavigationSearch,
+        "Bạn muốn tìm địa điểm nào?",
+        True,
+    ),
+    ToolSpec(
+        "navigation.plan",
+        "Chờ chọn điểm đến trước khi lập tuyến xem trước. use_search_results dùng danh sách đã tìm ở bước trước. Không tự bắt đầu.",
+        NavigationPlan,
+        "Bạn muốn đi đến đâu?",
+        True,
+    ),
+    ToolSpec(
+        "navigation.select",
+        "Chọn đúng handle từ các địa điểm đã tìm để lập tuyến xem trước.",
+        NavigationSelect,
+        "Bạn muốn chọn địa điểm nào?",
+        True,
+    ),
+    ToolSpec(
+        "navigation.refine",
+        "Làm rõ vùng đang chờ: choice_handle từ navigation.clarification.choices hoặc query là địa điểm cụ thể trong vùng. Không tự bắt đầu tuyến.",
+        NavigationRefine,
+        "Bạn muốn đến trung tâm hay địa điểm cụ thể nào?",
+        True,
+    ),
+    ToolSpec(
+        "navigation.start",
+        "Bắt đầu tuyến xem trước sau xác nhận, bắt buộc route_revision hiện tại; không tự suy quyền xác nhận.",
+        NavigationStart,
+        "Bạn chọn tuyến xem trước nhé.",
+    ),
+    ToolSpec(
+        "navigation.cancel",
+        "Huỷ tìm/chọn điểm đang chờ theo revision; giữ hành trình đang chạy.",
+        NavigationStart,
+        "Bạn muốn huỷ yêu cầu nào?",
+    ),
+    ToolSpec("navigation.stop", "Dừng hành trình hiện tại.", Parameters, "Bạn muốn dừng dẫn đường?"),
+)
+NAVIGATION_TOOL = NAVIGATION_TOOLS[0]
+TOOL_REGISTRY.update({tool.name: tool for tool in NAVIGATION_TOOLS})
+
+
+class TripSelect(NavigationSelect):
+    plan_id: str
+    route_revision: StrictInt = Field(ge=1)
+
+
+class TripRefine(NavigationRefine):
+    plan_id: str
+    route_revision: StrictInt = Field(ge=1)
+
+
+class TripIdentity(Parameters):
+    plan_id: str
+    route_revision: StrictInt = Field(ge=1)
+
+
+TRIP_TOOLS = (
+    ToolSpec(
+        "trip.plan",
+        "Lập kế hoạch chuyến đi/sạc, độc lập dẫn đường đang chạy. Tách điểm đến query, origin_query và trip_kind (round_trip nếu quay lại). Không tự chạy.",
+        NavigationPlan,
+        "Bạn muốn lập kế hoạch tới đâu?",
+        True,
+    ),
+    ToolSpec(
+        "trip.select",
+        "Chọn handle địa điểm của trip_plan hiện tại; giữ đúng ID/revision.",
+        TripSelect,
+        "Bạn chọn địa điểm nào?",
+        True,
+    ),
+    ToolSpec(
+        "trip.refine",
+        "Đổi/giữ điểm mặc định theo câu hỏi trip_plan.clarification, dùng handle hoặc query và ID/revision.",
+        TripRefine,
+        "Bạn muốn đổi điểm đến nào?",
+        True,
+    ),
+    ToolSpec(
+        "trip.start",
+        "Chấp nhận đề nghị bắt đầu kế hoạch đã xem, với đúng ID/revision. Server kiểm tra lại pin/vị trí/policy trước khi chạy.",
+        TripIdentity,
+        "Bạn muốn bắt đầu kế hoạch nào?",
+    ),
+    ToolSpec(
+        "trip.decline",
+        "Từ chối bắt đầu, vẫn giữ kế hoạch để xem lại.",
+        TripIdentity,
+        "Bạn muốn giữ kế hoạch nào?",
+        True,
+    ),
+    ToolSpec(
+        "trip.cancel",
+        "Huỷ kế hoạch đang chờ; không dừng chuyến đang chạy.",
+        TripIdentity,
+        "Bạn muốn huỷ kế hoạch nào?",
+        True,
+    ),
+)
+TOOL_REGISTRY.update({tool.name: tool for tool in TRIP_TOOLS})
 
 
 def validate_tool_arguments(name: str, arguments: dict) -> tuple[dict | None, str | None]:
@@ -204,4 +380,31 @@ def validate_tool_arguments(name: str, arguments: dict) -> tuple[dict | None, st
             return None, "Nhiệt độ hỗ trợ nằm trong khoảng 16 đến 30 độ C."
         if any(error["type"] == "extra_forbidden" for error in exc.errors()):
             return None, "Mình chưa hiểu rõ tham số của thao tác. Bạn nói lại yêu cầu nhé."
-        return None, spec.missing_question
+        missing = {error["loc"][0] for error in exc.errors() if error["type"] == "missing"}
+        questions = {
+            "value_celsius": "Bạn muốn đặt nhiệt độ bao nhiêu?",
+            "position_percent": "Bạn muốn mở kính bao nhiêu phần trăm?",
+            "open": "Bạn muốn mở hay đóng?",
+            "locked": "Bạn muốn khoá hay mở khoá?",
+            "level": "Bạn muốn sưởi ghế mức mấy?",
+            "memory_value": "Bạn muốn mình nhớ tên nào?"
+            if arguments.get("memory_key") == "display_name"
+            else "Bạn muốn mình ghi nhớ nội dung gì?",
+        }
+        if (
+            name in {"door.set_open", "window.set_position", "door.set_lock", "seat.set_heat_level"}
+            and not arguments.get("zone")
+            and not arguments.get("zones")
+        ):
+            questions["target"] = {
+                "door.set_open": "Bạn muốn mở cửa ở vị trí nào?"
+                if arguments.get("open") is True
+                else "Bạn muốn đóng cửa ở vị trí nào?"
+                if arguments.get("open") is False
+                else "Bạn muốn thao tác với cửa ở vị trí nào?",
+                "window.set_position": "Bạn muốn điều chỉnh kính ở vị trí nào?",
+                "door.set_lock": "Bạn muốn khoá hay mở khoá cửa ở vị trí nào?",
+                "seat.set_heat_level": "Bạn muốn điều chỉnh sưởi ghế ở vị trí nào?",
+            }[name]
+            missing.add("target")
+        return None, next((questions[key] for key in questions if key in missing), spec.missing_question)

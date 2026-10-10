@@ -69,7 +69,7 @@ async def health():
         "runtime": "local",
         "orchestration": {
             "engine": "langgraph",
-            "workflow_version": "unified-3",
+            "workflow_version": "unified-5",
             "fallback_chain": _fallback_chain(config),
             "cloud_budget_seconds": config.cloud_budget_seconds,
             "local_budget_seconds": config.local_budget_seconds,

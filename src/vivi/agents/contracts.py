@@ -10,6 +10,19 @@ Route = Literal["handbook", "action", "conversation", "clarify", "unsupported"]
 class ActionProposal(BaseModel):
     intent: Literal[
         "memory.reset",
+        "trip.plan",
+        "trip.select",
+        "trip.refine",
+        "trip.start",
+        "trip.decline",
+        "trip.cancel",
+        "navigation.search",
+        "navigation.plan",
+        "navigation.select",
+        "navigation.refine",
+        "navigation.start",
+        "navigation.stop",
+        "navigation.cancel",
         "climate.set_temperature",
         "window.set_position",
         "door.set_lock",
@@ -60,3 +73,6 @@ class AssistantOutput(BaseModel):
     timings: dict[str, float] = Field(default_factory=dict)
     diagnostics: dict[str, Any] = Field(default_factory=dict)
     steps: list[dict[str, Any]] = Field(default_factory=list)
+    navigation: dict[str, Any] | None = None
+    trip_plan: dict[str, Any] | None = None
+    ui_events: list[dict[str, Any]] = Field(default_factory=list)

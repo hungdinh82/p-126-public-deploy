@@ -114,7 +114,9 @@ class ConfirmationTests(unittest.IsolatedAsyncioTestCase):
                 self.assertIsNone(response.confirmation)
 
         followup = await self.turn("trái")
-        self.assertEqual(followup.status, "clarify")
+        # Location correction now preserves the rear-door task; fresh policy
+        # must still block opening while driving rather than lose the context.
+        self.assertEqual(followup.status, "blocked")
         self.assertIsNone(followup.confirmation)
 
     async def test_new_request_cancels_old_confirmation(self):

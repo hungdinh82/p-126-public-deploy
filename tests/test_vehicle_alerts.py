@@ -68,15 +68,16 @@ def test_alert_episode_is_stable_recovers_and_retriggers_with_new_id() -> None:
     assert same_version.active_alerts[0].alert_id == alert_id
 
     still_active = engine.evaluate(state(2, battery_percent=9))
-    assert still_active.event_sequence == 1
-    assert still_active.active_alerts[0].alert_id == alert_id
+    assert still_active.event_sequence == 2
+    assert next(a for a in still_active.active_alerts if a.code == 'LOW_BATTERY').alert_id == alert_id
+    assert next(a for a in still_active.active_alerts if a.code == 'BATTERY_CRITICAL').severity == 'critical'
 
-    recovered = engine.evaluate(state(3, battery_percent=20))
-    assert recovered.event_sequence == 2
+    recovered = engine.evaluate(state(3, battery_percent=22))
+    assert recovered.event_sequence == 4
     assert recovered.active_alerts == []
 
     retriggered = engine.evaluate(state(4, battery_percent=19))
-    assert retriggered.event_sequence == 3
+    assert retriggered.event_sequence == 5
     assert retriggered.active_alerts[0].alert_id != alert_id
 
 

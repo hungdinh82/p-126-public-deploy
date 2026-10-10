@@ -190,6 +190,15 @@ class Settings(BaseSettings):
     navigation_default_lat: float = 21.0285
     navigation_default_lng: float = 105.8522
     navigation_default_label: str = "Hồ Gươm"
+    energy_profile_path: Path | None = Path("data/energy/vf8-plus.json")
+    charging_stations_path: Path | None = Path("data/energy/charging-stations.json")
+    navigation_pharmacy_category: str = ""
+    navigation_charging_category: str = ""
+    navigation_charging_search_seconds: float = Field(default=8, ge=1, le=15)
+    navigation_charging_radius_m: int = Field(default=20000, ge=1000, le=40000)
+    navigation_charging_max_detour_m: int = Field(default=15000, ge=1000, le=40000)
+    charging_assumptions_path: Path | None = Path("data/energy/charging-assumptions.json")
+    charging_assumptions_enabled: bool = True
 
     database_url: str = "sqlite:///./data/app.db"
     rag_data_dir: Path = Path("./data/handbooks")

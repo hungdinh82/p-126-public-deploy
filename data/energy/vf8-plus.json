@@ -1,0 +1,35 @@
+{
+  "id": "vf8-plus-87kwh-approximate-v1",
+  "vehicle_model": "VF8",
+  "model_year": 2026,
+  "edition": "Plus — cấu hình mô phỏng bản pin 87,7 kWh, không phải VF8 thế hệ mới 60,13 kWh",
+  "usable_kwh": 87.7,
+  "consumption_kwh_per_100km": 22,
+  "max_charge_kw": 149,
+  "charge_curve": [
+    {"until_soc": 50, "power_kw": 120},
+    {"until_soc": 70, "power_kw": 90},
+    {"until_soc": 80, "power_kw": 60},
+    {"until_soc": 90, "power_kw": 35},
+    {"until_soc": 100, "power_kw": 18}
+  ],
+  "connector": "CCS2",
+  "source": "https://vinfastauto.com/vn_vi/dat-coc-xe-vf8 ; tiêu hao/đường cong/connector là giả định mô phỏng",
+  "updated_at": "2026-10-10",
+  "simulated": true,
+  "conservative_factor": 1.15,
+  "field_sources": {
+    "usable_kwh": "VinFast công bố dung lượng khả dụng 87,7 kWh cho VF8 Plus bản pin này",
+    "max_charge_kw": "VinFast công bố công suất sạc nhanh DC tối đa 149 kW",
+    "consumption_kwh_per_100km": "Ước tính 22 kWh/100 km do người dùng chấp nhận thông số gần đúng; chưa hiệu chỉnh bằng telemetry",
+    "charge_curve": "Các dải công suất ước tính cho mô phỏng; không phải đường cong công bố/đo thực tế",
+    "connector": "Giả định CCS2 cho mô phỏng, cần đối chiếu xe/trạm khi dùng thật",
+    "model_year": "Nhãn phiên của backend hiện tại; không xác nhận đời xe vật lý"
+  },
+  "notes": [
+    "Tiêu hao bảo thủ đang dùng: 22 × 1,15 = 25,3 kWh/100 km.",
+    "Dự phòng tối thiểu 15% ở mỗi trạm và đích do EnergyPlanner kiểm soát.",
+    "Thời gian sạc gồm 5 phút thao tác; thời gian chờ trụ chưa biết.",
+    "simulated=true phải được giữ cho đến khi thông số tiêu hao/đường cong được xác minh."
+  ]
+}
