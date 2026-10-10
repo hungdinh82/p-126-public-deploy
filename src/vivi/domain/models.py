@@ -6,8 +6,22 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field, model_validator
 
 from src.vivi.dialogue.contracts import ActionDraft
+from src.vivi.navigation.workflow import NavigationEvent, Position
 
 Intent = Literal[
+    "trip.plan",
+    "trip.select",
+    "trip.refine",
+    "trip.start",
+    "trip.decline",
+    "trip.cancel",
+    "navigation.search",
+    "navigation.plan",
+    "navigation.select",
+    "navigation.refine",
+    "navigation.start",
+    "navigation.stop",
+    "navigation.cancel",
     "memory.reset",
     "climate.set_temperature",
     "window.set_position",
@@ -28,7 +42,9 @@ Intent = Literal[
 ]
 Route = Literal["conversation", "handbook", "vehicle", "clarify", "unsupported"]
 RiskClass = Literal["R0", "R1", "R2", "R3"]
-TurnStatus = Literal["verified", "clarify", "blocked", "confirmation_required", "denied", "expired", "unsupported", "unverified", "error"]
+TurnStatus = Literal[
+    "verified", "clarify", "blocked", "confirmation_required", "denied", "expired", "unsupported", "unverified", "error"
+]
 
 
 class ActionProposal(BaseModel):
@@ -87,8 +103,14 @@ ACTION_JSON_SCHEMA = {
                 "media_query": {"type": ["string", "null"]},
             },
             "required": [
-                "value_celsius", "position_percent", "query", "open", "locked", "level",
-                "zone", "media_query"
+                "value_celsius",
+                "position_percent",
+                "query",
+                "open",
+                "locked",
+                "level",
+                "zone",
+                "media_query",
             ],
             "additionalProperties": False,
         },
@@ -168,18 +190,14 @@ class VehicleState(BaseModel):
         if "power_state" not in migrated:
             migrated["power_state"] = "driving" if migrated.get("driving", False) else "off"
         migrated["driving"] = migrated["power_state"] == "driving"
-        windows = migrated.get("window_positions") or {
-            "driver": migrated.get("window_driver_percent", 0)
-        }
+        windows = migrated.get("window_positions") or {"driver": migrated.get("window_driver_percent", 0)}
         doors = migrated.get("door_states") or {
             "driver": {
                 "open": migrated.get("door_driver_open", False),
                 "locked": migrated.get("door_driver_locked", False),
             }
         }
-        seats = migrated.get("seat_heat_levels") or {
-            "driver": migrated.get("seat_driver_heat_level", 0)
-        }
+        seats = migrated.get("seat_heat_levels") or {"driver": migrated.get("seat_driver_heat_level", 0)}
         if isinstance(windows, BaseModel):
             windows = windows.model_dump()
         if isinstance(doors, BaseModel):
@@ -222,6 +240,8 @@ class ConfirmationPreview(BaseModel):
 
 class TurnRequest(BaseModel):
     action: ActionDraft | None = None
+    navigation_event: dict[str, Any] | None = None
+    position: dict[str, Any] | None = None
     transcript: str = Field(min_length=1, max_length=500)
     session_id: str = Field(min_length=1, max_length=100)
     turn_id: str = Field(min_length=1, max_length=100)
@@ -233,6 +253,23 @@ class TurnRequest(BaseModel):
     confirmation_id: str | None = Field(default=None, max_length=100)
     confirmation_decision: Literal["approve", "deny"] | None = None
     llm_provider: Literal["rules", "openai", "google", "local", "openrouter"] | None = None
+
+    @model_validator(mode="after")
+    def validate_navigation(self):
+        if self.position:
+            self.position = Position.model_validate(self.position).model_dump(mode="json")
+        if self.navigation_event:
+            value = NavigationEvent.model_validate(self.navigation_event)
+            if value.kind in {"position", "point"} and value.position is None:
+                raise ValueError("navigation position is required")
+            if value.kind == "progress" and value.distance_m is None:
+                raise ValueError("navigation distance_m is required")
+            if value.kind == "charge" and value.elapsed_s is None:
+                raise ValueError("navigation elapsed_s is required")
+            if value.kind == "select_plan" and not value.plan_id:
+                raise ValueError("navigation plan_id is required")
+            self.navigation_event = value.model_dump(mode="json")
+        return self
 
 
 class TurnResponse(BaseModel):
@@ -256,6 +293,9 @@ class TurnResponse(BaseModel):
     trace: list[TraceSpan] = Field(default_factory=list)
     diagnostics: dict[str, Any] = Field(default_factory=dict)
     steps: list[dict[str, Any]] = Field(default_factory=list)
+    navigation: dict[str, Any] | None = None
+    trip_plan: dict[str, Any] | None = None
+    ui_events: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class STTResponse(BaseModel):

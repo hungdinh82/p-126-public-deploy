@@ -63,6 +63,18 @@ class VehicleSimulator:
                 state.updated_at = datetime.now(UTC)
             return state.model_copy(deep=True)
 
+    def set_energy(self, session_id, soc, range_km):
+        """Server-computed simulation energy; never accepts browser SOC."""
+        import math
+        with self._lock:
+            state = self._states.setdefault(session_id, VehicleState())
+            battery, remaining = max(0, min(100, math.floor(soc))), max(0, math.floor(range_km))
+            if (battery, remaining) != (state.battery_percent, state.range_km):
+                state.battery_percent, state.range_km = battery, remaining
+                state.state_version += 1
+                state.updated_at = datetime.now(UTC)
+            return state.model_copy(deep=True)
+
     def execute_sync(
         self,
         session_id: str,

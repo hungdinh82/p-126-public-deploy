@@ -1,4 +1,4 @@
-import { closeJourney, initJourney, openJourney, pauseJourney } from './journey.js?v=16';
+import { closeJourney, initJourney, openJourney, pauseJourney, applyNavigation, getJourneyPosition } from './journey.js?v=17';
 import { createCabinMusic } from './music.js?v=2';
 import { neonBorder } from './neon.js?v=2';
 import { createWave } from './wave.js?v=2';
@@ -33,7 +33,7 @@ function rememberEdgeCommand(command) {
 let activePanelView = '';
 const seenAlertIds = new Set();
 const alertLastSpoken = new Map();
-const ALERT_TTS_COOLDOWN_MS = 30000;
+const ALERT_TTS_COOLDOWN_MS = 300000;
 const MAX_SEEN_ALERT_IDS = 1024;
 const phaseLabels = { idle: 'ViVi đang ở đây', listening: 'Mình đang nghe bạn', transcribing: 'Mình đang nhận diện lời nói', thinking: 'Để mình xem nhé', validating: 'Đang kiểm tra an toàn', acting: 'Đang chăm sóc không gian của bạn', synthesizing: 'Đang chuẩn bị giọng Mai Chi', speaking: 'Một chút dễ chịu, dành cho bạn', confirm: 'Mình chờ bạn xác nhận', clarify: 'Mình chờ bạn nói thêm', blocked: 'Mình giữ nguyên trạng thái xe' };
 const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -272,6 +272,8 @@ setInterval(() => {
 }, 500);
 const alertCodeLabels = {
   LOW_BATTERY: 'Pin yếu',
+  BATTERY_CRITICAL: 'Pin rất thấp',
+  ROUTE_ENERGY_LOW: 'Pin không đủ cho tuyến',
   TIRE_PRESSURE_LOW: 'Áp suất lốp thấp',
   TIRE_PRESSURE_HIGH: 'Áp suất lốp cao',
   POWERTRAIN_OVERHEAT: 'Hệ truyền động quá nhiệt',
@@ -293,6 +295,7 @@ function renderAlerts(snapshot) {
 }
 function announceNewAlerts(alerts) {
   for (const alert of alerts) {
+    if (alert.announce === false) continue;
     if (seenAlertIds.has(alert.alert_id)) {
       seenAlertIds.delete(alert.alert_id);
       seenAlertIds.add(alert.alert_id);
@@ -305,8 +308,28 @@ function announceNewAlerts(alerts) {
     const inCooldown = now - (alertLastSpoken.get(key) || 0) < ALERT_TTS_COOLDOWN_MS;
     if (!state.sound || (alert.severity !== 'critical' && inCooldown)) continue;
     alertLastSpoken.set(key, now);
-    speak(alert.message, `alert-${alert.alert_id}`).catch(() => say(alert.message));
+    queueAnnouncement(alert.message, alert.severity === 'critical' ? 2 : 1, `alert-${alert.alert_id}`);
   }
+}
+const announcementQueue = [];
+let announcementRunning = false;
+function queueAnnouncement(text, priority = 0, id = makeId()) {
+  if (!state.sound) return;
+  announcementQueue.push({text,priority,id});
+  announcementQueue.sort((a,b)=>b.priority-a.priority);
+  if(priority === 2) { state.audioEpoch=(state.audioEpoch || 0)+1; stopPlayback(); if('speechSynthesis' in window) speechSynthesis.cancel(); }
+  void drainAnnouncements();
+}
+async function drainAnnouncements() {
+  if(announcementRunning || !announcementQueue.length) return;
+  if((state.busy || currentPlayback) && announcementQueue[0].priority < 2) {
+    setTimeout(()=>void drainAnnouncements(),200); return;
+  }
+  announcementRunning=true;
+  try {
+    const item=announcementQueue.shift();
+    if(state.sound) await speak(item.text,item.id,null,true).catch(()=>say(item.text));
+  } finally { announcementRunning=false; void drainAnnouncements(); }
 }
 async function pollVehicleAlerts() {
   if (!state.backendAvailable) return;
@@ -368,8 +391,10 @@ async function finishTtsPlayback(playback) {
   await playback.done;
   if (currentPlayback === playback) currentPlayback = null;
 }
-async function speak(text, turnId = makeId(), sequencePlayback = null) {
+async function speak(text, turnId = makeId(), sequencePlayback = null, announcement = false) {
   if (!state.sound) return;
+  if (!announcement) while (announcementRunning) await wait(50);
+  if (sequencePlayback?.cancelled) return;
   if (!sequencePlayback) {
     stopPlayback();
     if ('speechSynthesis' in window) speechSynthesis.cancel();
@@ -454,37 +479,6 @@ async function speak(text, turnId = makeId(), sequencePlayback = null) {
 }
 function normalize(text) { return text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd'); }
 
-// This intentionally deterministic demo changes only in-memory vehicle state.
-// A production adapter must verify actual vehicle acknowledgement before success.
-function resolveCommand(command) {
-  const text = normalize(command);
-  if (/\b(dung|khong)\s+(mo|dong|tang|giam|bat|tat|phat|ha)\b/.test(text)) return { type: 'clarify', message: 'Mình giữ nguyên trạng thái xe. Bạn có thể nói rõ thao tác muốn thực hiện nhé.' };
-  if (/huong dan|manual|canh bao|ap suat|cam nang/.test(text)) return { type: 'manual' };
-  if (/trang thai|pin|nhien lieu|bao nhieu|may do/.test(text)) return { type: 'status' };
-  if (/cua so|cua kinh/.test(text)) {
-    const opening = /mo|ha/.test(text);
-    if (!opening && !/dong|len/.test(text)) return { type: 'clarify', message: 'Bạn muốn mở hay đóng cửa sổ bên tài?' };
-    if (opening && state.driving) return { type: 'blocked', message: 'Demo đang ở chế độ lái xe. Theo policy minh họa, mình chỉ mở cửa sổ khi xe đang đỗ.' };
-    return { type: 'window', value: opening };
-  }
-  if (/\b(mo|dong)\s+cua\b/.test(text)) {
-    const opening = /\bmo\b/.test(text);
-    if (opening && state.driving) return { type: 'blocked', message: 'Demo đang ở chế độ lái xe. Theo policy minh họa, mình chỉ mở cửa xe khi xe đang đỗ.' };
-    return { type: 'door', value: opening };
-  }
-  if (/nhac|bai hat|am thanh|play|pause/.test(text)) return { type: 'music', value: !/dung|tat|pause/.test(text) };
-  if (/lanh|am hon|nong|nhiet do|dieu hoa|mat hon/.test(text)) {
-    if (/\b(bat|tat)\b/.test(text)) return { type: 'clarify', message: 'Bản demo hiện hỗ trợ đặt nhiệt độ từ 16 đến 30 độ. Bạn muốn đặt bao nhiêu độ?' };
-    const number = text.match(/(\d+(?:[.,]\d+)?)\s*(?:do|°)/);
-    const amount = number ? Number(number[1].replace(',', '.')) : 2;
-    const lower = /\b(giam|ha)\b|\bnong\b|\bmat hon\b/.test(text);
-    const relative = /\b(tang|giam|ha|them|bot)\b/.test(text);
-    const value = number && !relative ? amount : state.temp + (lower ? -amount : amount);
-    if (value < 16 || value > 30) return { type: 'blocked', message: 'Nhiệt độ của xe mô phỏng chỉ nhận từ 16 đến 30 độ. Bạn muốn đặt bao nhiêu độ?' };
-    return { type: 'climate', value };
-  }
-  return { type: 'clarify', message: 'Mình có thể chỉnh nhiệt độ, mở hoặc đóng cửa sổ bên tài, điều khiển nhạc và mở cẩm nang minh họa. Bạn muốn thử việc nào?' };
-}
 function lockControls(locked) {
   document.querySelectorAll('#climate-pop button, #body-pop button, #window-pop button, #music-toggle, #drive-toggle, .send-button').forEach(button => { button.disabled = locked; });
   // The mic stays enabled while recording so a second tap can stop it.
@@ -492,38 +486,10 @@ function lockControls(locked) {
   if (state.backendAvailable && state.vehicleProvider !== 'memory') $('#drive-toggle').disabled = true;
   $('#command-form').setAttribute('aria-busy', String(locked));
 }
-async function runLocalCommand(command, voiceDemo = false) {
-  if (state.busy || !command.trim()) return;
-  state.busy = true; state.lastCommand = command; state.progress = 0; lockControls(true);
-  $('#command-input').value = '';
-  try {
-    setPhase('listening', voiceDemo ? 'Demo giọng nói: “ViVi ơi, tôi hơi lạnh.”' : `“${command}”`);
-    await wait(voiceDemo ? 1400 : 850);
-    setPhase('thinking', 'Mình đang kiểm tra yêu cầu và trạng thái xe…'); state.progress = 1;
-    await wait(1100);
-    const action = resolveCommand(command);
-    if (action.type === 'clarify' || action.type === 'blocked') {
-      setPhase(action.type, action.message); say(action.message); await wait(1000); return;
-    }
-    setPhase('acting', action.type === 'manual' ? 'Mình đang mở nội dung hướng dẫn minh họa…' : 'Đã kiểm tra policy demo. Đang cập nhật trạng thái…'); state.progress = 2;
-    await wait(1000);
-    let message = '';
-    switch (action.type) {
-      case 'climate': state.temp = action.value; message = `Mình đã đặt nhiệt độ xe mô phỏng ở ${state.temp} độ. Hy vọng bạn thấy dễ chịu hơn.`; highlight('#climate-button'); break;
-      case 'window': state.window = action.value; state.windows = { ...state.windows, driver: action.value ? 100 : 0 }; message = `Mình đã ${state.window ? 'mở' : 'đóng'} cửa sổ bên tài trên xe mô phỏng.`; highlight('#window-button'); break;
-      case 'door': state.doorOpen = action.value; state.doors = { ...state.doors, driver: { ...state.doors.driver, open: action.value } }; message = `Mình đã ${state.doorOpen ? 'mở' : 'đóng'} cửa bên tài trên xe mô phỏng.`; highlight('#body-button'); break;
-      case 'music': state.music = action.value; message = state.music ? 'Đã chuyển nhạc sang trạng thái phát trong demo. Một chút bình yên cho hành trình.' : 'Mình đã dừng nhạc mô phỏng.'; highlight('#music-toggle'); break;
-      case 'manual': openPanel('manual'); message = 'Mình đã mở cẩm nang minh họa. Bản demo chưa kết nối tài liệu hướng dẫn chính thức.'; break;
-      case 'status': openPanel('vehicle'); message = `Xe mô phỏng còn 82% pin, nhiệt độ cài đặt ${state.temp} độ và cửa sổ bên tài ${state.window ? 'đang mở' : 'đang đóng'}.`; break;
-    }
-    updateVehicle(); state.progress = 3;
-    setPhase('speaking', message); say(message); await wait(2300);
-    setPhase('idle');
-  } finally { state.busy = false; lockControls(false); document.body.classList.remove('busy'); }
-}
-
 function applyBackendState(vehicle) {
   if (!vehicle) return;
+  if (vehicle.state_version != null && state.vehicleVersion != null && vehicle.state_version < state.vehicleVersion) return;
+  if (vehicle.state_version != null) state.vehicleVersion=vehicle.state_version;
   state.temp = vehicle.temperature_celsius;
   state.window = vehicle.window_driver_percent > 0;
   state.music = vehicle.media_playing;
@@ -549,6 +515,43 @@ function applyBackendState(vehicle) {
 }
 
 let activeTurn = null;
+let currentNavigationRevision = 0;
+let navigationResponseSerial = 0;
+async function acceptNavigationResponse(payload) {
+  currentNavigationRevision = Math.max(currentNavigationRevision, payload.navigation?.revision || 0);
+  if (payload.diagnostics?.observation_available !== false) applyBackendState(payload.vehicle_state);
+  await applyNavigation(payload);
+  const alerts = payload.navigation?.alerts || [];
+  announceNewAlerts(alerts);
+}
+async function sendNavigationEvent(event) {
+  const serial = ++navigationResponseSerial;
+  const response = await fetch(`${API_BASE}/api/v1/turn`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({ transcript:'Cập nhật hành trình', session_id:sessionId, turn_id:makeId(), navigation_event:event, llm_provider:state.llmProvider })
+  });
+  const payload = await response.json();
+  if (!response.ok) throw new Error(payload.detail || 'Không cập nhật được hành trình');
+  if (serial !== navigationResponseSerial || (payload.navigation?.revision || 0) < currentNavigationRevision) return;
+  await acceptNavigationResponse(payload);
+  if (event.kind === 'position' && payload.message) {
+    setPhase(payload.confirmation ? 'confirm' : payload.status === 'clarify' ? 'clarify' : 'idle',payload.message);
+    if(state.sound) queueAnnouncement(payload.message,0,`navigation-position:${event.id}`);
+  }
+}
+async function confirmNavigation(grant) {
+  const revision = currentNavigationRevision;
+  const response = await fetch(`${API_BASE}/api/v1/confirmations/${encodeURIComponent(grant.confirmation_id)}`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({session_id:sessionId,turn_id:makeId(),decision:'approve',llm_provider:state.llmProvider})
+  });
+  const payload = await response.json();
+  if (revision !== currentNavigationRevision) return;
+  if (!response.ok) { setPhase('error',payload.detail || 'Không bắt đầu được hành trình'); return; }
+  await acceptNavigationResponse(payload);
+  setPhase(payload.status === 'verified' ? 'idle' : payload.status,payload.message);
+  if(state.sound) await speak(payload.message);
+}
 function interruptActiveTurn() {
   stopPlayback();
   if ('speechSynthesis' in window) speechSynthesis.cancel();
@@ -569,7 +572,7 @@ async function runBackendCommand(command, turnId = makeId(), { autoConfirm = fal
   if (!command.trim()) return;
   if (state.busy) interruptActiveTurn();
   if (handleSpeakerCommand(command)) return;
-  const ownedTurn = { turnId, controller: new AbortController(), sequence: 0 };
+  const ownedTurn = { turnId, controller: new AbortController(), sequence: 0, audioEpoch: state.audioEpoch || 0 };
   activeTurn = ownedTurn;
   rememberEdgeCommand(command);
   renderTurnSteps([]);
@@ -579,7 +582,7 @@ async function runBackendCommand(command, turnId = makeId(), { autoConfirm = fal
     const response = await fetch(`${API_BASE}/api/v1/turn/stream`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       signal: ownedTurn.controller.signal,
-      body: JSON.stringify({ transcript: command, session_id: sessionId, turn_id: turnId, llm_provider: state.llmProvider, ...(action ? { action } : {}) })
+      body: JSON.stringify({ transcript: command, session_id: sessionId, turn_id: turnId, llm_provider: state.llmProvider, ...(action ? { action } : {}), position: getJourneyPosition() })
     });
     if (!response.ok) {
       const payload = await response.json();
@@ -591,8 +594,8 @@ async function runBackendCommand(command, turnId = makeId(), { autoConfirm = fal
     const decoder = new TextDecoder();
     let buffer = '';
     let payload = null;
-    let streamedSpeech = false;
     let voiceStreamed = false;
+    let answerVoiceQueued = false;
     let speechQueue = Promise.resolve();
     let speechPlayback = null;
     const handleEvent = (event) => {
@@ -605,6 +608,7 @@ async function runBackendCommand(command, turnId = makeId(), { autoConfirm = fal
         state.effectiveProvider = event.provider;
         updateModelStatus();
       }
+      if (event.type === 'trip_plan') applyNavigation(event).catch(error => console.warn('Trip plan display:', error.message));
       if (event.type === 'step' && event.step?.message) setPhase('thinking', event.step.message);
       if (event.type === 'error') throw new Error(event.detail || 'Pipeline streaming bị lỗi');
       if (event.type === 'progress' && event.text) {
@@ -614,14 +618,13 @@ async function runBackendCommand(command, turnId = makeId(), { autoConfirm = fal
         if (state.sound && state.ttsAvailable) {
           speechPlayback ||= createTtsPlayback();
           voiceStreamed = true;
-          speechQueue = speechQueue.then(() => activeTurn === ownedTurn ? speak(event.text, turnId, speechPlayback) : undefined);
+          speechQueue = speechQueue.then(() => activeTurn === ownedTurn && ownedTurn.audioEpoch === (state.audioEpoch || 0) ? speak(event.text, turnId, speechPlayback) : undefined);
         } else say(event.text);
       } else if (event.type === 'speech' && event.text) {
         // A deliberate touch on a concrete vehicle control is the user's
         // approval. Suppress the intermediate confirmation prompt; the final
         // verified or blocked result is still spoken below.
         if (autoConfirm) return;
-        streamedSpeech = true;
         // Speech events may contain one event per sentence. Keep them for
         // low-latency audio, but render only the authoritative final response
         // so a two-sentence answer does not look like two assistant outputs.
@@ -629,13 +632,13 @@ async function runBackendCommand(command, turnId = makeId(), { autoConfirm = fal
         if (state.sound && state.ttsAvailable) {
           speechPlayback ||= createTtsPlayback();
           voiceStreamed = true;
+          answerVoiceQueued = true;
           // Fetch/synthesize the next clause as soon as the previous clause is
           // buffered, while sharing one Web Audio timeline for gapless speech.
-          speechQueue = speechQueue.then(() => activeTurn === ownedTurn ? speak(event.text, turnId, speechPlayback) : undefined);
+          speechQueue = speechQueue.then(() => activeTurn === ownedTurn && ownedTurn.audioEpoch === (state.audioEpoch || 0) ? speak(event.text, turnId, speechPlayback) : undefined);
         }
       } else if (event.type === 'final') {
         payload = event.response;
-        streamedSpeech ||= Boolean(event.streamed_speech);
       }
     };
     while (true) {
@@ -671,7 +674,7 @@ async function runBackendCommand(command, turnId = makeId(), { autoConfirm = fal
       );
       payload = await confirmationResponse.json();
       if (!confirmationResponse.ok) throw new Error(payload.detail || 'Backend không phản hồi');
-      streamedSpeech = false;
+      answerVoiceQueued = false;
     }
     await wait(180);
     if (activeTurn !== ownedTurn) return;
@@ -679,6 +682,8 @@ async function runBackendCommand(command, turnId = makeId(), { autoConfirm = fal
     state.generationProvider = payload.diagnostics?.generation_provider || '';
     updateModelStatus();
     renderTurnSteps(payload.steps || []);
+    currentNavigationRevision = Math.max(currentNavigationRevision,payload.navigation?.revision || 0);
+    await applyNavigation(payload);
     if (payload.diagnostics?.observation_available !== false) applyBackendState(payload.vehicle_state);
     if (payload.route === 'handbook' && payload.status === 'verified') {
       state.manualAnswer = payload.message;
@@ -697,7 +702,8 @@ async function runBackendCommand(command, turnId = makeId(), { autoConfirm = fal
     if (voiceStreamed) {
       await speechQueue;
       await finishTtsPlayback(speechPlayback);
-    } else if (!streamedSpeech || state.sound) await speak(payload.message, turnId);
+    }
+    if (!answerVoiceQueued && ownedTurn.audioEpoch === (state.audioEpoch || 0)) await speak(payload.message, turnId);
     await wait(500);
     if (activeTurn !== ownedTurn) return;
     if (payload.status === 'verified') setPhase('idle');
@@ -1092,7 +1098,7 @@ initJourney({
   onOpen: () => openPanel('journey'),
   onClose: () => openPanel('home'),
   // Navigation prompts surface in the assistant line and use ViVi's voice.
-  announce: text => { setResponseText(text); if (state.sound) speak(text).catch(() => say(text)); },
+  announce: text => { setResponseText(text); queueAnnouncement(text); },
   setDriving: driving => {
     if (state.driving === driving) return;
     // The car cannot leave P (door or hood open): keep it still on the map as well.
@@ -1101,7 +1107,11 @@ initJourney({
   progress: progress => { nav = progress; updateHud(); },
   route: route => { plannedRoute = route; scene?.setRoute(route); },
   travel: distance => scene?.setRouteDistance(distance),
-  network: roads => scene?.setNetwork(roads)
+  network: roads => scene?.setNetwork(roads),
+  command: (text, action) => runBackendCommand(text, makeId(), { action }),
+  confirm: grant => confirmNavigation(grant),
+  position: position => sendNavigationEvent({ kind:'position', id:makeId(), revision:currentNavigationRevision, position }),
+  event: event => sendNavigationEvent(event)
 });
 function applyReducedMotion(reduced) {
   state.reduced = reduced;

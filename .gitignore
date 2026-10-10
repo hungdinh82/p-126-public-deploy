@@ -31,6 +31,8 @@ Thumbs.db
 # Handbooks
 data/*
 !data/handbooks/
+!data/energy/
+!data/navigation/
 data/handbooks/*
 
 *.sqlite3

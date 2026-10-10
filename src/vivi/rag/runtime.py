@@ -61,6 +61,9 @@ class HandbookServices:
     memory_context_max_characters: int = 2000
     generation_provider: str = "unknown"
     navigation: object | None = None
+    energy_planner: object | None = None
+    navigation_categories: dict | None = None
+    charging_discovery: object | None = None
 
 
 @lru_cache(maxsize=2)

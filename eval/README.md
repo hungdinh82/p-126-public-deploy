@@ -20,6 +20,19 @@ The current split contains 55 development and 19 test cases.
 
 ## Prepare the local model and index
 
+Charging map smoke (opt-in, real VietMap API calls, no vehicle action or history
+write):
+
+```bash
+.venv/bin/python -m eval.charging_map_smoke --soc 60 \
+  --destination 'Vincom Plaza Thanh Hóa' --output /tmp/vivi-charging-map.json
+```
+
+Uses the configured navigation origin and first returned destination POI;
+`--destination-ref` pins a specific search result. SOC is an explicit test input.
+Reports live map references, route legs, station sources and missing equipment
+data; does not assume a charger power or fabricate a rest area/expressway km.
+
 See [offline RAG setup](../docs/rag_local.md). The downloader accesses the public
 model repository only during provisioning. The index builder and runtime do not
 download models or send handbook content to an external API. Default input paths
@@ -199,8 +212,86 @@ They are not independent held-out accuracy estimates. Scripted providers test
 architecture behavior, not Qwen understanding. Speech smoke uses adapters/mock
 transports; it does not measure microphones, speakers or speech-model quality.
 
+## October 9 dialogue/navigation/energy update
+
+`audit_854_897.jsonl` contains all 44 audited utterances; the ordered oracle in
+`tests/test_dialogue_audit_oct09.py` runs parser, cloud mock and local mock.
+`dialogue_navigation_cases.jsonl` adds independent paraphrases to that development
+regression. These examples are outside the semantic system prompt.
+
+```bash
+.venv/bin/python -m eval.audit_contract_benchmark
+.venv/bin/python -m eval.dialogue_v2_benchmark --provider rules \
+  --dataset eval/dialogue_navigation_cases.jsonl --max-cases 6 \
+  --output eval/results/navigation-dialogue-parser.json
+.venv/bin/python -m eval.dialogue_v2_benchmark --provider google --allow-api \
+  --dataset eval/dialogue_navigation_cases.jsonl --max-cases 6 --interval-seconds 4 \
+  --output eval/results/navigation-dialogue-google.json
+.venv/bin/python -m pytest tests/test_navigation_workflow.py tests/test_dialogue_audit_oct09.py
+node --test tests/test_frontend*.cjs
+```
+
+Do not combine simultaneous cloud runs when measuring provider latency/fallback:
+rate limits and service timeouts are counted against the tier that actually serves.
+`by_tier` reports guard repairs separately; accuracy is the whole workflow result,
+not unguarded model output. `unexpected_executions` counts an effect where the
+fixture explicitly prohibited it; exclusion/revision/replay invariants additionally
+have exact state/argument tests.
+
+See [implementation and activation](../docs/navigation_energy.md) and
+[the final validation report](results/navigation-update-report.md). Local mocks do
+not establish Qwen accuracy. Energy fixtures are synthetic; real itinerary readiness
+requires a verified vehicle profile and station catalogue.
+
 Historical v2 artifacts remain for comparison: `dialogue-v2-rules-summary.json`
 (3/9 episodes) and `dialogue-v2-google-smoke-summary.json` (first three episodes only).
 The initial unified Google run also remains: its failures prompted stricter
 capability argument validation and a clearer missing-slot/conflict contract.
 See [runtime and migration](../docs/langgraph_unified_runtime.md).
+
+## Regression log 898–909
+
+`audit_898_909.jsonl` lưu câu nói và semantic output lỗi đã ghi lại; test
+`tests/test_dialogue_audit_recent.py` replay qua parser, Google/local mock và
+kiểm tra tác vụ/consent/effects. Mock này không phải phép đo NLU.
+
+```bash
+python -m eval.dialogue_v2_benchmark --provider rules --dataset eval/dialogue_recent_cases.jsonl --max-cases 3 --output eval/results/dialogue-recent-parser.json
+python -m eval.dialogue_v2_benchmark --provider google --allow-api --dataset eval/dialogue_recent_cases.jsonl --max-cases 3 --interval-seconds 1 --output eval/results/dialogue-recent-google.json
+```
+
+Cloud gửi chỉ fixture đã chuẩn hoá và dùng DB tạm/xe mô phỏng. Báo cáo riêng
+tầng thực sự phục vụ tại `results/dialogue-recent-report.md`; đây là development
+regression, không phải tập đánh giá độc lập.
+
+## Default ±2°C và multi-task (log 910–924)
+
+`audit_910_924.jsonl` replay output đã ghi lại qua parser và provider mocks trong
+`tests/test_dialogue_multitask.py`. `dialogue_multitask_cases.jsonl` gồm default,
+slot + append, loại trừ nhiều lượt và sửa bước sau khi bước trước chờ xác nhận.
+Các oracle về amount thiếu đã cập nhật theo quyết định sản phẩm ±2°C mới; báo
+cáo trước giữ kết quả lịch sử theo chính sách cũ.
+
+```bash
+python -m eval.dialogue_v2_benchmark --provider rules --dataset eval/dialogue_multitask_cases.jsonl --max-cases 4 --output eval/results/dialogue-multitask-parser.json
+python -m eval.dialogue_v2_benchmark --provider google --allow-api --dataset eval/dialogue_multitask_cases.jsonl --max-cases 4 --interval-seconds 4 --output eval/results/dialogue-multitask-google.json
+```
+
+Chi tiết các lỗi, kết quả model và fallback: [dialogue-multitask-report](results/dialogue-multitask-report.md).
+
+## Chọn địa điểm bằng lời và đa bước (log 925–958)
+
+`audit_925_958.jsonl` giữ 20 lượt model của 34 bản ghi mới; typed UI events được
+kiểm tra qua các kịch bản trong `tests/test_dialogue_audit_oct10.py` và API/DOM
+regression. Model mock phát lại output lỗi cũ; không dùng để đo NLU Qwen.
+`navigation_voice_cases.jsonl` có 4 episode / 14 lượt, POI và tuyến tổng hợp.
+
+```bash
+python -m eval.navigation_voice_benchmark --provider rules --output eval/results/navigation-voice-oct10-parser.json
+python -m eval.navigation_voice_benchmark --provider google --allow-api --interval 6 --output eval/results/navigation-voice-oct10-google.json
+```
+
+Benchmark chỉ gửi câu fixture và context tổng hợp; dùng DB tạm/VehicleSimulator,
+không gọi VietMap thật hoặc xe vật lý. Kết quả tách theo provider thực sự phục vụ,
+giữ cả lượt Google lỗi và fallback; không gọi điểm sau guard là accuracy model thô.
+Thông số mô phỏng VF8 Plus và kho trạm nằm trong [data/energy](../data/energy/README.md).

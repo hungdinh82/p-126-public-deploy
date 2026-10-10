@@ -143,14 +143,6 @@ class CapabilityRuntime:
                 "grounding_status": "supported" if grounded else "insufficient_evidence", "citations": citations,
                 "generation_provider": served, "generation_attempts": attempts}
 
-    async def navigation(self, arguments):
-        if self.services.navigation is None:
-            return {"status": "blocked", "message": "Dịch vụ tìm địa điểm chưa sẵn sàng."}
-        places = await self.services.navigation.search(arguments["query"])
-        return {"status": "completed", "message": "Mình tìm thấy: " + "; ".join(p.name for p in places[:3]) + "." if places else "Mình chưa tìm thấy địa điểm đó.",
-                "places": [p.model_dump() for p in places[:5]]}
-
-
     @staticmethod
     def status_message(state, fields=None):
         selected = fields.split(",") if fields else ["summary"]

@@ -18,6 +18,7 @@ LABELS = {
     "preferred_temperature": "Nhiệt độ bạn thích",
     "preferred_music": "Nhạc bạn thích",
     "response_style": "Cách trả lời bạn muốn",
+    "address_style": "Cách xưng hô bạn muốn",
 }
 
 
