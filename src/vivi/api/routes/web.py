@@ -30,6 +30,12 @@ async def engineer(request: Request):
     return FileResponse(PROJECT_ROOT / "engineer.html", headers={"Cache-Control": "no-store"})
 
 
+@router.get("/record")
+async def record():
+    """Voice recorder for wake-word clips; needs no role, so it can be shared as a link."""
+    return FileResponse(PROJECT_ROOT / "record.html", headers={"Cache-Control": "no-store"})
+
+
 MODEL_ASSETS = {"vf8.glb", "vf8-hq.glb", "vf8-lossless.glb"}
 
 
@@ -44,10 +50,25 @@ async def model_asset(asset_name: str):
     )
 
 
+WAKE_ASSETS = {"melspectrogram.onnx", "embedding_model.onnx", "vivi.onnx"}
+
+
+@router.get("/wake/{asset_name}")
+async def wake_asset(asset_name: str):
+    """Wake-word models for wake.js; vivi.onnx is replaced after each retraining, so revalidate."""
+    if asset_name not in WAKE_ASSETS:
+        raise HTTPException(status_code=404)
+    return FileResponse(
+        PROJECT_ROOT / "assets" / "wake" / asset_name,
+        media_type="application/octet-stream",
+        headers={"Cache-Control": "no-cache"},
+    )
+
+
 @router.get("/{asset_name}")
 async def asset(asset_name: str):
     if asset_name == "monitor":
         return FileResponse(PROJECT_ROOT / "monitor.html", headers={"Cache-Control": "no-store"})
-    if asset_name not in {"app.js", "journey.js", "music.js", "scene3d.js", "wave.js", "neon.js", "style.css", "monitor.js", "engineer.js", "engineer.css", "role.js", "role.css"}:
+    if asset_name not in {"app.js", "journey.js", "wake.js", "music.js", "scene3d.js", "wave.js", "neon.js", "style.css", "monitor.js", "engineer.js", "engineer.css", "role.js", "role.css"}:
         raise HTTPException(status_code=404)
     return FileResponse(PROJECT_ROOT / asset_name, headers={"Cache-Control": "no-store"})

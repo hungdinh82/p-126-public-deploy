@@ -1,7 +1,8 @@
-import { closeJourney, initJourney, openJourney, pauseJourney } from './journey.js?v=7';
+import { closeJourney, initJourney, openJourney, pauseJourney, applyNavigation, getJourneyPosition } from './journey.js?v=17';
 import { createCabinMusic } from './music.js?v=2';
 import { neonBorder } from './neon.js?v=2';
 import { createWave } from './wave.js?v=2';
+import { startWakeWord } from './wake.js?v=1';
 const cabinMusic = createCabinMusic();
 
 const $ = (selector) => document.querySelector(selector);
@@ -33,7 +34,7 @@ function rememberEdgeCommand(command) {
 let activePanelView = '';
 const seenAlertIds = new Set();
 const alertLastSpoken = new Map();
-const ALERT_TTS_COOLDOWN_MS = 30000;
+const ALERT_TTS_COOLDOWN_MS = 300000;
 const MAX_SEEN_ALERT_IDS = 1024;
 const phaseLabels = { idle: 'ViVi đang ở đây', listening: 'Mình đang nghe bạn', transcribing: 'Mình đang nhận diện lời nói', thinking: 'Để mình xem nhé', validating: 'Đang kiểm tra an toàn', acting: 'Đang chăm sóc không gian của bạn', synthesizing: 'Đang chuẩn bị giọng Mai Chi', speaking: 'Một chút dễ chịu, dành cho bạn', confirm: 'Mình chờ bạn xác nhận', clarify: 'Mình chờ bạn nói thêm', blocked: 'Mình giữ nguyên trạng thái xe' };
 const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
@@ -66,10 +67,11 @@ const NEON_BY_PHASE = {
   blocked: { speed: 4, borderSize: 50, color: '#D6AE78' }
 };
 
-import('./scene3d.js?v=33')
+import('./scene3d.js?v=42')
   .then(module => {
     scene = module.createScene($('#space'), { reduced: state.reduced });
     scene.setRoute(plannedRoute);
+    scene.onBlink(onBlink);
     document.body.classList.add('space-ready');
     updateDriveUI();
     updateVehicle();
@@ -118,8 +120,7 @@ function renderLiveCaption(final, interim) {
 function updateVehicle() {
   $('#temperature').textContent = `${state.temp}°`;
   $('#dock-temp').textContent = `${state.temp}°`;
-  $('#window-toggle').setAttribute('aria-pressed', String(state.window));
-  $('#window-toggle').setAttribute('aria-label', state.window ? 'Đóng cửa sổ bên tài' : 'Mở cửa sổ bên tài');
+  updateWindowPanel();
   // Backend reports the opening in percent; the offline demo only knows open or closed.
   scene?.setWindow(state.window ? (state.windows.driver > 0 ? state.windows.driver : 100) : 0);
   updateBodyPanel();
@@ -130,6 +131,28 @@ function updateVehicle() {
   if (state.music) cabinMusic.play().catch(() => {}); else cabinMusic.stop();
   $('#music-toggle').setAttribute('aria-label', state.music ? 'Dừng nhạc' : 'Phát nhạc');
   updateHud();
+}
+// The four side windows share one popover, sending the spoken command per window.
+const WINDOWS = {
+  driver: { label: 'Bên tài', noun: 'cửa sổ bên tài' },
+  front_passenger: { label: 'Bên phụ', noun: 'cửa sổ bên phụ' },
+  rear_left: { label: 'Sau trái', noun: 'cửa sổ sau trái' },
+  rear_right: { label: 'Sau phải', noun: 'cửa sổ sau phải' }
+};
+const windowPercent = zone => zone === 'driver' && !state.windows.driver ? (state.window ? 100 : 0) : Number(state.windows[zone]) || 0;
+function updateWindowPanel() {
+  const opened = [];
+  for (const [zone, pane] of Object.entries(WINDOWS)) {
+    const percent = windowPercent(zone), open = percent > 0;
+    const chip = $(`#window-pop [data-window="${zone}"]`);
+    chip.setAttribute('aria-pressed', String(open));
+    chip.setAttribute('aria-label', `${open ? 'Đóng' : 'Mở'} ${pane.noun}`);
+    chip.querySelector('small').textContent = !open ? 'Đã đóng' : percent < 100 ? `Mở ${percent}%` : 'Đang mở';
+    $(`#window-car [data-pane="${zone}"]`).classList.toggle('open', open);
+    if (open) opened.push(pane.label);
+  }
+  $('#window-summary').textContent = opened.length ? `Đang mở · ${opened.join(', ')}` : 'Tất cả đã đóng';
+  $('#window-button').classList.toggle('attention', opened.length > 0);
 }
 // Doors, hood and tailgate share one popover; each chip sends the same spoken
 // command a driver would say, so policy and confirmation stay on the backend.
@@ -191,6 +214,43 @@ function updateHud() {
   // VietMap signs: negative turns left, positive right; only near turns get a cue.
   const turning = next && next.distance < 220 && next.sign !== 4 && next.sign !== 5;
   scene?.setTurn(turning ? Math.sign(next.sign) : null);
+  scene?.setIndicator(driving ? signalFor(nav) : 0);
+}
+const SIGNAL_DISTANCE = 70;   // metres before a turn
+const EXIT_SIGNAL = 25;       // metres before leaving a roundabout
+// Signal shortly before a real turn; not for straight on, arrival or via
+// points. Roundabouts (sign 6) run anticlockwise: an exit to the right is
+// signalled right all the way; going straight on only signals right at the
+// exit; further round signals left until the exit, then right.
+const exitSide = turn => turn > 30 ? 1 : turn < -30 ? -1 : 0;
+function signalFor(progress) {
+  const next = progress?.next;
+  if (progress?.roundabout != null) return next && next.distance < EXIT_SIGNAL ? 1 : exitSide(progress.roundabout);
+  if (!next || next.distance >= SIGNAL_DISTANCE) return 0;
+  if (next.sign === 6) return exitSide(next.exitTurn ?? 0);
+  return [0, 4, 5].includes(Math.abs(next.sign)) ? 0 : Math.sign(next.sign);
+}
+
+// Blinker lamp on the HUD and the relay tick, both driven by the scene's blink.
+let tickContext = null;
+function blinkerTick(on) {
+  if (!state.sound || state.reduced) return;
+  try {
+    tickContext ??= new AudioContext();
+    if (tickContext.state === 'suspended') tickContext.resume();
+    const now = tickContext.currentTime, click = tickContext.createOscillator(), gain = tickContext.createGain();
+    click.type = 'square';
+    click.frequency.value = on ? 1900 : 1300;
+    gain.gain.setValueAtTime(.05, now);
+    gain.gain.exponentialRampToValueAtTime(.0001, now + .025);
+    click.connect(gain).connect(tickContext.destination);
+    click.start(now);
+    click.stop(now + .03);
+  } catch { /* audio unavailable */ }
+}
+function onBlink(side) {
+  document.querySelectorAll('.blinkers [data-blink]').forEach(arrow => arrow.classList.toggle('on', Number(arrow.dataset.blink) === side));
+  blinkerTick(side !== 0);
 }
 let shownDriving = false;
 function updateDriveUI() {
@@ -213,6 +273,8 @@ setInterval(() => {
 }, 500);
 const alertCodeLabels = {
   LOW_BATTERY: 'Pin yếu',
+  BATTERY_CRITICAL: 'Pin rất thấp',
+  ROUTE_ENERGY_LOW: 'Pin không đủ cho tuyến',
   TIRE_PRESSURE_LOW: 'Áp suất lốp thấp',
   TIRE_PRESSURE_HIGH: 'Áp suất lốp cao',
   POWERTRAIN_OVERHEAT: 'Hệ truyền động quá nhiệt',
@@ -234,6 +296,7 @@ function renderAlerts(snapshot) {
 }
 function announceNewAlerts(alerts) {
   for (const alert of alerts) {
+    if (alert.announce === false) continue;
     if (seenAlertIds.has(alert.alert_id)) {
       seenAlertIds.delete(alert.alert_id);
       seenAlertIds.add(alert.alert_id);
@@ -246,8 +309,28 @@ function announceNewAlerts(alerts) {
     const inCooldown = now - (alertLastSpoken.get(key) || 0) < ALERT_TTS_COOLDOWN_MS;
     if (!state.sound || (alert.severity !== 'critical' && inCooldown)) continue;
     alertLastSpoken.set(key, now);
-    speak(alert.message, `alert-${alert.alert_id}`).catch(() => say(alert.message));
+    queueAnnouncement(alert.message, alert.severity === 'critical' ? 2 : 1, `alert-${alert.alert_id}`);
   }
+}
+const announcementQueue = [];
+let announcementRunning = false;
+function queueAnnouncement(text, priority = 0, id = makeId()) {
+  if (!state.sound) return;
+  announcementQueue.push({text,priority,id});
+  announcementQueue.sort((a,b)=>b.priority-a.priority);
+  if(priority === 2) { state.audioEpoch=(state.audioEpoch || 0)+1; stopPlayback(); if('speechSynthesis' in window) speechSynthesis.cancel(); }
+  void drainAnnouncements();
+}
+async function drainAnnouncements() {
+  if(announcementRunning || !announcementQueue.length) return;
+  if((state.busy || currentPlayback) && announcementQueue[0].priority < 2) {
+    setTimeout(()=>void drainAnnouncements(),200); return;
+  }
+  announcementRunning=true;
+  try {
+    const item=announcementQueue.shift();
+    if(state.sound) await speak(item.text,item.id,null,true).catch(()=>say(item.text));
+  } finally { announcementRunning=false; void drainAnnouncements(); }
 }
 async function pollVehicleAlerts() {
   if (!state.backendAvailable) return;
@@ -261,14 +344,26 @@ async function pollVehicleAlerts() {
   } catch { /* Polling resumes automatically after a temporary disconnect. */ }
 }
 function highlight(id) { $(id).classList.add('highlight'); setTimeout(() => $(id).classList.remove('highlight'), 2600); }
-const DOCK_BY_INTENT = { climate: '#climate-button', window: '#window-toggle', door: '#body-button', hood: '#body-button', trunk: '#body-button', body: '#body-button', media: '#music-toggle' };
+const DOCK_BY_INTENT = { climate: '#climate-button', window: '#window-button', door: '#body-button', hood: '#body-button', trunk: '#body-button', body: '#body-button', media: '#music-toggle' };
+// Resolves when the browser voice has finished, so whatever follows (the follow-up
+// microphone) does not start over ViVi's own words. The timer covers browsers that
+// never fire onend; speechSynthesis.speaking is not trusted, it can stay true.
+let browserSpeaking = false, lastUtterance = null;
 function say(text) {
-  if (!state.sound || !('speechSynthesis' in window)) return;
+  if (!state.sound || !('speechSynthesis' in window)) return Promise.resolve();
   speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(text); utterance.lang = 'vi-VN'; utterance.rate = .93;
+  // Browser voices read "OK" as "ô ka"; say it the Vietnamese way, as the server TTS does.
+  const utterance = new SpeechSynthesisUtterance(text.replace(/\b(?:ok|okay|oke)\b/gi, 'ô kê')); utterance.lang = 'vi-VN'; utterance.rate = .93;
   const voice = speechSynthesis.getVoices().find(voice => voice.lang.startsWith('vi'));
   if (voice) utterance.voice = voice;
-  speechSynthesis.speak(utterance);
+  browserSpeaking = true;
+  return new Promise(resolve => {
+    const done = () => { if (utterance === lastUtterance) browserSpeaking = false; resolve(); };
+    lastUtterance = utterance;
+    utterance.onend = utterance.onerror = done;
+    setTimeout(done, Math.min(20000, 1500 + text.length * 90));
+    speechSynthesis.speak(utterance);
+  });
 }
 let ttsAudioContext = null;
 let currentPlayback = null;
@@ -309,8 +404,22 @@ async function finishTtsPlayback(playback) {
   await playback.done;
   if (currentPlayback === playback) currentPlayback = null;
 }
-async function speak(text, turnId = makeId(), sequencePlayback = null) {
+// What ViVi said lately, to recognise her own voice leaking into a follow-up recording.
+const recentSpeech = [];
+function isOwnEcho(transcript) {
+  const words = normalize(transcript).match(/[a-z0-9]+/g) || [];
+  // "OK", "có", "ừ mở đi" are answers, never echo.
+  if (words.length < 3) return false;
+  const spoken = new Set(recentSpeech.filter(item => Date.now() - item.at < 30000)
+    .flatMap(item => normalize(item.text).match(/[a-z0-9]+/g) || []));
+  return words.filter(word => spoken.has(word)).length / words.length >= .7;
+}
+async function speak(text, turnId = makeId(), sequencePlayback = null, announcement = false) {
   if (!state.sound) return;
+  recentSpeech.push({ text, at: Date.now() });
+  recentSpeech.splice(0, recentSpeech.length - 4);
+  if (!announcement) while (announcementRunning) await wait(50);
+  if (sequencePlayback?.cancelled) return;
   if (!sequencePlayback) {
     stopPlayback();
     if ('speechSynthesis' in window) speechSynthesis.cancel();
@@ -391,80 +500,21 @@ async function speak(text, turnId = makeId(), sequencePlayback = null) {
       if (playback.played) return;
     }
   }
-  say(text);
+  await say(text);
 }
 function normalize(text) { return text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd'); }
 
-// This intentionally deterministic demo changes only in-memory vehicle state.
-// A production adapter must verify actual vehicle acknowledgement before success.
-function resolveCommand(command) {
-  const text = normalize(command);
-  if (/\b(dung|khong)\s+(mo|dong|tang|giam|bat|tat|phat|ha)\b/.test(text)) return { type: 'clarify', message: 'Mình giữ nguyên trạng thái xe. Bạn có thể nói rõ thao tác muốn thực hiện nhé.' };
-  if (/huong dan|manual|canh bao|ap suat|cam nang/.test(text)) return { type: 'manual' };
-  if (/trang thai|pin|nhien lieu|bao nhieu|may do/.test(text)) return { type: 'status' };
-  if (/cua so|cua kinh/.test(text)) {
-    const opening = /mo|ha/.test(text);
-    if (!opening && !/dong|len/.test(text)) return { type: 'clarify', message: 'Bạn muốn mở hay đóng cửa sổ bên tài?' };
-    if (opening && state.driving) return { type: 'blocked', message: 'Demo đang ở chế độ lái xe. Theo policy minh họa, mình chỉ mở cửa sổ khi xe đang đỗ.' };
-    return { type: 'window', value: opening };
-  }
-  if (/\b(mo|dong)\s+cua\b/.test(text)) {
-    const opening = /\bmo\b/.test(text);
-    if (opening && state.driving) return { type: 'blocked', message: 'Demo đang ở chế độ lái xe. Theo policy minh họa, mình chỉ mở cửa xe khi xe đang đỗ.' };
-    return { type: 'door', value: opening };
-  }
-  if (/nhac|bai hat|am thanh|play|pause/.test(text)) return { type: 'music', value: !/dung|tat|pause/.test(text) };
-  if (/lanh|am hon|nong|nhiet do|dieu hoa|mat hon/.test(text)) {
-    if (/\b(bat|tat)\b/.test(text)) return { type: 'clarify', message: 'Bản demo hiện hỗ trợ đặt nhiệt độ từ 16 đến 30 độ. Bạn muốn đặt bao nhiêu độ?' };
-    const number = text.match(/(\d+(?:[.,]\d+)?)\s*(?:do|°)/);
-    const amount = number ? Number(number[1].replace(',', '.')) : 2;
-    const lower = /\b(giam|ha)\b|\bnong\b|\bmat hon\b/.test(text);
-    const relative = /\b(tang|giam|ha|them|bot)\b/.test(text);
-    const value = number && !relative ? amount : state.temp + (lower ? -amount : amount);
-    if (value < 16 || value > 30) return { type: 'blocked', message: 'Nhiệt độ của xe mô phỏng chỉ nhận từ 16 đến 30 độ. Bạn muốn đặt bao nhiêu độ?' };
-    return { type: 'climate', value };
-  }
-  return { type: 'clarify', message: 'Mình có thể chỉnh nhiệt độ, mở hoặc đóng cửa sổ bên tài, điều khiển nhạc và mở cẩm nang minh họa. Bạn muốn thử việc nào?' };
-}
 function lockControls(locked) {
-  document.querySelectorAll('#climate-pop button, #body-pop button, #window-toggle, #music-toggle, #drive-toggle, .send-button').forEach(button => { button.disabled = locked; });
+  document.querySelectorAll('#climate-pop button, #body-pop button, #window-pop button, #music-toggle, #drive-toggle, .send-button').forEach(button => { button.disabled = locked; });
   // The mic stays enabled while recording so a second tap can stop it.
-  $('#demo-mic').disabled = locked && recorder?.state !== 'recording';
+  $('#demo-mic').disabled = !state.backendAvailable || !state.sttAvailable;
   if (state.backendAvailable && state.vehicleProvider !== 'memory') $('#drive-toggle').disabled = true;
   $('#command-form').setAttribute('aria-busy', String(locked));
 }
-async function runLocalCommand(command, voiceDemo = false) {
-  if (state.busy || !command.trim()) return;
-  state.busy = true; state.lastCommand = command; state.progress = 0; lockControls(true);
-  $('#command-input').value = '';
-  try {
-    setPhase('listening', voiceDemo ? 'Demo giọng nói: “ViVi ơi, tôi hơi lạnh.”' : `“${command}”`);
-    await wait(voiceDemo ? 1400 : 850);
-    setPhase('thinking', 'Mình đang kiểm tra yêu cầu và trạng thái xe…'); state.progress = 1;
-    await wait(1100);
-    const action = resolveCommand(command);
-    if (action.type === 'clarify' || action.type === 'blocked') {
-      setPhase(action.type, action.message); say(action.message); await wait(1000); return;
-    }
-    setPhase('acting', action.type === 'manual' ? 'Mình đang mở nội dung hướng dẫn minh họa…' : 'Đã kiểm tra policy demo. Đang cập nhật trạng thái…'); state.progress = 2;
-    await wait(1000);
-    let message = '';
-    switch (action.type) {
-      case 'climate': state.temp = action.value; message = `Mình đã đặt nhiệt độ xe mô phỏng ở ${state.temp} độ. Hy vọng bạn thấy dễ chịu hơn.`; highlight('#climate-button'); break;
-      case 'window': state.window = action.value; message = `Mình đã ${state.window ? 'mở' : 'đóng'} cửa sổ bên tài trên xe mô phỏng.`; highlight('#window-toggle'); break;
-      case 'door': state.doorOpen = action.value; state.doors = { ...state.doors, driver: { ...state.doors.driver, open: action.value } }; message = `Mình đã ${state.doorOpen ? 'mở' : 'đóng'} cửa bên tài trên xe mô phỏng.`; highlight('#body-button'); break;
-      case 'music': state.music = action.value; message = state.music ? 'Đã chuyển nhạc sang trạng thái phát trong demo. Một chút bình yên cho hành trình.' : 'Mình đã dừng nhạc mô phỏng.'; highlight('#music-toggle'); break;
-      case 'manual': openPanel('manual'); message = 'Mình đã mở cẩm nang minh họa. Bản demo chưa kết nối tài liệu hướng dẫn chính thức.'; break;
-      case 'status': openPanel('vehicle'); message = `Xe mô phỏng còn 82% pin, nhiệt độ cài đặt ${state.temp} độ và cửa sổ bên tài ${state.window ? 'đang mở' : 'đang đóng'}.`; break;
-    }
-    updateVehicle(); state.progress = 3;
-    setPhase('speaking', message); say(message); await wait(2300);
-    setPhase('idle');
-  } finally { state.busy = false; lockControls(false); document.body.classList.remove('busy'); }
-}
-
 function applyBackendState(vehicle) {
   if (!vehicle) return;
+  if (vehicle.state_version != null && state.vehicleVersion != null && vehicle.state_version < state.vehicleVersion) return;
+  if (vehicle.state_version != null) state.vehicleVersion=vehicle.state_version;
   state.temp = vehicle.temperature_celsius;
   state.window = vehicle.window_driver_percent > 0;
   state.music = vehicle.media_playing;
@@ -489,16 +539,78 @@ function applyBackendState(vehicle) {
   }
 }
 
-async function runBackendCommand(command, turnId = makeId(), { autoConfirm = false } = {}) {
-  if (state.busy || !command.trim()) return;
+let activeTurn = null;
+let currentNavigationRevision = 0;
+let navigationResponseSerial = 0;
+async function acceptNavigationResponse(payload) {
+  currentNavigationRevision = Math.max(currentNavigationRevision, payload.navigation?.revision || 0);
+  if (payload.diagnostics?.observation_available !== false) applyBackendState(payload.vehicle_state);
+  await applyNavigation(payload);
+  const alerts = payload.navigation?.alerts || [];
+  announceNewAlerts(alerts);
+}
+async function sendNavigationEvent(event) {
+  const serial = ++navigationResponseSerial;
+  const response = await fetch(`${API_BASE}/api/v1/turn`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({ transcript:'Cập nhật hành trình', session_id:sessionId, turn_id:makeId(), navigation_event:event, llm_provider:state.llmProvider })
+  });
+  const payload = await response.json();
+  if (!response.ok) throw new Error(payload.detail || 'Không cập nhật được hành trình');
+  if (serial !== navigationResponseSerial || (payload.navigation?.revision || 0) < currentNavigationRevision) return;
+  await acceptNavigationResponse(payload);
+  if (event.kind === 'position' && payload.message) {
+    setPhase(payload.confirmation ? 'confirm' : payload.status === 'clarify' ? 'clarify' : 'idle',payload.message);
+    if(state.sound) queueAnnouncement(payload.message,0,`navigation-position:${event.id}`);
+  }
+}
+async function confirmNavigation(grant) {
+  const revision = currentNavigationRevision;
+  const response = await fetch(`${API_BASE}/api/v1/confirmations/${encodeURIComponent(grant.confirmation_id)}`, {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({session_id:sessionId,turn_id:makeId(),decision:'approve',llm_provider:state.llmProvider})
+  });
+  const payload = await response.json();
+  if (revision !== currentNavigationRevision) return;
+  if (!response.ok) { setPhase('error',payload.detail || 'Không bắt đầu được hành trình'); return; }
+  await acceptNavigationResponse(payload);
+  setPhase(payload.status === 'verified' ? 'idle' : payload.status,payload.message);
+  if(state.sound) await speak(payload.message);
+}
+function interruptActiveTurn() {
+  stopPlayback();
+  if ('speechSynthesis' in window) speechSynthesis.cancel();
+  const previous = activeTurn;
+  activeTurn = null;
+  if (previous) {
+    previous.controller.abort();
+    void fetch(`${API_BASE}/api/v1/turns/${encodeURIComponent(previous.turnId)}/cancel`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: sessionId })
+    }).catch(() => {});
+  }
+  state.busy = false;
+  lockControls(false);
+}
+
+async function runBackendCommand(command, turnId = makeId(), { autoConfirm = false, action = null } = {}) {
+  if (!command.trim()) return;
+  if (state.busy) interruptActiveTurn();
   if (handleSpeakerCommand(command)) return;
+  const ownedTurn = { turnId, controller: new AbortController(), sequence: 0, audioEpoch: state.audioEpoch || 0 };
+  activeTurn = ownedTurn;
+  // Spoken turns may reopen the mic afterwards; typed and button turns never do.
+  const spoken = followUpArmed;
+  followUpArmed = false;
   rememberEdgeCommand(command);
+  renderTurnSteps([]);
   state.busy = true; state.lastCommand = command; lockControls(true); $('#command-input').value = '';
   try {
     setPhase('thinking', `“${command}”`);
     const response = await fetch(`${API_BASE}/api/v1/turn/stream`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ transcript: command, session_id: sessionId, turn_id: turnId, llm_provider: state.llmProvider })
+      signal: ownedTurn.controller.signal,
+      body: JSON.stringify({ transcript: command, session_id: sessionId, turn_id: turnId, llm_provider: state.llmProvider, ...(action ? { action } : {}), position: getJourneyPosition() })
     });
     if (!response.ok) {
       const payload = await response.json();
@@ -510,11 +622,22 @@ async function runBackendCommand(command, turnId = makeId(), { autoConfirm = fal
     const decoder = new TextDecoder();
     let buffer = '';
     let payload = null;
-    let streamedSpeech = false;
     let voiceStreamed = false;
+    let answerVoiceQueued = false;
     let speechQueue = Promise.resolve();
     let speechPlayback = null;
     const handleEvent = (event) => {
+      if (activeTurn !== ownedTurn) return;
+      if (event.turn_id && event.turn_id !== ownedTurn.turnId) return;
+      if (event.sequence && event.sequence <= ownedTurn.sequence) return;
+      if (event.sequence) ownedTurn.sequence = event.sequence;
+      if (event.type === 'cancelled') return;
+      if (event.type === 'provider' && event.provider) {
+        state.effectiveProvider = event.provider;
+        updateModelStatus();
+      }
+      if (event.type === 'trip_plan') applyNavigation(event).catch(error => console.warn('Trip plan display:', error.message));
+      if (event.type === 'step' && event.step?.message) setPhase('thinking', event.step.message);
       if (event.type === 'error') throw new Error(event.detail || 'Pipeline streaming bị lỗi');
       if (event.type === 'progress' && event.text) {
         // Slow turns (handbook lookup) announce the wait; the answer is queued
@@ -523,14 +646,13 @@ async function runBackendCommand(command, turnId = makeId(), { autoConfirm = fal
         if (state.sound && state.ttsAvailable) {
           speechPlayback ||= createTtsPlayback();
           voiceStreamed = true;
-          speechQueue = speechQueue.then(() => speak(event.text, turnId, speechPlayback));
+          speechQueue = speechQueue.then(() => activeTurn === ownedTurn && ownedTurn.audioEpoch === (state.audioEpoch || 0) ? speak(event.text, turnId, speechPlayback) : undefined);
         } else say(event.text);
       } else if (event.type === 'speech' && event.text) {
         // A deliberate touch on a concrete vehicle control is the user's
         // approval. Suppress the intermediate confirmation prompt; the final
         // verified or blocked result is still spoken below.
         if (autoConfirm) return;
-        streamedSpeech = true;
         // Speech events may contain one event per sentence. Keep them for
         // low-latency audio, but render only the authoritative final response
         // so a two-sentence answer does not look like two assistant outputs.
@@ -538,13 +660,13 @@ async function runBackendCommand(command, turnId = makeId(), { autoConfirm = fal
         if (state.sound && state.ttsAvailable) {
           speechPlayback ||= createTtsPlayback();
           voiceStreamed = true;
+          answerVoiceQueued = true;
           // Fetch/synthesize the next clause as soon as the previous clause is
           // buffered, while sharing one Web Audio timeline for gapless speech.
-          speechQueue = speechQueue.then(() => speak(event.text, turnId, speechPlayback));
+          speechQueue = speechQueue.then(() => activeTurn === ownedTurn && ownedTurn.audioEpoch === (state.audioEpoch || 0) ? speak(event.text, turnId, speechPlayback) : undefined);
         }
       } else if (event.type === 'final') {
         payload = event.response;
-        streamedSpeech ||= Boolean(event.streamed_speech);
       }
     };
     while (true) {
@@ -556,6 +678,7 @@ async function runBackendCommand(command, turnId = makeId(), { autoConfirm = fal
       if (done) break;
     }
     if (buffer.trim()) handleEvent(JSON.parse(buffer));
+    if (activeTurn !== ownedTurn) return;
     if (!payload) throw new Error('Backend kết thúc luồng trước khi trả kết quả');
     if (autoConfirm && payload.status === 'confirmation_required' && payload.confirmation) {
       if (voiceStreamed) {
@@ -563,11 +686,14 @@ async function runBackendCommand(command, turnId = makeId(), { autoConfirm = fal
         await finishTtsPlayback(speechPlayback);
         voiceStreamed = false;
       }
+      if (activeTurn !== ownedTurn) return;
       turnId = makeId();
+      ownedTurn.turnId = turnId;
       const confirmationResponse = await fetch(
         `${API_BASE}/api/v1/confirmations/${payload.confirmation.confirmation_id}`,
         {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
+          signal: ownedTurn.controller.signal,
           body: JSON.stringify({
             session_id: sessionId, turn_id: turnId,
             decision: 'approve', llm_provider: state.llmProvider
@@ -576,10 +702,17 @@ async function runBackendCommand(command, turnId = makeId(), { autoConfirm = fal
       );
       payload = await confirmationResponse.json();
       if (!confirmationResponse.ok) throw new Error(payload.detail || 'Backend không phản hồi');
-      streamedSpeech = false;
+      answerVoiceQueued = false;
     }
     await wait(180);
-    applyBackendState(payload.vehicle_state);
+    if (activeTurn !== ownedTurn) return;
+    state.effectiveProvider = payload.diagnostics?.effective_provider || state.llmProvider;
+    state.generationProvider = payload.diagnostics?.generation_provider || '';
+    updateModelStatus();
+    renderTurnSteps(payload.steps || []);
+    currentNavigationRevision = Math.max(currentNavigationRevision,payload.navigation?.revision || 0);
+    await applyNavigation(payload);
+    if (payload.diagnostics?.observation_available !== false) applyBackendState(payload.vehicle_state);
     if (payload.route === 'handbook' && payload.status === 'verified') {
       state.manualAnswer = payload.message;
       state.manualEvidence = payload.evidence || [];
@@ -597,14 +730,53 @@ async function runBackendCommand(command, turnId = makeId(), { autoConfirm = fal
     if (voiceStreamed) {
       await speechQueue;
       await finishTtsPlayback(speechPlayback);
-    } else if (!streamedSpeech || state.sound) await speak(payload.message, turnId);
-    await wait(500);
+    }
+    if (!answerVoiceQueued && ownedTurn.audioEpoch === (state.audioEpoch || 0)) await speak(payload.message, turnId);
+    // A follow-up opens the mic the moment ViVi stops talking; otherwise the answer stays up a little.
+    if (!(spoken && (spoken === 'wake' || ['confirm', 'clarify'].includes(phase)))) await wait(500);
+    if (activeTurn !== ownedTurn) return;
     if (payload.status === 'verified') setPhase('idle');
     else setPhase(phase, payload.message);
   } catch (error) {
-    setPhase('blocked', `Không kết nối được pipeline local: ${error.message}`);
+    if (activeTurn === ownedTurn && error.name !== 'AbortError') setPhase('blocked', `Không kết nối được pipeline local: ${error.message}`);
   } finally {
-    state.busy = false; lockControls(false); document.body.classList.remove('busy');
+    if (activeTurn === ownedTurn) {
+      activeTurn = null;
+      state.busy = false; lockControls(false); document.body.classList.remove('busy');
+      if (spoken && (spoken === 'wake' || ['confirm', 'clarify'].includes(state.phase))) listenForFollowUp(spoken);
+      else if (spoken) console.info('[vivi] follow-up: not reopened, answer complete and the turn did not start with the wake word');
+    }
+  }
+}
+const voiceBusy = () => Boolean(currentPlayback || announcementRunning || browserSpeaking);
+function listenForFollowUp(kind) {
+  const started = performance.now();
+  const check = () => {
+    if (recorder?.state === 'recording') return;
+    if (state.busy) { console.info('[vivi] follow-up: skipped, a new turn already started'); return; }
+    // Wait for every voice to end (server TTS, browser voice, queued announcements).
+    if (voiceBusy()) {
+      if (performance.now() - started < 30000) setTimeout(check, 30);
+      else console.info('[vivi] follow-up: skipped, ViVi was still speaking after 30 s');
+      return;
+    }
+    // At once, right after her last word: echo cancellation removes what is left of it.
+    console.info(`[vivi] follow-up: listening (${kind}, after ${state.phase})`);
+    startRecording({ followUp: true, armed: kind });
+  };
+  check();
+}
+
+function renderTurnSteps(steps) {
+  const container = $('#turn-steps');
+  if (!container) return;
+  container.hidden = steps.length < 2;
+  container.replaceChildren();
+  const labels = { completed: 'Đã xong', cancelled: 'Đã huỷ', pending: 'Chưa chạy', waiting_slot: 'Cần thông tin', waiting_confirmation: 'Chờ xác nhận', blocked: 'Bị chặn', unknown: 'Chưa xác minh' };
+  for (const step of steps) {
+    const item = document.createElement('li');
+    item.textContent = `${labels[step.status] || 'Đang xử lý'}: ${step.result?.message || ({ 'climate.set_temperature': 'Chỉnh điều hoà', 'window.set_position': 'Chỉnh cửa kính', 'door.set_open': 'Mở/đóng cửa', 'door.set_lock': 'Khoá cửa', 'hood.set_open': 'Mở/đóng capo', 'trunk.set_open': 'Mở/đóng cốp', 'body.set_open': 'Mở/đóng các cửa', 'seat.set_heat_level': 'Chỉnh sưởi ghế', 'media.play': 'Phát nhạc', 'media.pause': 'Dừng nhạc', 'manual.search': 'Tra cẩm nang', 'vehicle.get_status': 'Đọc trạng thái xe', 'memory.remember': 'Ghi nhớ', 'memory.forget': 'Quên thông tin', 'memory.reset': 'Xoá bộ nhớ', 'memory.recall': 'Đọc bộ nhớ', 'navigation.search': 'Tìm địa điểm' }[step.capability] || 'Thao tác tiếp theo')}`;
+    container.append(item);
   }
 }
 
@@ -615,7 +787,7 @@ function runCommand(command, options = {}) {
   return Promise.resolve();
 }
 
-let recorder = null, recorderStream = null, recorderChunks = [], audioContext = null, silenceFrame = null, sttSocket = null, sttResult = null;
+let recorder = null, recorderStream = null, recorderChunks = [], audioContext = null, silenceFrame = null, sttSocket = null, sttResult = null, unanswered = false;
 function stopRecording() {
   if (recorder?.state === 'recording') recorder.stop();
 }
@@ -648,7 +820,18 @@ function listenSttStream(socket) {
   result.catch(() => {}); // Awaited after recording stops; avoid an unhandled rejection meanwhile.
   return result;
 }
-async function finishStreaming(socket, result, blob, turnId) {
+// What to send from a follow-up recording, or null when it only caught ViVi's own
+// words: sent on, those would read as an unclear request and drop the pending
+// confirmation.
+function followUpAnswer(transcript, followUp) {
+  if (!followUp) return transcript;
+  if (transcript.trim() && !isOwnEcho(transcript)) return transcript;
+  console.info('[vivi] follow-up: ignored ViVi\'s own voice', transcript);
+  setPhase(followUp.phase, followUp.text);
+  listenForFollowUp(followUp.kind);
+  return null;
+}
+async function finishStreaming(socket, result, blob, turnId, followUp = null) {
   // Keep the live caption on screen while the last words are confirmed.
   const captionLive = $('#response-text').classList.contains('live');
   lockControls(true); setPhase('transcribing', captionLive ? '' : `${state.sttProvider} đang chốt câu…`);
@@ -665,9 +848,11 @@ async function finishStreaming(socket, result, blob, turnId) {
   $('#command-input').value = transcript;
   renderLiveCaption(transcript, '');
   lockControls(false);
-  await runBackendCommand(transcript, turnId);
+  const answer = followUpAnswer(transcript, followUp);
+  if (answer === null) return;
+  await runBackendCommand(answer, turnId);
 }
-async function submitRecording(blob, turnId) {
+async function submitRecording(blob, turnId, followUp = null) {
   lockControls(true); setPhase('transcribing', `${state.sttProvider || 'STT local'} đang chuyển giọng nói thành văn bản…`);
   try {
     const form = new FormData();
@@ -677,16 +862,32 @@ async function submitRecording(blob, turnId) {
     if (!response.ok) throw new Error(payload.detail || 'STT lỗi');
     $('#command-input').value = payload.transcript;
     lockControls(false);
-    await runBackendCommand(payload.transcript, turnId);
+    const answer = followUpAnswer(payload.transcript, followUp);
+    if (answer === null) { lockControls(false); return; }
+    await runBackendCommand(answer, turnId);
   } catch (error) {
     setPhase('blocked', error.message); lockControls(false);
   }
 }
-async function startRecording() {
+// After a "ViVi ơi" turn the mic reopens briefly, so a follow-up ("thêm 2 độ nữa")
+// needs no second wake word; silence for FOLLOW_UP_MS closes it without calling STT.
+// A question from ViVi (confirm, clarify) reopens it after any spoken turn, mic button
+// included, and waits longer, since the answer needs a moment. A wake with nothing
+// said after it closes the same way. followUpArmed: false | 'voice' | 'wake'.
+const FOLLOW_UP_MS = 4000, QUESTION_FOLLOW_UP_MS = 7000, WAKE_SILENCE_MS = 6000;
+let followUpArmed = false;
+async function startRecording(options) {
+  const followUp = options?.followUp === true;
+  const asked = ['confirm', 'clarify'].includes(state.phase);
+  const quietLimit = followUp ? (asked ? QUESTION_FOLLOW_UP_MS : FOLLOW_UP_MS) : options?.wake ? WAKE_SILENCE_MS : 0;
+  if (options instanceof Event) followUpArmed = 'voice';
+  else if (followUp) followUpArmed = options.armed || 'voice';
   if (!state.backendAvailable) { setPhase('blocked', 'Hãy chạy backend local trước khi dùng microphone.'); return; }
   if (!state.sttAvailable) { setPhase('blocked', 'STT local chưa sẵn sàng. Kiểm tra trang health và hướng dẫn setup runtime.'); return; }
   if (recorder?.state === 'recording') { stopRecording(); return; }
-  if (state.busy) return;
+  interruptActiveTurn();
+  // Where a follow-up returns to if it only hears ViVi's own voice.
+  const resume = followUp ? { phase: state.phase, text: $('#response-text')?.textContent || '', kind: followUpArmed } : null;
   try {
     recorderStream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } });
     recorderChunks = [];
@@ -694,10 +895,13 @@ async function startRecording() {
     recorder = new MediaRecorder(recorderStream, mimeType ? { mimeType } : undefined);
     const turnId = makeId();
     sttSocket = null; sttResult = null;
-    if (state.sttStreaming) {
-      // Fall back to the upload endpoint when the live socket cannot open.
-      try { sttSocket = await openSttStream(turnId); sttResult = listenSttStream(sttSocket); $('#command-input').value = ''; } catch { sttSocket = null; }
-    }
+    // The live socket opens alongside the recorder rather than before it, so the mic
+    // is live at once; what it heard meanwhile is sent when the socket opens. Without
+    // one the upload endpoint is used.
+    const socketOpening = state.sttStreaming ? openSttStream(turnId).then(socket => {
+      sttSocket = socket; sttResult = listenSttStream(socket); $('#command-input').value = '';
+      recorderChunks.forEach(chunk => socket.send(chunk));
+    }, () => { sttSocket = null; }) : Promise.resolve();
     recorder.ondataavailable = event => {
       if (!event.data.size) return;
       recorderChunks.push(event.data);
@@ -707,23 +911,33 @@ async function startRecording() {
       $('#demo-mic').classList.remove('recording'); $('#demo-mic').setAttribute('aria-label', 'Bắt đầu thu âm');
       cancelAnimationFrame(silenceFrame); voiceLevel.mic = 0; recorderStream?.getTracks().forEach(track => track.stop()); await audioContext?.close(); audioContext = null;
       const blob = new Blob(recorderChunks, { type: recorder.mimeType || 'audio/webm' }); recorder = null;
+      await socketOpening;
       const socket = sttSocket, result = sttResult; sttSocket = null; sttResult = null;
-      if (socket) await finishStreaming(socket, result, blob, turnId);
-      else await submitRecording(blob, turnId);
+      if (unanswered) {
+        // Nobody spoke after ViVi's answer: end the conversation quietly.
+        followUpArmed = false;
+        socket?.close();
+        setPhase('idle');
+        return;
+      }
+      if (socket) await finishStreaming(socket, result, blob, turnId, resume);
+      else await submitRecording(blob, turnId, resume);
     };
     recorder.start(250); $('#demo-mic').classList.add('recording'); $('#demo-mic').setAttribute('aria-label', 'Dừng thu âm');
-    setPhase('listening', sttSocket ? 'Mình đang nghe… lời bạn nói sẽ hiện ở đây.' : 'Mình đang nghe… Nhấn mic lần nữa để dừng.');
+    setPhase('listening', followUp ? 'Mình vẫn đang nghe… cứ nói tiếp nếu bạn cần.' : state.sttStreaming ? 'Mình đang nghe… lời bạn nói sẽ hiện ở đây.' : 'Mình đang nghe… Nhấn mic lần nữa để dừng.');
     audioContext = new AudioContext();
     const source = audioContext.createMediaStreamSource(recorderStream), analyser = audioContext.createAnalyser(), samples = new Uint8Array(512);
     analyser.fftSize = 1024; source.connect(analyser);
     let heardSpeech = false, silentSince = 0, startedAt = performance.now();
+    unanswered = false;
     const monitor = () => {
       analyser.getByteTimeDomainData(samples);
       const rms = Math.sqrt(samples.reduce((sum, value) => sum + ((value - 128) / 128) ** 2, 0) / samples.length);
       voiceLevel.mic = rms;
       if (rms > .035) { heardSpeech = true; silentSince = 0; }
       else if (heardSpeech && !silentSince) silentSince = performance.now();
-      if ((silentSince && performance.now() - silentSince > 1400) || performance.now() - startedAt > 15000) stopRecording();
+      if (quietLimit && !heardSpeech && performance.now() - startedAt > quietLimit) { unanswered = true; stopRecording(); }
+      else if ((silentSince && performance.now() - silentSince > 1400) || performance.now() - startedAt > 15000) stopRecording();
       else silenceFrame = requestAnimationFrame(monitor);
     };
     monitor();
@@ -754,7 +968,7 @@ async function checkBackend() {
     localStorage.setItem('vivi-llm-default-provider', state.llmDefaultProvider);
     updateModelStatus();
     $('#backend-status').classList.remove('offline'); $('#backend-status').innerHTML = '<i></i> Local · <span id="backend-model"></span>';
-    $('#backend-model').textContent = state.llmProvider;
+    $('#backend-model').textContent = state.effectiveProvider || state.llmProvider;
     $('#backend-status').title = `STT ${health.stt.available ? 'sẵn sàng' : 'chưa cài'} · TTS ${state.ttsAvailable ? ttsVoiceLabel(state.ttsVoice) : 'chưa cài'} · LLM ${state.llmProvider}`;
     $('#drive-toggle').disabled = state.vehicleProvider !== 'memory';
     try {
@@ -768,34 +982,42 @@ async function checkBackend() {
 }
 
 function updateModelStatus() {
-  if ($('#backend-model')) $('#backend-model').textContent = state.llmProvider;
+  if ($('#backend-model')) {
+    const served = state.effectiveProvider || state.llmProvider;
+    $('#backend-model').textContent = state.generationProvider && state.generationProvider !== served ? `${served} · cẩm nang: ${state.generationProvider}` : served;
+  }
 }
 
 $('#command-form').addEventListener('submit', event => { event.preventDefault(); runCommand($('#command-input').value); });
 $('#demo-mic').addEventListener('click', startRecording);
-document.querySelectorAll('[data-temp]').forEach(button => button.addEventListener('click', () => runCommand(`Đặt nhiệt độ ${state.temp + Number(button.dataset.temp)} độ`)));
-$('#window-toggle').addEventListener('click', () => runCommand(
-  state.window ? 'Đóng cửa sổ bên tài' : 'Mở cửa sổ bên tài',
-  { autoConfirm: true }
-));
+document.querySelectorAll('[data-temp]').forEach(button => button.addEventListener('click', () => runCommand(`Đặt nhiệt độ ${state.temp + Number(button.dataset.temp)} độ`, { action: { capability: 'climate.set_temperature', arguments: { temperature_delta_celsius: Number(button.dataset.temp) } } })));
+const windowAction = (zone, open) => ({ autoConfirm: true, action: { capability: 'window.set_position', arguments: { zone, position_percent: open ? 100 : 0 } } });
+$('#window-pop').addEventListener('click', event => {
+  const chip = event.target.closest('[data-window]');
+  if (!chip) return;
+  const zone = chip.dataset.window, open = !(windowPercent(zone) > 0);
+  runCommand(`${open ? 'Mở' : 'Đóng'} ${WINDOWS[zone].noun}`, windowAction(zone, open));
+});
+$('#windows-open-all').addEventListener('click', () => runCommand('Mở tất cả cửa sổ', windowAction('all', true)));
+$('#windows-close-all').addEventListener('click', () => runCommand('Đóng tất cả cửa sổ', windowAction('all', false)));
 $('#body-pop').addEventListener('click', event => {
   const chip = event.target.closest('[data-panel]');
   if (chip) runCommand(
     `${bodyPanelState(chip.dataset.panel).open ? 'Đóng' : 'Mở'} ${BODY_PANELS[chip.dataset.panel].noun}`,
-    { autoConfirm: true }
+    { autoConfirm: true, action: { capability: chip.dataset.panel === 'hood' ? 'hood.set_open' : chip.dataset.panel === 'trunk' ? 'trunk.set_open' : 'door.set_open', arguments: { ...(CABIN_ZONES.includes(chip.dataset.panel) ? { zone: chip.dataset.panel } : {}), open: !bodyPanelState(chip.dataset.panel).open } } }
   );
 });
 // Direct manipulation is the user's approval, while the backend still binds a
 // single-use confirmation to the exact grouped action and rechecks safety.
 $('#open-all').addEventListener('click', () => {
   const anyOpen = Object.keys(BODY_PANELS).some(id => bodyPanelState(id).open);
-  runCommand(`${anyOpen ? 'Đóng' : 'Mở'} tất cả cửa, capo và cốp`, { autoConfirm: true });
+  runCommand(`${anyOpen ? 'Đóng' : 'Mở'} tất cả cửa, capo và cốp`, { autoConfirm: true, action: { capability: 'body.set_open', arguments: { open: !anyOpen } } });
 });
 $('#lock-all').addEventListener('click', () => runCommand(
   CABIN_ZONES.every(zone => state.doors[zone]?.locked) ? 'Mở khóa tất cả cửa' : 'Khóa tất cả cửa',
-  { autoConfirm: true }
+  { autoConfirm: true, action: { capability: 'door.set_lock', arguments: { zone: 'all', locked: !CABIN_ZONES.every(zone => state.doors[zone]?.locked) } } }
 ));
-$('#music-toggle').addEventListener('click', () => runCommand(state.music ? 'Dừng nhạc' : 'Phát nhạc thư giãn'));
+$('#music-toggle').addEventListener('click', () => runCommand(state.music ? 'Dừng nhạc' : 'Phát nhạc thư giãn', { action: { capability: state.music ? 'media.pause' : 'media.play', arguments: state.music ? {} : { media_query: 'thư giãn' } } }));
 async function setDemoDriving(driving) {
   if (!state.backendAvailable) {
     // Same rule as the memory simulator: no driving off with a door, the hood or the tailgate open.
@@ -948,13 +1170,14 @@ function openPanel(view) {
   const contents = {
     vehicle: vehicleDetailsMarkup(),
     manual: manualContent,
-    settings: `<h2>Cấu hình ViVi</h2><p>Chọn cách ViVi suy nghĩ và chuyển động trong không gian của bạn.</p><section class="config-section"><div class="config-heading"><span>MÔ HÌNH HỘI THOẠI</span><strong id="active-model">${escapeHtml(modelLabels[state.llmProvider] || state.llmProvider || 'Chưa kết nối')} · ${escapeHtml(currentModel?.model || '')}</strong></div><div class="model-options">${modelOptionsMarkup()}</div><p class="dialog-note">Lựa chọn được áp dụng từ lượt hội thoại tiếp theo. Model ID và API key vẫn được quản lý an toàn trong .env.</p></section><section class="config-section"><div class="config-heading"><span>GIỌNG PHẢN HỒI</span><strong id="active-voice">${state.ttsAvailable ? `${escapeHtml(ttsLabels[state.ttsProvider] || state.ttsProvider)} · ${escapeHtml(ttsVoiceLabel(state.ttsVoice))}` : 'Trình duyệt/text fallback'}</strong></div><div class="model-options">${ttsOptionsMarkup()}</div><p class="dialog-note">Áp dụng từ câu trả lời tiếp theo. Lần đầu dùng ViVi local cần vài giây để nạp model.</p></section><section class="config-section"><div class="config-heading"><span>TRẢI NGHIỆM</span><strong>Không gian & giọng nói</strong></div><label class="motion-setting"><span><strong>Giảm chuyển động</strong><small>Dừng lơ lửng, quỹ đạo và hiệu ứng sóng</small></span><input id="reduce-motion" type="checkbox" ${state.reduced ? 'checked' : ''}><i></i></label><div class="config-runtime"><div><span>NHẬN DIỆN GIỌNG NÓI</span><strong>${state.sttAvailable ? `${escapeHtml(state.sttProvider)} · ${state.sttDevice === 'cloud' ? `cloud${state.sttStreaming ? ' · trực tiếp' : ''}` : 'local'}` : 'Chưa sẵn sàng'}</strong></div></div><p class="dialog-note">Audio: ${state.storeAudio ? 'đang lưu' : 'không lưu'} · transcript: ${state.storeTranscripts ? 'đang lưu' : 'không lưu'}.</p></section>`
+    settings: `<h2>Cấu hình ViVi</h2><p>Chọn cách ViVi suy nghĩ và chuyển động trong không gian của bạn.</p><section class="config-section"><div class="config-heading"><span>MÔ HÌNH HỘI THOẠI</span><strong id="active-model">${escapeHtml(modelLabels[state.llmProvider] || state.llmProvider || 'Chưa kết nối')} · ${escapeHtml(currentModel?.model || '')}</strong></div><div class="model-options">${modelOptionsMarkup()}</div><p class="dialog-note">Lựa chọn được áp dụng từ lượt hội thoại tiếp theo. Model ID và API key vẫn được quản lý an toàn trong .env.</p></section><section class="config-section"><div class="config-heading"><span>GIỌNG PHẢN HỒI</span><strong id="active-voice">${state.ttsAvailable ? `${escapeHtml(ttsLabels[state.ttsProvider] || state.ttsProvider)} · ${escapeHtml(ttsVoiceLabel(state.ttsVoice))}` : 'Trình duyệt/text fallback'}</strong></div><div class="model-options">${ttsOptionsMarkup()}</div><p class="dialog-note">Áp dụng từ câu trả lời tiếp theo. Lần đầu dùng ViVi local cần vài giây để nạp model.</p></section><section class="config-section"><div class="config-heading"><span>TRẢI NGHIỆM</span><strong>Không gian & giọng nói</strong></div><label class="motion-setting"><span><strong>Giảm chuyển động</strong><small>Dừng lơ lửng, quỹ đạo và hiệu ứng sóng</small></span><input id="reduce-motion" type="checkbox" ${state.reduced ? 'checked' : ''}><i></i></label><label class="motion-setting"><span><strong>Gọi “ViVi ơi”</strong><small>Nghe từ khoá ngay trên máy; âm thanh chỉ được gửi đi sau khi bạn gọi</small></span><input id="wake-word" type="checkbox" ${wakeWordEnabled() ? 'checked' : ''}><i></i></label><div class="config-runtime"><div><span>NHẬN DIỆN GIỌNG NÓI</span><strong>${state.sttAvailable ? `${escapeHtml(state.sttProvider)} · ${state.sttDevice === 'cloud' ? `cloud${state.sttStreaming ? ' · trực tiếp' : ''}` : 'local'}` : 'Chưa sẵn sàng'}</strong></div></div><p class="dialog-note">Audio: ${state.storeAudio ? 'đang lưu' : 'không lưu'} · transcript: ${state.storeTranscripts ? 'đang lưu' : 'không lưu'}.</p></section>`
   };
   $('#dialog-content').innerHTML = contents[view];
   dialog.classList.toggle('config-dialog', view === 'settings');
   if (!dialog.open) dialog.showModal();
   $('#try-climate')?.addEventListener('click', () => { dialog.close(); runCommand('Tôi hơi lạnh'); });
   $('#reduce-motion')?.addEventListener('change', event => applyReducedMotion(event.target.checked));
+  $('#wake-word')?.addEventListener('change', event => setWakeWord(event.target.checked));
   document.querySelectorAll('[data-llm-provider]').forEach(button => button.addEventListener('click', () => selectLlmProvider(button.dataset.llmProvider)));
   document.querySelectorAll('[data-tts-provider]').forEach(button => button.addEventListener('click', () => selectTtsProvider(button.dataset.ttsProvider)));
 }
@@ -967,7 +1190,7 @@ initJourney({
   onOpen: () => openPanel('journey'),
   onClose: () => openPanel('home'),
   // Navigation prompts surface in the assistant line and use ViVi's voice.
-  announce: text => { setResponseText(text); if (state.sound) speak(text).catch(() => say(text)); },
+  announce: text => { setResponseText(text); queueAnnouncement(text); },
   setDriving: driving => {
     if (state.driving === driving) return;
     // The car cannot leave P (door or hood open): keep it still on the map as well.
@@ -975,7 +1198,12 @@ initJourney({
   },
   progress: progress => { nav = progress; updateHud(); },
   route: route => { plannedRoute = route; scene?.setRoute(route); },
-  travel: distance => scene?.setRouteDistance(distance)
+  travel: distance => scene?.setRouteDistance(distance),
+  network: roads => scene?.setNetwork(roads),
+  command: (text, action) => runBackendCommand(text, makeId(), { action }),
+  confirm: grant => confirmNavigation(grant),
+  position: position => sendNavigationEvent({ kind:'position', id:makeId(), revision:currentNavigationRevision, position }),
+  event: event => sendNavigationEvent(event)
 });
 function applyReducedMotion(reduced) {
   state.reduced = reduced;
@@ -988,6 +1216,35 @@ function applyReducedMotion(reduced) {
 motionPreference.addEventListener('change', event => applyReducedMotion(event.matches));
 applyReducedMotion(state.reduced);
 
+// Hands-free "ViVi ơi" / "Hey ViVi". Off until the driver turns it on, because it
+// keeps the microphone open; detection runs in the page and nothing is sent until
+// the phrase is heard. It sleeps while a turn runs, while recording and while
+// ViVi speaks, so her own voice cannot wake her.
+const WAKE_KEY = 'vivi-wake-word';
+let wakeWord = null, wakeStarting = false;
+function wakeWordEnabled() {
+  try { return localStorage.getItem(WAKE_KEY) === 'on'; } catch { return false; }
+}
+const wakeCanListen = () => state.backendAvailable && state.sttAvailable && !state.busy && !voiceBusy() && recorder?.state !== 'recording';
+async function setWakeWord(on) {
+  try { localStorage.setItem(WAKE_KEY, on ? 'on' : 'off'); } catch {}
+  if (!on) { wakeWord?.stop(); wakeWord = null; followUpArmed = false; return; }
+  if (wakeWord || wakeStarting) return;
+  wakeStarting = true;
+  try {
+    wakeWord = await startWakeWord({ base: './wake/', canListen: wakeCanListen, onWake: () => { followUpArmed = 'wake'; startRecording({ wake: true }); } });
+    if (state.phase === 'idle') setPhase('idle', 'Gọi “ViVi ơi” hoặc “Hey ViVi” bất cứ lúc nào.');
+  } catch (error) {
+    try { localStorage.setItem(WAKE_KEY, 'off'); } catch {}
+    if ($('#wake-word')) $('#wake-word').checked = false;
+    const reason = error?.name === 'NotAllowedError' ? 'trình duyệt chưa cho dùng micro' : error?.message || 'lỗi không rõ';
+    setPhase('blocked', `Chưa bật được gọi “ViVi ơi”: ${reason}.`);
+  } finally {
+    wakeStarting = false;
+  }
+}
+if (wakeWordEnabled()) setWakeWord(true);
+
 // The full-screen map hides the 3D scene, so stop rendering it meanwhile.
 new MutationObserver(() => scene?.setPaused(document.body.classList.contains('journey-open'))).observe(document.body, { attributes: true, attributeFilter: ['class'] });
 
@@ -999,7 +1256,7 @@ $('#keyboard-toggle').addEventListener('click', () => {
 });
 $('#command-input').addEventListener('keydown', event => { if (event.key === 'Escape') $('#keyboard-toggle').click(); });
 // Dock popovers sit above their button, kept inside the viewport; one at a time.
-const dockPops = [['#climate-pop', '#climate-button'], ['#body-pop', '#body-button']];
+const dockPops = [['#climate-pop', '#climate-button'], ['#window-pop', '#window-button'], ['#body-pop', '#body-button']];
 function togglePop(popId, buttonId, open = $(popId).hidden) {
   const pop = $(popId);
   if (open) dockPops.forEach(([other, button]) => { if (other !== popId) togglePop(other, button, false); });

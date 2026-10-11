@@ -4,9 +4,8 @@ import json
 
 import httpx
 
-from src.vivi.agents.classifier import StructuredAPIIntentClassifier
-from src.vivi.agents.graph import build_graph
 from src.vivi.config import Settings
+from src.vivi.graphs import build_graph
 from src.vivi.history.sqlite import SQLiteConversationHistory
 from src.vivi.orchestration import create_langgraph_orchestrator
 from src.vivi.persistence.event_store import EventStore
@@ -49,12 +48,10 @@ def test_openai_compatible_local_graph_routes_retrieves_and_cites(tmp_path):
         payload = json.loads(request.content)
         schema_name = payload["response_format"]["json_schema"]["name"]
         requests.append(schema_name)
-        if schema_name == "vivi_intent_decision":
+        if schema_name == "vivi_semantic_turn":
             content = {
-                "route": "handbook",
-                "intent": "manual.search",
-                "arguments": {"query": "Sạc AC thế nào?"},
-                "confidence": 0.99,
+                "act": "question",
+                "actions": [{"capability": "manual.search", "arguments": {"query": "Sạc AC thế nào?"}}],
             }
         else:
             content = {
@@ -91,7 +88,7 @@ def test_openai_compatible_local_graph_routes_retrieves_and_cites(tmp_path):
         retriever=_Retriever(),
         generator=StructuredAPIHandbookGenerator(client),
         history=SQLiteConversationHistory(tmp_path / "history.sqlite3"),
-        classifier=StructuredAPIIntentClassifier(client),
+        semantic_client=client,
     )
     result = build_graph(services).invoke(
         {
@@ -102,7 +99,7 @@ def test_openai_compatible_local_graph_routes_retrieves_and_cites(tmp_path):
     )
 
     # Model-backed mode interprets the turn before grounded answer generation.
-    assert requests == ["vivi_intent_decision", "vivi_grounded_answer"]
+    assert requests == ["vivi_semantic_turn", "vivi_grounded_answer"]
     assert result["output"]["route"] == "handbook"
     assert result["output"]["status"] == "answered"
     assert result["output"]["grounding_status"] == "supported"
@@ -122,4 +119,6 @@ def test_configured_local_provider_is_registered_in_canonical_graph(tmp_path):
     store = EventStore(config)
     orchestrator = create_langgraph_orchestrator(vehicle, store, config)
 
-    assert orchestrator.graph_providers == {"rules", "local"}
+    assert {"rules", "local"} <= orchestrator.graph_providers
+    assert len(set(orchestrator.graphs.values())) == 1
+    next(iter(orchestrator.graphs.values())).close()

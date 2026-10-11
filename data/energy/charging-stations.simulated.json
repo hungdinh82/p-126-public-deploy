@@ -1,0 +1,16 @@
+[
+  {
+    "id": "simulation-hanoi-haiphong-stop-1",
+    "name": "Trạm mô phỏng chặng Hà Nội–Hải Phòng — không phải trạm thực",
+    "lat": 21.0,
+    "lng": 106.2,
+    "network": "vgreen",
+    "connector": "CCS2",
+    "power_kw": 120,
+    "max_soc": 80,
+    "accessible": true,
+    "source": "Fixture mô phỏng của repo, không xác nhận vị trí/công suất trạm V-Green",
+    "updated_at": "2026-10-10",
+    "simulated": true
+  }
+]

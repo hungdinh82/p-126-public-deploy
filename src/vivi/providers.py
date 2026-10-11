@@ -12,7 +12,8 @@ def llm_models(config: Settings) -> dict[str, str]:
         "local": config.local_llm_model,
         "openrouter": config.openrouter_model,
     }
-    return {key: value for key, value in models.items() if not config.rag_local_only or key in {"rules", "local"}}
+    local_only = config.rag_local_only or config.jetson_ai_policy == "offline_only"
+    return {key: value for key, value in models.items() if not local_only or key in {"rules", "local"}}
 
 
 def configured_llm_providers(config: Settings) -> list[str]:
@@ -26,4 +27,5 @@ def configured_llm_providers(config: Settings) -> list[str]:
         providers.append("local")
     if config.openrouter_api_key:
         providers.append("openrouter")
-    return [provider for provider in providers if not config.rag_local_only or provider in {"rules", "local"}]
+    local_only = config.rag_local_only or config.jetson_ai_policy == "offline_only"
+    return [provider for provider in providers if not local_only or provider in {"rules", "local"}]

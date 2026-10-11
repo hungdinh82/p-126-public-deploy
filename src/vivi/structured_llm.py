@@ -1,11 +1,53 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import json
 import time
 from typing import Any
 
 import httpx
+
+
+def strict_schema(schema: dict) -> dict:
+    """Provider strict mode requires closed objects and every property required."""
+    result = copy.deepcopy(schema)
+
+    def visit(value):
+        if isinstance(value, dict):
+            if value.get("type") == "object" and "properties" in value:
+                value["additionalProperties"] = False
+                value["required"] = list(value["properties"])
+            for child in value.values():
+                visit(child)
+        elif isinstance(value, list):
+            for child in value:
+                visit(child)
+
+    visit(result)
+    return result
+
+
+def portable_schema(schema: dict) -> dict:
+    """Gemini's compatibility endpoint rejects some Pydantic annotations.
+
+    Keep types, enums and closed objects. Bounds remain enforced by the
+    semantic validator after generation, including the single repair attempt.
+    """
+    result = copy.deepcopy(schema)
+
+    def visit(value):
+        if isinstance(value, dict):
+            for key in ("default", "title", "minimum", "maximum", "minItems", "maxItems", "pattern"):
+                value.pop(key, None)
+            for child in value.values():
+                visit(child)
+        elif isinstance(value, list):
+            for child in value:
+                visit(child)
+
+    visit(result)
+    return result
 
 
 class StructuredChatClient:
@@ -24,6 +66,7 @@ class StructuredChatClient:
         extra_headers: dict[str, str] | None = None,
         schema_in_prompt: bool = False,
         max_attempts: int = 3,
+        schema_subset: bool = False,
     ) -> None:
         if not model:
             raise RuntimeError("A model name is required for structured generation")
@@ -39,6 +82,7 @@ class StructuredChatClient:
         # schema, so the schema is also spelled out in the system prompt.
         self.schema_in_prompt = schema_in_prompt
         self.max_attempts = max(1, min(3, max_attempts))
+        self.schema_subset = schema_subset
 
     def generate_json(
         self,
@@ -97,10 +141,16 @@ class StructuredChatClient:
         raise RuntimeError("structured generation failed")
 
     def _tool_payload(self, system: str, user: str, tools: list[dict]) -> dict:
-        return {**self.extra_body, "model": self.model,
-                "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
-                "tools": tools, "tool_choice": "required", "parallel_tool_calls": False,
-                "temperature": 0, "max_tokens": self.max_tokens}
+        return {
+            **self.extra_body,
+            "model": self.model,
+            "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+            "tools": tools,
+            "tool_choice": "required",
+            "parallel_tool_calls": False,
+            "temperature": 0,
+            "max_tokens": self.max_tokens,
+        }
 
     @staticmethod
     def _tool_result(response: httpx.Response) -> tuple[str, dict]:
@@ -127,6 +177,8 @@ class StructuredChatClient:
         schema: dict[str, Any],
         schema_name: str,
     ) -> dict[str, Any]:
+        if self.schema_subset:
+            schema = portable_schema(schema)
         if self.schema_in_prompt:
             system = (
                 f"{system}\nChỉ trả về một object JSON hợp lệ theo JSON Schema sau, "
@@ -146,7 +198,7 @@ class StructuredChatClient:
                 "json_schema": {
                     "name": schema_name,
                     "strict": True,
-                    "schema": schema,
+                    "schema": strict_schema(schema),
                 },
             },
         }
@@ -197,6 +249,7 @@ def google_client(config: Any) -> StructuredChatClient:
         extra_body={"reasoning_effort": config.google_reasoning_effort},
         schema_in_prompt=True,
         max_attempts=1,
+        schema_subset=True,
     )
 
 

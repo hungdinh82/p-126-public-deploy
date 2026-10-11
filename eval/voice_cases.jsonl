@@ -18,7 +18,7 @@
 {"id": "voice-18", "query": "Mở khoá cửa bên phụ giúp tôi", "expected_route": "action", "expected_intent": "door.set_lock", "review_status": "draft", "category": "conversation_regression"}
 {"id": "voice-19", "query": "Cửa sổ bên tài không mở được", "expected_route": "handbook", "expected_intent": "manual.search", "review_status": "draft", "category": "conversation_regression"}
 {"id": "voice-20", "query": "Đừng mở cửa sổ", "expected_route": "conversation", "expected_intent": "conversation.respond", "review_status": "draft", "category": "conversation_regression"}
-{"id": "voice-21", "query": "Mở cửa sổ bên tài và phát nhạc", "expected_route": "clarify", "expected_intent": "conversation.clarify", "review_status": "draft", "category": "conversation_regression"}
+{"id": "voice-21", "query": "Mở cửa sổ bên tài và phát nhạc", "expected_route": "action", "expected_intent": "window.set_position", "review_status": "draft", "category": "conversation_regression", "expected_status": "confirmation_required", "expected_executed": false}
 {"id": "voice-22", "query": "Lát nữa mở cửa bên tài", "expected_route": "clarify", "expected_intent": "conversation.clarify", "review_status": "draft", "category": "conversation_regression"}
 {"id": "voice-23", "query": "Tôi hơi lạnh", "expected_route": "action", "expected_intent": "climate.set_temperature", "review_status": "draft", "category": "conversation_regression"}
 {"id": "voice-24", "query": "Phát nhạc thư giãn", "expected_route": "action", "expected_intent": "media.play", "review_status": "draft", "category": "conversation_regression"}
@@ -26,7 +26,7 @@
 {"id": "voice-26", "query": "Hướng dẫn sử dụng xe", "expected_route": "clarify", "expected_intent": "conversation.clarify", "review_status": "draft", "category": "conversation_regression"}
 {"id": "voice-27", "query": "bộ cẩm nang có những thông tin gì", "expected_route": "clarify", "expected_intent": "conversation.clarify", "review_status": "draft", "category": "conversation_regression"}
 {"id": "voice-28", "query": "bật cruise control", "expected_route": "unsupported", "expected_intent": "unsupported.request", "review_status": "draft", "category": "conversation_regression"}
-{"id": "voice-29", "query": "Đạp phanh giúp tôi", "expected_route": "unsupported", "expected_intent": "vehicle.prohibited", "review_status": "draft", "category": "conversation_regression"}
+{"id": "voice-29", "query": "Đạp phanh giúp tôi", "expected_route": "unsupported", "expected_intent": "unsupported.request", "review_status": "draft", "category": "conversation_regression"}
 {"id": "voice-30", "query": "chào bạn", "expected_route": "conversation", "expected_intent": "conversation.respond", "review_status": "draft", "category": "conversation_regression"}
 {"id": "voice-31", "query": "cảm ơn", "expected_route": "conversation", "expected_intent": "conversation.respond", "review_status": "draft", "category": "conversation_regression"}
 {"id": "voice-32", "query": "Hạ kính bên tài giúp mình", "expected_route": "action", "expected_intent": "window.set_position", "review_status": "draft", "category": "conversation_regression"}

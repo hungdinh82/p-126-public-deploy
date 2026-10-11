@@ -93,12 +93,12 @@ class ConfirmationTests(unittest.IsolatedAsyncioTestCase):
     async def test_vague_door_request_clarifies_location_before_confirmation(self):
         vague = await self.turn("Mở cửa")
         self.assertEqual(vague.status, "clarify")
-        self.assertEqual(vague.message, "Bạn muốn mở cửa bên nào?")
+        self.assertIn("vị trí", vague.message)
         self.assertIsNone(vague.confirmation)
 
         specified = await self.turn("Bên phụ")
         self.assertEqual(specified.status, "confirmation_required")
-        self.assertEqual(specified.confirmation.preview, "Xác nhận mở cửa bên phụ?")
+        self.assertEqual(specified.confirmation.preview, "Nói OK để mở cửa bên phụ.")
         approved = await self.turn("Xác nhận", specified.confirmation.confirmation_id, "approve")
         self.assertEqual(approved.status, "verified")
         self.assertTrue(approved.vehicle_state.door_states.front_passenger.open)
@@ -114,7 +114,9 @@ class ConfirmationTests(unittest.IsolatedAsyncioTestCase):
                 self.assertIsNone(response.confirmation)
 
         followup = await self.turn("trái")
-        self.assertEqual(followup.status, "clarify")
+        # Location correction now preserves the rear-door task; fresh policy
+        # must still block opening while driving rather than lose the context.
+        self.assertEqual(followup.status, "blocked")
         self.assertIsNone(followup.confirmation)
 
     async def test_new_request_cancels_old_confirmation(self):
@@ -137,7 +139,7 @@ class ConfirmationTests(unittest.IsolatedAsyncioTestCase):
     async def test_hood_and_trunk_open_after_confirmation_and_block_driving(self):
         quote = await self.turn("Mở cốp sau")
         self.assertEqual(quote.status, "confirmation_required")
-        self.assertEqual(quote.confirmation.preview, "Xác nhận mở cốp sau?")
+        self.assertEqual(quote.confirmation.preview, "Nói OK để mở cốp sau.")
         approved = await self.turn("Xác nhận", quote.confirmation.confirmation_id, "approve")
         self.assertEqual(approved.status, "verified")
         self.assertTrue(approved.vehicle_state.trunk_open)
@@ -159,7 +161,7 @@ class ConfirmationTests(unittest.IsolatedAsyncioTestCase):
     async def test_open_all_needs_one_confirmation_for_every_panel(self):
         quote = await self.turn("Mở tất cả cửa, capo và cốp")
         self.assertEqual(quote.status, "confirmation_required")
-        self.assertEqual(quote.confirmation.preview, "Xác nhận mở tất cả cửa, nắp capo và cốp sau?")
+        self.assertEqual(quote.confirmation.preview, "Nói OK để mở tất cả cửa, nắp capo và cốp sau.")
         opened = await self.turn("Xác nhận", quote.confirmation.confirmation_id, "approve")
         self.assertEqual(opened.status, "verified")
         state = opened.vehicle_state

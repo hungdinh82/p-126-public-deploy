@@ -3,8 +3,9 @@ from __future__ import annotations
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal
+from urllib.parse import urlsplit
 
-from pydantic import AliasChoices, Field
+from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict, TomlConfigSettingsSource
 
 
@@ -49,6 +50,11 @@ class Settings(BaseSettings):
     cors_origins: str = "http://127.0.0.1:8787,http://localhost:8787"
 
     data_dir: Path = Field(default=Path("./data"), validation_alias="VIVI_DATA_DIR")
+    turn_timeout_seconds: float = Field(default=45, ge=1, le=180)
+    cloud_budget_seconds: float = Field(default=10, ge=0.1, le=60)
+    local_budget_seconds: float = Field(default=12, ge=0.1, le=60)
+    provider_breaker_seconds: float = Field(default=30, ge=0, le=300)
+    planner_max_tokens: int = Field(default=2048, ge=512, le=8192)
     store_audio: bool = Field(default=False, validation_alias="VIVI_STORE_AUDIO")
     store_transcripts: bool = Field(default=False, validation_alias="VIVI_STORE_TRANSCRIPTS")
     memory_enabled: bool = Field(default=True, validation_alias="VIVI_MEMORY_ENABLED")
@@ -120,6 +126,41 @@ class Settings(BaseSettings):
     local_llm_api_key: str = "local"
     local_llm_model: str = ""
     local_llm_max_tokens: int = Field(default=512, ge=64, le=4096)
+    # Opt-in Laptop router for the private Jetson inference gateway.
+    jetson_ai_policy: Literal["disabled", "offline_only", "prefer_local", "allow_cloud"] = "disabled"
+    jetson_ai_url: str = Field(default="", validation_alias=AliasChoices(
+        "AI_SERVER_URL", "JETSON_AI_URL", "ai_server_url", "jetson_ai_url"
+    ))
+    jetson_ai_token: str = Field(default="", validation_alias=AliasChoices(
+        "AI_SERVER_TOKEN", "JETSON_AI_TOKEN", "ai_server_token", "jetson_ai_token"
+    ))
+    jetson_ai_probe_timeout_seconds: float = Field(default=0.75, gt=0, le=5)
+    ai_server_auth_required: bool = Field(default=True, validation_alias=AliasChoices(
+        "AI_SERVER_AUTH_REQUIRED", "JETSON_AI_AUTH_REQUIRED", "ai_server_auth_required"
+    ))
+
+    @model_validator(mode="after")
+    def configure_ai_server(self) -> Settings:
+        # Gateway capabilities and inference must use the same server/token.
+        # Disabled policy preserves standalone OpenAI-compatible local servers.
+        if self.jetson_ai_policy != "disabled" and self.jetson_ai_url:
+            url = self.jetson_ai_url.strip().rstrip("/")
+            if url.endswith("/v1"):
+                url = url[:-3]
+            parsed = urlsplit(url)
+            if (parsed.scheme not in {"http", "https"} or not parsed.hostname
+                    or parsed.username or parsed.password or parsed.query or parsed.fragment):
+                raise ValueError("AI_SERVER_URL must be an HTTP(S) gateway URL without credentials, query or fragment")
+            self.jetson_ai_url = url
+            self.local_llm_base_url = url + "/v1"
+            if not self.ai_server_auth_required:
+                self.local_llm_api_key = ""
+                self.jetson_ai_token = ""
+            elif self.jetson_ai_token:
+                self.local_llm_api_key = self.jetson_ai_token
+            elif self.local_llm_api_key and self.local_llm_api_key != "local":
+                self.jetson_ai_token = self.local_llm_api_key
+        return self
 
     tts_provider: Literal["off", "zerotts", "vieneu"] = "off"
     zerotts_model: str = "zeroweight-ai/ZeroTTS"
@@ -149,6 +190,15 @@ class Settings(BaseSettings):
     navigation_default_lat: float = 21.0285
     navigation_default_lng: float = 105.8522
     navigation_default_label: str = "Hồ Gươm"
+    energy_profile_path: Path | None = Path("data/energy/vf8-plus.json")
+    charging_stations_path: Path | None = Path("data/energy/charging-stations.json")
+    navigation_pharmacy_category: str = ""
+    navigation_charging_category: str = ""
+    navigation_charging_search_seconds: float = Field(default=8, ge=1, le=15)
+    navigation_charging_radius_m: int = Field(default=20000, ge=1000, le=40000)
+    navigation_charging_max_detour_m: int = Field(default=15000, ge=1000, le=40000)
+    charging_assumptions_path: Path | None = Path("data/energy/charging-assumptions.json")
+    charging_assumptions_enabled: bool = True
 
     database_url: str = "sqlite:///./data/app.db"
     rag_data_dir: Path = Path("./data/handbooks")

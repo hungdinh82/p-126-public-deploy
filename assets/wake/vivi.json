@@ -1,0 +1,52 @@
+{
+  "phrases": [
+    "ViVi ơi",
+    "Hey ViVi"
+  ],
+  "input": [
+    1,
+    16,
+    96
+  ],
+  "acav": true,
+  "steps": 30000,
+  "negative_weight": 30.0,
+  "mine_rounds": 3,
+  "report": {
+    "0.3": {
+      "recall": 0.9060367454068241,
+      "test_false_rate": 0.01280846063454759,
+      "false_wakes_per_hour": 8.413906005243629
+    },
+    "0.4": {
+      "recall": 0.8976377952755905,
+      "test_false_rate": 0.012338425381903642,
+      "false_wakes_per_hour": 6.731124804194904
+    },
+    "0.5": {
+      "recall": 0.89501312335958,
+      "test_false_rate": 0.01163337250293772,
+      "false_wakes_per_hour": 5.796246359167833
+    },
+    "0.6": {
+      "recall": 0.8902887139107611,
+      "test_false_rate": 0.010928319623971798,
+      "false_wakes_per_hour": 4.8613679141407635
+    },
+    "0.7": {
+      "recall": 0.883989501312336,
+      "test_false_rate": 0.010223266745005875,
+      "false_wakes_per_hour": 4.487416536129936
+    },
+    "0.8": {
+      "recall": 0.8755905511811024,
+      "test_false_rate": 0.009518213866039953,
+      "false_wakes_per_hour": 3.73951378010828
+    },
+    "0.9": {
+      "recall": 0.8608923884514436,
+      "test_false_rate": 0.009048178613396005,
+      "false_wakes_per_hour": 2.9916110240866236
+    }
+  }
+}

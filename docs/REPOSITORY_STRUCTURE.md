@@ -48,10 +48,9 @@ P-126/
 │   │       ├── vehicle.py       # Vehicle state và demo fixtures
 │   │       └── web.py           # Static HTML/JS/CSS
 │   ├── agents/
-│   │   ├── contracts.py         # Structured intent/action/output contracts
-│   │   ├── state.py             # Typed LangGraph state
-│   │   ├── classifier.py        # Rules, Google, OpenAI-compatible classifiers
-│   │   └── graph.py             # Nodes, edges và graph compilation
+│   │   ├── contracts.py         # Action/output DTOs (semantic contract trong dialogue/)
+│   │   ├── tools.py             # Schema tham số capability
+│   │   └── prompts.py           # Persona thoại (giữ lời chào hiện có)
 │   ├── domain/
 │   │   ├── models.py            # API/domain request-response models
 │   │   ├── safety.py            # Risk policy, limits, confirmation policy
@@ -64,10 +63,13 @@ P-126/
 │   │   ├── stt.py               # STT factory, off/PhoWhisper adapters
 │   │   ├── whisper_cpp.py       # Low-memory STT adapter
 │   │   └── tts.py               # TTS factory, off/ZeroTTS adapters
+│   ├── dialogue/                 # Semantic contract, resolver/parser và task reducer
+│   ├── graphs/                   # Một workflow LangGraph thống nhất
+│   ├── capabilities/             # Registry, validation và execution adapters
 │   ├── rag/                      # Retrieval, generation, grounding, vector stores
 │   ├── ingestion/                # Crawl, parse và index handbook
 │   ├── history/                  # Conversation history SQLite
-│   ├── persistence/              # Event/audio storage
+│   ├── persistence/              # Checkpoints, grant/effect ledger, migration và event/audio storage
 │   ├── cli/                      # Ingestion và RAG development commands
 │   ├── config.py                 # Toàn bộ environment settings
 │   ├── providers.py              # Provider catalog và availability config
@@ -170,7 +172,7 @@ node --check app.js
 ```
 
 Test cần dùng temporary directory cho SQLite/audio. Không gọi provider online trong unit
-test; dùng rules classifier, fake graph hoặc `httpx.MockTransport`.
+test; dùng parser/resolver, mock provider hoặc `httpx.MockTransport`.
 
 Log hội thoại được ghi bởi `EventStore` vào
 `VIVI_DATA_DIR/YYYY-MM-DD/turns.jsonl` khi `VIVI_STORE_TRANSCRIPTS=true`. Audio chỉ được
@@ -193,8 +195,8 @@ Vehicle action là thay đổi xuyên nhiều boundary; hoàn tất đủ checkl
 
 1. Thêm intent và arguments vào `agents/contracts.py`.
 2. Đồng bộ public action model trong `domain/models.py`.
-3. Cập nhật classifier instruction và rules classifier trong `agents/classifier.py`.
-4. Validate arguments trong node `validate_action` của `agents/graph.py`.
+3. Đăng ký capability/schema/executor trong `capabilities/registry.py` và semantic contract.
+4. Cập nhật parser grammar trong `dialogue/parser.py` và kiểm thử validation/policy; không thêm keyword vào graph.
 5. Gán risk class và policy trong `domain/safety.py`.
 6. Thêm verify rule trong `vehicle/gateway.py`.
 7. Implement action ở `vehicle/memory.py`.
@@ -207,14 +209,14 @@ execution và state verification mới được dùng từ “đã”.
 ## 7. Thêm LLM provider
 
 1. Mở rộng `Settings.llm_provider` và thêm settings/key/model cần thiết.
-2. Implement `IntentClassifier` trong `agents/classifier.py`.
+2. Kết nối client structured generation với `dialogue/planner.py:ModelProvider`.
 3. Implement `HandbookGenerator` trong `rag/generator.py`.
-4. Đăng ký classifier/generator trong `rag/runtime.py:create_services`.
+4. Đăng ký client/generator trong `rag/runtime.py:create_services` và resolver factory.
 5. Thêm provider vào catalog và điều kiện cấu hình trong `providers.py`.
 6. Thêm biến mẫu và ghi chú profile vào `.env.example`.
 7. Test structured output bằng mock transport; test provider xuất hiện trong health.
 
-Classifier phải trả đúng `IntentDecision`; handbook generator phải trả grounded answer và
+Semantic resolver phải trả đúng `SemanticTurn`; handbook generator phải trả grounded answer và
 citations. Provider không được bỏ qua safety graph.
 
 ## 8. Thêm STT hoặc TTS provider
@@ -251,11 +253,9 @@ phụ thuộc API embedding.
 
 ## 10. Khi nào nên tách thêm file
 
-`agents/graph.py` hiện là hotspot lớn nhất. Các node cùng chia sẻ một `HandbookServices`
-runtime và routing contract, nên chưa tách cơ học trong lần migration này. Khi bổ sung một
-nhánh nghiệp vụ đáng kể, hãy tách theo capability thành `agents/nodes/handbook.py`,
-`agents/nodes/actions.py`, `agents/nodes/conversation.py`; giữ `graph.py` chỉ để đăng ký node
-và edge. Không tạo một file cho mỗi hàm nhỏ nếu chúng luôn thay đổi cùng nhau.
+Workflow hiện tại nằm trong `graphs/assistant.py`; reducer, parser và capabilities đã
+được tách riêng. Xem [kiến trúc thống nhất](langgraph_unified_runtime.md) để thay đổi
+state, provider, task lifecycle và execution theo đúng quyền sở hữu.
 
 Một module nên được tách khi có ít nhất một trong các dấu hiệu:
 

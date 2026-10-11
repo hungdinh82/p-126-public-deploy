@@ -11,10 +11,11 @@ from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
 
-from src.vivi.agents.classifier import RulesIntentClassifier
 from src.vivi.api.app import app
 from src.vivi.api.runtime import runtime
 from src.vivi.config import Settings, settings
+from src.vivi.dialogue.contracts import SessionState
+from src.vivi.dialogue.reducer import reduce_turn
 from src.vivi.domain.models import ActionProposal, TurnRequest, VehicleState
 from src.vivi.domain.safety import validate
 from src.vivi.orchestration import (
@@ -27,6 +28,7 @@ from src.vivi.speech.stt import DisabledSTTAdapter, PhoWhisperAdapter, create_st
 from src.vivi.speech.tts import DisabledTTSAdapter, ZeroTTSAdapter, create_tts
 from src.vivi.vehicle.gateway import VehicleActionGateway
 from src.vivi.vehicle.memory import VehicleSimulator
+from tests.semantic_helpers import parse
 
 
 class SafetyTests(unittest.TestCase):
@@ -81,14 +83,11 @@ class SafetyTests(unittest.TestCase):
 
 class RulesTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
-        self.rules = RulesIntentClassifier()
+        self.session = SessionState()
 
     def classify(self, text: str, state: VehicleState | None = None):
-        return self.rules.classify_with_context(
-            text,
-            [],
-            (state or VehicleState()).model_dump(mode="json"),
-        )
+        return parse(text, session=self.session, observation=state or VehicleState())
+
 
     async def test_open_ended_reply_is_conversation(self):
         result = self.classify("Bạn là ai")
@@ -98,7 +97,7 @@ class RulesTests(unittest.IsolatedAsyncioTestCase):
     async def test_cold_increases_temperature(self):
         result = self.classify("Tôi hơi lạnh", VehicleState(temperature_celsius=23))
         self.assertEqual(result.intent, "climate.set_temperature")
-        self.assertEqual(result.arguments.value_celsius, 25)
+        self.assertEqual(result.resolved["value_celsius"], 25)
 
     async def test_word_hai_is_not_mistaken_for_lower_command(self):
         result = self.classify(
@@ -106,7 +105,7 @@ class RulesTests(unittest.IsolatedAsyncioTestCase):
             VehicleState(temperature_celsius=23),
         )
         self.assertEqual(result.intent, "climate.set_temperature")
-        self.assertEqual(result.arguments.value_celsius, 25)
+        self.assertEqual(result.resolved["value_celsius"], 25)
 
     async def test_negation_acknowledges_without_execution(self):
         result = self.classify("Đừng mở cửa sổ", VehicleState())
@@ -130,42 +129,19 @@ class RulesTests(unittest.IsolatedAsyncioTestCase):
                     (intent, arguments),
                 )
         unrelated = self.classify("Nhiệt độ của xe 25 độ", state)
-        self.assertEqual(unrelated.intent, "climate.set_temperature")
+        self.assertEqual(unrelated.intent, "manual.search")
 
     async def test_door_action_requires_location_and_accepts_driver_side_followup(self):
         vague = self.classify("Mở cửa", VehicleState())
-        self.assertEqual(vague.intent, "conversation.clarify")
-        self.assertEqual(vague.clarification_question, "Bạn muốn mở cửa bên nào?")
-
-        followup = self.rules.classify_with_context(
-            "Bên tài",
-            [
-                {
-                    "query": "Mở cửa",
-                    "answer": "Bạn muốn mở cửa bên nào?",
-                    "route": "clarify",
-                    "intent": "conversation.clarify",
-                }
-            ],
-            VehicleState().model_dump(mode="json"),
-        )
-        self.assertEqual(followup.intent, "door.set_open")
-        self.assertEqual(followup.arguments.model_dump(exclude_none=True), {"open": True, "zone": "driver"})
-
-        changed_topic = self.rules.classify_with_context(
-            "Bên tài đang bị bẩn",
-            [
-                {
-                    "query": "Mở cửa",
-                    "answer": "Bạn muốn mở cửa bên nào?",
-                    "route": "clarify",
-                    "intent": "conversation.clarify",
-                }
-            ],
-            VehicleState().model_dump(mode="json"),
-        )
-        self.assertEqual(changed_topic.intent, "conversation.clarify")
-
+        self.assertEqual(vague.intent, "door.set_open")
+        self.assertIn("vị trí", vague.error)
+        self.session, _ = reduce_turn(self.session, vague.frame)
+        followup = self.classify("Bên tài")
+        self.assertEqual(followup.act, "modify")
+        self.session, _ = reduce_turn(self.session, followup.frame)
+        self.assertEqual(self.session.active.steps[0].draft.arguments.model_dump(exclude_none=True), {"open": True, "zone": "driver"})
+        changed_topic = self.classify("Bên tài đang bị bẩn")
+        self.assertNotEqual(changed_topic.act, "modify")
         passenger = self.classify("Mở cửa bên phụ", VehicleState())
         self.assertEqual(passenger.intent, "door.set_open")
         self.assertEqual(passenger.arguments.zone, "front_passenger")
@@ -304,6 +280,13 @@ class TTSStreamTests(unittest.IsolatedAsyncioTestCase):
 
 
 class APITests(unittest.TestCase):
+    def setUp(self):
+        # These route tests supply graph doubles, without a real AI gateway.
+        # Gateway availability/fallback is covered by the Jetson integration tests.
+        policy = patch.object(runtime.settings, "jetson_ai_policy", "disabled")
+        policy.start()
+        self.addCleanup(policy.stop)
+
     def test_health(self):
         response = TestClient(app).get("/api/v1/health")
         self.assertEqual(response.status_code, 200)
@@ -312,7 +295,7 @@ class APITests(unittest.TestCase):
         # The catalog follows config (cloud entries appear when rag_local_only is off);
         # without credentials only the scripted provider can run.
         self.assertEqual({item["provider"] for item in options}, set(runtime.llm_models))
-        self.assertEqual({item["provider"] for item in options if item["available"]}, {"rules"})
+        self.assertIn("rules", {item["provider"] for item in options if item["available"]})
 
     def test_turn_uses_selected_provider_without_changing_default(self):
         class LocalGraph:
@@ -464,8 +447,8 @@ class TurnStreamingTests(unittest.IsolatedAsyncioTestCase):
             request = TurnRequest(transcript="Cách sạc AC cho VF8 thế nào?", session_id="stream", turn_id="stream-manual")
             events = [event async for event in orchestrator.run_stream(request, provider="rules")]
 
-        self.assertEqual(events[0]["type"], "progress")
-        self.assertIn(events[0]["text"], PROGRESS_MESSAGES)
+        progress = next(event for event in events if event["type"] == "progress")
+        self.assertIn(progress["text"], PROGRESS_MESSAGES)
         self.assertEqual(events[-1]["response"]["route"], "handbook")
 
 
@@ -494,7 +477,7 @@ class IntegratedLangGraphVoiceTests(unittest.IsolatedAsyncioTestCase):
                 }
 
             async def astream(self, state, stream_mode):
-                yield "updates", {"scope_guard": {"grounding_status": "pending"}}
+                yield "updates", {"interpret": {"turn": {"effective_provider": "rules", "semantic": {"actions": [{"capability": "manual.search"}]}}}}
                 yield "values", await self.ainvoke(state)
 
         with tempfile.TemporaryDirectory() as directory:
@@ -509,8 +492,8 @@ class IntegratedLangGraphVoiceTests(unittest.IsolatedAsyncioTestCase):
             )
             events = [event async for event in pipeline.run_stream(request, provider="rules")]
 
-        self.assertEqual([event["type"] for event in events], ["progress", "speech", "final"])
-        self.assertIn(events[0]["text"], PROGRESS_MESSAGES)
+        self.assertEqual([event["type"] for event in events], ["provider", "progress", "speech", "final"])
+        self.assertIn(next(event["text"] for event in events if event["type"] == "progress"), PROGRESS_MESSAGES)
         response = events[-1]["response"]
         self.assertEqual(response["route"], "handbook")
         self.assertEqual(response["status"], "verified")

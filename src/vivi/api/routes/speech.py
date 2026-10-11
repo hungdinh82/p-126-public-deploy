@@ -11,6 +11,7 @@ from fastapi.responses import Response, StreamingResponse
 
 from src.vivi.api.runtime import runtime
 from src.vivi.domain.models import STTResponse, TTSRequest
+from src.vivi.text import spoken_text
 
 router = APIRouter(prefix="/api/v1")
 _AUDIO_SUFFIXES = {".wav", ".webm", ".ogg", ".mp3", ".m4a"}
@@ -128,8 +129,11 @@ async def transcribe_stream(socket: WebSocket, session_id: str, turn_id: str):
         return
     latency = round((time.perf_counter() - stopped_at[0]) * 1000, 2) if stopped_at else None
     if not transcript:
-        await socket.send_json({"type": "error", "detail": "Không nhận diện được lời nói"})
-        await socket.close()
+        try:
+            await socket.send_json({"type": "error", "detail": "Không nhận diện được lời nói"})
+            await socket.close()
+        except Exception:
+            pass  # The browser closed it first, e.g. a follow-up window nobody spoke in.
         return
     stored_path = runtime.store.save_audio(session_id, turn_id, ".webm", b"".join(received))
     audio_path = str(stored_path) if stored_path is not None else None
@@ -160,14 +164,17 @@ async def transcribe_stream(socket: WebSocket, session_id: str, turn_id: str):
 def _tts(request: TTSRequest):
     if request.tts_provider is None:
         return runtime.tts
-    return runtime.tts_engines[request.tts_provider]
+    engine = runtime.tts_engines.get(request.tts_provider)
+    if engine is None:
+        raise HTTPException(status_code=400, detail="TTS provider không khả dụng trong profile này")
+    return engine
 
 
 @router.post("/tts")
 async def synthesize(request: TTSRequest):
     tts = _tts(request)
     try:
-        audio = await tts.synthesize(request.text)
+        audio = await tts.synthesize(spoken_text(request.text))
     except Exception as exc:
         raise HTTPException(status_code=503, detail=f"TTS chưa sẵn sàng: {exc}") from exc
     return Response(
@@ -194,7 +201,7 @@ async def synthesize_stream(request: TTSRequest):
         received_at = time.time()
         first_chunk = None
         audio_duration_ms = 0.0
-        async for chunk in tts.stream(request.text):
+        async for chunk in tts.stream(spoken_text(request.text)):
             if first_chunk is None:
                 first_chunk = round((time.perf_counter() - started) * 1000, 2)
             audio_duration_ms += len(chunk) / 2 / tts.sample_rate * 1000

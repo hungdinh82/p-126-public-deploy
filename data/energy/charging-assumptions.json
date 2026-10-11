@@ -1,0 +1,8 @@
+{
+  "power_kw": 120,
+  "connector": "CCS2",
+  "max_soc": 80,
+  "networks": ["vinfast", "vgreen", "v-green"],
+  "source": "Công suất giả định do người dùng cho phép để ước tính lộ trình; không phải thông số trụ từ VietMap",
+  "updated_at": "2026-10-10"
+}

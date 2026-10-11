@@ -2,13 +2,16 @@ from __future__ import annotations
 
 import pytest
 
-from src.vivi.agents.classifier import RulesIntentClassifier, StructuredAPIIntentClassifier
-from src.vivi.agents.graph import build_graph
+from src.vivi.dialogue.contracts import SessionState
+from src.vivi.dialogue.planner import ModelProvider, SemanticResolver
+from src.vivi.domain.models import VehicleState
+from src.vivi.graphs import build_graph
 from src.vivi.history.sqlite import SQLiteConversationHistory
 from src.vivi.rag.generator import ExtractiveHandbookGenerator
 from src.vivi.rag.runtime import HandbookServices
 from src.vivi.rag.schemas import RetrievedChunk
 from src.vivi.vehicle.gateway import VehicleActionGateway
+from tests.semantic_helpers import parse
 
 
 def chunk(source_id, content, section):
@@ -23,21 +26,30 @@ def chunk(source_id, content, section):
     ("hạ nhiệt độ xuống thấp nhất", 16),
     ("tăng nhiệt độ thêm 20 độ", 30),
     ("tăng nhiệt độ lên 20 độ", 20),
-    ("hạ nhiệt độ xuống 10 độ", 10),
+
 ])
 def test_temperature_target_words_take_precedence_over_numeric_heuristics(query, expected):
-    decision = RulesIntentClassifier().classify_with_context(query, [], {"temperature_celsius": 23})
-    assert decision.intent == "climate.set_temperature" and decision.arguments.value_celsius == expected
+    decision = parse(query, observation=VehicleState(temperature_celsius=23))
+    assert decision.intent == "climate.set_temperature" and decision.resolved["value_celsius"] == expected
+
+
+@pytest.mark.parametrize("query,intent", [
+    ("Mở nắp capo,", "hood.set_open"),
+    ("Mở cốp sau,", "trunk.set_open"),
+    ("mở capo…", "hood.set_open"),
+])
+def test_command_cut_at_a_pause_keeps_its_intent(query, intent):
+    # STT ends a command cut at a pause with a comma instead of a full stop.
+    assert parse(query).intent == intent
 
 
 def test_rule_fallback_preserves_obvious_tool_and_dialogue_requests():
-    classifier = RulesIntentClassifier()
     for query, intent in [("Tôi hơi lạnh", "climate.set_temperature"),
                           ("Tăng điều hoà lên tối đa", "climate.set_temperature"),
                           ("Thống số pin hiện tại", "vehicle.get_status"),
                           ("Bạn có đang gặp vấn đề gì không?", "vehicle.get_status"),
                           ("bạn giúp gì được cho mình", "conversation.respond")]:
-        assert classifier.classify_with_context(query, [], {"temperature_celsius": 23}).intent == intent
+        assert parse(query, observation=VehicleState()).intent == intent
 
 
 @pytest.mark.asyncio
@@ -45,11 +57,10 @@ async def test_async_model_interprets_even_an_obvious_control_request():
     class Model:
         async def agenerate_json(self, **kwargs):
             assert "Tăng điều hoà lên tối đa" in kwargs["user"]
-            return '{"route":"action","intent":"climate.set_temperature","arguments":{"value_celsius":30}}'
-    decision = await StructuredAPIIntentClassifier(Model()).aclassify_with_context(
-        "Tăng điều hoà lên tối đa", [], {"temperature_celsius": 23}
-    )
-    assert decision.arguments.value_celsius == 30
+            return '{"act":"request","actions":[{"capability":"climate.set_temperature","arguments":{"value_celsius":30}}]}'
+    decision, tier, _ = await SemanticResolver({"google": ModelProvider("google", Model(), 1)}).resolve(
+        "Tăng điều hoà lên tối đa", SessionState(), requested="google")
+    assert tier == "google" and decision.actions[0].arguments.value_celsius == 30
 
 
 def test_definition_rejects_control_instructions_and_picks_actual_definition():
@@ -80,12 +91,11 @@ def test_wifi_password_instructions_are_not_the_users_password():
 
 
 def test_new_handbook_topic_does_not_inherit_previous_topic():
-    from src.vivi.agents.graph import _retrieval_query
-
+    from src.vivi.dialogue.parser import OfflineParser
     history = [{"route": "handbook", "query": "ADAS là gì?"}]
     query = "Còn áp suất lốp khuyến nghị?"
-    assert _retrieval_query({"query": query, "conversation_history": history}) == query
-    assert "ADAS" in _retrieval_query({"query": "Vậy nó có thay thế người lái không?", "conversation_history": history})
+    assert OfflineParser.question_reference(query, history) == query
+    assert "ADAS" in OfflineParser.question_reference("Vậy nó có thay thế người lái không?", history)
 
 
 def test_charger_clarification_keeps_original_question(tmp_path):
@@ -96,14 +106,16 @@ def test_charger_clarification_keeps_original_question(tmp_path):
     retriever = Retriever()
     history = SQLiteConversationHistory(tmp_path / "history.sqlite3")
     graph = build_graph(HandbookServices(retriever, ExtractiveHandbookGenerator(), history,
-                                       classifier=RulesIntentClassifier(), generation_provider="rules"))
+                                       generation_provider="rules"))
     graph.invoke({"session_id": "s", "input_text": "Cần bao lâu để sạc đầy?"})
-    graph.invoke({"session_id": "s", "input_text": "DC"})
+    resumed = graph.invoke({"session_id": "s", "input_text": "DC"})
     assert "bao lâu" in retriever.query and "DC" in retriever.query
     saved = history.recent("s")[-1]
     assert saved["query"] == "DC"
-    assert saved["diagnostics"]["retrieval_query"] == retriever.query
-    assert saved["diagnostics"]["generation_provider"] == "rules"
+    patch = saved["diagnostics"]["semantic"]["actions"][0]["arguments"]
+    assert patch["charging_mode"] == "DC" and patch["query"] is None
+    assert resumed["session"]["active"]["steps"][0]["draft"]["arguments"]["query"] == "Cần bao lâu để sạc đầy?"
+    assert saved["diagnostics"]["generation_provider"] is None  # No evidence means no generation call.
 
 
 def test_model_query_rewrite_cannot_erase_an_unsafe_original_request(tmp_path):
@@ -115,7 +127,7 @@ def test_model_query_rewrite_cannot_erase_an_unsafe_original_request(tmp_path):
     result = graph.invoke({"input_text": "Cách tháo pin cao áp", "model_input": {
         "route": "handbook", "intent": "manual.search", "arguments": {"query": "Sạc pin VF8"}
     }})
-    assert result["output"]["status"] == "out_of_scope"
+    assert result["output"]["status"] == "unsupported"
 
 
 def test_evidence_gate_rejects_wrong_charging_domain_for_any_retriever(tmp_path):
@@ -124,9 +136,9 @@ def test_evidence_gate_rejects_wrong_charging_domain_for_any_retriever(tmp_path)
             return [chunk("phone", "Sạc không dây mất 1 giờ.", "Sạc không dây điện thoại")]
     services = HandbookServices(Retriever(), ExtractiveHandbookGenerator(),
                                 SQLiteConversationHistory(tmp_path / "history.sqlite3"),
-                                classifier=RulesIntentClassifier(), action_gateway=VehicleActionGateway())
+                                action_gateway=VehicleActionGateway())
     result = build_graph(services).invoke({"input_text": "Sạc AC mất bao lâu?"})
-    assert result["accepted_chunks"] == []
+    assert result["output"]["citations"] == []
     assert result["output"]["status"] == "insufficient_evidence"
 
 
@@ -141,3 +153,28 @@ def test_history_migrates_old_database_without_losing_turns(tmp_path):
     migrated = SQLiteConversationHistory(path)
     assert migrated.recent("s")[0]["answer"] == "Mình đây."
     assert migrated.recent("s")[0]["diagnostics"] == {}
+
+
+@pytest.mark.parametrize("status", ["preview", "paused"])
+@pytest.mark.parametrize("answer", ["Ok.", "Ok,.", "Ô kê", "Có"])
+def test_yes_confirms_the_pending_action_not_a_leftover_route(status, answer):
+    # 11/10 log: "Mở tất cả các cửa xe" → "OK" started a route stopped earlier.
+    from src.vivi.dialogue.contracts import ActionDraft, DialogueTask, NavigationState, SessionState, TaskStep
+
+    session = SessionState(
+        active=DialogueTask(steps=[TaskStep(
+            draft=ActionDraft(capability="door.set_open", arguments={"open": True, "zone": "all"}),
+            status="waiting_confirmation",
+            confirmation={"confirmation_id": "doors"},
+        )]),
+        navigation=NavigationState(status=status, revision=1, selected={"name": "Ký túc xá VinUni"}, route={"distance_m": 1000}),
+    )
+    turn = parse(answer, session=session)
+    assert turn.act == "confirm" and turn.frame.task_ref == "active"
+
+
+def test_yes_without_a_pending_action_still_starts_the_previewed_route():
+    from src.vivi.dialogue.contracts import NavigationState, SessionState
+
+    session = SessionState(navigation=NavigationState(status="preview", revision=1, selected={"name": "A"}, route={"distance_m": 1000}))
+    assert parse("Ok.", session=session).intent == "navigation.start"

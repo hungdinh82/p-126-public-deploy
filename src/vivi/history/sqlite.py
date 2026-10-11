@@ -40,9 +40,7 @@ class SQLiteConversationHistory:
                 )
                 """
             )
-            columns = {
-                row[1] for row in connection.execute("PRAGMA table_info(handbook_turns)").fetchall()
-            }
+            columns = {row[1] for row in connection.execute("PRAGMA table_info(handbook_turns)").fetchall()}
             migrations = {
                 "intent": "TEXT",
                 "route": "TEXT",
@@ -51,7 +49,20 @@ class SQLiteConversationHistory:
                 "confirmation_json": "TEXT NOT NULL DEFAULT '{}'",
                 "vehicle_state_json": "TEXT NOT NULL DEFAULT '{}'",
                 "diagnostics_json": "TEXT NOT NULL DEFAULT '{}'",
+                "steps_json": "TEXT NOT NULL DEFAULT '[]'",
+                "trip_plan_json": "TEXT NOT NULL DEFAULT '{}'",
+                "navigation_json": "TEXT NOT NULL DEFAULT '{}'",
+                "errors_json": "TEXT NOT NULL DEFAULT '[]'",
             }
+            if (
+                "trip_plan_json" not in columns
+                and connection.execute("SELECT 1 FROM handbook_turns LIMIT 1").fetchone()
+            ):
+                backup_path = self.path.with_name(
+                    self.path.stem + "-before-trip-plan-" + datetime.now(UTC).strftime("%Y%m%dT%H%M%S%f") + ".sqlite3"
+                )
+                with self._connect() as source, sqlite3.connect(backup_path) as backup:
+                    source.backup(backup)
             for name, declaration in migrations.items():
                 if name not in columns:
                     connection.execute(f"ALTER TABLE handbook_turns ADD COLUMN {name} {declaration}")
@@ -63,7 +74,7 @@ class SQLiteConversationHistory:
             rows = connection.execute(
                 """
                 SELECT query, answer, citations_json, created_at, intent, route, action_json,
-                       execution_json, confirmation_json, vehicle_state_json, status, diagnostics_json
+                       execution_json, confirmation_json, vehicle_state_json, status, diagnostics_json, trip_plan_json
                 FROM handbook_turns
                 WHERE session_id = ?
                 ORDER BY id DESC
@@ -84,6 +95,7 @@ class SQLiteConversationHistory:
                 "vehicle_state": json.loads(row["vehicle_state_json"] or "{}") or None,
                 "created_at": row["created_at"],
                 "status": row["status"],
+                "trip_plan": json.loads(row["trip_plan_json"] or "{}") or None,
                 "diagnostics": json.loads(row["diagnostics_json"] or "{}"),
             }
             for row in reversed(rows)
@@ -97,8 +109,8 @@ class SQLiteConversationHistory:
                     session_id, turn_id, query, answer, status, grounding_status,
                     citations_json, vehicle_model, model_year, locale, timings_json, created_at,
                     intent, route, action_json, execution_json, confirmation_json,
-                    vehicle_state_json, diagnostics_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    vehicle_state_json, diagnostics_json, steps_json, navigation_json, errors_json, trip_plan_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(session_id, turn_id) DO UPDATE SET
                     answer = excluded.answer,
                     status = excluded.status,
@@ -111,7 +123,11 @@ class SQLiteConversationHistory:
                     execution_json = excluded.execution_json,
                     confirmation_json = excluded.confirmation_json,
                     vehicle_state_json = excluded.vehicle_state_json,
-                    diagnostics_json = excluded.diagnostics_json
+                    diagnostics_json = excluded.diagnostics_json,
+                    steps_json = excluded.steps_json,
+                    navigation_json = excluded.navigation_json,
+                    errors_json = excluded.errors_json,
+                    trip_plan_json = excluded.trip_plan_json
                 """,
                 (
                     state["session_id"],
@@ -133,5 +149,9 @@ class SQLiteConversationHistory:
                     json.dumps(state.get("confirmation") or {}, ensure_ascii=False),
                     json.dumps(state.get("vehicle_state") or {}, ensure_ascii=False),
                     json.dumps(state.get("diagnostics") or {}, ensure_ascii=False),
+                    json.dumps(state.get("steps") or [], ensure_ascii=False),
+                    json.dumps(state.get("navigation") or {}, ensure_ascii=False),
+                    json.dumps(state.get("errors") or [], ensure_ascii=False),
+                    json.dumps(state.get("trip_plan") or {}, ensure_ascii=False),
                 ),
             )

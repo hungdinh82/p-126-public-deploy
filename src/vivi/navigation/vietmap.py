@@ -4,7 +4,7 @@ import math
 from typing import Any
 
 import httpx
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, model_validator
 
 from src.vivi.config import Settings
 
@@ -17,8 +17,14 @@ class Place(BaseModel):
     ref_id: str
     name: str
     address: str = ""
-    lat: float | None = None
-    lng: float | None = None
+    lat: float | None = Field(default=None, ge=-90, le=90)
+    lng: float | None = Field(default=None, ge=-180, le=180)
+    category: str | None = None
+    distance_m: float | None = None
+    duration_s: float | None = None
+    boundaries: list[dict] = Field(default_factory=list)
+    categories: list = Field(default_factory=list)
+    result_layer: str | None = None
 
 
 class RouteStep(BaseModel):
@@ -31,12 +37,20 @@ class RouteStep(BaseModel):
 
 
 class Route(BaseModel):
-    distance_m: float
-    duration_s: float
+    distance_m: float = Field(ge=0, allow_inf_nan=False)
+    duration_s: float = Field(ge=0, allow_inf_nan=False)
     # GeoJSON order: [lng, lat].
-    coordinates: list[list[float]]
+    coordinates: list[list[float]] = Field(min_length=2)
     bbox: list[float] | None = None
     steps: list[RouteStep]
+
+    @model_validator(mode="after")
+    def valid_coordinates(self):
+        if any(
+            len(point) != 2 or not -180 <= point[0] <= 180 or not -90 <= point[1] <= 90 for point in self.coordinates
+        ):
+            raise ValueError("Invalid route coordinates")
+        return self
 
 
 def decode_polyline(encoded: str, precision: int = 5) -> list[list[float]]:
@@ -119,10 +133,26 @@ class VietMapClient:
             raise VietMapError(f"VietMap trả về HTTP {response.status_code}")
         return response.json()
 
-    async def search(self, text: str, near: tuple[float, float] | None = None) -> list[Place]:
+    async def search(
+        self,
+        text: str,
+        near: tuple[float, float] | None = None,
+        category: str | None = None,
+        *,
+        radius_m: int | None = None,
+        layers: str | None = None,
+    ) -> list[Place]:
         params = [("text", text), ("display_type", "1")]
         if near:
             params.append(("focus", f"{near[0]},{near[1]}"))
+        if category:
+            params.append(("cats", category))
+        if radius_m is not None:
+            if not near or radius_m <= 0:
+                raise ValueError("A positive radius requires a search centre")
+            params.extend([("circle_center", f"{near[0]},{near[1]}"), ("circle_radius", str(radius_m))])
+        if layers:
+            params.append(("layers", layers))
         payload = await self._get("/api/autocomplete/v4", params)
         if not isinstance(payload, list):
             raise VietMapError("Phản hồi tìm kiếm VietMap không hợp lệ")
@@ -131,10 +161,30 @@ class VietMapClient:
                 ref_id=item["ref_id"],
                 name=item.get("name") or item.get("display") or "",
                 address=item.get("address") or "",
+                lat=item.get("lat"),
+                lng=item.get("lng"),
+                category=category if category else item.get("category"),
+                boundaries=item.get("boundaries") or [],
+                categories=item.get("categories") or [],
+                result_layer=layers,
             )
             for item in payload
             if item.get("ref_id")
         ]
+
+    async def matrix(self, points):
+        params = [("point", f"{lat},{lng}") for lat, lng in points]
+        params += [
+            ("vehicle", "car"),
+            ("sources", "0"),
+            ("destinations", ";".join(str(i) for i in range(1, len(points)))),
+            ("annotation", "distance"),
+        ]
+        payload = await self._get("/api/matrix/v4", params)
+        distances = payload.get("distances", []) if isinstance(payload, dict) else []
+        if not distances or len(distances[0]) != len(points) - 1:
+            raise VietMapError("Không có ma trận khoảng cách hợp lệ")
+        return distances[0]
 
     async def place(self, ref_id: str) -> Place:
         payload = await self._get("/api/place/v4", [("refid", ref_id)])

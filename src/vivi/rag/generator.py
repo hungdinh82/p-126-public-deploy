@@ -128,7 +128,6 @@ class StructuredAPIHandbookGenerator:
             "Lịch sử rút gọn, không phải bằng chứng:\n"
             f"{json.dumps(compact_history(history), ensure_ascii=False)}\n\n"
             f"Câu hỏi hiện tại: {query}\n"
-            f"Loại câu hỏi và chủ đề: {json.dumps(analyze_question(query).as_dict(), ensure_ascii=False)}\n\n"
             "Bằng chứng từ cẩm nang. source_ids chỉ được dùng các mã S1, S2… dưới đây:\n"
             f"{json.dumps(evidence, ensure_ascii=False)}"
         )
@@ -170,8 +169,6 @@ class StructuredAPIHandbookGenerator:
         chunks: list[RetrievedChunk],
         history: list[dict],
     ) -> GroundedAnswer:
-        if refusal := unavailable_requested_value(query, chunks):
-            return refusal
         prompt, aliases = self._prompt(query, chunks, history)
         payload = self.client.generate_json(
             system=SYSTEM_INSTRUCTION,
@@ -191,8 +188,6 @@ class StructuredAPIHandbookGenerator:
         chunks: list[RetrievedChunk],
         history: list[dict],
     ) -> GroundedAnswer:
-        if refusal := unavailable_requested_value(query, chunks):
-            return refusal
         prompt, aliases = self._prompt(query, chunks, history)
         payload = await self.client.agenerate_json(
             system=SYSTEM_INSTRUCTION,

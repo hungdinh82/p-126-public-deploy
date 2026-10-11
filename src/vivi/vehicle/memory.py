@@ -63,11 +63,24 @@ class VehicleSimulator:
                 state.updated_at = datetime.now(UTC)
             return state.model_copy(deep=True)
 
+    def set_energy(self, session_id, soc, range_km):
+        """Server-computed simulation energy; never accepts browser SOC."""
+        import math
+        with self._lock:
+            state = self._states.setdefault(session_id, VehicleState())
+            battery, remaining = max(0, min(100, math.floor(soc))), max(0, math.floor(range_km))
+            if (battery, remaining) != (state.battery_percent, state.range_km):
+                state.battery_percent, state.range_km = battery, remaining
+                state.state_version += 1
+                state.updated_at = datetime.now(UTC)
+            return state.model_copy(deep=True)
+
     def execute_sync(
         self,
         session_id: str,
         turn_id: str,
         action: ActionProposal,
+        *, expected_state_version: int | None = None,
     ) -> tuple[VehicleState, str]:
         """Execute once per session/turn; safe for sync LangGraph nodes."""
         with self._lock:
@@ -82,6 +95,8 @@ class VehicleSimulator:
             if action.intent not in self.ALLOWED_INTENTS:
                 raise ValueError(f"Action is not executable: {action.intent}")
             state = self._states.setdefault(session_id, VehicleState())
+            if expected_state_version is not None and state.state_version != expected_state_version:
+                raise ValueError("state_version_conflict before applying action")
             zones = selected_zones(action.arguments) if action.intent in {
                 "window.set_position", "door.set_open", "door.set_lock", "seat.set_heat_level"
             } else ()
