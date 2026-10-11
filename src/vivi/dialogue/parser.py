@@ -34,6 +34,20 @@ def place_query_matches(query, place):
 
 
 ZONES = ("driver", "front_passenger", "rear_left", "rear_right")
+# A spoken yes to a pending question, as normalized text. STT writes "OK" the
+# Vietnamese way ("Ô kê"), and people add a verb or a tail: "ừ mở đi", "ok luôn nhé".
+# Bare "dung" is left out on purpose: it is "đúng" but also "dừng" (stop).
+_YES = r"(?:toi )?xac nhan|co|dong y|duoc(?: roi)?|ok|oke|okay|okie|oki|o ke|vang|da|uh|u|um|dung roi|chac chan|tat nhien|nhat tri"
+_TAIL = r"di|luon|nhe|nha|di nhe|luon nhe|luon di|lien|ngay"
+def affirmed(value: str) -> bool:
+    """A yes, once STT punctuation is gone: Soniox writes a lone "OK" as "Ok,."."""
+    return bool(re.fullmatch(AFFIRM, re.sub(r"[\s,.!?;:…]+", " ", value).strip()))
+
+
+AFFIRM = (
+    rf"(?:{_YES})(?: (?:{_YES}))?(?: (?:mo|lam|xoa|dong|thuc hien|bat|chay))?(?: (?:{_TAIL}))?"
+    rf"|(?:lam|thuc hien)(?: (?:{_TAIL}))?"
+)
 LEXICON = (
     (r"(?:dang |phia )?(?:sau va (?:dang |phia )?truoc|truoc va (?:dang |phia )?sau)", "all"),
     (r"(?:ben )?phai (?:ghe |phia |hang )?truoc", "front_passenger"),
@@ -67,7 +81,8 @@ class Clause:
 
 class Lexer:
     def normalize(self, text):
-        value = normalize_text(text).strip(" .!?;")
+        # STT ends a sentence cut at a pause with a comma ("Mở nắp capo,").
+        value = normalize_text(text).strip(" .!?;,:…")
         for pattern, replacement in LEXICON:
             value = re.sub(r"\b(?:" + pattern + r")\b", replacement, value)
         value = re.sub(r"\ball cac (?=window|door|cua|kinh)", "all ", value)
@@ -131,10 +146,17 @@ class OfflineParser:
                     return SemanticTurn(act="request", actions=[command])
                 return self.ask("Bạn nói rõ nhiệt độ muốn đặt nhé.")
         value = self.lexer.normalize(text)
+        # The lexer already drops the name "vivi", so a bare "ViVi ơi" arrives as "oi".
+        if re.fullmatch(r"(?:(?:hey|hay|he|e|nay|ne|alo),? ?)?(?:v[iy] ?v[iy](?: ?(?:oi|a|nhe|nha))?|oi)", value):
+            # Only the wake phrase reached STT: answer the call instead of "not understood".
+            return SemanticTurn(act="reply", text="Mình đây, bạn cần gì nhé?")
         task = session.active
         index = task.current_index() if task else None
         current = task.steps[index] if index is not None else None
         live = bool(current)
+        if live and len(self.lexer.clauses(text)) > 1 and affirmed(value):
+            # "Ừ, mở đi" is one yes split by a comma, not two operations.
+            return SemanticTurn(act="confirm", task_ref="active")
         dislike = re.search(r"\bkhong (?:thich|muon) (?:dung|su dung|bat) dieu hoa\b", value)
         if dislike:
             return SemanticTurn(
@@ -189,17 +211,16 @@ class OfflineParser:
                 patch.arguments.temperature_delta_celsius is not None or patch.arguments.value_celsius is not None
             ):
                 return self.request("climate.set_temperature", patch.arguments.model_dump(exclude_none=True))
-        if re.fullmatch(
-            r"(?:toi )?xac nhan|co|dong y|duoc(?: roi)?|ok|oke|okay|vang|uh|u|(?:u |uh )?dung roi(?: mo)?|u mo|u xoa|lam|thuc hien",
-            value,
-        ):
+        if affirmed(value):
             return (
                 SemanticTurn(act="confirm", task_ref="active")
                 if live
                 else self.ask("Mình chưa có thao tác đang chờ xác nhận.")
             )
         if re.fullmatch(
-            r"khong|khong can|thoi|thoi khoi|bo qua|huy|huy yeu cau|dung lam|huy thao tac|khong mo nua", value
+            r"(?:khong|khong can|thoi|thoi khoi|bo qua|huy|huy yeu cau|dung lam|huy thao tac|khong mo nua)"
+            r"(?: (?:dau|nhe|nha|nua|di))?",
+            value,
         ):
             return (
                 SemanticTurn(act="cancel", task_ref="active")
@@ -1067,11 +1088,9 @@ class OfflineParser:
         if nav.status in {"preview", "paused"} and re.fullmatch(
             r"(?:bat dau|chay|di|xac nhan|dong y|ok|co|u|duoc)(?: di| dan duong| hanh trinh| mo phong)?", value
         ):
-            if (
-                session.active
-                and session.active.current_index() is not None
-                and session.active.steps[session.active.current_index()].draft.capability.startswith("navigation.")
-            ):
+            # A yes answers the pending step, whatever it is: "Mở tất cả cửa" → "OK"
+            # must open the doors, never start a route left over from earlier.
+            if session.active and session.active.current_index() is not None:
                 return SemanticTurn(act="confirm", task_ref="active")
             return self.request("navigation.start", {"route_revision": nav.revision})
         selection = re.fullmatch(
@@ -1186,7 +1205,7 @@ class OfflineParser:
         if explicit:
             return bool(start)
         return bool(
-            start or re.fullmatch(r"(?:u|uh|vang|co|duoc(?: roi)?|ok|oke|okay|dong y|xac nhan|dung(?: roi)?)", value)
+            start or affirmed(value)
         )
 
     def guard(self, text, semantic, session, memory=None, history=None):

@@ -2,6 +2,7 @@ import { closeJourney, initJourney, openJourney, pauseJourney, applyNavigation, 
 import { createCabinMusic } from './music.js?v=2';
 import { neonBorder } from './neon.js?v=2';
 import { createWave } from './wave.js?v=2';
+import { startWakeWord } from './wake.js?v=1';
 const cabinMusic = createCabinMusic();
 
 const $ = (selector) => document.querySelector(selector);
@@ -344,13 +345,25 @@ async function pollVehicleAlerts() {
 }
 function highlight(id) { $(id).classList.add('highlight'); setTimeout(() => $(id).classList.remove('highlight'), 2600); }
 const DOCK_BY_INTENT = { climate: '#climate-button', window: '#window-button', door: '#body-button', hood: '#body-button', trunk: '#body-button', body: '#body-button', media: '#music-toggle' };
+// Resolves when the browser voice has finished, so whatever follows (the follow-up
+// microphone) does not start over ViVi's own words. The timer covers browsers that
+// never fire onend; speechSynthesis.speaking is not trusted, it can stay true.
+let browserSpeaking = false, lastUtterance = null;
 function say(text) {
-  if (!state.sound || !('speechSynthesis' in window)) return;
+  if (!state.sound || !('speechSynthesis' in window)) return Promise.resolve();
   speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(text); utterance.lang = 'vi-VN'; utterance.rate = .93;
+  // Browser voices read "OK" as "ô ka"; say it the Vietnamese way, as the server TTS does.
+  const utterance = new SpeechSynthesisUtterance(text.replace(/\b(?:ok|okay|oke)\b/gi, 'ô kê')); utterance.lang = 'vi-VN'; utterance.rate = .93;
   const voice = speechSynthesis.getVoices().find(voice => voice.lang.startsWith('vi'));
   if (voice) utterance.voice = voice;
-  speechSynthesis.speak(utterance);
+  browserSpeaking = true;
+  return new Promise(resolve => {
+    const done = () => { if (utterance === lastUtterance) browserSpeaking = false; resolve(); };
+    lastUtterance = utterance;
+    utterance.onend = utterance.onerror = done;
+    setTimeout(done, Math.min(20000, 1500 + text.length * 90));
+    speechSynthesis.speak(utterance);
+  });
 }
 let ttsAudioContext = null;
 let currentPlayback = null;
@@ -391,8 +404,20 @@ async function finishTtsPlayback(playback) {
   await playback.done;
   if (currentPlayback === playback) currentPlayback = null;
 }
+// What ViVi said lately, to recognise her own voice leaking into a follow-up recording.
+const recentSpeech = [];
+function isOwnEcho(transcript) {
+  const words = normalize(transcript).match(/[a-z0-9]+/g) || [];
+  // "OK", "có", "ừ mở đi" are answers, never echo.
+  if (words.length < 3) return false;
+  const spoken = new Set(recentSpeech.filter(item => Date.now() - item.at < 30000)
+    .flatMap(item => normalize(item.text).match(/[a-z0-9]+/g) || []));
+  return words.filter(word => spoken.has(word)).length / words.length >= .7;
+}
 async function speak(text, turnId = makeId(), sequencePlayback = null, announcement = false) {
   if (!state.sound) return;
+  recentSpeech.push({ text, at: Date.now() });
+  recentSpeech.splice(0, recentSpeech.length - 4);
   if (!announcement) while (announcementRunning) await wait(50);
   if (sequencePlayback?.cancelled) return;
   if (!sequencePlayback) {
@@ -475,7 +500,7 @@ async function speak(text, turnId = makeId(), sequencePlayback = null, announcem
       if (playback.played) return;
     }
   }
-  say(text);
+  await say(text);
 }
 function normalize(text) { return text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd'); }
 
@@ -574,6 +599,9 @@ async function runBackendCommand(command, turnId = makeId(), { autoConfirm = fal
   if (handleSpeakerCommand(command)) return;
   const ownedTurn = { turnId, controller: new AbortController(), sequence: 0, audioEpoch: state.audioEpoch || 0 };
   activeTurn = ownedTurn;
+  // Spoken turns may reopen the mic afterwards; typed and button turns never do.
+  const spoken = followUpArmed;
+  followUpArmed = false;
   rememberEdgeCommand(command);
   renderTurnSteps([]);
   state.busy = true; state.lastCommand = command; lockControls(true); $('#command-input').value = '';
@@ -704,7 +732,8 @@ async function runBackendCommand(command, turnId = makeId(), { autoConfirm = fal
       await finishTtsPlayback(speechPlayback);
     }
     if (!answerVoiceQueued && ownedTurn.audioEpoch === (state.audioEpoch || 0)) await speak(payload.message, turnId);
-    await wait(500);
+    // A follow-up opens the mic the moment ViVi stops talking; otherwise the answer stays up a little.
+    if (!(spoken && (spoken === 'wake' || ['confirm', 'clarify'].includes(phase)))) await wait(500);
     if (activeTurn !== ownedTurn) return;
     if (payload.status === 'verified') setPhase('idle');
     else setPhase(phase, payload.message);
@@ -714,8 +743,28 @@ async function runBackendCommand(command, turnId = makeId(), { autoConfirm = fal
     if (activeTurn === ownedTurn) {
       activeTurn = null;
       state.busy = false; lockControls(false); document.body.classList.remove('busy');
+      if (spoken && (spoken === 'wake' || ['confirm', 'clarify'].includes(state.phase))) listenForFollowUp(spoken);
+      else if (spoken) console.info('[vivi] follow-up: not reopened, answer complete and the turn did not start with the wake word');
     }
   }
+}
+const voiceBusy = () => Boolean(currentPlayback || announcementRunning || browserSpeaking);
+function listenForFollowUp(kind) {
+  const started = performance.now();
+  const check = () => {
+    if (recorder?.state === 'recording') return;
+    if (state.busy) { console.info('[vivi] follow-up: skipped, a new turn already started'); return; }
+    // Wait for every voice to end (server TTS, browser voice, queued announcements).
+    if (voiceBusy()) {
+      if (performance.now() - started < 30000) setTimeout(check, 30);
+      else console.info('[vivi] follow-up: skipped, ViVi was still speaking after 30 s');
+      return;
+    }
+    // At once, right after her last word: echo cancellation removes what is left of it.
+    console.info(`[vivi] follow-up: listening (${kind}, after ${state.phase})`);
+    startRecording({ followUp: true, armed: kind });
+  };
+  check();
 }
 
 function renderTurnSteps(steps) {
@@ -738,7 +787,7 @@ function runCommand(command, options = {}) {
   return Promise.resolve();
 }
 
-let recorder = null, recorderStream = null, recorderChunks = [], audioContext = null, silenceFrame = null, sttSocket = null, sttResult = null;
+let recorder = null, recorderStream = null, recorderChunks = [], audioContext = null, silenceFrame = null, sttSocket = null, sttResult = null, unanswered = false;
 function stopRecording() {
   if (recorder?.state === 'recording') recorder.stop();
 }
@@ -771,7 +820,18 @@ function listenSttStream(socket) {
   result.catch(() => {}); // Awaited after recording stops; avoid an unhandled rejection meanwhile.
   return result;
 }
-async function finishStreaming(socket, result, blob, turnId) {
+// What to send from a follow-up recording, or null when it only caught ViVi's own
+// words: sent on, those would read as an unclear request and drop the pending
+// confirmation.
+function followUpAnswer(transcript, followUp) {
+  if (!followUp) return transcript;
+  if (transcript.trim() && !isOwnEcho(transcript)) return transcript;
+  console.info('[vivi] follow-up: ignored ViVi\'s own voice', transcript);
+  setPhase(followUp.phase, followUp.text);
+  listenForFollowUp(followUp.kind);
+  return null;
+}
+async function finishStreaming(socket, result, blob, turnId, followUp = null) {
   // Keep the live caption on screen while the last words are confirmed.
   const captionLive = $('#response-text').classList.contains('live');
   lockControls(true); setPhase('transcribing', captionLive ? '' : `${state.sttProvider} đang chốt câu…`);
@@ -788,9 +848,11 @@ async function finishStreaming(socket, result, blob, turnId) {
   $('#command-input').value = transcript;
   renderLiveCaption(transcript, '');
   lockControls(false);
-  await runBackendCommand(transcript, turnId);
+  const answer = followUpAnswer(transcript, followUp);
+  if (answer === null) return;
+  await runBackendCommand(answer, turnId);
 }
-async function submitRecording(blob, turnId) {
+async function submitRecording(blob, turnId, followUp = null) {
   lockControls(true); setPhase('transcribing', `${state.sttProvider || 'STT local'} đang chuyển giọng nói thành văn bản…`);
   try {
     const form = new FormData();
@@ -800,16 +862,32 @@ async function submitRecording(blob, turnId) {
     if (!response.ok) throw new Error(payload.detail || 'STT lỗi');
     $('#command-input').value = payload.transcript;
     lockControls(false);
-    await runBackendCommand(payload.transcript, turnId);
+    const answer = followUpAnswer(payload.transcript, followUp);
+    if (answer === null) { lockControls(false); return; }
+    await runBackendCommand(answer, turnId);
   } catch (error) {
     setPhase('blocked', error.message); lockControls(false);
   }
 }
-async function startRecording() {
+// After a "ViVi ơi" turn the mic reopens briefly, so a follow-up ("thêm 2 độ nữa")
+// needs no second wake word; silence for FOLLOW_UP_MS closes it without calling STT.
+// A question from ViVi (confirm, clarify) reopens it after any spoken turn, mic button
+// included, and waits longer, since the answer needs a moment. A wake with nothing
+// said after it closes the same way. followUpArmed: false | 'voice' | 'wake'.
+const FOLLOW_UP_MS = 4000, QUESTION_FOLLOW_UP_MS = 7000, WAKE_SILENCE_MS = 6000;
+let followUpArmed = false;
+async function startRecording(options) {
+  const followUp = options?.followUp === true;
+  const asked = ['confirm', 'clarify'].includes(state.phase);
+  const quietLimit = followUp ? (asked ? QUESTION_FOLLOW_UP_MS : FOLLOW_UP_MS) : options?.wake ? WAKE_SILENCE_MS : 0;
+  if (options instanceof Event) followUpArmed = 'voice';
+  else if (followUp) followUpArmed = options.armed || 'voice';
   if (!state.backendAvailable) { setPhase('blocked', 'Hãy chạy backend local trước khi dùng microphone.'); return; }
   if (!state.sttAvailable) { setPhase('blocked', 'STT local chưa sẵn sàng. Kiểm tra trang health và hướng dẫn setup runtime.'); return; }
   if (recorder?.state === 'recording') { stopRecording(); return; }
   interruptActiveTurn();
+  // Where a follow-up returns to if it only hears ViVi's own voice.
+  const resume = followUp ? { phase: state.phase, text: $('#response-text')?.textContent || '', kind: followUpArmed } : null;
   try {
     recorderStream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } });
     recorderChunks = [];
@@ -817,10 +895,13 @@ async function startRecording() {
     recorder = new MediaRecorder(recorderStream, mimeType ? { mimeType } : undefined);
     const turnId = makeId();
     sttSocket = null; sttResult = null;
-    if (state.sttStreaming) {
-      // Fall back to the upload endpoint when the live socket cannot open.
-      try { sttSocket = await openSttStream(turnId); sttResult = listenSttStream(sttSocket); $('#command-input').value = ''; } catch { sttSocket = null; }
-    }
+    // The live socket opens alongside the recorder rather than before it, so the mic
+    // is live at once; what it heard meanwhile is sent when the socket opens. Without
+    // one the upload endpoint is used.
+    const socketOpening = state.sttStreaming ? openSttStream(turnId).then(socket => {
+      sttSocket = socket; sttResult = listenSttStream(socket); $('#command-input').value = '';
+      recorderChunks.forEach(chunk => socket.send(chunk));
+    }, () => { sttSocket = null; }) : Promise.resolve();
     recorder.ondataavailable = event => {
       if (!event.data.size) return;
       recorderChunks.push(event.data);
@@ -830,23 +911,33 @@ async function startRecording() {
       $('#demo-mic').classList.remove('recording'); $('#demo-mic').setAttribute('aria-label', 'Bắt đầu thu âm');
       cancelAnimationFrame(silenceFrame); voiceLevel.mic = 0; recorderStream?.getTracks().forEach(track => track.stop()); await audioContext?.close(); audioContext = null;
       const blob = new Blob(recorderChunks, { type: recorder.mimeType || 'audio/webm' }); recorder = null;
+      await socketOpening;
       const socket = sttSocket, result = sttResult; sttSocket = null; sttResult = null;
-      if (socket) await finishStreaming(socket, result, blob, turnId);
-      else await submitRecording(blob, turnId);
+      if (unanswered) {
+        // Nobody spoke after ViVi's answer: end the conversation quietly.
+        followUpArmed = false;
+        socket?.close();
+        setPhase('idle');
+        return;
+      }
+      if (socket) await finishStreaming(socket, result, blob, turnId, resume);
+      else await submitRecording(blob, turnId, resume);
     };
     recorder.start(250); $('#demo-mic').classList.add('recording'); $('#demo-mic').setAttribute('aria-label', 'Dừng thu âm');
-    setPhase('listening', sttSocket ? 'Mình đang nghe… lời bạn nói sẽ hiện ở đây.' : 'Mình đang nghe… Nhấn mic lần nữa để dừng.');
+    setPhase('listening', followUp ? 'Mình vẫn đang nghe… cứ nói tiếp nếu bạn cần.' : state.sttStreaming ? 'Mình đang nghe… lời bạn nói sẽ hiện ở đây.' : 'Mình đang nghe… Nhấn mic lần nữa để dừng.');
     audioContext = new AudioContext();
     const source = audioContext.createMediaStreamSource(recorderStream), analyser = audioContext.createAnalyser(), samples = new Uint8Array(512);
     analyser.fftSize = 1024; source.connect(analyser);
     let heardSpeech = false, silentSince = 0, startedAt = performance.now();
+    unanswered = false;
     const monitor = () => {
       analyser.getByteTimeDomainData(samples);
       const rms = Math.sqrt(samples.reduce((sum, value) => sum + ((value - 128) / 128) ** 2, 0) / samples.length);
       voiceLevel.mic = rms;
       if (rms > .035) { heardSpeech = true; silentSince = 0; }
       else if (heardSpeech && !silentSince) silentSince = performance.now();
-      if ((silentSince && performance.now() - silentSince > 1400) || performance.now() - startedAt > 15000) stopRecording();
+      if (quietLimit && !heardSpeech && performance.now() - startedAt > quietLimit) { unanswered = true; stopRecording(); }
+      else if ((silentSince && performance.now() - silentSince > 1400) || performance.now() - startedAt > 15000) stopRecording();
       else silenceFrame = requestAnimationFrame(monitor);
     };
     monitor();
@@ -1079,13 +1170,14 @@ function openPanel(view) {
   const contents = {
     vehicle: vehicleDetailsMarkup(),
     manual: manualContent,
-    settings: `<h2>Cấu hình ViVi</h2><p>Chọn cách ViVi suy nghĩ và chuyển động trong không gian của bạn.</p><section class="config-section"><div class="config-heading"><span>MÔ HÌNH HỘI THOẠI</span><strong id="active-model">${escapeHtml(modelLabels[state.llmProvider] || state.llmProvider || 'Chưa kết nối')} · ${escapeHtml(currentModel?.model || '')}</strong></div><div class="model-options">${modelOptionsMarkup()}</div><p class="dialog-note">Lựa chọn được áp dụng từ lượt hội thoại tiếp theo. Model ID và API key vẫn được quản lý an toàn trong .env.</p></section><section class="config-section"><div class="config-heading"><span>GIỌNG PHẢN HỒI</span><strong id="active-voice">${state.ttsAvailable ? `${escapeHtml(ttsLabels[state.ttsProvider] || state.ttsProvider)} · ${escapeHtml(ttsVoiceLabel(state.ttsVoice))}` : 'Trình duyệt/text fallback'}</strong></div><div class="model-options">${ttsOptionsMarkup()}</div><p class="dialog-note">Áp dụng từ câu trả lời tiếp theo. Lần đầu dùng ViVi local cần vài giây để nạp model.</p></section><section class="config-section"><div class="config-heading"><span>TRẢI NGHIỆM</span><strong>Không gian & giọng nói</strong></div><label class="motion-setting"><span><strong>Giảm chuyển động</strong><small>Dừng lơ lửng, quỹ đạo và hiệu ứng sóng</small></span><input id="reduce-motion" type="checkbox" ${state.reduced ? 'checked' : ''}><i></i></label><div class="config-runtime"><div><span>NHẬN DIỆN GIỌNG NÓI</span><strong>${state.sttAvailable ? `${escapeHtml(state.sttProvider)} · ${state.sttDevice === 'cloud' ? `cloud${state.sttStreaming ? ' · trực tiếp' : ''}` : 'local'}` : 'Chưa sẵn sàng'}</strong></div></div><p class="dialog-note">Audio: ${state.storeAudio ? 'đang lưu' : 'không lưu'} · transcript: ${state.storeTranscripts ? 'đang lưu' : 'không lưu'}.</p></section>`
+    settings: `<h2>Cấu hình ViVi</h2><p>Chọn cách ViVi suy nghĩ và chuyển động trong không gian của bạn.</p><section class="config-section"><div class="config-heading"><span>MÔ HÌNH HỘI THOẠI</span><strong id="active-model">${escapeHtml(modelLabels[state.llmProvider] || state.llmProvider || 'Chưa kết nối')} · ${escapeHtml(currentModel?.model || '')}</strong></div><div class="model-options">${modelOptionsMarkup()}</div><p class="dialog-note">Lựa chọn được áp dụng từ lượt hội thoại tiếp theo. Model ID và API key vẫn được quản lý an toàn trong .env.</p></section><section class="config-section"><div class="config-heading"><span>GIỌNG PHẢN HỒI</span><strong id="active-voice">${state.ttsAvailable ? `${escapeHtml(ttsLabels[state.ttsProvider] || state.ttsProvider)} · ${escapeHtml(ttsVoiceLabel(state.ttsVoice))}` : 'Trình duyệt/text fallback'}</strong></div><div class="model-options">${ttsOptionsMarkup()}</div><p class="dialog-note">Áp dụng từ câu trả lời tiếp theo. Lần đầu dùng ViVi local cần vài giây để nạp model.</p></section><section class="config-section"><div class="config-heading"><span>TRẢI NGHIỆM</span><strong>Không gian & giọng nói</strong></div><label class="motion-setting"><span><strong>Giảm chuyển động</strong><small>Dừng lơ lửng, quỹ đạo và hiệu ứng sóng</small></span><input id="reduce-motion" type="checkbox" ${state.reduced ? 'checked' : ''}><i></i></label><label class="motion-setting"><span><strong>Gọi “ViVi ơi”</strong><small>Nghe từ khoá ngay trên máy; âm thanh chỉ được gửi đi sau khi bạn gọi</small></span><input id="wake-word" type="checkbox" ${wakeWordEnabled() ? 'checked' : ''}><i></i></label><div class="config-runtime"><div><span>NHẬN DIỆN GIỌNG NÓI</span><strong>${state.sttAvailable ? `${escapeHtml(state.sttProvider)} · ${state.sttDevice === 'cloud' ? `cloud${state.sttStreaming ? ' · trực tiếp' : ''}` : 'local'}` : 'Chưa sẵn sàng'}</strong></div></div><p class="dialog-note">Audio: ${state.storeAudio ? 'đang lưu' : 'không lưu'} · transcript: ${state.storeTranscripts ? 'đang lưu' : 'không lưu'}.</p></section>`
   };
   $('#dialog-content').innerHTML = contents[view];
   dialog.classList.toggle('config-dialog', view === 'settings');
   if (!dialog.open) dialog.showModal();
   $('#try-climate')?.addEventListener('click', () => { dialog.close(); runCommand('Tôi hơi lạnh'); });
   $('#reduce-motion')?.addEventListener('change', event => applyReducedMotion(event.target.checked));
+  $('#wake-word')?.addEventListener('change', event => setWakeWord(event.target.checked));
   document.querySelectorAll('[data-llm-provider]').forEach(button => button.addEventListener('click', () => selectLlmProvider(button.dataset.llmProvider)));
   document.querySelectorAll('[data-tts-provider]').forEach(button => button.addEventListener('click', () => selectTtsProvider(button.dataset.ttsProvider)));
 }
@@ -1123,6 +1215,35 @@ function applyReducedMotion(reduced) {
 }
 motionPreference.addEventListener('change', event => applyReducedMotion(event.matches));
 applyReducedMotion(state.reduced);
+
+// Hands-free "ViVi ơi" / "Hey ViVi". Off until the driver turns it on, because it
+// keeps the microphone open; detection runs in the page and nothing is sent until
+// the phrase is heard. It sleeps while a turn runs, while recording and while
+// ViVi speaks, so her own voice cannot wake her.
+const WAKE_KEY = 'vivi-wake-word';
+let wakeWord = null, wakeStarting = false;
+function wakeWordEnabled() {
+  try { return localStorage.getItem(WAKE_KEY) === 'on'; } catch { return false; }
+}
+const wakeCanListen = () => state.backendAvailable && state.sttAvailable && !state.busy && !voiceBusy() && recorder?.state !== 'recording';
+async function setWakeWord(on) {
+  try { localStorage.setItem(WAKE_KEY, on ? 'on' : 'off'); } catch {}
+  if (!on) { wakeWord?.stop(); wakeWord = null; followUpArmed = false; return; }
+  if (wakeWord || wakeStarting) return;
+  wakeStarting = true;
+  try {
+    wakeWord = await startWakeWord({ base: './wake/', canListen: wakeCanListen, onWake: () => { followUpArmed = 'wake'; startRecording({ wake: true }); } });
+    if (state.phase === 'idle') setPhase('idle', 'Gọi “ViVi ơi” hoặc “Hey ViVi” bất cứ lúc nào.');
+  } catch (error) {
+    try { localStorage.setItem(WAKE_KEY, 'off'); } catch {}
+    if ($('#wake-word')) $('#wake-word').checked = false;
+    const reason = error?.name === 'NotAllowedError' ? 'trình duyệt chưa cho dùng micro' : error?.message || 'lỗi không rõ';
+    setPhase('blocked', `Chưa bật được gọi “ViVi ơi”: ${reason}.`);
+  } finally {
+    wakeStarting = false;
+  }
+}
+if (wakeWordEnabled()) setWakeWord(true);
 
 // The full-screen map hides the 3D scene, so stop rendering it meanwhile.
 new MutationObserver(() => scene?.setPaused(document.body.classList.contains('journey-open'))).observe(document.body, { attributes: true, attributeFilter: ['class'] });
