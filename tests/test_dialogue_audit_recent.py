@@ -12,7 +12,7 @@ from src.vivi.dialogue.reducer import reduce_turn
 from tests.test_dialogue_v2 import ScriptedModel, build, invoke
 from tests.test_long_term_memory import services as services
 
-ROWS = [json.loads(line) for line in (Path(__file__).parents[1] / "eval/audit_898_909.jsonl").read_text().splitlines()]
+ROWS = [json.loads(line) for line in (Path(__file__).parents[1] / "tests/fixtures/dialogue_audits/audit_898_909.jsonl").read_text().splitlines()]
 
 
 @pytest.mark.parametrize("tier", ["rules", "google", "local"])

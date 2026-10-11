@@ -162,6 +162,6 @@ sử riêng. `data/memory/` được bỏ qua bởi Git.
 `eval/memory_cases.jsonl` gồm 29 lượt theo các chuỗi nhớ/sửa/đổi phiên/restart/quên/
 reset/lệnh có tên và safety. Nhãn là bản draft để người dùng chỉnh. Runner dùng
 database tạm, cấm TCP, dùng xe mô phỏng và không đọc/ghi bộ nhớ thật của người
-dùng. Báo cáo ở `eval/results/memory-dev.json` gồm kết quả từng lượt và p50/p95
+dùng. Lệnh chạy lại sinh `eval/results/memory-dev.json` với kết quả từng lượt và p50/p95
 latency toàn graph. Đây là regression deterministic trên máy phát triển, chưa
 đo chất lượng SLM/STT hoặc latency khi cùng chạy STT/TTS/SLM trên AGX Xavier.

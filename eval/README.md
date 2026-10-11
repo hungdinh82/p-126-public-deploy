@@ -1,297 +1,116 @@
-# VF8 local RAG evaluation
+# Đánh giá workflow hiện tại
 
-This directory separates **intent**, **retrieval**, and **answer generation**.
-Existing RAG runners keep all inference local. The unified dialogue runner
-supports cloud models only with explicit `--allow-api`; it does not relax their network guard.
-
-## Artifacts
-
-- `golden_dataset.jsonl`: 74 initial cases, with no conversational follow-up.
-- `golden_dataset.meta.json`: source hash and dataset provenance.
-- `build_golden.py`: authored seed questions, literal source/fact validation.
-- `benchmark.py`: runner and per-case JSON/Markdown reports.
-- `results/local-dev.*` and `results/local-test.*`: measured rules/extractive baselines.
-
-Every label is **draft**, awaiting user review. The dataset is deliberately small:
-it establishes a repeatable baseline, not a claim of production accuracy. Source
-content is copied into reference evidence for review; it is never included in the
-retrieval query. Two questions about the same source stay in the same split.
-The current split contains 55 development and 19 test cases.
-
-## Prepare the local model and index
-
-Charging map smoke (opt-in, real VietMap API calls, no vehicle action or history
-write):
+Bộ đánh giá chính nằm ở `workflow_cases.jsonl` và `workflow_benchmark.py`.
+Runner gọi LangGraph và orchestrator đang dùng trong ứng dụng, tạo SQLite riêng cho
+checkpoint, navigation state, receipt, effect ledger, history và memory trong thư mục tạm.
+Không ghi vào phiên hoặc database đang chạy của người dùng.
 
 ```bash
-.venv/bin/python -m eval.charging_map_smoke --soc 60 \
-  --destination 'Vincom Plaza Thanh Hóa' --output /tmp/vivi-charging-map.json
+.venv/bin/python -m eval.workflow_benchmark --repeats 3
+.venv/bin/python -m eval.navigation_controls_benchmark --samples 100
+.venv/bin/pytest -q tests/test_workflow_eval.py
 ```
 
-Uses the configured navigation origin and first returned destination POI;
-`--destination-ref` pins a specific search result. SOC is an explicit test input.
-Reports live map references, route legs, station sources and missing equipment
-data; does not assume a charger power or fabricate a rest area/expressway km.
+Kết quả mặc định: [report tổng hợp](results/report.md),
+[workflow Markdown](results/workflow.md), [workflow JSON](results/workflow.json),
+[P/D JSON](results/navigation-controls.json). Runner workflow ghi report cả khi có lỗi
+và trả exit code 1 nếu bất kỳ episode nào không đạt. Runner P/D cũng trả 1 nếu vượt
+budget; lỗi hành vi/receipt khiến phép đo dừng và không tạo report thành công.
 
-See [offline RAG setup](../docs/rag_local.md). The downloader accesses the public
-model repository only during provisioning. The index builder and runtime do not
-download models or send handbook content to an external API. Default input paths
-are `data/handbooks/handbook-source.sqlite3` for original evidence and
-`data/handbooks/handbook.sqlite3` for the runtime vector index. The initial reports
-record the former `handbook-local.sqlite3` filename; that exact artifact was
-promoted to `handbook.sqlite3` without changing its contents or hash.
+## Profile và phạm vi đo
 
-## Run the three measurements
+| Profile | Dependency | Ý nghĩa |
+|---|---|---|
+| `rules` | OfflineParser thật; map/energy tổng hợp | Regression hiểu lệnh bằng rules và workflow |
+| `fixture` | Model contract stub; map/energy tổng hợp | Provider timeout, JSON lỗi, fallback, semantic contract và orchestration |
+| P/D | Xe mô phỏng, SQLite/receipt/ledger thật | Latency backend khi bình thường, model chờ, map chờ |
+
+Model fixture mặc định chuyển câu nói qua parser để dựng semantic; một số operation
+cấp semantic cố định hoặc gây timeout/JSON lỗi. Đây **không phải điểm chính xác của
+Google/OpenAI/local model**. Report ghi cả provider được yêu cầu và provider thực sự
+phục vụ để không tính fallback rules là thành công của model thật.
+
+Các fixture không chứa API key, không gọi VietMap/model bên ngoài. Network guard
+chỉ cho phép loopback; runner chính không cần HTTP. STT/TTS tắt. Handbook fixture
+trả evidence rỗng để kiểm abstention, không đo chất lượng trả lời cẩm nang.
+
+## Hợp đồng scenario
+
+Mỗi dòng JSONL là một episode độc lập với `id`, `group`, `source`, `operations` và
+`providers` tùy chọn. Mỗi episode/repeat/profile dùng runtime mới. `restart` giữ
+SQLite và vehicle fixture, dựng lại graph để kiểm recovery mà không phát lại effect.
+
+Mỗi operation có ID riêng, kiểu thao tác và `expect` độc lập. `setup` chỉ chuẩn bị
+fixture; các thao tác còn lại bắt buộc có assertion. Kết quả được so với trạng thái
+vehicle adapter thực tế (`observed.vehicle`) thay vì chỉ đọc prose hoặc `verified`.
+
+```json
+{"id":"pause","type":"event","event":{"kind":"gear","gear":"P"},"expect":{"receipt.status":"completed","observed.vehicle.driving":false}}
+```
+
+`expect` dùng đường dẫn qua object/list, so sánh bằng hoặc các toán tử `contains`,
+`not_contains`, `length`, `min`, `exists`, `one_of`, `same_members`.
+`{"$ref":"select.trip_plan.id"}` ràng buộc ID/revision từ bước trước vào event,
+action hoặc oracle. Thiếu reference, typo operator và dataset rỗng/trùng ID đều bị chặn.
+Không cập nhật expected từ output của chính lượt chạy.
+
+| Operation | Kiểm chứng |
+|---|---|
+| `turn`, `action`, `event` | Hội thoại, typed action và điều khiển trực tiếp |
+| `stream` | Event stream có final; effect không nhân đôi khi replay |
+| `snapshot` | Bootstrap/đối chiếu receipt, domain state và checkpoint không chứa geometry |
+| `restart` | Phục hồi SQLite, giữ memory, không tự phát D |
+| `replay`, `collision` | Dedup turn; cùng ID với payload khác bị từ chối |
+| `lost_response` | Bỏ response nhận được; lấy receipt từ snapshot để đối chiếu |
+| `parallel_park` | Barrier giữ model/map chờ, P hoàn tất trước khi thả barrier |
+| `cancel` | Hủy khi model còn chờ, chưa dispatch, không có effect |
+| `setup` | Battery, driving, map lỗi, tuyến 10.000 điểm |
+
+Các nhóm bao phủ slot/correction/exclusion, multi-step scheduler, consent, policy,
+memory, abstention, stream, chọn POI bằng số/tên, số ngoài danh sách, draft/journey,
+P/D, restart/replay, hai tab với revision cũ, provider/dependency failure, cancel,
+checkpoint lớn và Sầm Sơn/khứ hồi. Danh sách thao tác và oracle đầy đủ ở [kịch bản](workflow_scenarios.md).
+
+## Phương pháp benchmark
+
+Workflow mặc định chạy mỗi episode ba lần trên cả hai profile, trừ các case chỉ có
+ý nghĩa với model fixture. Ghi riêng thời gian dựng runtime và thời gian từng operation,
+node spans, provider attempts và latency search/route/energy khi runtime cung cấp.
+P50 là median; p95 là nearest rank `ceil(0.95 * n)`, không bỏ failure khỏi latency.
+Ghi thời điểm UTC+7, revision/dirty flag, hash dataset, workflow/prompt version và
+phiên bản dependency. Dataset này là development regression đã biết, không phải holdout.
+
+P/D chạy tuần tự sau workflow để tránh hai benchmark tranh tài nguyên. Mỗi tải có
+5 warmup và ít nhất 100 mẫu xen kẽ P/D trên hành trình đã nhận. Mỗi mẫu kiểm receipt
+completed và trạng thái xe. Dependency chậm phải còn chờ suốt phép đo. Budget p95
+backend là 300 ms bình thường, 500 ms khi dependency chờ. **Chưa gồm HTTP, click,
+render/browser, mạng thật hay tải nhiều worker.** Muốn nghiệm thu click-to-confirm
+phải chạy thêm browser E2E và lưu trace trên cùng revision.
+
+## Các suite chuyên biệt còn dùng
+
+- RAG: `benchmark.py`, `build_golden.py`, `golden_dataset.jsonl` và metadata.
+  Giữ `results/local-dev.*`, `local-test.*` làm baseline lịch sử, không trộn với điểm workflow.
+- Memory: `memory_benchmark.py`, `memory_cases.jsonl` còn được regression sử dụng.
+- Voice/SLM: `voice_benchmark.py`, `voice_cases.jsonl`, `conversation_cases.jsonl`,
+  `task_cases.jsonl` cho smoke text/SLM riêng; tên voice không có nghĩa đã đo audio.
+- UI/map: `navigation_control_server.py`, `navigation_control_browser.cjs`,
+  `navigation_frame_browser.cjs`, `information_rail_browser.cjs`, `vietmap_map_browser.cjs`.
+  Xem [navigation runtime](../docs/navigation_runtime.md) về setup browser/fixture server.
+- `charging_map_smoke.py`, `navigation_followups_replay.py`: phép thử chuyên biệt;
+  chế độ live phải chạy tách biệt, có nguồn dữ liệu và dependency thật được ghi rõ.
+  Replay log phụ thuộc dữ liệu local, không dùng làm bộ regression di động chính.
 
 ```bash
-# Tune on development, then run the held-out split without tuning on its errors.
 .venv/bin/python -m eval.benchmark --split dev --output eval/results/local-dev.json
 .venv/bin/python -m eval.benchmark --split test --output eval/results/local-test.json
-
-# Evaluate a running self-hosted SLM. Supply the model ID exposed by /v1/models.
-.venv/bin/python -m eval.benchmark --provider local \
-  --base-url http://127.0.0.1:1234/v1 --model YOUR_LOCAL_MODEL \
-  --split dev --output eval/results/slm-dev.json
+.venv/bin/python -m eval.memory_benchmark
+.venv/bin/python -m eval.voice_benchmark
 ```
 
-The runner guards TCP connections to allow only loopback, so it can contact a
-local SLM but cannot contact a cloud LLM. It never executes vehicle actions.
-Missing models, unavailable endpoints and other execution errors are written to
-the report and cause a nonzero exit. Low metric values are reported, not hidden.
-
-### Intent
-
-Route accuracy, exact intent accuracy, route macro F1 and latency are measured on
-all cases. Include both knowledge questions and neighboring action, clarification,
-conversation and unsupported intents to expose accidental command routing.
-
-### Retrieval
-
-Compare legacy SQLite FTS5 (`fts`), FTS5 on the same token-budget chunks as the
-new index (`fts_local`), local vector-only, and independent FTS5/vector RRF.
-The same-chunk baseline separates chunking effects from retrieval changes.
-Recall@k counts recovered relevant original source chunks. MRR@k measures the first
-relevant rank. Token-budget subchunks map back to their original source ID, so the
-same references work across chunking configurations. This is original-chunk
-relevance, not an exact-span retrieval metric.
-
-Scope-rejected questions return no evidence. Answerable questions that were
-incorrectly scope-rejected still count as retrieval misses. Router output does not
-control this measurement: the reference route determines the retrieval test set.
-
-### Answer generation
-
-`answer_with_oracle_evidence` gives the generator the reference sources to isolate
-generation errors. `answer_with_retrieved_evidence` measures the retrieval/generation
-combination independently of routing.
-
-Automatic checks report required-fact keyword coverage, citation agreement with
-reference sources, citation ID validity, and abstention on unanswerable questions.
-**Keyword coverage and valid citations do not prove semantic entailment or
-preservation of negation.** Inspect per-case answers and correct the draft labels.
-The extractive baseline currently fails unanswerable cases; that failure is kept
-in the report. An oracle score of 1.0 for extractive answers is expected and does
-not establish SLM quality.
-
-## Edit and maintain the golden dataset
-
-Edit JSONL directly. For each answerable case preserve:
-
-- `relevant_source_ids`: original source IDs containing the answer.
-- `reference_evidence`: literal quote, source URL, section, content checksum.
-- `required_facts`: groups of acceptable aliases; every group must match.
-- `reference_answer`: reviewer-readable reference, currently the source excerpt.
-- `review_status`: change from `draft` to `reviewed` after checking the case.
-
-For multi-source questions list all required sources; Recall@k then tests all of
-them. For unanswerable questions set `answerable=false` and no reference sources.
-Do not put paraphrases or the same reference source in both dev and test. Add
-new cases and dataset versions rather than rewriting past results.
-
-The loader rejects duplicate IDs, stale sources/checksums, unsupported expected
-facts, and source leakage across splits. Regeneration refuses to overwrite an
-existing dataset unless `--overwrite` is explicitly passed.
-
-## Measurement limits
-
-Reports record dataset/index hashes, model revision and file checksums, software
-versions, thread limit, hardware, peak process RSS and first-query cold loading.
-Warm latency uses one pass and nearest-rank p95. Current timing is from the dev
-host, not AGX Xavier. Repeat on Xavier with STT/TTS/SLM loaded, including cold start,
-concurrent load, and the memory/power mode actually used in deployment.
-
-## Conversation regressions
-
-`voice_cases.jsonl` contains recent short utterances and authored tool-boundary
-cases. Run `python -m eval.voice_benchmark` for local full-graph routing and reply
-length checks against an in-memory car. See [voice behavior](../docs/voice_assistant.md).
-`results/voice-dev.json` and `results/voice-rag-dev.*` record the updated behavior.
-The original reports are historical; their extractive oracle coverage is not the
-current selector's score. No held-out labels were edited for this change.
-
-The October 7 audit adds 17 development cases from conversational failures and
-temperature semantics, for 57 voice cases in total. `voice_benchmark.py` checks
-optional `required_answer_terms`, `forbidden_answer_terms` and
-`expected_value_celsius` in addition to route/intent. Reports are saved separately
-as `results/voice-oct07.json`, `results/rag-oct07-dev.*` and
-`results/rag-oct07-test.*`; historical results are preserved. The new test-split
-report still has failures, detailed in [the conversation audit](../docs/voice_assistant.md).
-
-## Memory regressions
-
-`memory_cases.jsonl` has 29 authored development turns in ordered episodes.
-Run `python -m eval.memory_benchmark` to verify persistence across sessions/restart,
-correction, profile isolation, selective forgetting/reset and saved commands going
-through confirmation and driving policy. Labels are draft and can be edited.
-The runner uses temporary SQLite databases, rules and a simulated car; TCP is
-disabled, and user memory is never modified. Reports include per-turn checks and
-full-graph p50/p95 latency, excluding graph construction. These measurements are
-from the development host, not AGX Xavier or a real speech/SLM workload.
-See [memory design](../docs/memory.md) and `results/memory-dev.json`.
-
-## Agents/RAG refactor regressions
-
-`conversation_cases.jsonl` adds 12 situations / 18 turns including the latest log
-failures, resolved referents, topic changes, pending slots and fresh observations.
-The voice runner accepts `turns` arrays and checks route/intent at every turn, plus
-optional `expected_status`, answer terms and temperature arguments.
-
-```bash
-.venv/bin/python -m eval.voice_benchmark --dataset eval/conversation_cases.jsonl \
-  --output eval/results/conversation-refactor-dev.json
-```
-
-Reports `voice-refactor-dev.json`, `conversation-refactor-dev.json` and
-`rag-refactor-{dev,test}.*` are the current snapshot. Earlier reports remain
-baselines. The test split was inspected while fixing implementation regressions;
-it has not been relabelled, but current results are **not an unseen evaluation**.
-Create a new independent cohort before making a generalization claim.
-See [architecture, diagnosis and remaining limits](../docs/agent_rag_architecture.md).
-# Dialogue tasks and native local tools
-
-`task_cases.jsonl` adds six development episodes (14 turns): offers and consent,
-slot completion, vehicle confirmation, personal memory and corrections. The voice
-runner checks actual execution, exact arguments, memory counts and per-turn p50/p95.
-Each run uses temporary history/memory and a simulated vehicle; external networking
-is blocked. These are regression cases, not an unseen accuracy estimate.
-
-```bash
-.venv/bin/python -m eval.voice_benchmark --dataset eval/task_cases.jsonl \
-  --output eval/results/tasks-rules-dev.json
-# Requires an already running localhost inference server:
-LOCAL_LLM_MODEL=vivi-qwen3-1.7b LLM_TIMEOUT_SECONDS=90 \
-  .venv/bin/python -m eval.voice_benchmark --provider local \
-  --dataset eval/task_cases.jsonl --output eval/results/tasks-local-native-dev.json
-```
-
-See `docs/dialogue_tasks.md` for architecture, pinned artifacts, measured limitations
-and why the small experimental SLM is not the default runtime.
-
-
-## Unified dialogue regression
-
-`dialogue_v2_cases.jsonl` and `dialogue_v2_benchmark.py` keep their existing filenames,
-but now invoke only the unified workflow. Nine sanitized log-derived episodes check
-21 turns, exact arguments, real simulator effects, exclusions and final state.
-
-```bash
-.venv/bin/python -m eval.dialogue_v2_benchmark --provider rules --output /tmp/unified-parser.json
-# Explicit API opt-in; four-second pacing avoids the measured rate limit.
-.venv/bin/python -m eval.dialogue_v2_benchmark --provider google --allow-api --interval-seconds 4 --output /tmp/unified-google.json
-.venv/bin/python -m eval.voice_benchmark --output /tmp/unified-voice.json
-.venv/bin/python -m eval.memory_benchmark --output /tmp/unified-memory.json
-```
-
-See [the validation report](results/dialogue-unified-report.md) for separate parser,
-cloud, fallback, MQTT, API and voice checks. `by_tier` counts the provider that actually
-served each turn, with accuracy, clarification count and latency. Episode completion
-is reported separately; a fallback pass does not prove cloud accuracy.
-
-These are development regressions, including logged utterances and corrections.
-They are not independent held-out accuracy estimates. Scripted providers test
-architecture behavior, not Qwen understanding. Speech smoke uses adapters/mock
-transports; it does not measure microphones, speakers or speech-model quality.
-
-## October 9 dialogue/navigation/energy update
-
-`audit_854_897.jsonl` contains all 44 audited utterances; the ordered oracle in
-`tests/test_dialogue_audit_oct09.py` runs parser, cloud mock and local mock.
-`dialogue_navigation_cases.jsonl` adds independent paraphrases to that development
-regression. These examples are outside the semantic system prompt.
-
-```bash
-.venv/bin/python -m eval.audit_contract_benchmark
-.venv/bin/python -m eval.dialogue_v2_benchmark --provider rules \
-  --dataset eval/dialogue_navigation_cases.jsonl --max-cases 6 \
-  --output eval/results/navigation-dialogue-parser.json
-.venv/bin/python -m eval.dialogue_v2_benchmark --provider google --allow-api \
-  --dataset eval/dialogue_navigation_cases.jsonl --max-cases 6 --interval-seconds 4 \
-  --output eval/results/navigation-dialogue-google.json
-.venv/bin/python -m pytest tests/test_navigation_workflow.py tests/test_dialogue_audit_oct09.py
-node --test tests/test_frontend*.cjs
-```
-
-Do not combine simultaneous cloud runs when measuring provider latency/fallback:
-rate limits and service timeouts are counted against the tier that actually serves.
-`by_tier` reports guard repairs separately; accuracy is the whole workflow result,
-not unguarded model output. `unexpected_executions` counts an effect where the
-fixture explicitly prohibited it; exclusion/revision/replay invariants additionally
-have exact state/argument tests.
-
-See [implementation and activation](../docs/navigation_energy.md) and
-[the final validation report](results/navigation-update-report.md). Local mocks do
-not establish Qwen accuracy. Energy fixtures are synthetic; real itinerary readiness
-requires a verified vehicle profile and station catalogue.
-
-Historical v2 artifacts remain for comparison: `dialogue-v2-rules-summary.json`
-(3/9 episodes) and `dialogue-v2-google-smoke-summary.json` (first three episodes only).
-The initial unified Google run also remains: its failures prompted stricter
-capability argument validation and a clearer missing-slot/conflict contract.
-See [runtime and migration](../docs/langgraph_unified_runtime.md).
-
-## Regression log 898–909
-
-`audit_898_909.jsonl` lưu câu nói và semantic output lỗi đã ghi lại; test
-`tests/test_dialogue_audit_recent.py` replay qua parser, Google/local mock và
-kiểm tra tác vụ/consent/effects. Mock này không phải phép đo NLU.
-
-```bash
-python -m eval.dialogue_v2_benchmark --provider rules --dataset eval/dialogue_recent_cases.jsonl --max-cases 3 --output eval/results/dialogue-recent-parser.json
-python -m eval.dialogue_v2_benchmark --provider google --allow-api --dataset eval/dialogue_recent_cases.jsonl --max-cases 3 --interval-seconds 1 --output eval/results/dialogue-recent-google.json
-```
-
-Cloud gửi chỉ fixture đã chuẩn hoá và dùng DB tạm/xe mô phỏng. Báo cáo riêng
-tầng thực sự phục vụ tại `results/dialogue-recent-report.md`; đây là development
-regression, không phải tập đánh giá độc lập.
-
-## Default ±2°C và multi-task (log 910–924)
-
-`audit_910_924.jsonl` replay output đã ghi lại qua parser và provider mocks trong
-`tests/test_dialogue_multitask.py`. `dialogue_multitask_cases.jsonl` gồm default,
-slot + append, loại trừ nhiều lượt và sửa bước sau khi bước trước chờ xác nhận.
-Các oracle về amount thiếu đã cập nhật theo quyết định sản phẩm ±2°C mới; báo
-cáo trước giữ kết quả lịch sử theo chính sách cũ.
-
-```bash
-python -m eval.dialogue_v2_benchmark --provider rules --dataset eval/dialogue_multitask_cases.jsonl --max-cases 4 --output eval/results/dialogue-multitask-parser.json
-python -m eval.dialogue_v2_benchmark --provider google --allow-api --dataset eval/dialogue_multitask_cases.jsonl --max-cases 4 --interval-seconds 4 --output eval/results/dialogue-multitask-google.json
-```
-
-Chi tiết các lỗi, kết quả model và fallback: [dialogue-multitask-report](results/dialogue-multitask-report.md).
-
-## Chọn địa điểm bằng lời và đa bước (log 925–958)
-
-`audit_925_958.jsonl` giữ 20 lượt model của 34 bản ghi mới; typed UI events được
-kiểm tra qua các kịch bản trong `tests/test_dialogue_audit_oct10.py` và API/DOM
-regression. Model mock phát lại output lỗi cũ; không dùng để đo NLU Qwen.
-`navigation_voice_cases.jsonl` có 4 episode / 14 lượt, POI và tuyến tổng hợp.
-
-```bash
-python -m eval.navigation_voice_benchmark --provider rules --output eval/results/navigation-voice-oct10-parser.json
-python -m eval.navigation_voice_benchmark --provider google --allow-api --interval 6 --output eval/results/navigation-voice-oct10-google.json
-```
-
-Benchmark chỉ gửi câu fixture và context tổng hợp; dùng DB tạm/VehicleSimulator,
-không gọi VietMap thật hoặc xe vật lý. Kết quả tách theo provider thực sự phục vụ,
-giữ cả lượt Google lỗi và fallback; không gọi điểm sau guard là accuracy model thô.
-Thông số mô phỏng VF8 Plus và kho trạm nằm trong [data/energy](../data/energy/README.md).
+Các runner workflow cũ chia theo ngày và snapshot trung gian đã được thay thế.
+[Manifest dọn dẹp](cleanup.json) liệt kê file xóa/chuyển. Audit JSONL còn được test
+đọc đã chuyển sang `tests/fixtures/dialogue_audits`; các test được sửa đường dẫn.
+`eval/artifacts/navigation-runtime` giữ bằng chứng UI/map trước đó và có ngày riêng;
+không tính những artifacts đó là đã đo lại trong lượt benchmark mới. Lịch sử Git
+vẫn chứa kết quả đã dọn nếu cần đối chiếu.

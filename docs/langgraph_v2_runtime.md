@@ -136,37 +136,24 @@ Rollback: đặt `VIVI_GRAPH_VERSION=v1`, `VIVI_PLANNER_SHADOW=false`, restart. 
 DB v2; v1 không resume durable task threads v2. Yêu cầu người dùng tạo lại proposal
 đang chờ sau khi đổi version. Quay lại v2 giữ DB; grant vẫn phải vượt TTL/version checks.
 
-## Evaluation và release gates
+## Evaluation hiện tại
 
 ```bash
-.venv/bin/python -m pytest -q tests
-node --test tests/*.cjs
-.venv/bin/python -m eval.dialogue_v2_benchmark --provider rules --output /tmp/v2-rules.json
-# Chỉ khi được phép gửi fixture và chấp nhận chi phí API:
-.venv/bin/python -m eval.dialogue_v2_benchmark --provider google --allow-api --max-cases 3 --output /tmp/v2-google.json
+.venv/bin/python -m pytest -q tests/test_workflow_eval.py
+.venv/bin/python -m eval.workflow_benchmark --repeats 3
+.venv/bin/python -m eval.navigation_controls_benchmark --samples 100
 ```
 
-Runner mới dùng temporary memory/history/vehicle DB, không đọc hoặc gửi toàn bộ log.
-Fixture dev ở `eval/dialogue_v2_cases.jsonl`: chín episode từ lỗi đã khảo sát, đã bỏ
-session ID/dữ liệu cá nhân. Checks kiểm tra exact arguments, actual execution,
-final state, nonempty error replies; không coi `verified` là đủ. `--allow-api` bắt buộc
-với cloud; max-cases/max-tokens giới hạn quy mô (không phải giới hạn chi phí bằng tiền).
-Runner offline cũ vẫn giữ network guard. Report rules đo profile rules; scripted
-model tests đo orchestration, **không đo accuracy của model thật**.
+Runner hiện tại dùng graph chung, SQLite/ledger thật và các dependency fixture có nhãn.
+`eval/workflow_cases.jsonl` thay thế các dataset chia theo từng đợt sửa. Các scenario
+kiểm tra receipt, trạng thái xe, draft/journey, restart, replay, provider timeout,
+cancel và P khi model/map còn chờ. Profile model fixture kiểm tra contract và fallback,
+không đo chất lượng model thật. Xem [report](../eval/results/report.md) và
+[hướng dẫn](../eval/README.md) để biết kết quả revision hiện tại và giới hạn đo.
 
-Smoke Google 09/10/2026: ba episode đầu được chấp thuận đã đạt 3/3 trong hai lần
-chạy sau sửa contract missing-slot (18 lượt, không degraded). Xem
-[report](../eval/results/dialogue-v2-google-smoke-summary.json). Full local regression:
-367 pass, 13 test MQTT skip do thiếu Mosquitto. Đây chưa phải điểm holdout.
-
-Chưa hoàn thành release gates: sáu episode API còn lại/holdout, MQTT broker integration
-trên máy có Mosquitto, E2E STT/TTS latency và barge-in trên browser/phần cứng thật,
-shadow/canary rollout thực tế, retention và multiworker deployment. Không triển khai
-production/canary tự động trong đợt thay đổi này.
-
-Tham khảo official [persistence](https://docs.langchain.com/oss/python/langgraph/persistence)
-và [interrupts](https://docs.langchain.com/oss/python/langgraph/interrupts). Runtime kiểm thử
-với LangGraph 1.2.14 và langgraph-checkpoint-sqlite 3.1.1; requirements giữ compatibility range.
+Phần v1/v2 còn lại trong tài liệu mô tả lịch sử migration; không dùng số pass cũ
+làm điều kiện phát hành workflow hiện tại. Production, MQTT, STT/TTS và model thật
+cần nghiệm thu riêng trên môi trường triển khai.
 
 ## Khi nào bỏ workflow v1?
 

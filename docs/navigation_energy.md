@@ -3,7 +3,7 @@
 Workflow `unified-5`, semantic prompt `semantic-unified-12`. Một LangGraph tiếp nhận
 lời nói và sự kiện có kiểu, dùng chung reducer, scheduler, checkpoint và ledger.
 Cloud → local → parser vẫn là fallback về khả dụng; câu hỏi làm rõ hoặc từ chối
-hợp lệ không gây chuyển tầng. Xem [báo cáo nghiệm thu](../eval/results/navigation-update-report.md).
+hợp lệ không gây chuyển tầng. Xem [báo cáo benchmark hiện tại](../eval/results/report.md).
 
 ## Hội thoại
 

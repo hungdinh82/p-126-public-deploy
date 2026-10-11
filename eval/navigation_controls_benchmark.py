@@ -1,121 +1,105 @@
-"""Measure current control path with real SQLite, ledger and vehicle adapter."""
+"""Measure controls with SQLite and pending synthetic dependencies; no external I/O."""
 
+import argparse
 import asyncio
+import hashlib
 import json
-import math
+import platform
+import subprocess
 import tempfile
 import time
+from datetime import datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
-import tests.conftest  # noqa: F401
-from src.vivi.config import Settings
+from eval.benchmark import local_network_only
+from eval.workflow_benchmark import ROOT, Runtime, latency
 from src.vivi.domain.models import TurnRequest
-from src.vivi.orchestration import LangGraphOrchestrator
-from src.vivi.persistence.event_store import EventStore
-from tests.test_long_term_memory import services
-from tests.test_navigation_lifecycle import runtime, start
-from tests.test_navigation_refinement import DestinationMaps
 
 
-class SlowProvider:
-    def __init__(self):
-        self.started = asyncio.Event()
-
-    async def agenerate_json(self, **kwargs):
-        self.started.set()
-        await asyncio.Event().wait()
-
-
-class SlowMaps(DestinationMaps):
-    def __init__(self):
-        super().__init__()
-        self.started = asyncio.Event()
-
-    async def search(self, *args, **kwargs):
-        self.started.set()
-        await asyncio.Event().wait()
-
-
-def percentile(values):
-    return sorted(values)[math.ceil(len(values) * 0.95) - 1]
-
-
-async def measure(load):
+async def measure(load, samples=100, warmup=5):
     with tempfile.TemporaryDirectory(prefix="vivi-control-benchmark-") as directory:
-        root = Path(directory)
-        model = SlowProvider() if load == "model_pending" else None
-        graph, ledger, gateway = runtime(services.__wrapped__(root), root, model=model)
-        graph.default_provider = "rules"
-        pipeline = LangGraphOrchestrator({"rules": graph}, gateway, EventStore(Settings(data_dir=root)), ledger=ledger)
+        runtime = Runtime(Path(directory), "fixture" if load == "model_pending" else "rules")
+        background = None
+        blocker = None
         try:
-            await start(graph)
-            background = None
-            if model:
-                graph.navigation.workflow.resolver.providers["google"].budget_seconds = 600
-                background = asyncio.create_task(
-                    graph.ainvoke(
-                        {
-                            "session_id": "driver",
-                            "turn_id": "pending-model",
-                            "provider": "google",
-                            "input_text": "tôi nóng",
-                        }
-                    )
-                )
-                await asyncio.wait_for(model.started.wait(), 2)
-            elif load == "vietmap_pending":
-                maps = SlowMaps()
-                graph.navigation.workflow.services.navigation.client = maps
-                background = asyncio.create_task(
-                    graph.ainvoke({"session_id": "driver", "turn_id": "pending-map", "input_text": "đi Hà Nội"})
-                )
-                await asyncio.wait_for(maps.started.wait(), 2)
+            # Use an accepted journey, not only free-drive controls.
+            cases = [json.loads(line) for line in (ROOT / "eval/workflow_cases.jsonl").read_text().splitlines()]
+            steps = next(case for case in cases if case["id"] == "trip-accept-pause-resume-end")["operations"][:3]
+            outputs = {}
+            for step in steps:
+                outputs[step["id"]] = await runtime.execute(step, "driver", outputs)
+            assert outputs["A-start"]["navigation_workspace"]["journey"]["status"] == "running"
+            if load != "normal":
+                blocker = runtime.model if load == "model_pending" else runtime.maps
+                blocker.entered.clear()
+                blocker.release = asyncio.Event()
+                if load == "model_pending":
+                    runtime.graph.navigation.workflow.resolver.providers["fixture"].budget_seconds = 600
+                background = asyncio.create_task(runtime.pipeline.run(TurnRequest(
+                    session_id="driver", turn_id="pending", transcript="tôi nóng" if load == "model_pending" else "lập lộ trình tới Sầm Sơn",
+                    position={"lat": 21, "lng": 105.8, "simulated": True}), runtime.provider))
+                await asyncio.wait_for(blocker.entered.wait(), 3)
             measurements = []
-            for index in range(105):
+            for index in range(samples + warmup):
                 started = time.perf_counter()
-                response = await pipeline.run(
-                    TurnRequest(
-                        session_id="driver",
-                        turn_id=f"gear-{index}",
-                        transcript="Đổi số",
-                        navigation_event={
-                            "kind": "gear",
-                            "gear": "P" if index % 2 == 0 else "D",
-                            "id": f"gear-{index}",
-                            "revision": 0,
-                        },
-                    )
-                )
-                if index >= 5:
-                    measurements.append(
-                        {
-                            **response.latency_ms,
-                            "wall": round((time.perf_counter() - started) * 1000, 2),
-                            "ledger": round((time.perf_counter() - started) * 1000 - response.latency_ms["total"], 2),
-                        }
-                    )
-            report = {
-                "load": load,
-                "samples": len(measurements),
-                "backend_p95_ms": percentile([m["wall"] for m in measurements]),
-                "queue_p95_ms": percentile([m["queue"] for m in measurements]),
-                "control_p95_ms": percentile([m["control"] for m in measurements]),
-                "ledger_p95_ms": percentile([m["ledger"] for m in measurements]),
-                "includes": "orchestration, navigation state/receipt and turn ledger; excludes HTTP and browser",
-            }
+                gear = "P" if index % 2 == 0 else "D"
+                response = await asyncio.wait_for(runtime.pipeline.run(TurnRequest(
+                    session_id="driver", turn_id=f"gear-{index}", transcript="Đổi số",
+                    navigation_event={"kind": "gear", "gear": gear, "id": f"gear-{index}", "revision": 0}), runtime.provider), 2)
+                wall = (time.perf_counter() - started) * 1000
+                assert response.receipt["status"] == "completed", response.receipt
+                assert runtime.vehicle.state_for("driver").driving == (gear == "D")
+                if index >= warmup:
+                    measurements.append({"gear": gear, **response.latency_ms, "wall": round(wall, 2),
+                                         "orchestration": round(wall - response.latency_ms["total"], 2)})
             if background:
-                assert not background.done(), "Slow dependency must remain pending throughout measurement"
-            return report
+                assert not background.done(), "Dependency must remain pending throughout measurement"
+            summary = latency([row["wall"] for row in measurements])
+            budget = 300 if load == "normal" else 500
+            return {"load": load, "samples": samples, "warmup": warmup, "backend": summary,
+                    "queue": latency([row["queue"] for row in measurements]),
+                    "control": latency([row["control"] for row in measurements]),
+                    "per_gear": {gear: latency([row["wall"] for row in measurements if row["gear"] == gear]) for gear in ("P", "D")},
+                    "budget_ms": budget, "passed": summary["p95_ms"] <= budget,
+                    "includes": "orchestration, domain, durable receipts and turn ledger; excludes HTTP/browser",
+                    "measurements": measurements}
         finally:
-            await graph.aclose()
+            if background:
+                background.cancel()
+                await asyncio.gather(background, return_exceptions=True)
+            if blocker:
+                blocker.release.set()
+                blocker.release = None
+            await runtime.close()
 
 
-async def benchmark():
-    report = [await measure(load) for load in ("normal", "model_pending", "vietmap_pending")]
-    print(json.dumps(report, indent=2))
-    Path("/tmp/vivi-ui-check").mkdir(exist_ok=True)
-    Path("/tmp/vivi-ui-check/navigation-backend-performance.json").write_text(json.dumps(report, indent=2))
+async def benchmark(samples=100):
+    return [await measure(load, samples) for load in ("normal", "model_pending", "vietmap_pending")]
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--samples", type=int, default=100)
+    parser.add_argument("--output", type=Path, default=ROOT / "eval/results/navigation-controls.json")
+    args = parser.parse_args()
+    if args.samples < 100:
+        parser.error("At least 100 samples per load are required for this benchmark")
+    with local_network_only():
+        report = asyncio.run(benchmark(args.samples))
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    document = {
+        "created_at": datetime.now(ZoneInfo("Asia/Ho_Chi_Minh")).isoformat(),
+        "revision": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
+        "working_tree_dirty": bool(subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT, text=True)),
+        "environment": {"platform": platform.platform(), "python": platform.python_version()},
+        "fixture_sha256": hashlib.sha256((ROOT / "eval/workflow_fixtures.py").read_bytes()).hexdigest(),
+        "runs": report,
+    }
+    args.output.write_text(json.dumps(document, indent=2) + "\n")
+    print(json.dumps([{key: value for key, value in row.items() if key != "measurements"} for row in report], indent=2))
+    raise SystemExit(0 if all(row["passed"] for row in report) else 1)
 
 
 if __name__ == "__main__":
-    asyncio.run(benchmark())
+    main()

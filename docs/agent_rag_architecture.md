@@ -152,8 +152,8 @@ lượt: route/intent, trạng thái, từ cần có/không được có và tha
 được khai báo. Đây là development regressions, không phải đánh giá semantic toàn
 diện. Không tạo lượt thử vào history thực của người dùng.
 
-Các file `results/*-refactor-*` lưu kết quả hiện tại; file `*-oct07-*` là baseline
-của lần sửa trước. Không thay nhãn hoặc nguồn của golden_dataset. Bộ test 19 ca đã
+Các số đo dưới đây là lịch sử của lần tái cấu trúc; các snapshot trung gian đã
+được dọn. Kết quả hiện tại xem [report](../eval/results/report.md). Không thay nhãn hoặc nguồn của golden_dataset. Bộ test 19 ca đã
 được xem để tìm lỗi hồi quy khi tái cấu trúc, vì vậy kết quả mới là regression
 measurement, không phải đánh giá dữ liệu chưa từng xem. Cần một tập độc lập mới
 để đo khả năng tổng quát.

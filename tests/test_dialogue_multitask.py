@@ -17,7 +17,7 @@ from tests.test_long_term_memory import services as services
 @pytest.mark.asyncio
 async def test_logs_910_924_with_recorded_wrong_model_outputs(services, tmp_path, tier):
     rows = [
-        json.loads(line) for line in (Path(__file__).parents[1] / "eval/audit_910_924.jsonl").read_text().splitlines()
+        json.loads(line) for line in (Path(__file__).parents[1] / "tests/fixtures/dialogue_audits/audit_910_924.jsonl").read_text().splitlines()
     ]
     model = ScriptedModel([row["recorded_semantic"] for row in rows])
     graph, _, gateway = build(

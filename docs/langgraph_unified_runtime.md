@@ -111,11 +111,11 @@ cách xoá dữ liệu của workspace.
 
 ## Kiểm chứng và giới hạn
 
-[Báo cáo regression](../eval/results/dialogue-unified-report.md) ghi đầy đủ API,
-parser, cloud, memory, MQTT và smoke thoại. Các score là development regression,
-không phải held-out accuracy hay bảo đảm hiểu mọi cách nói. Qwen dùng mock trước khi
-server có model; smoke STT/TTS kiểm tra contract với mock transport. Chưa đo chất
-lượng microphone/speaker hoặc xe thật. Deployment vẫn một backend worker; chưa
-hỗ trợ nhiều worker dùng chung checkpoint/session lock.
+[Báo cáo benchmark hiện tại](../eval/results/report.md) tách rules,
+model fixture và latency backend P/D; scope và giới hạn ghi theo từng phép đo.
+Các số đo API/cloud/MQTT/thoại của những đợt trước không được tính là đã nghiệm thu lại.
+Dataset là development regression, không phải held-out accuracy hoặc bảo đảm hiểu mọi
+cách nói. Microphone/speaker, model thật và xe thật cần kiểm chứng riêng.
+Deployment vẫn một backend worker; chưa hỗ trợ nhiều worker dùng chung checkpoint/session lock.
 
 Tham khảo: [LangGraph workflows](https://docs.langchain.com/oss/python/langgraph/workflows-agents), [persistence](https://docs.langchain.com/oss/python/langgraph/persistence).
