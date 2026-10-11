@@ -22,7 +22,8 @@ def selection(owner, count=2, same_name=False):
         ],
     )
     if owner == "trip":
-        return SessionState(trip_plan=TripPlanState(**data))
+        # record_trip_plan always hands the conversation to the plan it records.
+        return SessionState(trip_plan=TripPlanState(**data), navigation_focus="trip")
     return SessionState(navigation=NavigationState(**data))
 
 

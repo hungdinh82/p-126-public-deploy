@@ -713,6 +713,16 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
         for stage, elapsed in result.get("timings", {}).items():
             turn["timings"][stage] = round(turn["timings"].get(stage, 0) + elapsed, 2)
         result = CapabilityResult.normalize(result, capability=step.draft.capability, command_id=command_id)
+        if (
+            result["status"] == "completed"
+            and result.get("confirmation")
+            and any(event.get("type") == "navigation.preview" for event in result.get("ui_events", []))
+            and any(later.status == "pending" for later in task.steps[index + 1 :])
+        ):
+            # "Đi Ninh Bình rồi bật nhạc": the steps after a route offer wait for its
+            # consent, so they never run while ViVi is still asking, and a following
+            # confirmation cannot become a second open question.
+            result = {**result, "status": "waiting_confirmation"}
         session = record_step(
             session,
             index,
