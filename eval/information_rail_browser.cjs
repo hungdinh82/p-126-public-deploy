@@ -9,7 +9,8 @@ const server=http.createServer((req,res)=>res.end(html));
 (async()=>{await new Promise(r=>server.listen(0,'127.0.0.1',r));const browser=await chromium.launch({headless:true,args:['--no-sandbox']});try{
 for(const size of [{width:1440,height:900},{width:1024,height:768},{width:390,height:844},{width:390,height:568}]){
  const page=await browser.newPage({viewport:size});const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.goto(`http://127.0.0.1:${server.address().port}`);
- await page.addScriptTag({content:fs.readFileSync(root+'/journey.js','utf8').replace(/export /g,'')});
+ for(const file of ['journey-map.js','journey-simulation.js','journey-renderer.js'])await page.addScriptTag({content:fs.readFileSync(root+'/'+file,'utf8').replace(/export /g,'')});
+ await page.addScriptTag({content:fs.readFileSync(root+'/journey.js','utf8').replace(/^import .*$/gm,'').replace(/export /g,'')});
  await page.evaluate(()=>{window.commands=[];hooks={command:(...args)=>commands.push(args),event(){},announce(){},progress(){},route(){},travel(){}};ensureMap=async()=>{map={resize(){},easeTo(){},getSource(){return{setData(){}}}};};window.vietmapgl=null;});
  await page.evaluate(async()=>{await document.fonts.ready;});
  const initialLayout=await page.evaluate(()=>{const box=s=>{const r=document.querySelector(s).getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height};};return {scene:box('.space'),assistant:box('.assistant'),dock:box('.dock')};});
@@ -25,6 +26,10 @@ for(const size of [{width:1440,height:900},{width:1024,height:768},{width:390,he
  await page.evaluate(async plan=>{await applyNavigation({trip_plan:{...plan,event_sequence:3},ui_events:[]});},fixture);assert.equal(await page.locator('#trip-plan-card').isVisible(),false);
  await page.getByRole('button',{name:'Kế hoạch',exact:true}).click();assert.equal(await page.locator('#trip-plan-card').isVisible(),true);
  await page.getByRole('button',{name:'Xem bản đồ',exact:true}).click();assert.equal(await page.locator('#journey').isVisible(),true);assert.equal(await page.evaluate(()=>commands.length),0);
+ if(size.width<=760){
+  const panel=await page.locator('.journey-panel').boundingBox();assert.ok(panel.y>size.height*.25,'compact sheet leaves map visible');
+  await page.locator('#journey-details-toggle').evaluate(el=>el.onclick=()=>setJourneyDetails(!document.querySelector('#journey').classList.contains('details-expanded')));await page.locator('#journey-details-toggle').click();
+ }
  const scroll=page.locator('#journey-scroll');await scroll.hover();await page.mouse.wheel(0,600);await page.waitForTimeout(180);assert.ok(await scroll.evaluate(el=>el.scrollTop)>0,'map content scroll '+JSON.stringify(size));
  const actions=await page.locator('#journey-controls').boundingBox();const area=await scroll.boundingBox();assert.ok(actions.y+actions.height<=area.y+1,'actions outside scroll');
  await page.locator('#journey-close').evaluate(el=>el.onclick=()=>closeJourney());await page.locator('#journey-close').click();assert.equal(await page.locator('#journey').isVisible(),false);

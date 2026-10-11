@@ -1,0 +1,12 @@
+{
+  "points": 10000,
+  "visible_samples": 301,
+  "frame_p95_ms": 16.800000000000182,
+  "navigation_tick_p95_ms": 0.40000000037252903,
+  "max_long_task_ms": 0,
+  "camera_updates": 112,
+  "marker_updates": 112,
+  "paint_updates": 24,
+  "hidden_map_render_updates": 0,
+  "conditions": "Chromium headless; real journey controller and DOM; SDK drawing fixture; excludes GPU tiles and 3D"
+}

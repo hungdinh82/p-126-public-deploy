@@ -39,7 +39,8 @@ async def lifespan(app: FastAPI):
         metrics.stop_gpu_sampler()
         for task in background:
             task.cancel()
-        runtime.close()
+        await asyncio.gather(*background, return_exceptions=True)
+        await runtime.aclose()
 
 
 def create_app() -> FastAPI:

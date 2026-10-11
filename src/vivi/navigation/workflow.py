@@ -10,13 +10,15 @@ from datetime import UTC, datetime
 from typing import Literal
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from src.vivi.navigation.destinations import administrative_match, region_for
+from src.vivi.navigation.effects import vehicle_effect
 from src.vivi.navigation.energy import ChargingStation, EnergyPlanner
 from src.vivi.navigation.presentation import choice_message, place_label, route_summary, short_address, station_label
 from src.vivi.navigation.selection import decide_place, distinct_places
 from src.vivi.navigation.vietmap import VietMapError
+from src.vivi.turn_control import current_control
 
 logger = logging.getLogger(__name__)
 
@@ -52,10 +54,46 @@ class NavigationEvent(BaseModel):
     elapsed_s: float | None = Field(default=None, ge=0, le=30)
     gear: Literal["P", "D"] | None = None
     plan_id: str | None = None
+    target_id: str | None = Field(default=None, max_length=100)
+    client_id: str | None = Field(default=None, min_length=1, max_length=100)
+    control_sequence: int | None = Field(default=None, ge=1)
+    runtime_epoch: str | None = Field(default=None, max_length=100)
+    expected_vehicle_version: int | None = Field(default=None, ge=0)
+    expected_control_revision: int | None = Field(default=None, ge=0)
+
+    @model_validator(mode="after")
+    def ordered_control(self):
+        if (self.client_id is None) != (self.control_sequence is None):
+            raise ValueError("client_id and control_sequence must be provided together")
+        return self
 
 
 def coordinates(value):
     return value["lat"], value["lng"]
+
+
+async def read_many(client, operations):
+    if hasattr(client, "batch"):
+        return await client.batch(operations)
+    semaphore = asyncio.Semaphore(3)
+
+    async def single(operation):
+        async with semaphore:
+            name, args, kwargs = operation
+            try:
+                return await getattr(client, name)(*args, **kwargs)
+            except (VietMapError, TimeoutError) as exc:
+                return exc
+
+    async with asyncio.TaskGroup() as group:
+        tasks = [group.create_task(single(operation)) for operation in operations]
+    return [task.result() for task in tasks]
+
+
+def read_budget(maximum):
+    control = current_control.get()
+    # Reserve time for the domain commit, response, checkpoint and turn receipt.
+    return max(0.01, min(maximum, control.deadline - time.monotonic() - 5)) if control else maximum
 
 
 async def route_position(route, distance):
@@ -571,6 +609,11 @@ class NavigationWorkflow:
         if category and categories.get(category):
             kwargs["category"] = categories[category]
         places = await self.services.navigation.search(arguments["query"], **kwargs)
+        missing = [place for place in places[:10] if place.lat is None or place.lng is None]
+        details = await read_many(
+            self.services.navigation, [("place", (place.ref_id,), {}) for place in missing]
+        )
+        details = dict(zip((place.ref_id for place in missing), details))
         candidates = []
         for place in places[:10]:
             if representative and not administrative_match(place.model_dump(), arguments["query"].split(",")[0]):
@@ -589,13 +632,12 @@ class NavigationWorkflow:
                 if not poi_matches(place.name, category):
                     continue
             if place.lat is None or place.lng is None:
-                try:
-                    detail = await self.services.navigation.place(place.ref_id)
-                    place = place.model_copy(
-                        update={"lat": detail.lat, "lng": detail.lng, "address": place.address or detail.address}
-                    )
-                except Exception:
+                detail = details.get(place.ref_id)
+                if detail is None or isinstance(detail, Exception):
                     continue
+                place = place.model_copy(
+                    update={"lat": detail.lat, "lng": detail.lng, "address": place.address or detail.address}
+                )
                 if category and not categories.get(category) and not poi_matches(place.name, category):
                     continue
             if place.lat is None or place.lng is None:
@@ -626,12 +668,15 @@ class NavigationWorkflow:
             except Exception:
                 pass
         reachable = []
-        for index, place in enumerate(candidates):
-            if distances and index < len(distances) and (distances[index] is None or distances[index] < 0):
-                continue
-            try:
-                route = await self.services.navigation.route(coordinates(origin), coordinates(place))
-            except Exception:
+        indexed = [
+            (index, place) for index, place in enumerate(candidates)
+            if not (distances and index < len(distances) and (distances[index] is None or distances[index] < 0))
+        ]
+        routes = await read_many(self.services.navigation, [
+            ("route", (coordinates(origin), coordinates(place)), {}) for _, place in indexed
+        ])
+        for (index, place), route in zip(indexed, routes):
+            if isinstance(route, Exception):
                 continue
             place["distance_m"], place["duration_s"] = route.distance_m, route.duration_s
             place["_rank_distance"] = (
@@ -743,7 +788,16 @@ class NavigationWorkflow:
             return {**assessment, "selected_plan": choices[0]}, choices
         started = time.monotonic()
         if self.discovery:
-            discovered = await self.discovery.discover(nav.route)
+            from src.vivi.navigation.charging import StationDiscovery
+
+            try:
+                async with asyncio.timeout(read_budget(getattr(self.discovery, "budget_seconds", 8))):
+                    work = self.discovery.discover(nav.route)
+                    discovered = await self.services.navigation.run_read(work) if hasattr(
+                        self.services.navigation, "run_read"
+                    ) else await work
+            except TimeoutError:
+                discovered = StationDiscovery(incomplete=True, errors=["station_search_budget"])
             stations = discovered.stations
             assessment["station_search"] = {
                 "source": "vietmap",
@@ -769,27 +823,24 @@ class NavigationWorkflow:
         points = {"origin": origin, "destination": destination, **{s.id: (s.lat, s.lng) for s in stations}}
         if round_trip:
             points["return"] = origin
-        semaphore = asyncio.Semaphore(4)
-
-        async def edge(a, b):
-            async with semaphore:
-                try:
-                    route = await self.services.navigation.route(points[a], points[b])
-                    edges[a, b] = route.model_dump()
-                except (VietMapError, TimeoutError) as exc:
-                    logger.warning("Charging route unavailable from=%s to=%s", a, b, exc_info=True)
+        async def collect_edges(pairs):
+            pairs = list(pairs)
+            results = await read_many(self.services.navigation, [
+                ("route", (points[a], points[b]), {}) for a, b in pairs
+            ])
+            for (a, b), result in zip(pairs, results):
+                if isinstance(result, (VietMapError, TimeoutError)):
                     assessment["routing_incomplete"] = True
                     assessment.setdefault("routing_errors", []).append(
-                        {"from": a, "to": b, "error_type": type(exc).__name__}
+                        {"from": a, "to": b, "error_type": type(result).__name__}
                     )
-
-        async def collect_edges(pairs):
-            async with asyncio.TaskGroup() as group:
-                for a, b in pairs:
-                    group.create_task(edge(a, b))
+                elif isinstance(result, Exception):
+                    raise result
+                else:
+                    edges[a, b] = result.model_dump()
 
         try:
-            async with asyncio.timeout(max(0.01, 25 - (time.monotonic() - started))):
+            async with asyncio.timeout(read_budget(max(0.01, 25 - (time.monotonic() - started)))):
                 # Both legs are mandatory. A rest area on the opposite
                 # carriageway may require a long detour despite looking nearby.
                 await collect_edges((a, b) for s in stations for a, b in (("origin", s.id), (s.id, "destination")))
@@ -1095,7 +1146,7 @@ class NavigationWorkflow:
                 command_id,
                 {"intent": capability, "arguments": arguments},
             )
-        vehicle = await asyncio.to_thread(
+        vehicle = await vehicle_effect(
             self.services.action_gateway.vehicle.set_driving, event.session_id, not keep_parked
         )
         nav.status = "paused" if keep_parked else "running"
@@ -1139,7 +1190,7 @@ class NavigationWorkflow:
             nav.resume_status, nav.status = nav.status, "paused"
         vehicle = None
         if hasattr(self.services.action_gateway.vehicle, "set_driving"):
-            vehicle = await asyncio.to_thread(self.services.action_gateway.vehicle.set_driving, event.session_id, False)
+            vehicle = await vehicle_effect(self.services.action_gateway.vehicle.set_driving, event.session_id, False)
         message = "Đã về P, hành trình tạm dừng. Chuyển D để tiếp tục." if nav.status == "paused" else "Đã chuyển về P."
         result = self.result(nav, message, "completed", "navigation.pause")
         if vehicle:
@@ -1185,8 +1236,15 @@ class NavigationWorkflow:
                     "error_code": "insufficient_energy",
                 }
         try:
-            vehicle = await asyncio.to_thread(
-                self.services.action_gateway.vehicle.set_driving, event.session_id, nav.resume_status == "running"
+            vehicle = await vehicle_effect(
+                self.services.action_gateway.vehicle.set_driving,
+                event.session_id,
+                nav.resume_status == "running",
+                **(
+                    {"expected_state_version": event.navigation_event["expected_vehicle_version"]}
+                    if (event.navigation_event or {}).get("expected_vehicle_version") is not None
+                    else {}
+                ),
             )
         except ValueError as exc:
             return {"status": "blocked", "message": str(exc), "error_code": "simulation_policy"}
@@ -1243,8 +1301,15 @@ class NavigationWorkflow:
                 }
             elif hasattr(self.services.action_gateway.vehicle, "set_driving"):
                 try:
-                    vehicle = await asyncio.to_thread(
-                        self.services.action_gateway.vehicle.set_driving, event.session_id, True
+                    vehicle = await vehicle_effect(
+                        self.services.action_gateway.vehicle.set_driving,
+                        event.session_id,
+                        True,
+                        **(
+                            {"expected_state_version": value.expected_vehicle_version}
+                            if value.expected_vehicle_version is not None
+                            else {}
+                        ),
                     )
                 except ValueError as exc:
                     return {"status": "blocked", "message": str(exc), "error_code": "simulation_policy"}
@@ -1383,7 +1448,7 @@ class NavigationWorkflow:
                 if nav.stop_index < len(stop_distances) and nav.progress_m >= limit:
                     nav.status = "charging"
             if nav.status != session.navigation.status and nav.status in {"running", "charging"}:
-                await asyncio.to_thread(
+                await vehicle_effect(
                     self.services.action_gateway.vehicle.set_driving, event.session_id, nav.status == "running"
                 )
             if self.energy.profile:
@@ -1487,7 +1552,7 @@ class NavigationWorkflow:
                     nav.last_assessment_m, nav.last_assessment_soc = nav.progress_m, soc
             if nav.progress_m >= nav.route["distance_m"] and nav.status != "charging":
                 nav.status = "completed"
-                await asyncio.to_thread(self.services.action_gateway.vehicle.set_driving, event.session_id, False)
+                await vehicle_effect(self.services.action_gateway.vehicle.set_driving, event.session_id, False)
         nav.applied_events = [*nav.applied_events[-99:], value.id]
         result = self.result(nav, "", "completed", "navigation.progress")
         if value.kind in {"progress", "charge"}:

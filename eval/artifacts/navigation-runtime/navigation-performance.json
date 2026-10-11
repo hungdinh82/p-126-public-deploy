@@ -1,0 +1,47 @@
+[
+  {
+    "viewport": {
+      "width": 1440,
+      "height": 900
+    },
+    "parking_dom_p95_ms": 5,
+    "click_to_ack_dom_p95_ms": 152.19999999925494,
+    "gear_ack_p95_ms": 103.53,
+    "writer_queue_p95_ms": 0.1,
+    "control_p95_ms": 42.11,
+    "automation_click_p95_ms": 73,
+    "samples": 100,
+    "webgl": "initialized, animation paused for control measurements",
+    "map_sdk": "blocked intentionally"
+  },
+  {
+    "viewport": {
+      "width": 1024,
+      "height": 768
+    },
+    "parking_dom_p95_ms": 5,
+    "click_to_ack_dom_p95_ms": 197.09999999962747,
+    "gear_ack_p95_ms": 144.37,
+    "writer_queue_p95_ms": 0.11,
+    "control_p95_ms": 64.13,
+    "automation_click_p95_ms": 76,
+    "samples": 100,
+    "webgl": "initialized, animation paused for control measurements",
+    "map_sdk": "blocked intentionally"
+  },
+  {
+    "viewport": {
+      "width": 390,
+      "height": 844
+    },
+    "parking_dom_p95_ms": 6.2999999998137355,
+    "click_to_ack_dom_p95_ms": 201.69999999925494,
+    "gear_ack_p95_ms": 142.39,
+    "writer_queue_p95_ms": 0.09,
+    "control_p95_ms": 67.07,
+    "automation_click_p95_ms": 141,
+    "samples": 100,
+    "webgl": "initialized, animation paused for control measurements",
+    "map_sdk": "blocked intentionally"
+  }
+]

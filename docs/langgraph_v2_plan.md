@@ -1,5 +1,7 @@
 > Tài liệu lịch sử v2. Runtime hiện tại đã hợp nhất và xoá builder v1; xem [workflow thống nhất](langgraph_unified_runtime.md).
 
+> Tài liệu lịch sử. Runtime hiện tại và kết quả kiểm chứng mới nhất: [navigation_runtime.md](navigation_runtime.md).
+
 # Kế hoạch ViVi LangGraph v2
 
 Ngày: 09/10/2026. Trạng thái: runtime v2 đã triển khai trong workspace; release gates API/voice/MQTT/canary còn chờ.

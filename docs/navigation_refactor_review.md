@@ -1,5 +1,7 @@
 # Navigation refactor — implementation and focused review
 
+> Tài liệu lịch sử. Runtime hiện tại và kết quả kiểm chứng mới nhất: [navigation_runtime.md](navigation_runtime.md).
+
 Reviewed 2026-10-10. Design: [navigation_state_ui_design.md](navigation_state_ui_design.md).
 
 ## State ownership

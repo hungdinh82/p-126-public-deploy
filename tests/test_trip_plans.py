@@ -334,7 +334,9 @@ async def test_energy_change_updates_offer_without_start_and_restart_deduplicate
         graph.close()
         graph, _, _ = build(services, tmp_path, store=store)
         replay = await invoke(graph, "bắt đầu luôn", "restart-replay")
-        assert replay["navigation"] == final["navigation"]
+        assert replay["navigation"]["status"] == "paused"
+        assert replay["navigation"]["route_id"] == final["navigation"]["route_id"]
+        assert not gateway.vehicle.state_for("driver").driving
         with store.connect() as db:
             assert db.execute("SELECT COUNT(*) FROM command_ledger WHERE turn LIKE '%:start'").fetchone()[0] == 1
     finally:

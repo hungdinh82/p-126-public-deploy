@@ -1,4 +1,6 @@
-# Lõi hội thoại thống nhất (`unified-3`)
+# Lõi hội thoại thống nhất (`unified-6`)
+
+Trạng thái hành trình và receipt hiện thuộc NavigationService, nằm ngoài checkpoint hội thoại. Xem [contract, migration và kiểm chứng navigation](navigation_runtime.md).
 
 ViVi dùng một workflow LangGraph có kiểm soát. Provider diễn giải toàn bộ lượt thành
 `SemanticTurn`; code sở hữu task, revision, policy, grant và external effects.

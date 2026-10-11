@@ -13,7 +13,8 @@ function harness({withEnergy=false}={}) {
     command:(...args)=>commands.push(args),event:async value=>events.push(value),setDriving:value=>driving.push(value),announce:text=>announcements.push(text),
   };
   vm.createContext(sandbox);
-  vm.runInContext(readFileSync('journey.js','utf8').replace(/export /g,''),sandbox);
+  for(const file of ['journey-map.js','journey-simulation.js','journey-renderer.js'])vm.runInContext(readFileSync(file,'utf8').replace(/export /g,''),sandbox);
+  vm.runInContext(readFileSync('journey.js','utf8').replace(/^import .*$/gm,'').replace(/export /g,''),sandbox);
   vm.runInContext(`map=stubMap; hooks={command,event,setDriving,announce,progress(){},route:reportRoute,travel(){},confirm:grant=>command('confirm',grant)}; realOpenJourney=openJourney; openJourney=async()=>{}; placeMarker=(name,point)=>{markers[name]={point,setRotation(){},remove(){}};return markers[name];}; planRoute=()=>{throw Error('Client must not recompute server route');};`,sandbox);
   return {sandbox,commands,events,driving,announcements,elements,sources,routes};
 }

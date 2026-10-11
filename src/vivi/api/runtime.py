@@ -33,6 +33,11 @@ class Runtime:
         if isinstance(self.vehicle, MqttVehicleAdapter):
             self.vehicle.close()
 
+    async def aclose(self) -> None:
+        await self.orchestrator.aclose()
+        if isinstance(self.vehicle, MqttVehicleAdapter):
+            self.vehicle.close()
+
 
 def build_runtime(config: Settings = settings) -> Runtime:
     if config.vehicle_provider == "mqtt":

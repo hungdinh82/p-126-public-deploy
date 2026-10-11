@@ -63,15 +63,19 @@ class LangGraphOrchestrator:
         self._sessions: dict[str, asyncio.Lock] = {}
         self._active: dict[tuple[str, str], TurnControl] = {}
         self._runners: dict[tuple[str, str], asyncio.Task] = {}
+        self._closing = False
 
     def session_key(self, request):
         return f"{self.profile_id}:{request.session_id}"
 
     @asynccontextmanager
     async def turn_scope(self, request, provider):
+        if self._closing:
+            raise RuntimeError("Assistant runtime is closing")
         session = self.session_key(request)
         lock = self._sessions.setdefault(session, asyncio.Lock())
         control = TurnControl(time.monotonic() + self.timeout_seconds)
+        started = time.perf_counter()
         token = current_control.set(control)
         key = (request.session_id, request.turn_id)
         try:
@@ -91,8 +95,18 @@ class LangGraphOrchestrator:
                     self._runners[key] = asyncio.current_task()
                     try:
                         yield cached
-                    except BaseException:
+                    except BaseException as exc:
                         control.cancel()
+                        timed_out = isinstance(exc, TimeoutError) or time.monotonic() >= control.deadline
+                        self.store.append_event({
+                            "event_type": "turn_error", "session_id": request.session_id,
+                            "turn_id": request.turn_id, "transcript": request.transcript,
+                            "provider": provider,
+                            "error_code": "turn_timeout" if timed_out else "turn_cancelled"
+                            if isinstance(exc, asyncio.CancelledError) else "turn_failed",
+                            "stage": control.stage, "dispatched": control.dispatched,
+                            "latency_ms": {**control.timings, "total": round((time.perf_counter() - started) * 1000, 2)},
+                        })
                         if self.ledger and not cached:
                             await asyncio.to_thread(self.ledger.fail_turn, session, request.turn_id)
                         raise
@@ -213,6 +227,7 @@ class LangGraphOrchestrator:
                         "sequence": sequence,
                         "version": 2,
                         "timestamp": time.time(),
+                        **({"speech_id": f"{request.session_id}:{request.turn_id}:{sequence}"} if event.get("type") == "speech" else {}),
                     }
                 yield event
 
@@ -362,6 +377,9 @@ class LangGraphOrchestrator:
             for stage, latency in output.timings.items()
         ]
         response = TurnResponse(
+            control_revision=output.control_revision,
+            receipt=output.receipt,
+            control_receipts=output.control_receipts,
             runtime_epoch=output.runtime_epoch,
             snapshot_sequence=output.snapshot_sequence,
             event_id=output.event_id,
@@ -394,9 +412,19 @@ class LangGraphOrchestrator:
             self.store.append_event({"event_type": "turn", **response.model_dump(mode="json")})
         return response
 
-    async def navigation_snapshot(self, session_id):
+    async def navigation_snapshot(self, session_id, event_id=None):
         _, graph = self._graph(None)
-        return await graph.snapshot(session_id)
+        return await graph.snapshot(session_id, event_id)
+
+    async def aclose(self):
+        self._closing = True
+        tasks = [task for task in self._runners.values() if task is not asyncio.current_task()]
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        for graph in set(self.graphs.values()):
+            if hasattr(graph, "aclose"):
+                await graph.aclose()
 
     @staticmethod
     def _trace_stage(stage: str) -> str:

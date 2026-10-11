@@ -91,6 +91,9 @@ async def test_hanoi_haiphong_energy_and_simulation_checkpoint(services, tmp_pat
         assert 23.33 < nav["simulated_soc"] < 38.34
         graph.close()
         graph, _, _ = build(services, tmp_path, store=store)
+        restored = await graph.snapshot("driver")
+        assert restored["navigation"]["status"] == "paused"
+        await progress(graph, nav, "resume-charge", kind="resume")
         for index in range(12, 21):
             result = await progress(graph, nav, f"charge-{index}", kind="charge", elapsed_s=30)
             nav = result["navigation"]

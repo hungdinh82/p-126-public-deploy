@@ -274,6 +274,9 @@ class TurnRequest(BaseModel):
 
 
 class TurnResponse(BaseModel):
+    control_revision: int = 0
+    receipt: dict[str, Any] | None = None
+    control_receipts: list[dict[str, Any]] = Field(default_factory=list)
     runtime_epoch: str | None = None
     snapshot_sequence: int = 0
     event_id: str | None = None

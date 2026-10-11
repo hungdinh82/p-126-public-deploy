@@ -1,5 +1,6 @@
-import { closeJourney, initJourney, openJourney, applyNavigation, getJourneyPosition, setJourneyMotionBlocked, resetJourneyRuntime } from './journey.js?v=22';
-import { SnapshotOrder, GearController } from './navigation-state.js?v=1';
+import { closeJourney, initJourney, openJourney, applyNavigation, getJourneyPosition, setJourneyMotionBlocked, resetJourneyRuntime } from './journey.js?v=23';
+import { GearController } from './navigation-state.js?v=2';
+import { NavigationStore, MissingRouteError } from './navigation-store.js?v=1';
 import { createCabinMusic } from './music.js?v=2';
 import { neonBorder } from './neon.js?v=2';
 import { createWave } from './wave.js?v=2';
@@ -14,7 +15,8 @@ const makeId = () => globalThis.crypto?.randomUUID?.() || `vivi-${Date.now()}-${
 const sessionId = localStorage.getItem('vivi-session-id') || makeId();
 localStorage.setItem('vivi-session-id', sessionId);
 const state = { phase: 'idle', temp: 23, window: false, music: false, driving: false, powerState: 'off', battery: 82, range: 328, powertrainTemp: 45, tirePressures: {}, windows: {}, doors: {}, seatHeatLevels: {}, doorLocked: false, doorOpen: false, hoodOpen: false, trunkOpen: false, seatHeat: 0, alerts: [], alertSequence: 0, reduced: motionPreference.matches, sound: true, busy: false, backendAvailable: false, vehicleProvider: '', sttAvailable: false, sttProvider: '', sttStreaming: false, sttDevice: '', ttsAvailable: false, ttsProvider: '', ttsVoice: '', ttsDevice: '', ttsOptions: [], storeAudio: false, storeTranscripts: false, llmProvider: '', llmOptions: [], lastCommand: '', manualAnswer: '', manualEvidence: [], progress: 0 };
-const snapshotOrder = new SnapshotOrder();
+const navigationStore = new NavigationStore();
+const snapshotOrder = navigationStore.order;
 let syncRequest = null;
 const gearController = new GearController({
   send: event=>sendNavigationEvent({...event,revision:currentNavigationRevision}),
@@ -538,10 +540,15 @@ function applyBackendState(vehicle) {
 let activeTurn = null;
 let currentNavigationRevision = 0;
 async function acceptNavigationResponse(payload,authoritative=false) {
-  if(!snapshotOrder.accept(payload,authoritative)) {
+  let accepted;
+  try{accepted=navigationStore.receive(payload,authoritative);}catch(error){
+    if(error instanceof MissingRouteError){void synchronizeNavigation();return false;}throw error;
+  }
+  if(!accepted) {
     if(payload.runtime_epoch && payload.runtime_epoch!==snapshotOrder.epoch && !snapshotOrder.retired.has(payload.runtime_epoch))void synchronizeNavigation();
     return false;
   }
+  payload=accepted;
   const restarted=state.runtimeEpoch && state.runtimeEpoch!==snapshotOrder.epoch;
   state.runtimeEpoch=snapshotOrder.epoch;
   if(restarted){state.vehicleVersion=null;currentNavigationRevision=0;resetJourneyRuntime();}
@@ -550,14 +557,25 @@ async function acceptNavigationResponse(payload,authoritative=false) {
   if(payload.diagnostics?.observation_available!==false)applyBackendState(payload.vehicle_state);
   gearController.observe(payload,authoritative);
   // Rendering the route/map cannot delay vehicle controls.
-  await applyNavigation(payload);
+  queueNavigationRender(payload);
   announceNewAlerts(payload.navigation?.alerts || []);
   return true;
+}
+let navigationRenderPayload=null,navigationRenderScheduled=false;
+function queueNavigationRender(payload){
+  navigationRenderPayload=payload;
+  if(navigationRenderScheduled)return;
+  navigationRenderScheduled=true;
+  queueMicrotask(()=>{
+    navigationRenderScheduled=false;
+    const next=navigationRenderPayload;navigationRenderPayload=null;
+    Promise.resolve(applyNavigation(next)).catch(error=>console.warn('Navigation view failed:',error.message));
+  });
 }
 async function synchronizeNavigation() {
   if(syncRequest)return syncRequest;
   syncRequest=(async()=>{
-    const response=await fetch(`${API_BASE}/api/v1/navigation/snapshot?session_id=${encodeURIComponent(sessionId)}`);
+    const response=await fetch(`${API_BASE}/api/v1/navigation/snapshot?session_id=${encodeURIComponent(sessionId)}${gearController.pending?`&event_id=${encodeURIComponent(gearController.pending.id)}`:''}`);
     if(!response.ok)throw Error('Chưa đồng bộ được trạng thái xe');
     const payload=await response.json();
     await acceptNavigationResponse(payload,true);
@@ -566,9 +584,12 @@ async function synchronizeNavigation() {
   return syncRequest;
 }
 async function sendNavigationEvent(event) {
-  const response = await fetch(`${API_BASE}/api/v1/turn`, {
+  const journey=navigationStore.select().journey;
+  event={runtime_epoch:state.runtimeEpoch,...event};
+  if(journey && ['progress','charge','pause','resume','end'].includes(event.kind))event.target_id ||= journey.route_id;
+  const response = await fetch(`${API_BASE}/api/v1/navigation/events`, {
     method:'POST', signal:AbortSignal.timeout(8000), headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({ transcript:'Cập nhật hành trình', session_id:sessionId, turn_id:makeId(), navigation_event:event, llm_provider:state.llmProvider })
+    body:JSON.stringify({session_id:sessionId,event,known_routes:navigationStore.knownRoutes})
   });
   const payload = await response.json();
   if (!response.ok) throw new Error(payload.detail || 'Không cập nhật được hành trình');
@@ -653,7 +674,10 @@ async function runBackendCommand(command, turnId = makeId(), { autoConfirm = fal
       }
       if (event.type === 'trip_plan' && event.committed!==false) acceptNavigationResponse(event).catch(error => console.warn('Trip plan display:', error.message));
       if (event.type === 'step' && event.step?.message) setPhase('thinking', event.step.message);
-      if (event.type === 'error') throw new Error(event.detail || 'Pipeline streaming bị lỗi');
+      if (event.type === 'error') {
+        if (event.error_code === 'turn_timeout') void synchronizeNavigation();
+        throw new Error(event.detail || 'Pipeline streaming bị lỗi');
+      }
       if (event.type === 'progress' && event.text) {
         // Slow turns (handbook lookup) announce the wait; the answer is queued
         // on the same playback so it follows without cutting this phrase off.

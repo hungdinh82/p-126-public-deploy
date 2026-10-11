@@ -48,7 +48,7 @@ async def test_parking_preempts_model_without_executing_its_stale_proposal(servi
         assert not (await graph.snapshot("driver"))["vehicle_state"]["driving"]
     finally:
         model.release.set()
-        graph.close()
+        await graph.aclose()
 
 
 @pytest.mark.asyncio
@@ -94,7 +94,7 @@ async def test_parking_preempts_vietmap_and_does_not_commit_stale_draft(services
         assert not gateway.vehicle.state_for("driver").driving
     finally:
         maps.release.set()
-        graph.close()
+        await graph.aclose()
 
 
 @pytest.mark.asyncio
@@ -110,14 +110,14 @@ async def test_snapshot_gear_replay_and_restart_have_unambiguous_order(services,
         assert snapshot["snapshot_sequence"] >= paused["snapshot_sequence"]
         assert snapshot["navigation"]["status"] == "paused"
         old_epoch = snapshot["runtime_epoch"]
-        graph.close()
+        await graph.aclose()
         graph, _, _ = runtime(services, tmp_path, store=store)
         restored = await graph.snapshot("driver")
         assert restored["runtime_epoch"] != old_epoch
         assert restored["navigation"]["status"] == "paused"
         assert restored["snapshot_sequence"] >= snapshot["snapshot_sequence"]
     finally:
-        graph.close()
+        await graph.aclose()
 
 
 @pytest.mark.asyncio
@@ -149,7 +149,7 @@ async def test_telemetry_does_not_invalidate_model_or_restore_old_progress(servi
         assert result["snapshot_sequence"] > progressed["snapshot_sequence"]
     finally:
         model.release.set()
-        graph.close()
+        await graph.aclose()
 
 
 @pytest.mark.asyncio
@@ -158,7 +158,7 @@ async def test_queued_progress_coalesces_and_parking_runs_before_telemetry(servi
     try:
         running = await start(graph)
         config = graph.config(graph.event({"session_id": "driver"}))
-        lock = graph.thread_lock(config)
+        lock = graph.navigation.lock(config["configurable"]["thread_id"])
         await lock.acquire()
         updates = [
             asyncio.create_task(event(graph, running, "progress", f"progress-{i}", distance_m=i * 100))
@@ -181,7 +181,7 @@ async def test_queued_progress_coalesces_and_parking_runs_before_telemetry(servi
             snapshot["navigation_workspace"]["applied_events"] == results[0]["navigation_workspace"]["applied_events"]
         )
     finally:
-        graph.close()
+        await graph.aclose()
 
 
 @pytest.mark.asyncio
@@ -189,7 +189,7 @@ async def test_later_queued_park_supersedes_earlier_queued_drive(services, tmp_p
     graph, _, gateway = runtime(services, tmp_path)
     try:
         config = graph.config(graph.event({"session_id": "driver"}))
-        lock = graph.thread_lock(config)
+        lock = graph.navigation.lock(config["configurable"]["thread_id"])
         await lock.acquire()
         driving = asyncio.create_task(
             graph.ainvoke(
@@ -218,7 +218,7 @@ async def test_later_queued_park_supersedes_earlier_queued_drive(services, tmp_p
         assert not gateway.vehicle.state_for("driver").driving
         assert (await graph.snapshot("driver"))["control_receipts"][-1]["event_id"] == "drive"
     finally:
-        graph.close()
+        await graph.aclose()
 
 
 @pytest.mark.asyncio
@@ -236,7 +236,7 @@ async def test_voice_gear_uses_same_accepted_journey_as_button(services, tmp_pat
         assert resumed["navigation"]["route_id"] == running["navigation"]["route_id"]
         assert gateway.vehicle.state_for("driver").driving
     finally:
-        graph.close()
+        await graph.aclose()
 
 
 def test_negated_gear_request_cannot_create_a_drive_action():
@@ -278,7 +278,7 @@ async def test_coalesced_charge_ignores_duplicate_and_previously_applied_elapsed
         assert charging["navigation"]["status"] == "charging"
         charging = await event(graph, charging, "charge", "already-applied", elapsed_s=10)
         config = graph.config(graph.event({"session_id": "driver"}))
-        lock = graph.thread_lock(config)
+        lock = graph.navigation.lock(config["configurable"]["thread_id"])
         await lock.acquire()
         updates = [
             asyncio.create_task(event(graph, charging, "charge", identifier, elapsed_s=10))
@@ -293,4 +293,4 @@ async def test_coalesced_charge_ignores_duplicate_and_previously_applied_elapsed
         repeated_last = await event(graph, replay, "charge", "new-2", elapsed_s=10)
         assert repeated_last["navigation"]["charge_elapsed_s"] == 30
     finally:
-        graph.close()
+        await graph.aclose()

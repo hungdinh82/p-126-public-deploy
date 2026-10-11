@@ -1,9 +1,10 @@
+import {JourneyMap} from './journey-map.js?v=1';
+import {DriveSimulation} from './journey-simulation.js?v=1';
+import {JourneyRenderer} from './journey-renderer.js?v=1';
 // Journey view: VietMap map, destination search, route planning and a
 // client-side drive simulation along the planned route. Search and routing go
 // through the backend so the VietMap service key stays server side.
 const $ = (selector) => document.querySelector(selector);
-const SDK_VERSION = '6.0.1';
-const SDK_BASE = `https://unpkg.com/@vietmap/vietmap-gl-js@${SDK_VERSION}/dist`;
 const EARTH_RADIUS_M = 6371000;
 // GraphHopper-style maneuver signs returned by the VietMap route API.
 const SIGN_ICONS = { '-98': '↶', '-8': '↶', '-7': '↖', '-3': '↰', '-2': '↰', '-1': '↖', 0: '↑', 1: '↗', 2: '↱', 3: '↱', 4: '◎', 5: '•', 6: '↻', 7: '↗', 8: '↷' };
@@ -33,12 +34,13 @@ let progressAt = 0;
 let progressPending = false;
 let config = null;
 let map = null;
-let sdkPromise = null;
+
 let origin = null;          // { lat, lng, label }
 let destination = null;     // { lat, lng, name, address }
 let route = null;           // backend Route + cumulative distances
 let markers = {};
-let sim = { running: false, speedup: 5, traveled: 0, last: 0, frame: 0, step: -1, follow: true, lastPaint: 0, bearing: 0 };
+let sim = new DriveSimulation();
+const presentation = new JourneyRenderer();
 let lastNetworkScan = 0;
 // 'full' covers the screen for planning, 'mini' is the corner map while driving.
 let view = 'hidden';
@@ -111,103 +113,41 @@ function setMessage(text, tone = '') {
   element.hidden = !text;
 }
 
-function loadSdk() {
-  if (window.vietmapgl) return Promise.resolve();
-  sdkPromise ||= new Promise((resolve, reject) => {
-    const style = document.createElement('link');
-    style.rel = 'stylesheet'; style.href = `${SDK_BASE}/vietmap-gl.css`;
-    document.head.append(style);
-    const script = document.createElement('script');
-    script.src = `${SDK_BASE}/vietmap-gl.js`;
-    script.onload = resolve;
-    script.onerror = () => { sdkPromise = null; reject(new Error('Không tải được thư viện bản đồ VietMap')); };
-    document.head.append(script);
-  });
-  return sdkPromise;
-}
-
-function markerElement(className) {
-  const element = document.createElement('div');
-  element.className = `journey-marker ${className}`;
-  element.innerHTML = '<i></i>';
-  return element;
-}
-function placeMarker(name, lngLat, className) {
-  if(!map)return null;
-  if (!markers[name]) markers[name] = new vietmapgl.Marker({ element: markerElement(className), rotationAlignment: 'map' }).setLngLat(lngLat).addTo(map);
-  else markers[name].setLngLat(lngLat);
-  return markers[name];
-}
-function removeMarker(name) { markers[name]?.remove(); delete markers[name]; }
-
-function emptyLine() { return { type: 'Feature', geometry: { type: 'LineString', coordinates: [] } }; }
-function addRouteLayers() {
-  map.addSource('vivi-route', { type: 'geojson', data: emptyLine() });
-  map.addSource('vivi-traveled', { type: 'geojson', data: emptyLine() });
-  map.addSource('vivi-trip-preview', { type: 'geojson', data: emptyLine() });
-  map.addSource('vivi-pending-preview', { type: 'geojson', data: emptyLine() });
-  const line = { 'line-join': 'round', 'line-cap': 'round' };
-  map.addLayer({ id: 'vivi-route-glow', type: 'line', source: 'vivi-route', layout: line, paint: { 'line-color': '#9aa8c8', 'line-width': 14, 'line-opacity': .14, 'line-blur': 6 } });
-  map.addLayer({ id: 'vivi-route-line', type: 'line', source: 'vivi-route', layout: line, paint: { 'line-color': '#d0d8ea', 'line-width': 4 } });
-  map.addLayer({ id: 'vivi-trip-preview-line', type: 'line', source: 'vivi-trip-preview', layout: line, paint: { 'line-color': '#f0cd92', 'line-width': 5, 'line-dasharray': [2, 1] } });
-  map.addLayer({ id: 'vivi-pending-preview-line', type: 'line', source: 'vivi-pending-preview', layout: line, paint: { 'line-color': '#f0cd92', 'line-width': 4, 'line-dasharray': [2, 1] } });
-  map.addLayer({ id: 'vivi-traveled-line', type: 'line', source: 'vivi-traveled', layout: line, paint: { 'line-color': '#4b6378', 'line-width': 5 } });
-}
-
-// Re-opening the panel while the map is still loading must not create a second map.
-let mapPromise = null;
-function ensureMap() {
-  mapPromise ||= createMap().catch(error => { mapPromise = null; throw error; });
-  return mapPromise;
-}
-async function createMap() {
-  config = await api('/api/v1/navigation/config');
-  if (!config.available) {
-    $('#journey').classList.add('no-map');
-    setMessage('Chưa cấu hình VIETMAP_API_KEY trong .env. Thêm key rồi khởi động lại ViVi để mở bản đồ.', 'warn');
-    $('#journey-search').disabled = true;
-    return;
+const mapAdapter = new JourneyMap({
+  fetchConfig:async()=>{
+    config=await api('/api/v1/navigation/config');
+    if(config.available)void api('/api/v1/navigation/map-health').then(health=>{
+      if([401,403,423,429].includes(health.tile_status)){
+        const notice=$('#journey-notice');notice.textContent=`Nền bản đồ chưa sẵn sàng (HTTP ${health.tile_status}). Bạn vẫn có thể tìm điểm đến.`;notice.hidden=false;
+      }
+    }).catch(()=>{});
+    return config;
+  },
+  notice:text=>{const notice=$('#journey-notice');notice.textContent=text;notice.hidden=false;},
+  ready:created=>{map=created;markers=mapAdapter.markers;hydrateMap();},
+  attach:created=>{
+    created.on('click',event=>{
+      if(sim.running || mapTripPlan || view!=='full')return;
+      hooks.event?.({kind:'point',id:crypto.randomUUID(),revision:backendNavigation?.revision || 0,
+        position:{lat:event.lngLat.lat,lng:event.lngLat.lng,label:'Điểm đã chọn trên bản đồ',simulated:true}});
+    });
+    created.on('dragstart',()=>{if(sim.running)sim.follow=false;});
   }
-  if (config.tile_status !== 200) {
-    $('#journey-notice').textContent = config.tile_status
-      ? `VietMap từ chối tải nền bản đồ (HTTP ${config.tile_status}). Kiểm tra VIETMAP_TILE_KEY (key của consumer Tilemap) — tìm kiếm và chỉ đường vẫn hoạt động.`
-      : 'Không kiểm tra được nền bản đồ VietMap; bản đồ có thể hiển thị trống.';
-    $('#journey-notice').hidden = false;
-  }
-  await loadSdk();
-  const center = [config.default_center.lng, config.default_center.lat];
-  let created;
-  try {
-    created = new vietmapgl.Map({ container: 'journey-map', style: config.style_url, center, zoom: 13, attributionControl: { compact: true } });
-  } catch {
-    throw new Error('Trình duyệt không hỗ trợ WebGL nên không hiển thị được bản đồ.');
-  }
-  // Tile failures are reported but not fatal: route layers only need the style,
-  // so search, routing and simulation keep working on a blank background.
-  let tileWarned = false;
-  created.on('error', event => {
-    const status = event.error?.status;
-    if (tileWarned || ![401, 403, 423, 429].includes(status)) return;
-    tileWarned = true;
-    $('#journey-notice').textContent = `VietMap từ chối tải nền bản đồ (HTTP ${status}). Kiểm tra VIETMAP_TILE_KEY (key của consumer Tilemap) — tìm kiếm và chỉ đường vẫn hoạt động.`;
-    $('#journey-notice').hidden = false;
-  });
-  // "load" waits for tiles, so a rejected tile key would hang; the style is enough.
-  await new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('Không tải được style bản đồ VietMap. Kiểm tra VIETMAP_API_KEY và kết nối mạng.')), 15000);
-    const ready = () => { clearTimeout(timer); resolve(); };
-    if (created.isStyleLoaded()) ready(); else created.once('style.load', ready);
-  }).catch(error => { created.remove(); throw error; });
-  map = created;
-  map.addControl(new vietmapgl.NavigationControl({ showCompass: true }), 'bottom-right');
-  addRouteLayers();
-  map.on('click', event => {
-    if (sim.running || mapTripPlan || view !== 'full') return;
-    if (hooks.event) return hooks.event({kind:'point',id:crypto.randomUUID(),revision:backendNavigation?.revision || 0,position:{lat:event.lngLat.lat,lng:event.lngLat.lng,label:'Điểm đã chọn trên bản đồ',simulated:true}});
-    setDestination({ lat: event.lngLat.lat, lng: event.lngLat.lng, name: 'Điểm đã chọn trên bản đồ', address: `${event.lngLat.lat.toFixed(5)}, ${event.lngLat.lng.toFixed(5)}` });
-  });
-  // Manual panning pauses camera follow until the recenter button is used.
-  map.on('dragstart', () => { if (sim.running) sim.follow = false; });
+});
+function placeMarker(name,lngLat,className){return mapAdapter.marker(name,lngLat,className);}
+function removeMarker(name){markers[name]?.remove();delete markers[name];}
+function emptyLine(){return {type:'Feature',geometry:{type:'LineString',coordinates:[]}};}
+function ensureMap(){return mapAdapter.ensure().then(created=>{map=created;return created;});}
+function hydrateMap(){
+  if(!map)return;
+  const active=backendNavigation;
+  map.getSource('vivi-route')?.setData(active?.route?{type:'Feature',geometry:{type:'LineString',coordinates:active.route.coordinates}}:emptyLine());
+  const preview=mapTripPlan || active?.pending?.navigation;
+  map.getSource(mapTripPlan?'vivi-trip-preview':'vivi-pending-preview')?.setData(preview?.route?{type:'Feature',geometry:{type:'LineString',coordinates:preview.route.coordinates}}:emptyLine());
+  if(active?.origin)setOrigin(active.origin);
+  if(active?.selected)placeMarker('destination',[active.selected.lng,active.selected.lat],'destination');
+  if(active)renderStationMarkers(active);
+  if(route && active?.progress_m){const sample=positionAt(sim.traveled);placeMarker('car',sample.point,'car')?.setRotation(sample.heading);}
 }
 
 let locating = false;
@@ -333,7 +273,12 @@ async function planRoute() {
 }
 function fitPadding() {
   const panel = $('.journey-panel').getBoundingClientRect();
-  return innerWidth > 760 ? { top: 60, bottom: 60, right: 60, left: panel.width + 60 } : { top: 40, bottom: panel.height + 30, left: 30, right: 30 };
+  const container=map?.getContainer?.();
+  const width=container?.clientWidth || globalThis.innerWidth || 1024;
+  const height=container?.clientHeight || globalThis.innerHeight || 768;
+  if(width>760)return {top:60,bottom:60,right:60,left:Math.min(panel.width+60,width*.65)};
+  const covered=Number.isFinite(panel.top)?height-panel.top+20:panel.height+30;
+  return {top:40,bottom:Math.min(Math.max(30,covered),height*.65),left:30,right:30};
 }
 
 function renderRoute() {
@@ -466,15 +411,7 @@ function scanNetwork(traveled) {
 }
 
 // --- Drive simulation -----------------------------------------------------
-function positionAt(distance) {
-  const { cumulative, coordinates } = route;
-  let low = 0, high = cumulative.length - 1;
-  while (low < high - 1) { const mid = (low + high) >> 1; if (cumulative[mid] <= distance) low = mid; else high = mid; }
-  const span = cumulative[high] - cumulative[low] || 1;
-  const t = Math.min(1, Math.max(0, (distance - cumulative[low]) / span));
-  const [a, b] = [coordinates[low], coordinates[high]];
-  return { index: low, point: [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t], heading: bearing(a, b) };
-}
+function positionAt(distance){return DriveSimulation.position(route,distance,bearing);}
 // Which way each roundabout (sign 6) is left, from the heading on the way in
 // to the heading after the exit: degrees, positive to the right.
 function markRoundaboutExits() {
@@ -486,11 +423,7 @@ function markRoundaboutExits() {
     step.exitTurn = ((turn % 360) + 540) % 360 - 180;
   });
 }
-function stepAt(index) {
-  let current = 0;
-  route.steps.forEach((step, stepIndex) => { if (step.point_index <= index) current = stepIndex; });
-  return current;
-}
+function stepAt(index){return DriveSimulation.step(route,index);}
 function showNextManeuver(stepIndex, traveled) {
   const next = route.steps[stepIndex + 1];
   if(mapTripPlan)return next ? {next,distance:route.cumulative[Math.min(next.point_index,route.cumulative.length-1)]-traveled} : null;
@@ -518,20 +451,15 @@ let manualScrollUntil = 0, lastHighlightedStep = -1;
 
 function tick(now) {
   if (!sim.running) return;
-  const elapsed = Math.min(0.25, (now - sim.last) / 1000);
-  sim.last = now;
-
-  const speed = route.length / Math.max(1, route.duration_s);
-  sim.traveled = Math.min(route.length, sim.traveled + elapsed * speed * sim.speedup);
+  const elapsed = sim.advance(now,route);
   if (backendNavigation?.status === 'running' && !progressPending && now - progressAt >= 1000) sendProgress({ kind: 'progress', distance_m: (route.length ? sim.traveled / route.length : 0) * route.distance_m }, now);
   const { index, point, heading } = positionAt(sim.traveled);
   hooks.travel(sim.traveled);
-  const car = placeMarker('car', point, 'car');
-  car?.setRotation(heading);
-  // Repainting map sources every frame is wasteful; ~8 Hz is smooth enough.
-  if (now - sim.lastPaint > 120) {
+  if(view!=='hidden' && now-sim.lastMarker>=1000/30){sim.lastMarker=now;placeMarker('car',point,'car')?.setRotation(heading);}
+  // Keep traveled geometry and guidance at 5 Hz.
+  if (now - sim.lastPaint > 200) {
     sim.lastPaint = now;
-    if(!mapTripPlan)map?.getSource('vivi-traveled')?.setData({ type: 'Feature', geometry: { type: 'LineString', coordinates: [...route.coordinates.slice(0, index + 1), point] } });
+    if(view!=='hidden' && !mapTripPlan)map?.getSource('vivi-traveled')?.setData({ type: 'Feature', geometry: { type: 'LineString', coordinates: [...route.coordinates.slice(0, index + 1), point] } });
     const summary = updateSummary(sim.traveled);
     const stepIndex = stepAt(index);
     const upcoming = showNextManeuver(stepIndex, sim.traveled);
@@ -552,12 +480,12 @@ function tick(now) {
     lastNetworkScan = now;
     try { scanNetwork(sim.traveled); } catch (error) { console.warn('Street network scan failed:', error); }
   }
-  if (mapTripPlan) { /* Viewing another plan must not move the active-route camera. */ } else if (view === 'mini') {
+  if (view==='hidden' || mapTripPlan) { /* Viewing another plan must not move the active-route camera. */ } else if (view === 'mini') {
     // Course-up in the corner map: smooth the heading so turns do not snap.
     const delta = ((heading - sim.bearing + 540) % 360) - 180;
     sim.bearing = (sim.bearing + delta * Math.min(1, elapsed * 4) + 360) % 360;
-    map?.jumpTo({ center: point, bearing: sim.bearing, zoom: 16.2, pitch: 50 });
-  } else if (sim.follow) map?.jumpTo({ center: point });
+    mapAdapter.camera({center:point,bearing:sim.bearing,zoom:16.2,pitch:50},now);
+  } else if (sim.follow) mapAdapter.camera({center:point},now);
   if (sim.traveled >= route.length) {
     if (hooks.event && backendNavigation?.status === 'running') {
       if (!progressPending) sendProgress({kind:'progress',distance_m:route.distance_m},now);
@@ -648,7 +576,13 @@ function setView(next) {
   if (!map || !changed) return;
   if (next === 'full') map.easeTo({ bearing: 0, pitch: 0, duration: 500 });
   // Wait for the CSS size transition before the map measures its container.
-  setTimeout(() => map?.resize(), 380);
+  if(!mapAdapter.resizeObserver)setTimeout(() => map?.resize(),380);
+}
+
+function setJourneyDetails(expanded) {
+  $('#journey').classList.toggle('details-expanded',expanded);
+  const button=$('#journey-details-toggle');
+  if(button){button.setAttribute('aria-expanded',String(expanded));button.textContent=expanded?'Thu gọn':'Chi tiết';}
 }
 
 // --- Public API -----------------------------------------------------------
@@ -668,13 +602,14 @@ async function prepareJourneyMap() {
       $('#journey').classList.remove('no-map');
       $('#journey-search').disabled = false;
       map.resize();
+      hydrateMap();
       if (!origin && !mapTripPlan) locate();
     }
   } catch (error) {
-    // Search and markers need a live map; keep them off until a reopen succeeds.
+    // Search stays available while map resources recover.
     $('#journey').classList.add('no-map');
-    $('#journey-search').disabled = true;
-    $('#journey-origin').textContent = 'Chưa xác định';
+    $('#journey-search').disabled = false;
+    $('#journey-origin').textContent = origin?.label || 'Chưa xác định';
     setMessage(error.message, 'error');
   }
 }
@@ -718,6 +653,7 @@ function hideJourneyInformation() {
 }
 export function initJourney(options) {
   hooks = { ...hooks, ...options };
+  $('#journey-details-toggle')?.addEventListener('click',()=>setJourneyDetails(!$('#journey').classList.contains('details-expanded')));
   document.querySelector('#journey-visibility')?.addEventListener('click',hideJourneyInformation);
   document.querySelector('#journey-clear')?.addEventListener('click',()=>hooks.event?.({kind:'end',id:crypto.randomUUID(),revision:backendNavigation?.revision || 0}));
   const scroll = document.querySelector('#journey-scroll');
@@ -795,7 +731,7 @@ function reopenButton(next,label) {
 }
 function renderInformation() {
   const tabs=document.querySelector('#information-tabs');if(tabs)tabs.innerHTML='';
-  const next=currentChoice();if(next) {renderDestinationChoices(next);if(next.clarification || next.status==='selecting')reopenButton(next,'Địa điểm');}
+  const next=currentChoice();if(next) {renderDestinationChoices(next);if(next.clarification || next.status==='selecting'){reopenButton(next,'Địa điểm');if(view==='full')setJourneyDetails(true);}}
   const draft=draftNavigation();
   const plan=choiceOwner==='trip' && backendTripPlan?.calculation_status!=='cancelled' && backendTripPlan?.started_revision!==backendTripPlan?.revision?backendTripPlan:draft;
   const card=document.querySelector('#trip-plan-card');if(card)card.hidden=true;
@@ -893,8 +829,8 @@ function renderTripCard(plan) {
   const key=informationKey(plan,'Kế hoạch');
   panel.hidden= !plan.route || !!plan.clarification || plan.calculation_status==='cancelled' || hiddenInformation.has(key);
   if(panel.hidden)return;
-  const signature=JSON.stringify([plan.id,plan.revision,plan.calculation_status,plan.offer,plan.started_revision,commandPending,backendNavigation?.status]);if(panel.renderSignature===signature)return;panel.renderSignature=signature;
-  const oldScroll=panel.scrollTop;panel.innerHTML='';panelHeading(panel,'Kế hoạch',key);
+  const signature=JSON.stringify([plan.id,plan.revision,plan.calculation_status,plan.offer,plan.started_revision,commandPending,backendNavigation?.status]);if(!presentation.begin(panel,signature))return;
+  const oldScroll=panel.scrollTop;panelHeading(panel,'Kế hoạch',key);
   const name=document.createElement('p');name.className='trip-destination';name.textContent=`${plan.trip_kind==='round_trip'?'Khứ hồi':'Một chiều'} · ${plan.selected?.spoken_label || plan.selected?.name || ''}`;panel.append(name);
   const energy=plan.energy?.selected_plan;
   const summary=document.createElement('p');summary.textContent=`${formatDistance(plan.route.distance_m)} · ${formatDuration(energy?.total_seconds || plan.route.duration_s)}${energy?` · pin đến ${Math.floor(energy.arrival_soc)}%`:''}`;panel.append(summary);
@@ -909,7 +845,7 @@ function renderTripCard(plan) {
   for(const [label,handler] of [['Xem bản đồ',()=>showPlanMap(plan,owner)],['Chỉnh kế hoạch',()=>editTripPlan(plan)],['Bắt đầu',()=>acceptPlan(target)]]) {
     const button=document.createElement('button');button.type='button';button.textContent=label==='Bắt đầu' && activeJourney()?`Thay tuyến sang ${plan.selected?.spoken_label || plan.selected?.name}`:label;button.disabled=commandPending || label==='Bắt đầu' && (!plan.energy?.selected_plan || !!plan.clarification || plan.started_revision===plan.revision);button.addEventListener('click',handler);actions.append(button);
   }panel.append(actions);
-  if(plan.started_revision!==plan.revision){const cancel=document.createElement('button');cancel.type='button';cancel.className='information-cancel';cancel.textContent='Huỷ kế hoạch';cancel.addEventListener('click',()=>{if(!actionCurrent(target))return;return owner==='trip'?tripCommand('trip.cancel',plan):hooks.command?.('Huỷ tuyến đang lập',{capability:'navigation.cancel',arguments:{route_revision:target.revision}});});panel.append(cancel);}panel.scrollTop=oldScroll;
+  if(plan.started_revision!==plan.revision){const cancel=document.createElement('button');cancel.type='button';cancel.className='information-cancel';cancel.textContent='Huỷ kế hoạch';cancel.addEventListener('click',()=>{if(!actionCurrent(target))return;return owner==='trip'?tripCommand('trip.cancel',plan):hooks.command?.('Huỷ tuyến đang lập',{capability:'navigation.cancel',arguments:{route_revision:target.revision}});});panel.append(cancel);}panel.scrollTop=oldScroll;presentation.finish(panel);
 }
 function editTripPlan(plan) {
   const panel=document.querySelector('#trip-plan-card');if(!panel || panel.querySelector?.('form'))return;
@@ -943,6 +879,11 @@ export async function applyNavigation(payload) {
   if(incoming && backendNavigation && (incoming.revision<backendNavigation.revision || incoming.revision===backendNavigation.revision && (incoming.event_sequence || 0)<(backendNavigation.event_sequence || 0)))return;
   if(payload.navigation_workspace)backendWorkspace=payload.navigation_workspace;
   if(payload.steps && !payload.navigation && !payload.trip_plan)planningSteps=payload.steps;
+  if(Object.hasOwn(payload,'trip_plan') && payload.trip_plan===null){
+    if(backendTripPlan)retiredTripPlans.add(backendTripPlan.id);
+    backendTripPlan=null;
+    if(mapAction?.owner==='trip'){mapTripPlan=null;mapAction=null;map?.getSource('vivi-trip-preview')?.setData(emptyLine());}
+  }
   if(payload.trip_plan) {
     const plan=payload.trip_plan;
     if(retiredTripPlans.has(plan.id))return;
@@ -965,6 +906,7 @@ export async function applyNavigation(payload) {
   if (backendNavigation && next.revision === backendNavigation.revision && (next.event_sequence || 0) < (backendNavigation.event_sequence || 0)) return;
   const previous = backendNavigation;
   backendNavigation = next;
+  if(view==='full' && previous?.status==='selecting' && next.status==='preview')setJourneyDetails(false);
   if(next.request_id && next.request_id!==previous?.request_id && payload.ui_events?.some(e=>['navigation.results','navigation.preview'].includes(e.type))) {
     journeyInformationHidden=false;rememberJourneyVisibility();
   }
@@ -983,7 +925,7 @@ export async function applyNavigation(payload) {
   const relevant = payload.ui_events?.some(event => event.type.startsWith('navigation.') && event.type !== 'navigation.progress');
   if(relevant && next.status==='running')restoreNavigationView();
   if (next.origin && !origin) setOrigin(next.origin);
-  if(next.route && ['running','charging'].includes(next.status) && !map && !activeMapLoad) {
+  if(next.route && ['running','charging'].includes(next.status) && !map && !activeMapLoad && mapAdapter.status==='idle') {
     activeMapLoad=prepareJourneyMap().then(()=>{
       if(map && backendNavigation?.route){
         map.getSource('vivi-route')?.setData({type:'Feature',geometry:{type:'LineString',coordinates:backendNavigation.route.coordinates}});
@@ -991,7 +933,7 @@ export async function applyNavigation(payload) {
         if(backendNavigation.selected)placeMarker('destination',[backendNavigation.selected.lng,backendNavigation.selected.lat],'destination');
         renderStationMarkers(backendNavigation);
       }
-    });
+    }).finally(()=>{activeMapLoad=null;});
   }
   if (backendNavigation !== next) return; // A newer response won while the map loaded.
   if (next.origin && (!markers.origin || next.origin.lat !== origin?.lat || next.origin.lng !== origin?.lng)) setOrigin(next.origin);
@@ -1004,9 +946,8 @@ export async function applyNavigation(payload) {
     destination = next.selected;
     $('#journey-search').value = destination.name;
     placeMarker('destination', [destination.lng, destination.lat], 'destination');
-    const cumulative = [0];
-    for (let i = 1; i < next.route.coordinates.length; i++) cumulative.push(cumulative[i-1] + haversine(next.route.coordinates[i-1], next.route.coordinates[i]));
-    route = { ...next.route, steps:next.route.steps.map(step=>({...step})), cumulative, length: cumulative.at(-1) || next.route.distance_m };
+    route=DriveSimulation.prepare(next.route,haversine);
+    const cumulative=route.cumulative;
     routeIdentity=nextRouteIdentity;
     markRoundaboutExits();
     const junctions=route.steps.slice(1).filter(step=>![4,5].includes(step.sign)).map(step=>cumulative[Math.min(step.point_index,cumulative.length-1)]);

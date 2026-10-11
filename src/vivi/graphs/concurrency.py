@@ -55,7 +55,7 @@ class SupersededTurnError(Exception):
 writer_context = ContextVar("checkpoint_writer", default=None)
 
 
-async def external_read(awaitable):
+async def external_read(awaitable, *, fence=True):
     context = writer_context.get()
     if context is None:
         return await awaitable
@@ -69,7 +69,9 @@ async def external_read(awaitable):
         error = exc
     finally:
         await lock.acquire()
-    if graph.generation(config) != generation:
+    changed = graph.generation(config) != generation
+    sensitive = fence(result) if callable(fence) and error is None else bool(fence)
+    if sensitive and changed:
         raise SupersededTurnError("Session changed while external data was being fetched")
     if error:
         raise error

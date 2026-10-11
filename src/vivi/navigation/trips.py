@@ -28,7 +28,7 @@ class TripWorkflow(NavigationWorkflow):
     def project(plan, result):
         update = result.pop("navigation_update", None)
         if update:
-            for field in plan.model_fields:
+            for field in type(plan).model_fields:
                 if field in update:
                     setattr(plan, field, update[field])
         complete = bool((plan.energy or {}).get("selected_plan")) and not plan.clarification

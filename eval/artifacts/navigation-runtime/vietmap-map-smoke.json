@@ -1,0 +1,30 @@
+{
+  "configured": true,
+  "style_ready": true,
+  "http_statuses": [
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200,
+    200
+  ],
+  "page_errors": 0,
+  "route_layer": true,
+  "resize_observer": true
+}

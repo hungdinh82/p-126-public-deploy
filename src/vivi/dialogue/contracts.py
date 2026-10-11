@@ -274,6 +274,7 @@ class NavigationWorkspace(BaseModel):
 
     version: int = 1
     revision: int = 0
+    cleared_at_revision: int = 0
     event_sequence: int = 0
     origin: dict | None = None
     draft: PlanDraft | None = None
@@ -322,6 +323,7 @@ class NavigationWorkspace(BaseModel):
                 draft.offer = previous.draft.offer
         return cls(
             revision=nav.revision,
+            cleared_at_revision=previous.cleared_at_revision if previous else 0,
             event_sequence=nav.event_sequence,
             origin=nav.origin,
             history=list(previous.history) if previous else [],
@@ -369,6 +371,7 @@ class TripPlanState(PlanDraft):
 
 
 class SessionState(BaseModel):
+    control_revision: int = 0
     snapshot_sequence: int = 0
     control_receipts: list[dict] = Field(default_factory=list)
     active: DialogueTask | None = None

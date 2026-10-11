@@ -2,7 +2,7 @@
 
 :root{color-scheme:dark;--bg:#04050a;--muted:#858b99;--text:#eef1f7;--cyan:#d6dcea;--teal:#b4c0d8;--line:rgba(196,206,230,.09);font-family:'Be Vietnam Pro',system-ui,sans-serif;font-synthesis:none;background:var(--bg);color:var(--text)}
 
-*{box-sizing:border-box}body{margin:0;min-height:100vh;background:var(--bg);overflow-x:hidden}button,input,a{-webkit-tap-highlight-color:transparent}button,input{font:inherit}button{cursor:pointer;color:inherit;border:0;background:none}button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid var(--teal);outline-offset:4px}button:disabled{cursor:wait;opacity:.45}
+*{box-sizing:border-box}[hidden]{display:none!important}body{margin:0;min-height:100vh;background:var(--bg);overflow-x:hidden}button,input,a{-webkit-tap-highlight-color:transparent}button,input{font:inherit}button{cursor:pointer;color:inherit;border:0;background:none}button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid var(--teal);outline-offset:4px}button:disabled{cursor:wait;opacity:.45}
 svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}.icon-library{position:absolute;width:0;height:0;overflow:hidden}
 @keyframes pulse{from{opacity:.55}to{opacity:1}}
 
@@ -196,3 +196,18 @@ body.journey-open .information-rail{visibility:hidden;pointer-events:none}
 
 .information-rail .destination-choice-card{padding:10px;min-height:52px;background:#1a1f297a;gap:8px}.information-rail .destination-choice-card:hover{background:#303949e0}.information-rail .destination-choice-card small{line-height:1.4}
 .dock-button.gear.shifting{color:var(--teal);border-color:#9caec044}
+
+/* A compact map sheet leaves the route visible; details expand on demand. */
+.journey-details-toggle{display:none}
+@media(max-width:760px){
+ .journey-details-toggle{display:block;margin-left:auto;padding:8px;color:#c4cddc;font-size:11px;border:1px solid var(--line);border-radius:8px}
+ .journey-panel{top:auto;bottom:90px;height:auto;max-height:min(48dvh,430px);padding:14px 16px;gap:9px}
+ .journey:not(.details-expanded) .journey-scroll,.journey:not(.details-expanded) .journey-summary,.journey:not(.details-expanded) .journey-next{display:none}
+ .journey.details-expanded .journey-panel{height:calc(100dvh - 110px);max-height:calc(100dvh - 110px)}
+}
+@media(max-height:650px) and (max-width:760px){
+ .journey:not(.details-expanded) .journey-point.origin{display:none}
+ .journey:not(.details-expanded) .journey-points:before{display:none}
+ .journey:not(.details-expanded) .journey-point.destination{border-top:0}
+}
+@media(max-width:760px){.journey.details-expanded .journey-recenter{display:none}}

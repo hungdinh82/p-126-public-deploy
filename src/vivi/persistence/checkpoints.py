@@ -2,6 +2,8 @@
 
 import asyncio
 import sqlite3
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from langgraph.checkpoint.sqlite import SqliteSaver
@@ -24,20 +26,41 @@ class ThreadedSqliteSaver(SqliteSaver):
                     target.close()
                 temporary.replace(backup)
         super().__init__(self.connection)
+        # A cancelled asyncio caller must not close a connection still in use by
+        # its worker. One executor serializes reads, writes and the final close.
+        self._executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="vivi-checkpoint")
+        self._lifecycle = threading.Lock()
+        self._closing = False
+        self._close_future = None
+
+    async def _run(self, function, *args):
+        with self._lifecycle:
+            if self._closing:
+                raise RuntimeError("Checkpoint store is closing")
+            future = self._executor.submit(function, *args)
+        return await asyncio.shield(asyncio.wrap_future(future))
 
     async def aget_tuple(self, config):
-        return await asyncio.to_thread(self.get_tuple, config)
+        return await self._run(self.get_tuple, config)
 
     async def aput(self, config, checkpoint, metadata, new_versions):
-        return await asyncio.to_thread(self.put, config, checkpoint, metadata, new_versions)
+        return await self._run(self.put, config, checkpoint, metadata, new_versions)
 
     async def aput_writes(self, config, writes, task_id, task_path=""):
-        await asyncio.to_thread(self.put_writes, config, writes, task_id, task_path)
+        await self._run(self.put_writes, config, writes, task_id, task_path)
 
     async def alist(self, config, **kwargs):
-        values = await asyncio.to_thread(lambda: list(self.list(config, **kwargs)))
+        values = await self._run(lambda: list(self.list(config, **kwargs)))
         for value in values:
             yield value
 
     def close(self):
-        self.connection.close()
+        with self._lifecycle:
+            if not self._closing:
+                self._closing = True
+                self._close_future = self._executor.submit(self.connection.close)
+                self._executor.shutdown(wait=False)
+
+    async def aclose(self):
+        self.close()
+        await asyncio.shield(asyncio.wrap_future(self._close_future))

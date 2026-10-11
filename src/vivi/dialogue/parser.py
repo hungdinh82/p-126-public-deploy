@@ -1095,10 +1095,7 @@ class OfflineParser:
             ):
                 return SemanticTurn(act="confirm", task_ref="active")
             return self.request("navigation.start", {"route_revision": nav.revision})
-        selection = re.fullmatch(
-            r"(?:(?:chon|den|di den|dan den) )?(?:(?:cho|tram(?: sac)?|dia diem|ket qua|so)(?: thu)? )?(dau tien|mot|hai|ba|bon|tu|nam|[0-9]+)",
-            value,
-        )
+        selection = self.place_ordinal(value)
         if selection and clarification and clarification.get("choices"):
             index = {"dau tien": 0, "mot": 0, "hai": 1, "ba": 2, "1": 0, "2": 1, "3": 2}.get(
                 selection[1], int(selection[1]) - 1 if selection[1].isdigit() else 99
@@ -1187,6 +1184,43 @@ class OfflineParser:
         return None
 
     @staticmethod
+    def place_ordinal(value):
+        return re.fullmatch(
+            r"(?:(?:chon|den|di den|dan den) )?"
+            r"(?:(?:cai|cho|tram(?: sac)?|dia diem|ket qua|so) )?"
+            r"(?:thu )?(dau tien|mot|hai|ba|bon|tu|nam|[0-9]+)", value,
+        )
+
+    def place_reference(self, text, session):
+        """Resolve only literal answers against the currently owned POI list."""
+        value = self.lexer.normalize(text)
+        index = session.active.current_index() if session.active else None
+        prefix = session.active.steps[index].draft.capability.split(".")[0] if index is not None else session.navigation_focus
+        if prefix not in {"navigation", "trip"}:
+            return None
+        trip = prefix == "trip" and session.trip_plan is not None
+        owner = session.trip_plan if trip else session.navigation
+        question = owner.clarification or {}
+        pending = (owner.pending or {}).get("navigation") or {}
+        energy = pending.get("energy") or owner.energy or {}
+        candidates = [*owner.candidates, *energy.get("station_candidates", [])]
+        if not (owner.status == "selecting" or owner.pending and owner.pending.get("status") == "selecting"
+                or question or energy.get("station_candidates")):
+            return None
+        literal = self.place_ordinal(value) or any(
+            value in {normalize_text(p["name"]), normalize_text(p.get("spoken_label", ""))}
+            for p in candidates
+        )
+        if not literal:
+            return None
+        parsed = self.trip(value, text, session) if trip else self.navigation(value, text, session)
+        if parsed and (parsed.act == "clarify" or parsed.actions and parsed.actions[0].capability in {
+            "navigation.select", "navigation.refine", "trip.select", "trip.refine",
+        }):
+            return parsed
+        return None
+
+    @staticmethod
     def awaiting_place(session):
         nav = session.navigation
         if not (nav.status == "selecting" or nav.pending and nav.pending.get("status") == "selecting"):
@@ -1217,6 +1251,9 @@ class OfflineParser:
         bounded = self.interpret(text, session, memory, history)
         if bounded.negated or bounded.conditional or bounded.scheduled or bounded.conflicting:
             return bounded
+        reference = self.place_reference(text, session)
+        if reference:
+            return reference
         travel = [a for a in result.drafts() if a.capability.startswith(("navigation.", "trip."))]
         for action in travel:
             if action.capability == "trip.start":

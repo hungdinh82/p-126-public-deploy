@@ -17,6 +17,7 @@ from langgraph.types import Command, interrupt
 from src.vivi.agents.contracts import AssistantOutput
 from src.vivi.capabilities.execution import CapabilityRuntime
 from src.vivi.capabilities.registry import REGISTRY, catalog
+from src.vivi.capabilities.result import CapabilityResult
 from src.vivi.dialogue.contracts import SemanticTurn, SessionState, TurnEvent
 from src.vivi.dialogue.planner import PROMPT_VERSION, SemanticResolver
 from src.vivi.dialogue.reducer import (
@@ -31,8 +32,9 @@ from src.vivi.dialogue.reducer import (
 )
 from src.vivi.graphs.concurrency import PriorityLock, SupersededTurnError, event_priority, external_read, writer_context
 from src.vivi.navigation.presentation import result_messages
-from src.vivi.navigation.trips import TripWorkflow
-from src.vivi.navigation.workflow import NavigationWorkflow
+from src.vivi.navigation.projections import dialogue_result, dialogue_turn
+from src.vivi.navigation.service import NavigationService
+from src.vivi.navigation.store import checkpoint_session
 from src.vivi.persistence.runtime_store import fingerprint
 from src.vivi.turn_control import current_control
 
@@ -50,12 +52,14 @@ logger = logging.getLogger(__name__)
 
 
 class AssistantGraph:
-    def __init__(self, compiled, saver, profile, control, vehicle, runtime_epoch, energy):
+    def __init__(self, compiled, saver, profile, control, vehicle, runtime_epoch, energy, navigation):
         self.compiled, self.saver, self.profile = compiled, saver, profile
         self.control, self.vehicle, self.runtime_epoch = control, vehicle, runtime_epoch
         self.energy = energy
-        self._generations = {}
-        self._latest_sessions = {}
+        self.navigation = navigation
+        self._dialogue_sessions = {}
+        self._tasks = set()
+        self._closing = False
         self._pending_telemetry = {}
         self._gear_requests = {}
         self.default_provider = "rules"
@@ -104,57 +108,45 @@ class AssistantGraph:
         return self._thread_locks.setdefault(config["configurable"]["thread_id"], PriorityLock())
 
     def generation(self, config):
-        return self._generations.get(config["configurable"]["thread_id"], 0)
+        return self.navigation.generation(config["configurable"]["thread_id"])
 
     def dialogue_lock(self, config):
         return self._dialogue_locks.setdefault(config["configurable"]["thread_id"], asyncio.Lock())
 
-    async def reconcile_vehicle(self, session, session_id):
-        nav = session.navigation
-        vehicle = await self.vehicle.get_state(session_id)
-        if nav.status == "running" and not vehicle.driving:
-            if (
-                vehicle.state_version == 0
-                and nav.simulated_soc is not None
-                and self.energy.profile
-                and hasattr(self.vehicle, "set_energy")
-            ):
-                await asyncio.to_thread(
-                    self.vehicle.set_energy,
-                    session_id,
-                    nav.simulated_soc,
-                    nav.simulated_soc / self.energy.soc_cost(1000),
-                )
-            nav.resume_status, nav.status = nav.status, "paused"
-            session = record_navigation(session, nav.model_dump(mode="json"))
-        return session
-
-    async def snapshot(self, session_id):
-        config = self.config({"session_id": session_id})
-        async with self.thread_lock(config):
-            snapshot = await self.compiled.aget_state(config)
-            session = SessionState.model_validate(snapshot.values.get("session") or {})
-            observed = await self.reconcile_vehicle(session, session_id)
-            if observed is not session:
-                session = observed
-                session.snapshot_sequence += 1
-                await self.compiled.aupdate_state(
-                    config, {"session": session.model_dump(mode="json")}, as_node="await_input"
-                )
-                self._generations[config["configurable"]["thread_id"]] = self.generation(config) + 1
+    async def snapshot(self, session_id, event_id=None):
+        key = self.navigation.key(session_id)
+        async with self.navigation.lock(key):
+            session = await self.navigation.synchronize(SessionState(), session_id)
             return {
                 "runtime_epoch": self.runtime_epoch,
                 "snapshot_sequence": session.snapshot_sequence,
-                "event_id": None,
+                "control_revision": session.control_revision,
+                "control_uncertain": await self.navigation.repository.run(
+                    self.navigation.repository.uncertain_control, key, session.control_revision
+                ),
+                "event_id": event_id,
                 "vehicle_state": (await self.vehicle.get_state(session_id)).model_dump(mode="json"),
                 "navigation": session.navigation.model_dump(mode="json"),
                 "navigation_workspace": session.navigation_workspace.model_dump(mode="json"),
                 "trip_plan": session.trip_plan.model_dump(mode="json") if session.trip_plan else None,
                 "ui_events": [],
+                "receipt": await self.navigation.repository.run(self.navigation.repository.receipt, key, event_id)
+                if event_id
+                else None,
                 "control_receipts": session.control_receipts,
             }
 
     async def ainvoke(self, state):
+        if self._closing:
+            raise RuntimeError("Assistant runtime is closing")
+        task = asyncio.current_task()
+        self._tasks.add(task)
+        try:
+            return await self._ainvoke(state)
+        finally:
+            self._tasks.discard(task)
+
+    async def _ainvoke(self, state):
         event = self.event(state)
         config = self.config(event)
         queued = time.perf_counter()
@@ -176,6 +168,7 @@ class AssistantGraph:
                     "result": None,
                     "ids": {value["id"]},
                     "elapsed": {value["id"]: value.get("elapsed_s") or 0},
+                    "members": {value["id"]: value},
                 }
                 self._pending_telemetry[telemetry_key] = batch
             else:
@@ -183,6 +176,7 @@ class AssistantGraph:
                     batch["event"] = event
                     batch["elapsed"][value["id"]] = value.get("elapsed_s") or 0
                 batch["ids"].add(value["id"])
+                batch["members"].setdefault(value["id"], value)
                 batch["count"] += 1
         priority_token = event_priority.set(
             0
@@ -193,7 +187,11 @@ class AssistantGraph:
             if value.get("kind") in CONTROL_EVENTS
             else 2
         )
-        lock = self.thread_lock(config)
+        lock = (
+            self.navigation.lock(config["configurable"]["thread_id"])
+            if value.get("kind") in CONTROL_EVENTS
+            else self.thread_lock(config)
+        )
         try:
             async with nullcontext() if value.get("kind") in CONTROL_EVENTS else self.dialogue_lock(config), lock:
                 token = writer_context.set((self, config, lock))
@@ -208,6 +206,7 @@ class AssistantGraph:
                                 queued,
                                 coalesced_ids=batch["ids"],
                                 coalesced_elapsed=batch["elapsed"],
+                                coalesced_members=batch["members"],
                             )
                         result = dict(batch["result"])
                         result["output"] = {**result["output"], "turn_id": event["turn_id"]}
@@ -215,14 +214,31 @@ class AssistantGraph:
                             **result["output"]["diagnostics"],
                             "coalesced_events": batch["count"],
                         }
-                        return self.project(result)
+                        return await self.aproject(result)
                     return await self._invoke_locked(event, config, queued, gear_order)
                 finally:
                     writer_context.reset(token)
         finally:
             event_priority.reset(priority_token)
 
-    async def _invoke_locked(self, event, config, queued, gear_order=None, coalesced_ids=None, coalesced_elapsed=None):
+    async def _invoke_locked(
+        self, event, config, queued, gear_order=None, coalesced_ids=None, coalesced_elapsed=None, coalesced_members=None
+    ):
+        key = config["configurable"]["thread_id"]
+        if (event.get("navigation_event") or {}).get("kind") in CONTROL_EVENTS:
+            previous = {"session": self._dialogue_sessions.get(key, {})}
+            value = event["navigation_event"]
+            latest_gear = self._gear_requests.get(key)
+            superseded = bool(
+                gear_order
+                and value.get("gear") == "D"
+                and latest_gear
+                and latest_gear[1] == "P"
+                and latest_gear[0] > gear_order
+            )
+            members = coalesced_members
+            result = await self.control(event, previous, queued, superseded=superseded, coalesced=members)
+            return await self.aproject(result)
         snapshot = await self.compiled.aget_state(config)
         old = snapshot.values.get("event", {})
         if (
@@ -231,65 +247,28 @@ class AssistantGraph:
         ):
             if old != event:
                 raise ValueError("turn_id đã được dùng cho một yêu cầu khác.")
-            return self.project(snapshot.values)
-        if (event.get("navigation_event") or {}).get("kind") in CONTROL_EVENTS:
-            original_event = event
-            previous = dict(snapshot.values)
-            previous["session"] = (
-                await self.reconcile_vehicle(
-                    SessionState.model_validate(previous.get("session") or {}), event["session_id"]
-                )
-            ).model_dump(mode="json")
-            if event["navigation_event"]["kind"] == "charge" and coalesced_elapsed:
-                applied = set(previous["session"]["navigation_workspace"]["applied_events"])
-                remaining = {key: elapsed for key, elapsed in coalesced_elapsed.items() if key not in applied}
-                if remaining:
-                    event = {
-                        **event,
-                        "navigation_event": {
-                            **event["navigation_event"],
-                            "id": next(reversed(remaining)),
-                            "elapsed_s": min(30, sum(remaining.values())),
-                        },
-                    }
-            latest_gear = self._gear_requests.get(config["configurable"]["thread_id"])
-            superseded = bool(
-                gear_order
-                and event["navigation_event"].get("gear") == "D"
-                and latest_gear
-                and latest_gear[1] == "P"
-                and latest_gear[0] > gear_order
-            )
-            result = await self.control(event, previous, queued, superseded=superseded)
-            result["event"] = original_event
-            if coalesced_ids:
-                applied = result["session"]["navigation_workspace"]["applied_events"]
-                result["session"]["navigation_workspace"]["applied_events"] = list(
-                    dict.fromkeys([*applied, *sorted(coalesced_ids)])
-                )[-100:]
-                result["output"]["navigation"]["applied_events"] = result["session"]["navigation_workspace"][
-                    "applied_events"
-                ]
-                result["output"]["navigation_workspace"] = result["session"]["navigation_workspace"]
-            await self.compiled.aupdate_state(config, result, as_node="await_input")
-            key = config["configurable"]["thread_id"]
-            self._latest_sessions[key] = result["session"]
-            telemetry = event["navigation_event"]["kind"] in {"progress", "charge"}
-            before = SessionState.model_validate(snapshot.values.get("session") or {}).navigation.status
-            after = SessionState.model_validate(result["session"]).navigation.status
-            if not telemetry or before != after:
-                self._generations[key] = self.generation(config) + 1
-            return self.project(result)
+            return await self.aproject(snapshot.values)
         try:
             result = await self.compiled.ainvoke(await self.input(event, config), config, durability="sync")
         except SupersededTurnError:
             latest = await self.compiled.aget_state(config)
             result = await self.control(event, latest.values, queued, superseded=True)
             await self.compiled.aupdate_state(config, result, as_node="await_input")
-        self._generations[config["configurable"]["thread_id"]] = self.generation(config) + 1
-        return self.project(result)
+        return await self.aproject(result)
 
     async def astream(self, state, stream_mode):
+        if self._closing:
+            raise RuntimeError("Assistant runtime is closing")
+        task = asyncio.current_task()
+        self._tasks.add(task)
+        try:
+            async with aclosing(self._astream(state, stream_mode)) as stream:
+                async for item in stream:
+                    yield item
+        finally:
+            self._tasks.discard(task)
+
+    async def _astream(self, state, stream_mode):
         event = self.event(state)
         config = self.config(event)
         lock = self.thread_lock(config)
@@ -302,32 +281,80 @@ class AssistantGraph:
                     )
                 ) as stream:
                     async for item in stream:
-                        yield item
+                        multiple = isinstance(stream_mode, (list, tuple))
+                        mode, chunk = item if multiple else (stream_mode, item)
+                        if mode == "values" and chunk.get("output"):
+                            chunk = await self.aproject(chunk)
+                        elif mode == "updates":
+                            for name, update in chunk.items():
+                                if isinstance(update, dict) and update.get("session"):
+                                    hydrated = await self.navigation.hydrate(
+                                        SessionState.model_validate(update["session"]), event["session_id"]
+                                    )
+                                    chunk = {**chunk, name: {**update, "session": hydrated.model_dump(mode="json")}}
+                        yield (mode, chunk) if multiple else chunk
             except SupersededTurnError:
                 latest = await self.compiled.aget_state(config)
                 result = await self.control(event, latest.values, time.perf_counter(), superseded=True)
                 await self.compiled.aupdate_state(config, result, as_node="await_input")
-                yield ("values", result)
+                projected = await self.aproject(result)
+                if isinstance(stream_mode, (list, tuple)):
+                    yield ("values", projected)
+                else:
+                    yield projected
             finally:
                 writer_context.reset(token)
-            self._generations[config["configurable"]["thread_id"]] = self.generation(config) + 1
+
+    async def aproject(self, state):
+        event = state.get("event", {})
+        session = await self.navigation.hydrate(
+            SessionState.model_validate(state.get("session") or {}), event.get("session_id", "cli")
+        )
+        return self.project({**state, "session": session.model_dump(mode="json")})
 
     @staticmethod
     def project(state):
-        output, turn = state.get("output", {}), state.get("turn", {})
+        event = state.get("event", {})
+        session = SessionState.model_validate(state.get("session") or {})
+        output, turn = dict(state.get("output", {})), state.get("turn", {})
+        output.update(
+            navigation=session.navigation.model_dump(mode="json"),
+            control_revision=session.control_revision,
+            navigation_workspace=session.navigation_workspace.model_dump(mode="json"),
+            trip_plan=session.trip_plan.model_dump(mode="json") if session.trip_plan else None,
+            control_receipts=session.control_receipts,
+            snapshot_sequence=session.snapshot_sequence,
+        )
         return {
             **state,
+            "session": session.model_dump(mode="json"),
             **output,
             "output": output,
             "answer": output.get("response_text"),
             "response": output.get("response_text"),
-            "query": state.get("event", {}).get("text"),
+            "query": event.get("text"),
             "conversation_history": turn.get("history", []),
             "memory_context": turn.get("memory", []),
         }
 
     def close(self):
+        self._closing = True
         self.saver.close()
+        self.navigation.repository.close()
+
+    async def aclose(self):
+        self._closing = True
+        tasks = [task for task in self._tasks if task is not asyncio.current_task()]
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        await self.saver.aclose()
+        await self.navigation.repository.aclose()
+        client = self.navigation.workflow.services.navigation
+        if client and hasattr(client, "aclose"):
+            await client.aclose()
+        if hasattr(self.saver, "_navigation_directory"):
+            self.saver._navigation_directory.cleanup()
 
 
 def build_assistant_graph(services, saver, store=None, provider=None, *, resolver=None, generators=None, budgets=None):
@@ -336,8 +363,20 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
     runtime = CapabilityRuntime(
         services, store, generators, budgets, resolver.breaker_seconds, provider_chains=resolver.fallback_chains
     )
-    navigation = NavigationWorkflow(services, store, resolver)
-    trips = TripWorkflow(services, store, resolver)
+    if store is None:
+        from pathlib import Path
+
+        from src.vivi.persistence.runtime_store import RuntimeStore
+
+        database = saver.connection.execute("PRAGMA database_list").fetchone()[2]
+        if not database:
+            from tempfile import TemporaryDirectory
+
+            saver._navigation_directory = TemporaryDirectory(prefix="vivi-navigation-")
+            database = str(Path(saver._navigation_directory.name) / "state.sqlite3")
+        store = RuntimeStore(Path(database).with_suffix(".runtime.sqlite3"))
+    domain = NavigationService(services, store, saver, resolver, runtime_epoch)
+    navigation = domain.workflow
     profile = services.memory_profile_id
 
     async def context(state):
@@ -359,24 +398,13 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
                         if step.draft.capability.startswith(("navigation.", "trip.")) and step.status != "completed":
                             step.status, step.confirmation = "cancelled", None
         session = upgrade_contract(session)
-        nav = session.navigation
-        if nav.status == "running":
-            observed = await services.action_gateway.vehicle.get_state(event.session_id)
-            if not observed.driving:
-                if (
-                    observed.state_version == 0
-                    and hasattr(services.action_gateway.vehicle, "set_energy")
-                    and nav.simulated_soc is not None
-                    and navigation.energy.profile
-                ):
-                    await asyncio.to_thread(
-                        services.action_gateway.vehicle.set_energy,
-                        event.session_id,
-                        nav.simulated_soc,
-                        nav.simulated_soc / navigation.energy.soc_cost(1000),
-                    )
-                nav.status, nav.resume_status = "paused", "running"
-                session = record_navigation(session, nav.model_dump(mode="json"))
+        session = await domain.synchronize(session, event.session_id)
+        reference = (state["session"].get("navigation_reference") or {}).get("revision", -1)
+        if (
+            session.navigation_workspace.cleared_at_revision > 0
+            and reference < session.navigation_workspace.cleared_at_revision
+        ):
+            session = clear_journey(session)
         expired_id = None
         if previous.active and session.active is None:
             index = previous.active.current_index()
@@ -449,8 +477,9 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
         session = SessionState.model_validate(state["session"])
         turn = dict(state["turn"])
         if event.kind == "navigation":
-            result = await navigation.event(event, session)
+            result, session = await domain.event(event, session)
             turn["navigation_result"] = result
+            turn["timings"].update(result.get("timings", {}))
             semantic, served, attempts = SemanticTurn(act="reply", text=result.get("message", "")), "event", []
             if result.get("request_action"):
                 semantic = SemanticTurn(act="request", actions=[result["request_action"]])
@@ -515,7 +544,11 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
                     history=turn["history"],
                     memory=turn["memory"],
                     catalog=catalog(services.navigation is not None),
-                )
+                ),
+                fence=lambda resolved: (
+                    resolved[0].act in {"confirm", "deny", "modify", "resume", "cancel"}
+                    or any(d.capability != "manual.search" for d in resolved[0].drafts())
+                ),
             )
         # Domain invalidity is a clarification, never a reason to ask a weaker model.
         if any(action.capability not in REGISTRY for action in semantic.drafts()):
@@ -531,8 +564,7 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
         # the same turn. Validate that action against the accepted event state,
         # not the candidate list from before the event.
         update = state["turn"].get("navigation_result", {})
-        if update.get("navigation_update"):
-            reducer_input = record_navigation(previous, update["navigation_update"])
+        # Typed event transitions are already committed by the domain writer.
         if update.get("clear_navigation_history"):
             reducer_input.navigation_workspace.history = []
         if update.get("clear_journey"):
@@ -655,15 +687,11 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
                 result = await runtime.memory(event, step, arguments, command_id)
             elif spec.executor == "handbook":
                 result = await external_read(
-                    runtime.handbook(event, arguments, turn["effective_provider"], turn["history"])
+                    runtime.handbook(event, arguments, turn["effective_provider"], turn["history"]), fence=False
                 )
             else:
-                workflow = trips if step.draft.capability.startswith("trip.") else navigation
-                call = workflow.execute(event, session, step, arguments, command_id, turn["effective_provider"])
-                result = (
-                    await external_read(call)
-                    if step.draft.capability.rsplit(".", 1)[-1] in {"plan", "search", "select", "refine"}
-                    else await call
+                result = await external_read(
+                    domain.execute(event, session, step, arguments, command_id, turn["effective_provider"]), fence=False
                 )
         except SupersededTurnError:
             raise
@@ -682,6 +710,9 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
                 *turn["errors"],
                 {"stage": "capability", "error_type": type(exc).__name__, "message": str(exc)},
             ]
+        for stage, elapsed in result.get("timings", {}).items():
+            turn["timings"][stage] = round(turn["timings"].get(stage, 0) + elapsed, 2)
+        result = CapabilityResult.normalize(result, capability=step.draft.capability, command_id=command_id)
         session = record_step(
             session,
             index,
@@ -690,10 +721,7 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
             confirmation=result.get("confirmation"),
             command_id=command_id if result["status"] != "waiting_slot" else None,
         )
-        if result.get("navigation_update"):
-            session = record_navigation(session, result["navigation_update"])
-        if result.get("trip_plan_update"):
-            session = record_trip_plan(session, result["trip_plan_update"])
+        session = await domain.hydrate(session, event.session_id)
         turn["results"] = [
             *turn["results"],
             {"step_id": step.id, "index": index, "capability": step.draft.capability, **result},
@@ -702,9 +730,13 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
         return {"session": session.model_dump(mode="json"), "turn": turn}
 
     async def response(state):
+        control = current_control.get()
+        if control:
+            control.stage = "response"
         event = TurnEvent.model_validate(state["event"])
-        session = SessionState.model_validate(state["session"])
-        session.snapshot_sequence += 1
+        session = await domain.hydrate(SessionState.model_validate(state["session"]), event.session_id)
+        if not state["turn"].get("domain_control"):
+            session = await domain.allocate_snapshot(session, event.session_id)
         turn = state["turn"]
         semantic = SemanticTurn.model_validate(turn["semantic"])
         results = turn["results"]
@@ -720,7 +752,7 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
                     "capability": s.draft.capability,
                     "status": s.status,
                     "arguments": s.draft.arguments.model_dump(exclude_none=True),
-                    "result": s.result,
+                    "result": dialogue_result(s.result) if s.result else s.result,
                     "command_id": s.command_id,
                 }
                 for s in task.steps
@@ -795,7 +827,7 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
         if confirmation and last.get("capability") == "memory.reset":
             action = {"intent": "memory.reset", "arguments": {}}
         diagnostics = {
-            "workflow_version": "unified-5",
+            "workflow_version": "unified-6",
             "prompt_version": PROMPT_VERSION,
             "requested_provider": event.provider,
             "effective_provider": turn["effective_provider"],
@@ -840,20 +872,25 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
             errors=turn["errors"],
             timings=turn["timings"],
             diagnostics=diagnostics,
+            control_receipts=session.control_receipts,
+            receipt=turn.get("navigation_result", {}).get("receipt"),
             steps=steps,
             navigation_workspace=session.navigation_workspace.model_dump(mode="json"),
             navigation=session.navigation.model_dump(mode="json"),
             trip_plan=session.trip_plan.model_dump(mode="json") if session.trip_plan else None,
             ui_events=[item for result in results for item in result.get("ui_events", [])],
         )
-        return {"output": output.model_dump(mode="json"), "session": session.model_dump(mode="json")}
+        projected = output.model_dump(mode="json")
+        for name in ("navigation", "navigation_workspace", "trip_plan", "control_receipts"):
+            projected.pop(name, None)
+        return {"output": projected, "session": checkpoint_session(session)}
 
-    async def control(event_data, previous, queued, superseded=False):
+    async def control(event_data, previous, queued, superseded=False, coalesced=None):
         started = time.perf_counter()
         event = TurnEvent.model_validate(event_data)
-        session = SessionState.model_validate(previous.get("session") or {})
+        session = await domain.hydrate(SessionState.model_validate(previous.get("session") or {}), event.session_id)
         before = session.navigation.status
-        if superseded:
+        if superseded and not event.navigation_event:
             for task in [session.active, *session.suspended]:
                 if task:
                     for step in task.steps:
@@ -865,24 +902,7 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
                 "error_code": "superseded_turn",
             }
         else:
-            result = await navigation.event(event, session)
-            if result.get("navigation_update"):
-                session = record_navigation(session, result["navigation_update"])
-            if result.get("clear_journey"):
-                session = clear_journey(session)
-            if result.get("clear_navigation_history"):
-                session.navigation_workspace.history = []
-        if event.navigation_event and event.navigation_event.get("kind") not in {"progress", "charge"}:
-            session.control_receipts = [
-                *session.control_receipts[-31:],
-                {
-                    "event_id": event.navigation_event["id"],
-                    "kind": event.navigation_event["kind"],
-                    "gear": event.navigation_event.get("gear"),
-                    "status": result["status"],
-                    "snapshot_sequence": session.snapshot_sequence + 1,
-                },
-            ]
+            result, session = await domain.event_locked(event, session, superseded=superseded, coalesced=coalesced)
         result["vehicle_state"] = (await services.action_gateway.vehicle.get_state(event.session_id)).model_dump(
             mode="json"
         )
@@ -890,11 +910,12 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
         queue_ms = round((started - queued) * 1000, 2)
         turn = {
             "semantic": SemanticTurn(act="reply").model_dump(mode="json"),
+            "domain_control": bool(event.navigation_event),
             "results": [],
             "navigation_result": result,
             "message": result.get("message", ""),
             "errors": [],
-            "timings": {"queue": queue_ms, "control": elapsed},
+            "timings": {"queue": queue_ms, "control": elapsed, **result.get("timings", {})},
             "spans": [],
             "effective_provider": "event",
             "history_session": event.session_id if profile == "default" else f"profile:{profile}:{event.session_id}",
@@ -928,6 +949,9 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
         return state
 
     async def persist(state):
+        control = current_control.get()
+        if control:
+            control.stage = "persist"
         event, output = state["event"], state["output"]
         if event.get("navigation_event", {}) and event["navigation_event"].get("kind") in {"progress", "charge"}:
             return {}
@@ -957,30 +981,25 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
     def timed(name, function):
         async def node(state):
             started = time.perf_counter()
+            control = current_control.get()
+            if control:
+                control.stage = name
+            before = await domain.hydrate(
+                SessionState.model_validate(state.get("session") or {}), state["event"]["session_id"]
+            )
+            state = {**state, "session": {**state.get("session", {}), **before.model_dump(mode="json")}}
             result = await function(state)
-            context = writer_context.get()
-            if context:
-                owner, config, _ = context
-                latest = owner._latest_sessions.get(config["configurable"]["thread_id"])
-                if latest:
-                    current = SessionState.model_validate(latest)
-                    updated = SessionState.model_validate(result.get("session", state.get("session", {})))
-                    if current.snapshot_sequence > updated.snapshot_sequence:
-                        old_journey, new_journey = (
-                            current.navigation_workspace.journey,
-                            updated.navigation_workspace.journey,
-                        )
-                        if old_journey and new_journey and old_journey.route_id == new_journey.route_id:
-                            updated.navigation_workspace.journey = old_journey.model_copy(deep=True)
-                        updated.navigation_workspace.event_sequence = max(
-                            updated.navigation_workspace.event_sequence, current.navigation_workspace.event_sequence
-                        )
-                        updated.snapshot_sequence = current.snapshot_sequence
-                        updated.control_receipts = current.control_receipts
-                        result["session"] = updated.model_dump(mode="json")
-            turn = dict(result.get("turn", state.get("turn", {})))
+            event = TurnEvent.model_validate(state["event"])
+            if "session" in result:
+                updated = SessionState.model_validate(result["session"])
+                updated = await domain.commit_session(updated, before, event.session_id)
+                result["session"] = checkpoint_session(updated)
+            turn = dialogue_turn(result.get("turn", state.get("turn", {})))
             elapsed = round((time.perf_counter() - started) * 1000, 2)
             turn["timings"] = {**turn.get("timings", {}), name: turn.get("timings", {}).get(name, 0) + elapsed}
+            if control:
+                control.timings = dict(turn["timings"])
+                control.stage = "checkpoint"
             session = SessionState.model_validate(result.get("session", state.get("session", {})))
             index = turn.get("index")
             step = (
@@ -1007,6 +1026,10 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
                     "provider": turn.get("effective_provider"),
                 },
             ]
+            owner_context = writer_context.get()
+            if owner_context:
+                owner, config, _ = owner_context
+                owner._dialogue_sessions[config["configurable"]["thread_id"]] = result.get("session", state["session"])
             return {**result, "turn": turn}
 
         return node
@@ -1050,4 +1073,5 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
         services.action_gateway.vehicle,
         runtime_epoch,
         navigation.energy,
+        domain,
     )

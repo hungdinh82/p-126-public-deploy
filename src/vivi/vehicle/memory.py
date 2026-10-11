@@ -48,10 +48,12 @@ class VehicleSimulator:
             self._states[session_id] = supplied.model_copy(deep=True)
         return self._states.setdefault(session_id, VehicleState()).model_copy(deep=True)
 
-    def set_driving(self, session_id: str, driving: bool) -> VehicleState:
+    def set_driving(self, session_id: str, driving: bool, *, expected_state_version: int | None = None) -> VehicleState:
         """Set the local demo fixture without trusting browser state in a turn."""
         with self._lock:
             state = self._states.setdefault(session_id, VehicleState())
+            if expected_state_version is not None and state.state_version != expected_state_version:
+                raise ValueError("Trạng thái xe đã thay đổi. Bạn đồng bộ và thử lại nhé.")
             if driving and any(door.open for _, door in state.door_states):
                 raise ValueError("Không thể chuyển sang chế độ lái khi cửa xe đang mở.")
             if driving and (state.hood_open or state.trunk_open):

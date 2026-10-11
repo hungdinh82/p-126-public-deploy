@@ -1,0 +1,29 @@
+[
+  {
+    "load": "normal",
+    "samples": 100,
+    "backend_p95_ms": 32.69,
+    "queue_p95_ms": 0.04,
+    "control_p95_ms": 9.33,
+    "ledger_p95_ms": 5.55,
+    "includes": "orchestration, navigation state/receipt and turn ledger; excludes HTTP and browser"
+  },
+  {
+    "load": "model_pending",
+    "samples": 100,
+    "backend_p95_ms": 29.72,
+    "queue_p95_ms": 0.03,
+    "control_p95_ms": 8.99,
+    "ledger_p95_ms": 5.53,
+    "includes": "orchestration, navigation state/receipt and turn ledger; excludes HTTP and browser"
+  },
+  {
+    "load": "vietmap_pending",
+    "samples": 100,
+    "backend_p95_ms": 24.94,
+    "queue_p95_ms": 0.03,
+    "control_p95_ms": 8.6,
+    "ledger_p95_ms": 5.21,
+    "includes": "orchestration, navigation state/receipt and turn ledger; excludes HTTP and browser"
+  }
+]
