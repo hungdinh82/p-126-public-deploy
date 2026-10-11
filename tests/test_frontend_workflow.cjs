@@ -12,7 +12,7 @@ function harness(events) {
     {capability: 'door.set_open', status: 'pending'}
   ]};
   const sandbox = { AbortController, TextDecoder, Uint8Array,
-    acceptNavigationResponse:async()=>true, currentNavigationRevision: 0, getJourneyPosition: () => null, applyNavigation: async () => {},
+    acceptNavigationResponse: async () => true, currentNavigationRevision: 0, followUpArmed: false, currentTurnSpoken: false, recorder: null, getJourneyPosition: () => null, applyNavigation: async () => {},
     state: {busy: false, sound: false, llmProvider: 'google'}, API_BASE: 'http://test', sessionId: 'driver', DOCK_BY_INTENT: {},
     document: {createElement: () => ({}), body: {classList: {remove() {}}}},
     $: selector => selector === '#turn-steps' ? container : {value: ''},

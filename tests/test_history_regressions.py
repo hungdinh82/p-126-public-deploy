@@ -33,6 +33,16 @@ def test_temperature_target_words_take_precedence_over_numeric_heuristics(query,
     assert decision.intent == "climate.set_temperature" and decision.resolved["value_celsius"] == expected
 
 
+@pytest.mark.parametrize("query,intent", [
+    ("Mở nắp capo,", "hood.set_open"),
+    ("Mở cốp sau,", "trunk.set_open"),
+    ("mở capo…", "hood.set_open"),
+])
+def test_command_cut_at_a_pause_keeps_its_intent(query, intent):
+    # STT ends a command cut at a pause with a comma instead of a full stop.
+    assert parse(query).intent == intent
+
+
 def test_rule_fallback_preserves_obvious_tool_and_dialogue_requests():
     for query, intent in [("Tôi hơi lạnh", "climate.set_temperature"),
                           ("Tăng điều hoà lên tối đa", "climate.set_temperature"),
@@ -143,3 +153,28 @@ def test_history_migrates_old_database_without_losing_turns(tmp_path):
     migrated = SQLiteConversationHistory(path)
     assert migrated.recent("s")[0]["answer"] == "Mình đây."
     assert migrated.recent("s")[0]["diagnostics"] == {}
+
+
+@pytest.mark.parametrize("status", ["preview", "paused"])
+@pytest.mark.parametrize("answer", ["Ok.", "Ok,.", "Ô kê", "Có"])
+def test_yes_confirms_the_pending_action_not_a_leftover_route(status, answer):
+    # 11/10 log: "Mở tất cả các cửa xe" → "OK" started a route stopped earlier.
+    from src.vivi.dialogue.contracts import ActionDraft, DialogueTask, NavigationState, SessionState, TaskStep
+
+    session = SessionState(
+        active=DialogueTask(steps=[TaskStep(
+            draft=ActionDraft(capability="door.set_open", arguments={"open": True, "zone": "all"}),
+            status="waiting_confirmation",
+            confirmation={"confirmation_id": "doors"},
+        )]),
+        navigation=NavigationState(status=status, revision=1, selected={"name": "Ký túc xá VinUni"}, route={"distance_m": 1000}),
+    )
+    turn = parse(answer, session=session)
+    assert turn.act == "confirm" and turn.frame.task_ref == "active"
+
+
+def test_yes_without_a_pending_action_still_starts_the_previewed_route():
+    from src.vivi.dialogue.contracts import NavigationState, SessionState
+
+    session = SessionState(navigation=NavigationState(status="preview", revision=1, selected={"name": "A"}, route={"distance_m": 1000}))
+    assert parse("Ok.", session=session).intent == "navigation.start"

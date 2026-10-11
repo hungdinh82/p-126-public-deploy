@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Thu giọng ViVi</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #fff; --text: #14171c; --muted: #5d6673; --line: #dfe3e8;
+    --accent: #0a84ff; --good: #1f9d55; --bad: #d64545; --rec: #e5484d;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #0d1014; --card: #161b22; --text: #e8edf3; --muted: #95a0ad; --line: #2a313b;
+      --accent: #4aa3ff; --good: #3fb950; --bad: #f47067; --rec: #ff6369; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 560px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 1.5rem; margin: 0 0 4px; }
+  p { margin: 0 0 12px; }
+  .muted { color: var(--muted); font-size: .92rem; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px; margin-top: 16px; }
+  label { display: block; font-weight: 600; margin-bottom: 6px; }
+  input[type=text] { width: 100%; padding: 10px 12px; font: inherit; color: inherit; background: var(--bg); border: 1px solid var(--line); border-radius: 10px; }
+  .check { display: flex; gap: 10px; align-items: flex-start; margin-top: 14px; font-weight: 400; }
+  .check input { margin-top: 5px; }
+  button { font: inherit; border: 0; border-radius: 10px; padding: 11px 18px; cursor: pointer; background: var(--line); color: var(--text); }
+  button.primary { background: var(--accent); color: #fff; }
+  button:disabled { opacity: .45; cursor: default; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+  .prompt { text-align: center; padding: 8px 0 4px; }
+  .phrase { font-size: 2.2rem; font-weight: 700; margin: 6px 0; }
+  .hint { min-height: 1.5em; color: var(--muted); }
+  .big { width: 132px; height: 132px; border-radius: 50%; font-size: 1.05rem; font-weight: 700; margin: 14px auto 4px; display: block; background: var(--accent); color: #fff; }
+  .big.recording { background: var(--rec); animation: pulse 1s infinite; }
+  @keyframes pulse { 50% { transform: scale(1.05); } }
+  @media (prefers-reduced-motion: reduce) { .big.recording { animation: none; } }
+  .meter { height: 8px; background: var(--line); border-radius: 4px; overflow: hidden; margin-top: 10px; }
+  .meter i { display: block; height: 100%; width: 0; background: var(--good); transition: width .08s; }
+  .progress { display: flex; justify-content: space-between; font-size: .92rem; color: var(--muted); margin-top: 12px; }
+  .tips li { margin-bottom: 4px; }
+  .done { color: var(--good); font-weight: 600; }
+  .warn { color: var(--bad); }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Thu giọng gọi ViVi</h1>
+  <p class="muted">Giúp trợ lý ViVi nghe ra giọng thật. Mất khoảng 5 phút; âm thanh chỉ nằm trên máy bạn cho tới khi bạn tự gửi file.</p>
+
+  <section class="card" id="setup">
+    <label for="speaker">Tên bạn (không dấu, ví dụ: lan, minhtuan)</label>
+    <input type="text" id="speaker" autocomplete="off" maxlength="24" placeholder="ten-ban">
+    <label class="check"><input type="checkbox" id="consent"> Tôi đồng ý cho nhóm ViVi dùng các bản ghi này để huấn luyện mô hình nhận diện từ khoá.</label>
+    <ul class="tips muted">
+      <li>Mỗi lượt: bấm nút, đợi đếm 3‑2‑1, rồi nói câu trên màn hình.</li>
+      <li>Thay đổi cách nói: nhanh, chậm, to, nhỏ, xa mic, gần mic, nói lơ đãng cũng được.</li>
+      <li>Nên thu ở vài chỗ khác nhau, kể cả chỗ hơi ồn.</li>
+    </ul>
+    <div class="row"><button class="primary" id="start" disabled>Bắt đầu</button></div>
+    <p class="warn" id="setup-error" hidden></p>
+  </section>
+
+  <section class="card" id="session" hidden>
+    <div class="prompt">
+      <div class="muted">Hãy nói</div>
+      <div class="phrase" id="phrase">«Vi Vi ơi»</div>
+      <button class="big" id="record">Bấm để thu</button>
+      <div class="hint" id="hint">Hoặc nhấn phím cách (Space)</div>
+      <div class="meter"><i id="level"></i></div>
+    </div>
+    <div class="row" id="review" hidden>
+      <button id="play">▶ Nghe lại</button>
+      <button id="redo">Thu lại</button>
+      <button class="primary" id="keep">Giữ, lượt tiếp →</button>
+    </div>
+    <div class="progress"><span id="count"></span><span id="size"></span></div>
+    <div class="row">
+      <button id="finish" disabled>Xong, tải file về</button>
+    </div>
+  </section>
+
+  <section class="card" id="finished" hidden>
+    <p class="done">Cảm ơn bạn! File <span id="zipname"></span> đã được tải về.</p>
+    <p>Gửi file đó cho người đã nhờ bạn (Zalo, Drive, email…). Muốn thu thêm thì cứ bấm tiếp.</p>
+    <div class="row"><button id="again">Thu thêm</button><button class="primary" id="download-again">Tải lại file</button></div>
+  </section>
+</main>
+<script>
+(() => {
+  const RATE = 16000, SECONDS = 3, PRE_ROLL = .5;
+  const params = new URLSearchParams(location.search);
+  const PER_PHRASE = Math.max(1, Math.min(100, Number(params.get('count')) || 20));
+  const PHRASES = [{ key: 'oi', text: 'Vi Vi ơi' }, { key: 'hey', text: 'Hey Vi Vi' }];
+  const $ = id => document.getElementById(id);
+  const takes = [];             // { key, wav: Blob }
+  let stream, context, source, processor, capture = null, current = null, lastZip = null, busy = false;
+
+  const speakerName = () => $('speaker').value.trim().toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/đ/g, 'd').replace(/[^a-z0-9]+/g, '').slice(0, 24);
+  const nextPhrase = () => PHRASES[takes.length % PHRASES.length];
+  const total = PER_PHRASE * PHRASES.length;
+
+  function refreshSetup() {
+    $('start').disabled = !(speakerName() && $('consent').checked);
+  }
+  $('speaker').addEventListener('input', refreshSetup);
+  $('consent').addEventListener('change', refreshSetup);
+
+  function render() {
+    $('phrase').textContent = `«${nextPhrase().text}»`;
+    $('count').textContent = `${takes.length}/${total} lượt`;
+    const bytes = takes.reduce((sum, take) => sum + take.wav.size, 0);
+    $('size').textContent = bytes ? `${(bytes / 1048576).toFixed(1)} MB` : '';
+    $('finish').disabled = !takes.length;
+    $('finish').textContent = takes.length >= total ? 'Xong, tải file về' : `Dừng ở đây, tải ${takes.length} lượt về`;
+    if (takes.length >= total) $('hint').textContent = 'Đủ rồi! Bấm "Xong, tải file về", hoặc thu thêm nếu muốn.';
+  }
+
+  $('start').addEventListener('click', async () => {
+    try {
+      // Same processing as the IVI page, so the clips sound like what the detector will hear.
+      stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } });
+    } catch (error) {
+      $('setup-error').hidden = false;
+      $('setup-error').textContent = 'Không mở được micro. Hãy cho phép trình duyệt dùng micro rồi thử lại.';
+      return;
+    }
+    context = new AudioContext();
+    source = context.createMediaStreamSource(stream);
+    processor = context.createScriptProcessor(4096, 1, 1);
+    const ring = [];             // keeps the last PRE_ROLL seconds before a take starts
+    processor.onaudioprocess = event => {
+      const data = new Float32Array(event.inputBuffer.getChannelData(0));
+      let peak = 0;
+      for (const value of data) peak = Math.max(peak, Math.abs(value));
+      $('level').style.width = `${Math.min(100, peak * 140)}%`;
+      if (capture) capture.push(data);
+      ring.push(data);
+      while (ring.length * 4096 > context.sampleRate * PRE_ROLL) ring.shift();
+    };
+    processor.ring = ring;
+    source.connect(processor);
+    processor.connect(context.destination);
+    $('setup').hidden = true;
+    $('session').hidden = false;
+    render();
+  });
+
+  const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
+  async function record() {
+    if (busy || !context) return;
+    busy = true;
+    await context.resume();
+    $('review').hidden = true;
+    const button = $('record');
+    button.disabled = true;
+    for (const tick of ['3', '2', '1']) { button.textContent = tick; await sleep(450); }
+    capture = [...processor.ring];
+    button.textContent = 'Nói!';
+    button.classList.add('recording');
+    $('hint').textContent = `Đang thu ${SECONDS} giây…`;
+    await sleep(SECONDS * 1000);
+    const chunks = capture; capture = null;
+    button.classList.remove('recording');
+    button.textContent = 'Bấm để thu';
+    button.disabled = false;
+    current = { key: nextPhrase().key, wav: await toWav(chunks, context.sampleRate) };
+    $('hint').textContent = 'Nghe lại nếu muốn, rồi giữ hoặc thu lại.';
+    $('review').hidden = false;
+    busy = false;
+  }
+
+  async function toWav(chunks, rate) {
+    const length = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+    const offline = new OfflineAudioContext(1, Math.ceil(length * RATE / rate), RATE);
+    const buffer = offline.createBuffer(1, length, rate);
+    let at = 0;
+    for (const chunk of chunks) { buffer.copyToChannel(chunk, 0, at); at += chunk.length; }
+    const node = offline.createBufferSource();
+    node.buffer = buffer;
+    node.connect(offline.destination);
+    node.start();
+    const samples = (await offline.startRendering()).getChannelData(0);
+    const out = new DataView(new ArrayBuffer(44 + samples.length * 2));
+    const text = (offset, value) => [...value].forEach((char, i) => out.setUint8(offset + i, char.charCodeAt(0)));
+    text(0, 'RIFF'); out.setUint32(4, 36 + samples.length * 2, true); text(8, 'WAVE'); text(12, 'fmt ');
+    out.setUint32(16, 16, true); out.setUint16(20, 1, true); out.setUint16(22, 1, true);
+    out.setUint32(24, RATE, true); out.setUint32(28, RATE * 2, true); out.setUint16(32, 2, true); out.setUint16(34, 16, true);
+    text(36, 'data'); out.setUint32(40, samples.length * 2, true);
+    samples.forEach((value, i) => out.setInt16(44 + i * 2, Math.max(-1, Math.min(1, value)) * 32767, true));
+    return new Blob([out], { type: 'audio/wav' });
+  }
+
+  $('record').addEventListener('click', record);
+  document.addEventListener('keydown', event => {
+    if (event.code !== 'Space' || $('session').hidden || event.target.tagName === 'INPUT') return;
+    event.preventDefault();
+    if (!$('review').hidden) $('keep').click(); else record();
+  });
+  $('play').addEventListener('click', () => current && new Audio(URL.createObjectURL(current.wav)).play());
+  $('redo').addEventListener('click', () => { current = null; $('review').hidden = true; record(); });
+  $('keep').addEventListener('click', () => {
+    if (!current) return;
+    takes.push(current); current = null;
+    $('review').hidden = true;
+    $('hint').textContent = 'Bấm nút hoặc phím cách cho lượt tiếp.';
+    render();
+  });
+
+  // Minimal ZIP writer (stored, no compression): WAV barely compresses anyway.
+  const CRC_TABLE = Array.from({ length: 256 }, (_, n) => {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    return c >>> 0;
+  });
+  const crc32 = bytes => {
+    let c = 0xffffffff;
+    for (const byte of bytes) c = CRC_TABLE[(c ^ byte) & 0xff] ^ (c >>> 8);
+    return (c ^ 0xffffffff) >>> 0;
+  };
+  async function zip(files) {
+    const parts = [], central = [];
+    let offset = 0;
+    for (const file of files) {
+      const name = new TextEncoder().encode(file.name);
+      const data = new Uint8Array(await file.blob.arrayBuffer());
+      const crc = crc32(data);
+      const header = new DataView(new ArrayBuffer(30));
+      header.setUint32(0, 0x04034b50, true); header.setUint16(4, 20, true);
+      header.setUint32(14, crc, true); header.setUint32(18, data.length, true); header.setUint32(22, data.length, true);
+      header.setUint16(26, name.length, true);
+      parts.push(header, name, data);
+      const entry = new DataView(new ArrayBuffer(46));
+      entry.setUint32(0, 0x02014b50, true); entry.setUint16(4, 20, true); entry.setUint16(6, 20, true);
+      entry.setUint32(16, crc, true); entry.setUint32(20, data.length, true); entry.setUint32(24, data.length, true);
+      entry.setUint16(28, name.length, true); entry.setUint32(42, offset, true);
+      central.push(entry, name);
+      offset += 30 + name.length + data.length;
+    }
+    const size = central.reduce((sum, part) => sum + part.byteLength, 0);
+    const end = new DataView(new ArrayBuffer(22));
+    end.setUint32(0, 0x06054b50, true); end.setUint16(8, files.length, true); end.setUint16(10, files.length, true);
+    end.setUint32(12, size, true); end.setUint32(16, offset, true);
+    return new Blob([...parts, ...central, end], { type: 'application/zip' });
+  }
+
+  function save(blob, name) {
+    const link = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: name });
+    document.body.append(link); link.click(); link.remove();
+  }
+
+  $('finish').addEventListener('click', async () => {
+    // A session stamp keeps a second zip from the same person from overwriting the first.
+    const stamp = new Date().toISOString().slice(5, 16).replace(/[-:]/g, '').replace('T', 't');
+    const speaker = `${speakerName()}_${stamp}`;
+    const counts = {};
+    // Names match record_wake.py: <speaker>-<phrase>-NNN.wav
+    const files = takes.map(take => {
+      counts[take.key] = (counts[take.key] || 0);
+      return { name: `${speaker}-${take.key}-${String(counts[take.key]++).padStart(3, '0')}.wav`, blob: take.wav };
+    });
+    lastZip = { blob: await zip(files), name: `vivi-wake-${speaker}.zip` };
+    save(lastZip.blob, lastZip.name);
+    $('zipname').textContent = lastZip.name;
+    $('session').hidden = true;
+    $('finished').hidden = false;
+  });
+  $('download-again').addEventListener('click', () => lastZip && save(lastZip.blob, lastZip.name));
+  $('again').addEventListener('click', () => { $('finished').hidden = true; $('session').hidden = false; render(); });
+})();
+</script>
+</body>
+</html>

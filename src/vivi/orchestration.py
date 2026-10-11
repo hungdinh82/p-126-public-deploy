@@ -17,6 +17,7 @@ from src.vivi.persistence.event_store import EventStore
 from src.vivi.persistence.runtime_store import RuntimeStore
 from src.vivi.providers import configured_llm_providers
 from src.vivi.rag.runtime import create_services
+from src.vivi.text import strip_address
 from src.vivi.turn_control import TurnControl, current_control
 from src.vivi.vehicle.gateway import VehicleActionGateway
 
@@ -155,7 +156,7 @@ class LangGraphOrchestrator:
     @staticmethod
     def _graph_input(request: TurnRequest) -> dict[str, Any]:
         return {
-            "input_text": request.transcript,
+            "input_text": strip_address(request.transcript),
             "session_id": request.session_id,
             "turn_id": request.turn_id,
             "vehicle_model": "VF8",
