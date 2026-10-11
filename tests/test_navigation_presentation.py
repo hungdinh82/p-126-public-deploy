@@ -135,7 +135,7 @@ async def test_log_962_compound_turn_speaks_choices_once_and_retains_full_data(s
         text = result["response_text"]
         for name in ("Habakuk", "Người Một Nhà", "Hai Tâm Hồn"):
             assert text.count(name) == 1
-        assert text.count("Bạn chọn số mấy?") == 1
+        assert text.count("Bạn chọn chỗ nào?") == 1
         assert "Phường Cửa Nam" in text
         assert "Thành phố Hà Nội" not in text and "Phan Huy Chú" not in text
         assert text.index("24 độ") < text.index("Habakuk")
@@ -167,11 +167,15 @@ async def test_log_963_preview_and_start_use_short_speech_with_precise_energy(se
         text = result["response_text"]
         assert "Habakuk, Phường Cửa Nam" in text
         assert "Phan Huy Chú" not in text and "Thành phố Hà Nội" not in text
-        assert "còn khoảng 80% pin" in text and "mô phỏng" not in text
+        # Short speech leaves the arrival charge to the screen; the summary keeps it.
+        assert result["navigation"]["summary"]["arrival_soc"] == 80 and "mô phỏng" not in text
         plan = result["navigation"]["energy"]["selected_plan"]
         assert plan["arrival_soc"] == pytest.approx(80.93, abs=0.01) and plan["simulated"]
-        assert result["status"] == "confirmation_required" and not gateway.vehicle.state_for("driver").driving
-        renewed = await graph.ainvoke(
+        assert result["status"] == "answered" and not gateway.vehicle.state_for("driver").driving
+        assert result["navigation"]["offer"]["status"] == "pending"
+        # Log 964: the start button answers the pending offer itself, so it starts at
+        # once with the energy plan that was shown; no second question.
+        started = await graph.ainvoke(
             {
                 "session_id": "driver",
                 "turn_id": "964",
@@ -182,13 +186,10 @@ async def test_log_963_preview_and_start_use_short_speech_with_precise_energy(se
                 },
             }
         )
-        assert renewed["response_text"] == "Bạn xác nhận dẫn đường đến Quán Cà Phê Habakuk, Phường Cửa Nam nhé."
-        assert renewed["status"] == "confirmation_required" and not gateway.vehicle.state_for("driver").driving
-        assert renewed["navigation"]["energy"] == result["navigation"]["energy"]
-        assert renewed["confirmation"]["confirmation_id"] != result["confirmation"]["confirmation_id"]
-        started = await invoke(graph, "đồng ý", "start")
         assert started["response_text"] == "Đã bắt đầu dẫn đường."
-        assert started["navigation"]["status"] == "running"
+        assert started["navigation"]["status"] == "running" and gateway.vehicle.state_for("driver").driving
+        assert started["navigation"]["energy"]["selected_plan"] == plan
+        assert not started["navigation"].get("offer")
     finally:
         graph.close()
 
@@ -207,7 +208,8 @@ async def test_charging_speech_rounds_minutes_but_preserves_calculation(services
             {
                 "session_id": "driver",
                 "turn_id": "search",
-                "input_text": "lộ trình sạc tới Hải Phòng",
+                # A named place: the synthetic map has no verified centre for the region.
+                "input_text": "chỉ đường tới Hải Phòng TEST",
                 "position": {"lat": HANOI[0], "lng": HANOI[1], "simulated": False},
             }
         )
