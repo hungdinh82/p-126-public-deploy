@@ -30,6 +30,12 @@ async def engineer(request: Request):
     return FileResponse(PROJECT_ROOT / "engineer.html", headers={"Cache-Control": "no-store"})
 
 
+@router.get("/record")
+async def record():
+    """Voice recorder for wake-word clips; needs no role, so it can be shared as a link."""
+    return FileResponse(PROJECT_ROOT / "record.html", headers={"Cache-Control": "no-store"})
+
+
 MODEL_ASSETS = {"vf8.glb", "vf8-hq.glb", "vf8-lossless.glb"}
 
 
