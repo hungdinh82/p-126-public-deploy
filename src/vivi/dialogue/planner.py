@@ -227,6 +227,10 @@ class SemanticResolver:
 
     async def resolve(self, text, session, *, requested="rules", history=None, memory=None, catalog=None):
         attempts = []
+        consent = self.parser.confirmation_reference(text, session)
+        if consent:
+            return consent, "rules", [{"provider": "rules", "outcome": "served", "latency_ms": 0,
+                                       "source": "pending_confirmation"}]
         reference = self.parser.place_reference(text, session)
         if reference:
             return reference, "rules", [{

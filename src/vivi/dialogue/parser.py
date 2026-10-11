@@ -68,6 +68,11 @@ class Clause:
 class Lexer:
     def normalize(self, text):
         value = normalize_text(text).strip(" .!?;")
+        consent = re.fullmatch(
+            r"(?:ok|oke|okay|vang|dong y|u)[, ]+(xac nhan|bat dau(?: di| hanh trinh| dan duong)?(?: ngay| luon)?)", value
+        )
+        if consent:
+            value = consent[1]
         for pattern, replacement in LEXICON:
             value = re.sub(r"\b(?:" + pattern + r")\b", replacement, value)
         value = re.sub(r"\ball cac (?=window|door|cua|kinh)", "all ", value)
@@ -1243,6 +1248,19 @@ class OfflineParser:
         return bool(
             start or re.fullmatch(r"(?:u|uh|vang|co|duoc(?: roi)?|ok|oke|okay|dong y|xac nhan|dung(?: roi)?)", value)
         )
+
+    def confirmation_reference(self, text, session):
+        """Resolve a whole consent reply only against the question currently owned."""
+        index = session.active.current_index() if session.active else None
+        waiting = index is not None and session.active.steps[index].status == "waiting_confirmation"
+        question = session.pending_question() or {}
+        if not waiting and question.get("kind") != "start_plan":
+            return None
+        value = self.lexer.normalize(text)
+        if not (self.start_consent(text) or value in {"khong", "chua", "chua di", "de sau"}):
+            return None
+        result = self.interpret(text, session)
+        return result if result.act in {"confirm", "deny", "cancel", "request", "clarify"} else None
 
     def guard(self, text, semantic, session, memory=None, history=None):
         """Language evidence checks stay at the language boundary for all tiers."""

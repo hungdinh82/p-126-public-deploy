@@ -11,6 +11,7 @@ from langgraph.checkpoint.sqlite import SqliteSaver
 
 class ThreadedSqliteSaver(SqliteSaver):
     def __init__(self, path):
+        self.path = Path(path)
         if str(path) != ":memory:":
             Path(path).parent.mkdir(parents=True, exist_ok=True)
         existing = str(path) != ":memory:" and Path(path).exists() and Path(path).stat().st_size > 0
@@ -42,6 +43,9 @@ class ThreadedSqliteSaver(SqliteSaver):
 
     async def aget_tuple(self, config):
         return await self._run(self.get_tuple, config)
+
+    async def adelete_thread(self, thread_id):
+        await self._run(self.delete_thread, thread_id)
 
     async def aput(self, config, checkpoint, metadata, new_versions):
         return await self._run(self.put, config, checkpoint, metadata, new_versions)

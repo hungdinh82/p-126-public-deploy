@@ -12,6 +12,7 @@ from uuid import uuid4
 from src.vivi.agents.contracts import AssistantOutput
 from src.vivi.config import get_settings
 from src.vivi.graphs.assistant import CONTROL_EVENTS
+from src.vivi.history.erasure import clear_backups
 from src.vivi.persistence.event_store import EventStore
 from src.vivi.persistence.runtime_store import RuntimeStore
 from src.vivi.providers import configured_llm_providers
@@ -64,6 +65,9 @@ class LangGraphOrchestrator:
         self._active: dict[tuple[str, str], TurnControl] = {}
         self._runners: dict[tuple[str, str], asyncio.Task] = {}
         self._closing = False
+        self._resetting = False
+        self._in_scope = 0
+        self._reset_task = None
 
     def session_key(self, request):
         return f"{self.profile_id}:{request.session_id}"
@@ -72,6 +76,9 @@ class LangGraphOrchestrator:
     async def turn_scope(self, request, provider):
         if self._closing:
             raise RuntimeError("Assistant runtime is closing")
+        if self._resetting:
+            raise ValueError("Đang xoá lịch sử. Hãy thử lại khi hoàn tất.")
+        self._in_scope += 1
         session = self.session_key(request)
         lock = self._sessions.setdefault(session, asyncio.Lock())
         control = TurnControl(time.monotonic() + self.timeout_seconds)
@@ -115,6 +122,7 @@ class LangGraphOrchestrator:
                         self._runners.pop(key, None)
         finally:
             current_control.reset(token)
+            self._in_scope -= 1
 
     def cancel(self, session_id, turn_id):
         control = self._active.get((session_id, turn_id))
@@ -412,12 +420,57 @@ class LangGraphOrchestrator:
             self.store.append_event({"event_type": "turn", **response.model_dump(mode="json")})
         return response
 
+    async def reset_history(self, session_id=None):
+        if self._closing or self._resetting or self._in_scope:
+            raise ValueError("Đợi lượt đang xử lý hoàn tất rồi xoá lịch sử.")
+        self._resetting = True
+        self._reset_task = asyncio.create_task(self._reset_history(session_id))
+        return await asyncio.shield(self._reset_task)
+
+    async def _reset_history(self, session_id):
+        try:
+            graphs = set(self.graphs.values())
+            history = next(iter(graphs)).navigation.workflow.services.history
+            sessions = set(await asyncio.to_thread(history.sessions, self.profile_id))
+            if self.ledger:
+                sessions.update(await asyncio.to_thread(self.ledger.sessions, self.profile_id))
+            sessions.update(key.split(":", 1)[1] for key in self._sessions if key.startswith(self.profile_id + ":"))
+            if session_id:
+                sessions.add(session_id)
+            for graph in graphs:
+                for sid in sessions:
+                    from src.vivi.dialogue.contracts import SessionState
+
+                    state = await graph.navigation.hydrate(SessionState(), sid)
+                    if state.navigation_workspace.draft:
+                        state.navigation_workspace.draft.offer = None
+                        state.navigation_workspace.draft.clarification = None
+                    if state.trip_plan:
+                        state.trip_plan.offer = None
+                    state.snapshot_sequence += 1
+                    await graph.navigation.save(state, sid, invalidate=True)
+                    await asyncio.to_thread(self.gateway.confirmations.cancel, sid)
+                    thread_id = graph.config({"session_id": sid})["configurable"]["thread_id"]
+                    await graph.saver.adelete_thread(thread_id)
+                    graph._dialogue_sessions.pop(thread_id, None)
+            deleted = await asyncio.to_thread(history.clear, sessions, self.profile_id)
+            if self.ledger:
+                await asyncio.to_thread(self.ledger.clear_history, self.profile_id, sessions)
+            await asyncio.to_thread(clear_backups, history, self.ledger, graphs, sessions, self.profile_id)
+            records = await asyncio.to_thread(self.store.clear_sessions, sessions)
+            return {"profile_id": self.profile_id, "sessions": len(sessions), "deleted_turns": deleted,
+                    "deleted_log_records": records}
+        finally:
+            self._resetting = False
+
     async def navigation_snapshot(self, session_id, event_id=None):
         _, graph = self._graph(None)
         return await graph.snapshot(session_id, event_id)
 
     async def aclose(self):
         self._closing = True
+        if self._reset_task:
+            await asyncio.gather(self._reset_task, return_exceptions=True)
         tasks = [task for task in self._runners.values() if task is not asyncio.current_task()]
         for task in tasks:
             task.cancel()

@@ -1227,3 +1227,16 @@ document.addEventListener('keydown', event => {
 function updateClock() { $('#clock').textContent = new Intl.DateTimeFormat('vi-VN', { hour: '2-digit', minute: '2-digit' }).format(new Date()); }
 if (location.hash === '#journey') openPanel('journey');
 updateClock(); setInterval(updateClock, 60000); updateVehicle(); checkBackend().then(pollVehicleAlerts); setInterval(pollVehicleAlerts, 1500);
+
+window.addEventListener('storage', event => {
+  if (event.key !== 'vivi-history-reset') return;
+  edgeCommandHistory = [];
+  state.lastCommand = '';
+  state.manualAnswer = '';
+  state.manualEvidence = [];
+  renderTurnSteps([]);
+  renderLiveCaption('', '');
+  if (activePanelView === 'manual') openPanel('manual');
+  if (!state.busy) setPhase('idle', 'Đã xoá lịch sử hội thoại.');
+  synchronizeNavigation().catch(() => {});
+});

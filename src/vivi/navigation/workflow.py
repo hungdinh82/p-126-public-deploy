@@ -265,7 +265,9 @@ class NavigationWorkflow:
                     binding,
                 )
                 if not consumed:
-                    return await self.preview(event, candidate, step, arguments, command_id, nav, brief=True)
+                    renewed = await self.preview(event, candidate, step, arguments, command_id, nav, brief=True)
+                    renewed["message"] = "Xác nhận trước không còn hiệu lực. " + renewed["message"]
+                    return renewed
                 keep_parked = nav.status == "paused" and nav.resume_status is not None
                 candidate.offer = None
                 return await self.start(event, candidate, command_id, arguments, keep_parked=keep_parked)

@@ -155,3 +155,19 @@ class SQLiteConversationHistory:
                     json.dumps(state.get("trip_plan") or {}, ensure_ascii=False),
                 ),
             )
+
+    def sessions(self, profile_id="default") -> list[str]:
+        with self._connect() as connection:
+            rows = connection.execute("SELECT DISTINCT session_id FROM handbook_turns").fetchall()
+        prefix = f"profile:{profile_id}:"
+        if profile_id == "default":
+            return [row[0] for row in rows if not row[0].startswith("profile:")]
+        return [row[0][len(prefix):] for row in rows if row[0].startswith(prefix)]
+
+    def clear(self, session_ids, profile_id="default") -> int:
+        names = [sid if profile_id == "default" else f"profile:{profile_id}:{sid}" for sid in session_ids]
+        with self._connect() as connection:
+            count = 0
+            for name in names:
+                count += connection.execute("DELETE FROM handbook_turns WHERE session_id=?", (name,)).rowcount
+        return count
