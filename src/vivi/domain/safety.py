@@ -37,18 +37,26 @@ RISK_BY_INTENT = {
 }
 
 
-def _r2_preview(proposal: ActionProposal) -> str:
+def _r2_action(proposal: ActionProposal) -> str:
     if proposal.intent == "window.set_position":
         target = zoned_noun("cửa sổ", proposal.arguments)
-        return f"Xác nhận đặt {target} ở mức {int(proposal.arguments['position_percent'])} phần trăm?"
+        percent = int(proposal.arguments["position_percent"])
+        return f"mở {target}" if percent == 100 else f"đóng {target}" if percent == 0 else f"mở {target} {percent} phần trăm"
     if proposal.intent == "door.set_lock":
         target = zoned_noun("cửa", proposal.arguments)
-        return f"Xác nhận khóa {target}?" if proposal.arguments.get("locked") else f"Xác nhận mở khóa {target}?"
+        return f"khóa {target}" if proposal.arguments.get("locked") else f"mở khóa {target}"
     if proposal.intent in BODY_PANELS or proposal.intent == "body.set_open":
         target = BODY_PANELS[proposal.intent][1] if proposal.intent in BODY_PANELS else ALL_PANELS_LABEL
-        return f"Xác nhận mở {target}?" if proposal.arguments.get("open") else f"Xác nhận đóng {target}?"
+        return f"mở {target}" if proposal.arguments.get("open") else f"đóng {target}"
     target = zoned_noun("cửa", proposal.arguments)
-    return f"Xác nhận mở {target}?" if proposal.arguments.get("open") else f"Xác nhận đóng {target}?"
+    return f"mở {target}" if proposal.arguments.get("open") else f"đóng {target}"
+
+
+def _r2_preview(proposal: ActionProposal) -> str:
+    # Spoken aloud, so it tells the driver what to say back ("OK" is what STT hears
+    # best), and the instruction comes first: the sentence ends right after it, which
+    # leaves little time for an answer to fall while the mic is still closed.
+    return f"Nói OK để {_r2_action(proposal)}."
 
 
 def validate(proposal: ActionProposal, vehicle: VehicleState, *, confirmed: bool = False) -> SafetyResult:
