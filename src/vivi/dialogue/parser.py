@@ -81,8 +81,13 @@ class Clause:
 
 class Lexer:
     def normalize(self, text):
-        # STT ends a sentence cut at a pause with a comma ("Mở nắp capo,").
+        # STT may end a sentence cut at a pause with a comma.
         value = normalize_text(text).strip(" .!?;,:…")
+        consent = re.fullmatch(
+            r"(?:ok|oke|okay|vang|dong y|u)[, ]+(xac nhan|bat dau(?: di| hanh trinh| dan duong)?(?: ngay| luon)?)", value
+        )
+        if consent:
+            value = consent[1]
         for pattern, replacement in LEXICON:
             value = re.sub(r"\b(?:" + pattern + r")\b", replacement, value)
         value = re.sub(r"\ball cac (?=window|door|cua|kinh)", "all ", value)
@@ -132,6 +137,12 @@ class OfflineParser:
         self.lexer = Lexer()
 
     def interpret(self, text: str, session: SessionState, memory=None, history=None) -> SemanticTurn:
+        gear = re.fullmatch(
+            r"(?:chuyen|ve|sang|vao)(?: sang| ve)?(?: so| che do)? ([pd])(?: nhe| di)?",
+            normalize_text(text).strip(" .!?"),
+        )
+        if gear:
+            return self.request("navigation.set_gear", {"gear": gear[1].upper()})
         # A comfort complaint followed by one aligned adjustment describes one
         # command, not two independent increments. Both clauses are consumed.
         comfort = re.fullmatch(
@@ -981,6 +992,8 @@ class OfflineParser:
         plan = session.trip_plan
         if not plan or plan.calculation_status == "cancelled":
             return None
+        if session.navigation_focus != "trip" and value != "huy ke hoach":
+            return None
         identity = {"plan_id": plan.id, "route_revision": plan.revision}
         if (
             plan.clarification
@@ -1083,9 +1096,22 @@ class OfflineParser:
             return self.ask("Bạn muốn chọn địa điểm thứ mấy trong danh sách?")
         if re.fullmatch(r"huy (?:tim|chon) dia diem", value):
             return self.request("navigation.cancel", {"route_revision": nav.revision})
+        if re.fullmatch(r"(?:ket thuc hanh trinh|khong di nua)", value):
+            return self.request("navigation.end")
         if re.fullmatch(r"(?:dung|huy|tat)(?: hanh trinh| dan duong| mo phong)", value):
             return self.request("navigation.stop")
-        if nav.status in {"preview", "paused"} and re.fullmatch(
+        candidate = (nav.pending or {}).get("navigation") or nav.model_dump(mode="json")
+        current_index = session.active.current_index() if session.active else None
+        if (
+            session.navigation_focus == "navigation"
+            and current_index is None
+            and (candidate.get("offer") or {}).get("status") == "pending"
+        ):
+            if re.fullmatch(r"(?:dong y|xac nhan|ok|co|u|duoc|dung|vang)(?: roi)?", value):
+                return SemanticTurn(act="confirm", task_ref="active")
+            if value in {"khong", "khong di", "chua", "chua di", "de sau"}:
+                return SemanticTurn(act="deny", task_ref="active")
+        if (nav.status in {"preview", "paused"} or nav.pending and nav.pending.get("navigation")) and re.fullmatch(
             r"(?:bat dau|chay|di|xac nhan|dong y|ok|co|u|duoc)(?: di| dan duong| hanh trinh| mo phong)?", value
         ):
             # A yes answers the pending step, whatever it is: "Mở tất cả cửa" → "OK"
@@ -1093,10 +1119,7 @@ class OfflineParser:
             if session.active and session.active.current_index() is not None:
                 return SemanticTurn(act="confirm", task_ref="active")
             return self.request("navigation.start", {"route_revision": nav.revision})
-        selection = re.fullmatch(
-            r"(?:(?:chon|den|di den|dan den) )?(?:(?:cho|tram(?: sac)?|dia diem|ket qua|so)(?: thu)? )?(dau tien|mot|hai|ba|bon|tu|nam|[0-9]+)",
-            value,
-        )
+        selection = self.place_ordinal(value)
         if selection and clarification and clarification.get("choices"):
             index = {"dau tien": 0, "mot": 0, "hai": 1, "ba": 2, "1": 0, "2": 1, "3": 2}.get(
                 selection[1], int(selection[1]) - 1 if selection[1].isdigit() else 99
@@ -1185,6 +1208,43 @@ class OfflineParser:
         return None
 
     @staticmethod
+    def place_ordinal(value):
+        return re.fullmatch(
+            r"(?:(?:chon|den|di den|dan den) )?"
+            r"(?:(?:cai|cho|tram(?: sac)?|dia diem|ket qua|so) )?"
+            r"(?:thu )?(dau tien|mot|hai|ba|bon|tu|nam|[0-9]+)", value,
+        )
+
+    def place_reference(self, text, session):
+        """Resolve only literal answers against the currently owned POI list."""
+        value = self.lexer.normalize(text)
+        index = session.active.current_index() if session.active else None
+        prefix = session.active.steps[index].draft.capability.split(".")[0] if index is not None else session.navigation_focus
+        if prefix not in {"navigation", "trip"}:
+            return None
+        trip = prefix == "trip" and session.trip_plan is not None
+        owner = session.trip_plan if trip else session.navigation
+        question = owner.clarification or {}
+        pending = (owner.pending or {}).get("navigation") or {}
+        energy = pending.get("energy") or owner.energy or {}
+        candidates = [*owner.candidates, *energy.get("station_candidates", [])]
+        if not (owner.status == "selecting" or owner.pending and owner.pending.get("status") == "selecting"
+                or question or energy.get("station_candidates")):
+            return None
+        literal = self.place_ordinal(value) or any(
+            value in {normalize_text(p["name"]), normalize_text(p.get("spoken_label", ""))}
+            for p in candidates
+        )
+        if not literal:
+            return None
+        parsed = self.trip(value, text, session) if trip else self.navigation(value, text, session)
+        if parsed and (parsed.act == "clarify" or parsed.actions and parsed.actions[0].capability in {
+            "navigation.select", "navigation.refine", "trip.select", "trip.refine",
+        }):
+            return parsed
+        return None
+
+    @staticmethod
     def awaiting_place(session):
         nav = session.navigation
         if not (nav.status == "selecting" or nav.pending and nav.pending.get("status") == "selecting"):
@@ -1208,6 +1268,19 @@ class OfflineParser:
             start or affirmed(value)
         )
 
+    def confirmation_reference(self, text, session):
+        """Resolve a whole consent reply only against the question currently owned."""
+        index = session.active.current_index() if session.active else None
+        waiting = index is not None and session.active.steps[index].status == "waiting_confirmation"
+        question = session.pending_question() or {}
+        if not waiting and question.get("kind") != "start_plan":
+            return None
+        value = self.lexer.normalize(text)
+        if not (self.start_consent(text) or value in {"khong", "chua", "chua di", "de sau"}):
+            return None
+        result = self.interpret(text, session)
+        return result if result.act in {"confirm", "deny", "cancel", "request", "clarify"} else None
+
     def guard(self, text, semantic, session, memory=None, history=None):
         """Language evidence checks stay at the language boundary for all tiers."""
         value = self.lexer.normalize(text)
@@ -1215,6 +1288,9 @@ class OfflineParser:
         bounded = self.interpret(text, session, memory, history)
         if bounded.negated or bounded.conditional or bounded.scheduled or bounded.conflicting:
             return bounded
+        reference = self.place_reference(text, session)
+        if reference:
+            return reference
         travel = [a for a in result.drafts() if a.capability.startswith(("navigation.", "trip."))]
         for action in travel:
             if action.capability == "trip.start":
@@ -1279,16 +1355,7 @@ class OfflineParser:
             ):
                 return self.ask("Lựa chọn đã thay đổi. Bạn chọn lại nhé.")
         current = session.active.current_index() if session.active else None
-        current_capability = session.active.steps[current].draft.capability if current is not None else None
-        pending_question = (
-            session.trip_plan.clarification
-            if session.trip_plan and (current_capability is None or current_capability.startswith("trip."))
-            else session.navigation.clarification
-            if current_capability and current_capability.startswith("navigation.")
-            else None
-        )
-        if pending_question and result.act in {"confirm", "deny"}:
-            return self.ask(pending_question["question"])
+        # Typed place answers are resolved by the dialogue reducer for every provider.
         current = session.active.current_index() if session.active else None
         if (
             result.act == "confirm"
@@ -1301,6 +1368,7 @@ class OfflineParser:
         if (
             result.act == "confirm"
             and current is not None
+            and session.active.steps[current].status == "waiting_confirmation"
             and session.active.steps[current].draft.capability.startswith("navigation.")
             and not self.start_consent(text)
         ):

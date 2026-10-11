@@ -23,6 +23,8 @@ let selectedTurnId = null;
 let listSignature = '';
 let detailSignature = '';
 let pollInFlight = false;
+let resetInFlight = false;
+let resetGeneration = 0;
 let metric = 'memory';
 
 const bytes = value => value == null ? '—' : `${(value / 1048576).toFixed(0)} MB`;
@@ -241,12 +243,14 @@ function updateTurns(item) {
 }
 
 async function poll() {
-  if (pollInFlight) return;
+  if (pollInFlight || resetInFlight) return;
+  const generation = resetGeneration;
   pollInFlight = true;
   try {
     const response = await fetch('/api/v1/metrics', { cache: 'no-store' });
     if (!response.ok) throw new Error(`metrics returned ${response.status}`);
     const item = await response.json();
+    if (generation !== resetGeneration || resetInFlight) return;
     samples.push(compactSample(item));
     samples.splice(0, Math.max(0, samples.length - MAX_SAMPLES));
     localStorage.setItem(STORAGE_KEY, JSON.stringify(samples));
@@ -256,6 +260,7 @@ async function poll() {
     updateTurns(item);
     drawChart();
   } catch {
+    if (generation !== resetGeneration || resetInFlight) return;
     setConnection(false);
     $('#updated').textContent = 'Backend offline';
   } finally {
@@ -263,20 +268,39 @@ async function poll() {
   }
 }
 
-$('#reset').addEventListener('click', () => {
-  samples.length = 0;
-  turns = [];
-  selectedTurnId = null;
-  listSignature = '';
-  detailSignature = '';
-  resetAt = Date.now();
-  localStorage.setItem(STORAGE_KEY, '[]');
-  localStorage.setItem(RESET_KEY, String(resetAt));
-  localStorage.removeItem('vivi-command-history');
-  $('#retained-command-list').innerHTML = '<div class="empty">Chưa có lệnh được lưu.</div>';
-  updateTurnList();
-  updateTurnDetail();
-  drawChart();
+$('#reset').addEventListener('click', async () => {
+  if (resetInFlight) return;
+  resetInFlight = true;
+  resetGeneration += 1;
+  $('#reset').disabled = true;
+  try {
+    const response = await fetch('/api/v1/history/reset', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: localStorage.getItem('vivi-session-id') || null }),
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.detail || 'Không xoá được lịch sử.');
+    samples.length = 0;
+    turns = [];
+    selectedTurnId = null;
+    listSignature = '';
+    detailSignature = '';
+    resetAt = Date.now();
+    localStorage.setItem(STORAGE_KEY, '[]');
+    localStorage.setItem(RESET_KEY, String(resetAt));
+    localStorage.removeItem('vivi-command-history');
+    $('#retained-command-list').innerHTML = '<div class="empty">Chưa có lệnh được lưu.</div>';
+    updateTurnList();
+    updateTurnDetail();
+    localStorage.setItem('vivi-history-reset', String(resetAt));
+    drawChart();
+    $('#updated').textContent = `Đã xoá ${result.deleted_turns} lượt hội thoại ở backend.`;
+  } catch (error) {
+    $('#updated').textContent = error.message || 'Không kết nối được backend để xoá lịch sử.';
+  } finally {
+    resetInFlight = false;
+    $('#reset').disabled = false;
+  }
 });
 $('#metric').addEventListener('click', event => {
   const button = event.target.closest('[data-metric]');

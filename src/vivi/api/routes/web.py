@@ -69,6 +69,25 @@ async def wake_asset(asset_name: str):
 async def asset(asset_name: str):
     if asset_name == "monitor":
         return FileResponse(PROJECT_ROOT / "monitor.html", headers={"Cache-Control": "no-store"})
-    if asset_name not in {"app.js", "journey.js", "wake.js", "music.js", "scene3d.js", "wave.js", "neon.js", "style.css", "monitor.js", "engineer.js", "engineer.css", "role.js", "role.css"}:
+    if asset_name not in {
+        "app.js",
+        "journey.js",
+        "wake.js",
+        "navigation-state.js",
+        "navigation-store.js",
+        "journey-map.js",
+        "journey-simulation.js",
+        "journey-renderer.js",
+        "music.js",
+        "scene3d.js",
+        "wave.js",
+        "neon.js",
+        "style.css",
+        "monitor.js",
+        "engineer.js",
+        "engineer.css",
+        "role.js",
+        "role.css",
+    }:
         raise HTTPException(status_code=404)
     return FileResponse(PROJECT_ROOT / asset_name, headers={"Cache-Control": "no-store"})

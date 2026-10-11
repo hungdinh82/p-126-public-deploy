@@ -150,6 +150,10 @@ class NavigationStart(Parameters):
     plan_id: str | None = None
 
 
+class NavigationGear(Parameters):
+    gear: Literal["P", "D"]
+
+
 @dataclass(frozen=True)
 class ToolSpec:
     name: str
@@ -300,7 +304,22 @@ NAVIGATION_TOOLS = (
         NavigationStart,
         "Bạn muốn huỷ yêu cầu nào?",
     ),
+    ToolSpec(
+        "navigation.end",
+        "Kết thúc hành trình, về P; không tiếp tục tuyến này khi chuyển D.",
+        Parameters,
+        "Bạn muốn kết thúc hành trình?",
+    ),
+    ToolSpec(
+        "navigation.decline", "Từ chối bắt đầu, giữ tuyến để xem lại.", NavigationStart, "Bạn muốn giữ tuyến nào?"
+    ),
     ToolSpec("navigation.stop", "Dừng hành trình hiện tại.", Parameters, "Bạn muốn dừng dẫn đường?"),
+    ToolSpec(
+        "navigation.set_gear",
+        "Chuyển P để đỗ/tạm dừng hoặc D để tiếp tục tuyến đã chấp nhận; không nhận bản nháp.",
+        NavigationGear,
+        "Bạn muốn chuyển P hay D?",
+    ),
 )
 NAVIGATION_TOOL = NAVIGATION_TOOLS[0]
 TOOL_REGISTRY.update({tool.name: tool for tool in NAVIGATION_TOOLS})

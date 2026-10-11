@@ -1,9 +1,10 @@
+import {JourneyMap} from './journey-map.js?v=1';
+import {DriveSimulation} from './journey-simulation.js?v=1';
+import {JourneyRenderer} from './journey-renderer.js?v=1';
 // Journey view: VietMap map, destination search, route planning and a
 // client-side drive simulation along the planned route. Search and routing go
 // through the backend so the VietMap service key stays server side.
 const $ = (selector) => document.querySelector(selector);
-const SDK_VERSION = '6.0.1';
-const SDK_BASE = `https://unpkg.com/@vietmap/vietmap-gl-js@${SDK_VERSION}/dist`;
 const EARTH_RADIUS_M = 6371000;
 // GraphHopper-style maneuver signs returned by the VietMap route API.
 const SIGN_ICONS = { '-98': '↶', '-8': '↶', '-7': '↖', '-3': '↰', '-2': '↰', '-1': '↖', 0: '↑', 1: '↗', 2: '↱', 3: '↱', 4: '◎', 5: '•', 6: '↻', 7: '↗', 8: '↷' };
@@ -11,8 +12,21 @@ const SIGN_ICONS = { '-98': '↶', '-8': '↶', '-7': '↖', '-3': '↰', '-2': 
 let hooks = { announce: () => {}, setDriving: () => {}, progress: () => {}, route: () => {}, travel: () => {}, network: () => {} };
 let backendNavigation = null;
 let backendTripPlan = null;
-let mapTripPlan = null;
+let mapTripPlan = null; // Read-only map target, never the implicit action target.
+let mapAction = null;
+let commandPending = false;
+let backendWorkspace = null;
 let choiceOwner = 'navigation';
+let planningSteps = [];
+let routeIdentity = null;
+let motionBlocked = false;
+let chargingTimer = null;
+let activeMapLoad = null;
+let lastEnergySignature = null;
+let pauseRequest = null;
+let journeyInformationHidden = false;
+const retiredTripPlans = new Set();
+try { journeyInformationHidden = sessionStorage.getItem('vivi.journeyInformationHidden') === 'true'; } catch {}
 const hiddenInformation = new Set();
 try { for (const key of JSON.parse(sessionStorage.getItem('vivi.hiddenInformation') || '[]')) hiddenInformation.add(key); } catch {}
 let navigationGrant = null;
@@ -20,17 +34,48 @@ let progressAt = 0;
 let progressPending = false;
 let config = null;
 let map = null;
-let sdkPromise = null;
+
 let origin = null;          // { lat, lng, label }
 let destination = null;     // { lat, lng, name, address }
 let route = null;           // backend Route + cumulative distances
 let markers = {};
-let sim = { running: false, speedup: 5, traveled: 0, last: 0, frame: 0, step: -1, follow: true, lastPaint: 0, bearing: 0 };
+let sim = new DriveSimulation();
+const presentation = new JourneyRenderer();
 let lastNetworkScan = 0;
 // 'full' covers the screen for planning, 'mini' is the corner map while driving.
 let view = 'hidden';
 let searchTimer = 0;
 let searchToken = 0;
+
+function draftNavigation() {
+  const nav = backendNavigation;
+  if (!nav) return null;
+  return nav.pending?.navigation || (['preview','selecting'].includes(nav.status) ? nav : null);
+}
+function activeJourney() { return ['running','paused','charging'].includes(backendNavigation?.status); }
+function planAction(plan, owner) {
+  return {owner, id:owner==='trip'?plan.id:backendNavigation?.request_id, revision:owner==='trip'?plan.revision:backendNavigation?.revision};
+}
+function actionCurrent(target) {
+  return target && (target.owner==='trip' ? backendTripPlan?.id===target.id && backendTripPlan.revision===target.revision : backendNavigation?.request_id===target.id && backendNavigation.revision===target.revision);
+}
+async function acceptPlan(target) {
+  if (commandPending || !actionCurrent(target)) return;
+  commandPending=true;renderInformation();renderMapAction();
+  try {
+    if(target.owner==='trip') await tripCommand('trip.start',backendTripPlan);
+    else await hooks.command?.('Bắt đầu tuyến đã chọn',{capability:'navigation.start',arguments:{route_revision:target.revision}});
+  } finally {commandPending=false;renderInformation();renderMapAction();}
+}
+function renderMapAction() {
+  const button=document.querySelector('#journey-start');if(!button)return;
+  const target=mapAction;
+  const plan=target?.owner==='trip'?backendTripPlan:draftNavigation();
+  button.hidden=!target || !actionCurrent(target);
+  button.disabled=commandPending || !plan?.energy?.selected_plan || !!plan?.clarification;
+  const label=document.querySelector('#journey-start span');
+  if(label)label.textContent=activeJourney()?`Thay tuyến sang ${plan?.selected?.spoken_label || plan?.selected?.name || 'đích mới'}`:'Bắt đầu hành trình';
+}
 
 const escapeHtml = (value) => String(value ?? '').replace(/[&<>'"]/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character]);
 const formatDistance = (meters) => meters < 1000 ? `${Math.max(0, Math.round(meters / 10) * 10)} m` : `${(meters / 1000).toLocaleString('vi-VN', { maximumFractionDigits: 1 })} km`;
@@ -68,100 +113,41 @@ function setMessage(text, tone = '') {
   element.hidden = !text;
 }
 
-function loadSdk() {
-  if (window.vietmapgl) return Promise.resolve();
-  sdkPromise ||= new Promise((resolve, reject) => {
-    const style = document.createElement('link');
-    style.rel = 'stylesheet'; style.href = `${SDK_BASE}/vietmap-gl.css`;
-    document.head.append(style);
-    const script = document.createElement('script');
-    script.src = `${SDK_BASE}/vietmap-gl.js`;
-    script.onload = resolve;
-    script.onerror = () => { sdkPromise = null; reject(new Error('Không tải được thư viện bản đồ VietMap')); };
-    document.head.append(script);
-  });
-  return sdkPromise;
-}
-
-function markerElement(className) {
-  const element = document.createElement('div');
-  element.className = `journey-marker ${className}`;
-  element.innerHTML = '<i></i>';
-  return element;
-}
-function placeMarker(name, lngLat, className) {
-  if (!markers[name]) markers[name] = new vietmapgl.Marker({ element: markerElement(className), rotationAlignment: 'map' }).setLngLat(lngLat).addTo(map);
-  else markers[name].setLngLat(lngLat);
-  return markers[name];
-}
-function removeMarker(name) { markers[name]?.remove(); delete markers[name]; }
-
-function emptyLine() { return { type: 'Feature', geometry: { type: 'LineString', coordinates: [] } }; }
-function addRouteLayers() {
-  map.addSource('vivi-route', { type: 'geojson', data: emptyLine() });
-  map.addSource('vivi-traveled', { type: 'geojson', data: emptyLine() });
-  map.addSource('vivi-trip-preview', { type: 'geojson', data: emptyLine() });
-  const line = { 'line-join': 'round', 'line-cap': 'round' };
-  map.addLayer({ id: 'vivi-route-glow', type: 'line', source: 'vivi-route', layout: line, paint: { 'line-color': '#9aa8c8', 'line-width': 14, 'line-opacity': .14, 'line-blur': 6 } });
-  map.addLayer({ id: 'vivi-route-line', type: 'line', source: 'vivi-route', layout: line, paint: { 'line-color': '#d0d8ea', 'line-width': 4 } });
-  map.addLayer({ id: 'vivi-trip-preview-line', type: 'line', source: 'vivi-trip-preview', layout: line, paint: { 'line-color': '#f0cd92', 'line-width': 5, 'line-dasharray': [2, 1] } });
-  map.addLayer({ id: 'vivi-traveled-line', type: 'line', source: 'vivi-traveled', layout: line, paint: { 'line-color': '#4b6378', 'line-width': 5 } });
-}
-
-// Re-opening the panel while the map is still loading must not create a second map.
-let mapPromise = null;
-function ensureMap() {
-  mapPromise ||= createMap().catch(error => { mapPromise = null; throw error; });
-  return mapPromise;
-}
-async function createMap() {
-  config = await api('/api/v1/navigation/config');
-  if (!config.available) {
-    $('#journey').classList.add('no-map');
-    setMessage('Chưa cấu hình VIETMAP_API_KEY trong .env. Thêm key rồi khởi động lại ViVi để mở bản đồ.', 'warn');
-    $('#journey-search').disabled = true;
-    return;
+const mapAdapter = new JourneyMap({
+  fetchConfig:async()=>{
+    config=await api('/api/v1/navigation/config');
+    if(config.available)void api('/api/v1/navigation/map-health').then(health=>{
+      if([401,403,423,429].includes(health.tile_status)){
+        const notice=$('#journey-notice');notice.textContent=`Nền bản đồ chưa sẵn sàng (HTTP ${health.tile_status}). Bạn vẫn có thể tìm điểm đến.`;notice.hidden=false;
+      }
+    }).catch(()=>{});
+    return config;
+  },
+  notice:text=>{const notice=$('#journey-notice');notice.textContent=text;notice.hidden=false;},
+  ready:created=>{map=created;markers=mapAdapter.markers;hydrateMap();},
+  attach:created=>{
+    created.on('click',event=>{
+      if(sim.running || mapTripPlan || view!=='full')return;
+      hooks.event?.({kind:'point',id:crypto.randomUUID(),revision:backendNavigation?.revision || 0,
+        position:{lat:event.lngLat.lat,lng:event.lngLat.lng,label:'Điểm đã chọn trên bản đồ',simulated:true}});
+    });
+    created.on('dragstart',()=>{if(sim.running)sim.follow=false;});
   }
-  if (config.tile_status !== 200) {
-    $('#journey-notice').textContent = config.tile_status
-      ? `VietMap từ chối tải nền bản đồ (HTTP ${config.tile_status}). Kiểm tra VIETMAP_TILE_KEY (key của consumer Tilemap) — tìm kiếm và chỉ đường vẫn hoạt động.`
-      : 'Không kiểm tra được nền bản đồ VietMap; bản đồ có thể hiển thị trống.';
-    $('#journey-notice').hidden = false;
-  }
-  await loadSdk();
-  const center = [config.default_center.lng, config.default_center.lat];
-  let created;
-  try {
-    created = new vietmapgl.Map({ container: 'journey-map', style: config.style_url, center, zoom: 13, attributionControl: { compact: true } });
-  } catch {
-    throw new Error('Trình duyệt không hỗ trợ WebGL nên không hiển thị được bản đồ.');
-  }
-  // Tile failures are reported but not fatal: route layers only need the style,
-  // so search, routing and simulation keep working on a blank background.
-  let tileWarned = false;
-  created.on('error', event => {
-    const status = event.error?.status;
-    if (tileWarned || ![401, 403, 423, 429].includes(status)) return;
-    tileWarned = true;
-    $('#journey-notice').textContent = `VietMap từ chối tải nền bản đồ (HTTP ${status}). Kiểm tra VIETMAP_TILE_KEY (key của consumer Tilemap) — tìm kiếm và chỉ đường vẫn hoạt động.`;
-    $('#journey-notice').hidden = false;
-  });
-  // "load" waits for tiles, so a rejected tile key would hang; the style is enough.
-  await new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('Không tải được style bản đồ VietMap. Kiểm tra VIETMAP_API_KEY và kết nối mạng.')), 15000);
-    const ready = () => { clearTimeout(timer); resolve(); };
-    if (created.isStyleLoaded()) ready(); else created.once('style.load', ready);
-  }).catch(error => { created.remove(); throw error; });
-  map = created;
-  map.addControl(new vietmapgl.NavigationControl({ showCompass: true }), 'bottom-right');
-  addRouteLayers();
-  map.on('click', event => {
-    if (sim.running || mapTripPlan || view !== 'full') return;
-    if (hooks.event) return hooks.event({kind:'point',id:crypto.randomUUID(),revision:backendNavigation?.revision || 0,position:{lat:event.lngLat.lat,lng:event.lngLat.lng,label:'Điểm đã chọn trên bản đồ',simulated:true}});
-    setDestination({ lat: event.lngLat.lat, lng: event.lngLat.lng, name: 'Điểm đã chọn trên bản đồ', address: `${event.lngLat.lat.toFixed(5)}, ${event.lngLat.lng.toFixed(5)}` });
-  });
-  // Manual panning pauses camera follow until the recenter button is used.
-  map.on('dragstart', () => { if (sim.running) sim.follow = false; });
+});
+function placeMarker(name,lngLat,className){return mapAdapter.marker(name,lngLat,className);}
+function removeMarker(name){markers[name]?.remove();delete markers[name];}
+function emptyLine(){return {type:'Feature',geometry:{type:'LineString',coordinates:[]}};}
+function ensureMap(){return mapAdapter.ensure().then(created=>{map=created;return created;});}
+function hydrateMap(){
+  if(!map)return;
+  const active=backendNavigation;
+  map.getSource('vivi-route')?.setData(active?.route?{type:'Feature',geometry:{type:'LineString',coordinates:active.route.coordinates}}:emptyLine());
+  const preview=mapTripPlan || active?.pending?.navigation;
+  map.getSource(mapTripPlan?'vivi-trip-preview':'vivi-pending-preview')?.setData(preview?.route?{type:'Feature',geometry:{type:'LineString',coordinates:preview.route.coordinates}}:emptyLine());
+  if(active?.origin)setOrigin(active.origin);
+  if(active?.selected)placeMarker('destination',[active.selected.lng,active.selected.lat],'destination');
+  if(active)renderStationMarkers(active);
+  if(route && active?.progress_m){const sample=positionAt(sim.traveled);placeMarker('car',sample.point,'car')?.setRotation(sample.heading);}
 }
 
 let locating = false;
@@ -268,8 +254,8 @@ async function planRoute() {
     hooks.route({ coordinates: route.coordinates, cumulative, junctions });
     networkKey = '';
     hooks.network([]);
-    map.getSource('vivi-route').setData({ type: 'Feature', geometry: { type: 'LineString', coordinates: planned.coordinates } });
-    map.getSource('vivi-traveled').setData(emptyLine());
+    map?.getSource('vivi-route')?.setData({ type: 'Feature', geometry: { type: 'LineString', coordinates: planned.coordinates } });
+    map?.getSource('vivi-traveled')?.setData(emptyLine());
     const bounds = planned.coordinates.reduce((box, point) => box.extend(point), new vietmapgl.LngLatBounds(planned.coordinates[0], planned.coordinates[0]));
     map.fitBounds(bounds, { padding: fitPadding(), duration: 900 });
     renderRoute();
@@ -287,7 +273,12 @@ async function planRoute() {
 }
 function fitPadding() {
   const panel = $('.journey-panel').getBoundingClientRect();
-  return innerWidth > 760 ? { top: 60, bottom: 60, right: 60, left: panel.width + 60 } : { top: 40, bottom: panel.height + 30, left: 30, right: 30 };
+  const container=map?.getContainer?.();
+  const width=container?.clientWidth || globalThis.innerWidth || 1024;
+  const height=container?.clientHeight || globalThis.innerHeight || 768;
+  if(width>760)return {top:60,bottom:60,right:60,left:Math.min(panel.width+60,width*.65)};
+  const covered=Number.isFinite(panel.top)?height-panel.top+20:panel.height+30;
+  return {top:40,bottom:Math.min(Math.max(30,covered),height*.65),left:30,right:30};
 }
 
 function renderRoute() {
@@ -335,6 +326,7 @@ function roadSourceId() {
   return Object.keys(sources).find(id => sources[id].type === 'vector');
 }
 function scanNetwork(traveled) {
+  if(!map)return;
   const source = roadSourceId();
   if (!source) return;
   // Route window in local metres around the car (x east, y north).
@@ -419,15 +411,7 @@ function scanNetwork(traveled) {
 }
 
 // --- Drive simulation -----------------------------------------------------
-function positionAt(distance) {
-  const { cumulative, coordinates } = route;
-  let low = 0, high = cumulative.length - 1;
-  while (low < high - 1) { const mid = (low + high) >> 1; if (cumulative[mid] <= distance) low = mid; else high = mid; }
-  const span = cumulative[high] - cumulative[low] || 1;
-  const t = Math.min(1, Math.max(0, (distance - cumulative[low]) / span));
-  const [a, b] = [coordinates[low], coordinates[high]];
-  return { index: low, point: [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t], heading: bearing(a, b) };
-}
+function positionAt(distance){return DriveSimulation.position(route,distance,bearing);}
 // Which way each roundabout (sign 6) is left, from the heading on the way in
 // to the heading after the exit: degrees, positive to the right.
 function markRoundaboutExits() {
@@ -439,11 +423,7 @@ function markRoundaboutExits() {
     step.exitTurn = ((turn % 360) + 540) % 360 - 180;
   });
 }
-function stepAt(index) {
-  let current = 0;
-  route.steps.forEach((step, stepIndex) => { if (step.point_index <= index) current = stepIndex; });
-  return current;
-}
+function stepAt(index){return DriveSimulation.step(route,index);}
 function showNextManeuver(stepIndex, traveled) {
   const next = route.steps[stepIndex + 1];
   if(mapTripPlan)return next ? {next,distance:route.cumulative[Math.min(next.point_index,route.cumulative.length-1)]-traveled} : null;
@@ -471,24 +451,15 @@ let manualScrollUntil = 0, lastHighlightedStep = -1;
 
 function tick(now) {
   if (!sim.running) return;
-  const elapsed = Math.min(0.25, (now - sim.last) / 1000);
-  sim.last = now;
-  if (backendNavigation?.status === 'charging') {
-    if (!progressPending && now - progressAt >= 1000) sendProgress({ kind: 'charge', elapsed_s: Math.min(30, (now - progressAt) / 1000 * sim.speedup) }, now);
-    sim.frame = requestAnimationFrame(tick);
-    return;
-  }
-  const speed = route.length / Math.max(1, route.duration_s);
-  sim.traveled = Math.min(route.length, sim.traveled + elapsed * speed * sim.speedup);
-  if (backendNavigation?.status === 'running' && !progressPending && now - progressAt >= 1000) sendProgress({ kind: 'progress', distance_m: sim.traveled / route.length * route.distance_m }, now);
+  const elapsed = sim.advance(now,route);
+  if (backendNavigation?.status === 'running' && !progressPending && now - progressAt >= 1000) sendProgress({ kind: 'progress', distance_m: (route.length ? sim.traveled / route.length : 0) * route.distance_m }, now);
   const { index, point, heading } = positionAt(sim.traveled);
   hooks.travel(sim.traveled);
-  const car = placeMarker('car', point, 'car');
-  car.setRotation(heading);
-  // Repainting map sources every frame is wasteful; ~8 Hz is smooth enough.
-  if (now - sim.lastPaint > 120) {
+  if(view!=='hidden' && now-sim.lastMarker>=1000/30){sim.lastMarker=now;placeMarker('car',point,'car')?.setRotation(heading);}
+  // Keep traveled geometry and guidance at 5 Hz.
+  if (now - sim.lastPaint > 200) {
     sim.lastPaint = now;
-    if(!mapTripPlan)map.getSource('vivi-traveled').setData({ type: 'Feature', geometry: { type: 'LineString', coordinates: [...route.coordinates.slice(0, index + 1), point] } });
+    if(view!=='hidden' && !mapTripPlan)map?.getSource('vivi-traveled')?.setData({ type: 'Feature', geometry: { type: 'LineString', coordinates: [...route.coordinates.slice(0, index + 1), point] } });
     const summary = updateSummary(sim.traveled);
     const stepIndex = stepAt(index);
     const upcoming = showNextManeuver(stepIndex, sim.traveled);
@@ -509,12 +480,12 @@ function tick(now) {
     lastNetworkScan = now;
     try { scanNetwork(sim.traveled); } catch (error) { console.warn('Street network scan failed:', error); }
   }
-  if (mapTripPlan) { /* Viewing another plan must not move the active-route camera. */ } else if (view === 'mini') {
+  if (view==='hidden' || mapTripPlan) { /* Viewing another plan must not move the active-route camera. */ } else if (view === 'mini') {
     // Course-up in the corner map: smooth the heading so turns do not snap.
     const delta = ((heading - sim.bearing + 540) % 360) - 180;
     sim.bearing = (sim.bearing + delta * Math.min(1, elapsed * 4) + 360) % 360;
-    map.jumpTo({ center: point, bearing: sim.bearing, zoom: 16.2, pitch: 50 });
-  } else if (sim.follow) map.jumpTo({ center: point });
+    mapAdapter.camera({center:point,bearing:sim.bearing,zoom:16.2,pitch:50},now);
+  } else if (sim.follow) mapAdapter.camera({center:point},now);
   if (sim.traveled >= route.length) {
     if (hooks.event && backendNavigation?.status === 'running') {
       if (!progressPending) sendProgress({kind:'progress',distance_m:route.distance_m},now);
@@ -527,19 +498,14 @@ function tick(now) {
 }
 function startSimulation(fromServer = false) {
   if (!route) return;
-  if (hooks.command && !fromServer) {
-    if (navigationGrant && Date.parse(navigationGrant.expires_at) <= Date.now()) navigationGrant=null;
-    if (navigationGrant) return hooks.confirm?.(navigationGrant);
-    return hooks.command('Bắt đầu hành trình', { capability: 'navigation.start', arguments: { route_revision: backendNavigation?.revision || 0 } });
-  }
-  if (sim.traveled >= route.length) sim.traveled = 0;
+  if (!fromServer) return acceptPlan(mapAction || (draftNavigation() && planAction(draftNavigation(),'navigation')));
   sim.running = true; sim.follow = true; sim.step = -1; sim.last = performance.now();
   $('#journey').classList.add('simulating');
   $('#journey-start span').textContent = 'Tạm dừng';
   sim.bearing = positionAt(sim.traveled).heading;
   // Driving hands the screen back to the 3D view; the map shrinks to a corner.
-  setView('mini');
-  if (!fromServer) hooks.setDriving(true);
+  setView(journeyInformationHidden ? 'hidden' : 'mini');
+
   if (!fromServer) hooks.announce(`Bắt đầu hành trình đến ${destination.spoken_label || destination.name}. Quãng đường ${formatDistance(route.length)}, khoảng ${formatDuration(route.duration_s)}.`);
   sim.frame = requestAnimationFrame(tick);
 }
@@ -552,10 +518,11 @@ function stopSimulation(announce = true, fromServer = false) {
   $('#journey-start span').textContent = sim.traveled > 0 && route && sim.traveled < route.length ? 'Tiếp tục mô phỏng' : 'Bắt đầu mô phỏng';
   if (wasRunning) {
     hooks.travel(null);
-    if(!fromServer) hooks.setDriving(false);
+
     hooks.progress(null);
     if (announce) hooks.announce('Đã tạm dừng mô phỏng hành trình.');
   }
+  if (fromServer) setView('hidden');
 }
 function finishSimulation() {
   sim.running = false;
@@ -609,40 +576,86 @@ function setView(next) {
   if (!map || !changed) return;
   if (next === 'full') map.easeTo({ bearing: 0, pitch: 0, duration: 500 });
   // Wait for the CSS size transition before the map measures its container.
-  setTimeout(() => map?.resize(), 380);
+  if(!mapAdapter.resizeObserver)setTimeout(() => map?.resize(),380);
+}
+
+function setJourneyDetails(expanded) {
+  $('#journey').classList.toggle('details-expanded',expanded);
+  const button=$('#journey-details-toggle');
+  if(button){button.setAttribute('aria-expanded',String(expanded));button.textContent=expanded?'Thu gọn':'Chi tiết';}
 }
 
 // --- Public API -----------------------------------------------------------
 export async function openJourney() {
+  journeyInformationHidden=false;rememberJourneyVisibility();renderInformation();
   setView('full');
+  await prepareJourneyMap();
+  const draft=draftNavigation();
+  if(!mapTripPlan && choiceOwner==='trip' && backendTripPlan?.route && backendTripPlan.calculation_status!=='cancelled' && backendTripPlan.started_revision!==backendTripPlan.revision) await showPlanMap(backendTripPlan,'trip',false);
+  else if(!mapTripPlan && draft?.route) await showPlanMap(draft,'navigation',false);
+  renderMapAction();
+}
+async function prepareJourneyMap() {
   try {
-    await ensureMap();
+    if (!map) await ensureMap();
     if (map) {
       $('#journey').classList.remove('no-map');
       $('#journey-search').disabled = false;
       map.resize();
+      hydrateMap();
       if (!origin && !mapTripPlan) locate();
     }
   } catch (error) {
-    // Search and markers need a live map; keep them off until a reopen succeeds.
+    // Search stays available while map resources recover.
     $('#journey').classList.add('no-map');
-    $('#journey-search').disabled = true;
-    $('#journey-origin').textContent = 'Chưa xác định';
+    $('#journey-search').disabled = false;
+    $('#journey-origin').textContent = origin?.label || 'Chưa xác định';
     setMessage(error.message, 'error');
   }
 }
 // Shifting to P (button, voice or backend state) stops the car on the map too.
 export function pauseJourney() {
-  if (sim.running) stopSimulation();
+  if (pauseRequest) return pauseRequest;
+  stopSimulation(false,true);
+  setView('hidden');
+  if (hooks.event && ['running','charging'].includes(backendNavigation?.status)) {
+    pauseRequest=hooks.event({kind:'pause',id:crypto.randomUUID(),revision:backendNavigation.revision}).finally(()=>{pauseRequest=null;});
+    return pauseRequest;
+  }
+}
+export function resetJourneyRuntime(){
+  stopSimulation(false,true);
+  if(chargingTimer)clearInterval(chargingTimer);
+  chargingTimer=null;backendNavigation=null;backendWorkspace=null;backendTripPlan=null;
+  routeIdentity=null;lastEnergySignature=null;route=null;activeMapLoad=null;
+}
+export function setJourneyMotionBlocked(blocked) {
+  motionBlocked=blocked;
+  if(blocked && backendNavigation?.status==='running')stopSimulation(false,true);
+  if(!blocked && backendNavigation?.status==='running' && route && !sim.running)startSimulation(true);
+}
+export async function changeJourneyDriving(driving) {
+  if(hooks.gear)return hooks.gear(driving?'D':'P');
+  if(!hooks.event)return false;
+  await hooks.event({kind:'gear',gear:driving?'D':'P',id:crypto.randomUUID(),revision:backendNavigation?.revision || 0});
+  return true;
 }
 export function closeJourney() {
   restoreNavigationView();
   // A trip in progress stays visible as the corner map.
-  const unfinished = route && sim.traveled > 0 && sim.traveled < route.length;
-  setView(sim.running || unfinished ? 'mini' : 'hidden');
+  setView(sim.running && !journeyInformationHidden ? 'mini' : 'hidden');
+}
+function rememberJourneyVisibility() {
+  try { sessionStorage.setItem('vivi.journeyInformationHidden',String(journeyInformationHidden)); } catch {}
+}
+function hideJourneyInformation() {
+  journeyInformationHidden=true;rememberJourneyVisibility();restoreNavigationView();setView('hidden');renderInformation();
 }
 export function initJourney(options) {
   hooks = { ...hooks, ...options };
+  $('#journey-details-toggle')?.addEventListener('click',()=>setJourneyDetails(!$('#journey').classList.contains('details-expanded')));
+  document.querySelector('#journey-visibility')?.addEventListener('click',hideJourneyInformation);
+  document.querySelector('#journey-clear')?.addEventListener('click',()=>hooks.event?.({kind:'end',id:crypto.randomUUID(),revision:backendNavigation?.revision || 0}));
   const scroll = document.querySelector('#journey-scroll');
   for (const type of ['wheel', 'touchstart', 'pointerdown', 'keydown']) scroll?.addEventListener(type, () => { manualScrollUntil = performance.now() + 15000; }, {passive:true});
   $('#journey-close').addEventListener('click', () => options.onClose?.());
@@ -654,12 +667,7 @@ export function initJourney(options) {
     const target = markers.car?.getLngLat() || (origin && [origin.lng, origin.lat]);
     if (target) map.easeTo({ center: target, zoom: sim.running ? 16 : 14 });
   });
-  $('#journey-start').addEventListener('click', () => {
-    if (mapTripPlan) return tripCommand('trip.start', mapTripPlan);
-    if (sim.running && hooks.command) hooks.command('Dừng hành trình', { capability: 'navigation.stop', arguments: {} });
-    else if (sim.running) stopSimulation();
-    else startSimulation();
-  });
+  $('#journey-start').addEventListener('click', () => acceptPlan(mapAction));
   document.querySelectorAll('[data-speed]').forEach(button => button.addEventListener('click', () => {
     sim.speedup = Number(button.dataset.speed);
     document.querySelectorAll('[data-speed]').forEach(item => item.setAttribute('aria-pressed', String(item === button)));
@@ -669,7 +677,7 @@ export function initJourney(options) {
     clearTimeout(searchTimer);
     const text = input.value.trim();
     if (text.length < 2) { searchToken++; closeResults(); return; }
-    if (mapTripPlan) { searchTimer = setTimeout(() => tripCommand('trip.plan', mapTripPlan, {query:text,trip_kind:mapTripPlan.trip_kind}), 700); return; }
+    if (mapAction?.owner==='trip') { searchTimer = setTimeout(() => tripCommand('trip.plan', backendTripPlan, {query:text,trip_kind:backendTripPlan.trip_kind}), 700); return; }
     searchTimer = setTimeout(() => search(text), 300);
   });
   input.addEventListener('keydown', event => {
@@ -693,14 +701,17 @@ async function sendProgress(value, now) {
   if (!hooks.event || !backendNavigation) return;
   progressPending = true; progressAt = now;
   try { await hooks.event({ ...value, id: crypto.randomUUID(), revision: backendNavigation.revision }); }
-  catch (error) { stopSimulation(false,true); setMessage(`Đã tạm dừng cập nhật hành trình: ${error.message}`,'error'); }
+  catch (error) { stopSimulation(false,true); setMessage(`Đang đồng bộ hành trình: ${error.message}`,'error');hooks.transportLost?.(); }
   finally { progressPending = false; }
 }
 
 function informationKey(next, label) { return `${next.id || next.request_id || `navigation:${next.revision}`}:${label}`; }
-function hideInformation(key) {
+function rememberHiddenInformation(key) {
   hiddenInformation.add(key);
   try { sessionStorage.setItem('vivi.hiddenInformation', JSON.stringify([...hiddenInformation].slice(-100))); } catch {}
+}
+function hideInformation(key) {
+  rememberHiddenInformation(key);
   renderInformation();
 }
 function currentChoice() { return choiceOwner === 'trip' ? backendTripPlan : backendNavigation; }
@@ -720,8 +731,37 @@ function reopenButton(next,label) {
 }
 function renderInformation() {
   const tabs=document.querySelector('#information-tabs');if(tabs)tabs.innerHTML='';
-  const next=currentChoice();if(next) {renderDestinationChoices(next);if(next.clarification || next.status==='selecting')reopenButton(next,'Địa điểm');}
-  if(backendTripPlan) {renderTripCard(backendTripPlan);if(backendTripPlan.route && !backendTripPlan.clarification && backendTripPlan.calculation_status!=='cancelled')reopenButton(backendTripPlan,'Kế hoạch');}
+  const next=currentChoice();if(next) {renderDestinationChoices(next);if(next.clarification || next.status==='selecting'){reopenButton(next,'Địa điểm');if(view==='full')setJourneyDetails(true);}}
+  const draft=draftNavigation();
+  const plan=choiceOwner==='trip' && backendTripPlan?.calculation_status!=='cancelled' && backendTripPlan?.started_revision!==backendTripPlan?.revision?backendTripPlan:draft;
+  const card=document.querySelector('#trip-plan-card');if(card)card.hidden=true;
+  if(plan?.route && !next?.clarification && next?.status!=='selecting') {renderTripCard(plan);reopenButton(plan,'Kế hoạch');}
+  renderPlanningControls();
+  const rail=document.querySelector('#information-rail');rail?.classList.toggle('journey-information-hidden',journeyInformationHidden);
+  const visibility=document.querySelector('#journey-visibility');
+  if(visibility){visibility.textContent=journeyInformationHidden?'Hiện bản đồ & kế hoạch':'Ẩn bản đồ & kế hoạch';visibility.setAttribute('aria-pressed',String(journeyInformationHidden));}
+  const toolbar=document.querySelector('#journey-toolbar');
+  if(toolbar)toolbar.hidden=!backendNavigation?.route && !backendNavigation?.clarification && !backendTripPlan && !backendNavigation?.candidates?.length && !planningSteps.some(step=>step.capability?.startsWith('navigation.') && step.status==='waiting_slot');
+  const status=document.querySelector('#journey-state');
+  if(status){
+    const labels={idle:'Chưa có hành trình',selecting:'Đang chọn điểm đến',preview:'Chờ xác nhận',running:'Đang đi',charging:'Đang sạc',paused:'Tạm dừng · P',completed:'Đã hoàn tất',ended:'Đã kết thúc'};
+    const selected=backendNavigation?.selected;
+    status.textContent=`${labels[backendNavigation?.status] || 'Kế hoạch'}${selected?` · ${selected.spoken_label || selected.name}`:''}`;
+    if(backendNavigation?.pending?.navigation?.selected)status.textContent+=` · Chờ xác nhận: ${backendNavigation.pending.navigation.selected.spoken_label || backendNavigation.pending.navigation.selected.name}`;
+  }
+  const clear=document.querySelector('#journey-clear');if(clear){clear.hidden=!activeJourney();clear.disabled=commandPending;}
+}
+function renderPlanningControls() {
+  const panel=document.querySelector('#planning-controls');if(!panel)return;
+  panel.hidden=true;panel.innerHTML='';
+  const missing=planningSteps.find(step=>step.status==='waiting_slot' && step.capability?.startsWith('navigation.'));
+  if(missing && !draftNavigation() && !journeyInformationHidden) {
+    panel.hidden=false;const label=document.createElement('span');
+    label.textContent='Đang chờ điểm xuất phát';
+    const revision=backendNavigation?.revision || 0;
+    const cancel=document.createElement('button');cancel.textContent='Huỷ yêu cầu';cancel.className='planning-cancel';
+    cancel.addEventListener('click',()=>{if(backendNavigation?.revision===revision)hooks.command?.('Huỷ tuyến',{capability:'navigation.cancel',arguments:{route_revision:revision}});});panel.append(cancel,label);
+  }
 }
 let destinationChoiceBusy = false;
 function renderDestinationChoices(next) {
@@ -785,11 +825,12 @@ function tripCommand(capability,plan,extra={}) {
 }
 function renderTripCard(plan) {
   const panel=document.querySelector('#trip-plan-card');if(!panel)return;
+  const owner=plan.id?'trip':'navigation',target=planAction(plan,owner);
   const key=informationKey(plan,'Kế hoạch');
   panel.hidden= !plan.route || !!plan.clarification || plan.calculation_status==='cancelled' || hiddenInformation.has(key);
   if(panel.hidden)return;
-  const signature=JSON.stringify([plan.id,plan.revision,plan.calculation_status,plan.offer,plan.started_revision]);if(panel.renderSignature===signature)return;panel.renderSignature=signature;
-  const oldScroll=panel.scrollTop;panel.innerHTML='';panelHeading(panel,'Kế hoạch',key);
+  const signature=JSON.stringify([plan.id,plan.revision,plan.calculation_status,plan.offer,plan.started_revision,commandPending,backendNavigation?.status]);if(!presentation.begin(panel,signature))return;
+  const oldScroll=panel.scrollTop;panelHeading(panel,'Kế hoạch',key);
   const name=document.createElement('p');name.className='trip-destination';name.textContent=`${plan.trip_kind==='round_trip'?'Khứ hồi':'Một chiều'} · ${plan.selected?.spoken_label || plan.selected?.name || ''}`;panel.append(name);
   const energy=plan.energy?.selected_plan;
   const summary=document.createElement('p');summary.textContent=`${formatDistance(plan.route.distance_m)} · ${formatDuration(energy?.total_seconds || plan.route.duration_s)}${energy?` · pin đến ${Math.floor(energy.arrival_soc)}%`:''}`;panel.append(summary);
@@ -801,43 +842,58 @@ function renderTripCard(plan) {
     const time=document.createElement('small');time.textContent=`${plan.trip_kind==='round_trip'?(stop.phase===1?'Chiều về · ':'Chiều đi · '):''}${Math.ceil(stop.charge_minutes)} phút · pin ${Math.floor(stop.arrival_soc)}% → ${Math.floor(stop.departure_soc)}%`;row.append(name,time);panel.append(row);
   }
   const actions=document.createElement('div');actions.className='trip-actions';
-  for(const [label,handler] of [['Xem bản đồ',()=>showTripMap(plan)],['Chỉnh kế hoạch',()=>editTripPlan(plan)],['Bắt đầu',()=>tripCommand('trip.start',plan)]]) {
-    const button=document.createElement('button');button.type='button';button.textContent=label;button.disabled=label==='Bắt đầu' && (plan.calculation_status!=='ready' || plan.started_revision===plan.revision);button.addEventListener('click',handler);actions.append(button);
+  for(const [label,handler] of [['Xem bản đồ',()=>showPlanMap(plan,owner)],['Chỉnh kế hoạch',()=>editTripPlan(plan)],['Bắt đầu',()=>acceptPlan(target)]]) {
+    const button=document.createElement('button');button.type='button';button.textContent=label==='Bắt đầu' && activeJourney()?`Thay tuyến sang ${plan.selected?.spoken_label || plan.selected?.name}`:label;button.disabled=commandPending || label==='Bắt đầu' && (!plan.energy?.selected_plan || !!plan.clarification || plan.started_revision===plan.revision);button.addEventListener('click',handler);actions.append(button);
   }panel.append(actions);
-  const cancel=document.createElement('button');cancel.type='button';cancel.className='information-cancel';cancel.textContent='Huỷ yêu cầu';cancel.addEventListener('click',()=>tripCommand('trip.cancel',plan));panel.append(cancel);panel.scrollTop=oldScroll;
+  if(plan.started_revision!==plan.revision){const cancel=document.createElement('button');cancel.type='button';cancel.className='information-cancel';cancel.textContent='Huỷ kế hoạch';cancel.addEventListener('click',()=>{if(!actionCurrent(target))return;return owner==='trip'?tripCommand('trip.cancel',plan):hooks.command?.('Huỷ tuyến đang lập',{capability:'navigation.cancel',arguments:{route_revision:target.revision}});});panel.append(cancel);}panel.scrollTop=oldScroll;presentation.finish(panel);
 }
 function editTripPlan(plan) {
   const panel=document.querySelector('#trip-plan-card');if(!panel || panel.querySelector?.('form'))return;
   const form=document.createElement('form');form.className='destination-choice-input';
   const input=document.createElement('input');input.placeholder='Điểm đến mới…';input.setAttribute('aria-label','Điểm đến mới');input.maxLength=200;
   const button=document.createElement('button');button.textContent='Tính lại';button.type='submit';form.append(input,button);panel.append(form);input.focus?.();
-  form.addEventListener('submit',event=>{event.preventDefault();if(input.value.trim().length>=2)tripCommand('trip.plan',plan,{query:input.value.trim(),trip_kind:plan.trip_kind});});
+  form.addEventListener('submit',event=>{event.preventDefault();if(input.value.trim().length>=2){const args={query:input.value.trim(),trip_kind:plan.trip_kind};if(plan.id)tripCommand('trip.plan',plan,args);else hooks.command?.('Chỉnh tuyến',{capability:'navigation.plan',arguments:args});}});
 }
-async function showTripMap(plan) {
-  if(backendTripPlan?.id!==plan.id || backendTripPlan?.revision!==plan.revision)return;
-  mapTripPlan=plan;await openJourney();
-  if(backendTripPlan?.id!==plan.id || backendTripPlan?.revision!==plan.revision || !map)return;
+async function showTripMap(plan) {return showPlanMap(plan,'trip');}
+async function showPlanMap(plan,owner,open=true) {
+  const target=planAction(plan,owner);if(!actionCurrent(target))return;
+  mapTripPlan=plan;mapAction=target;
+  if(open)await openJourney();
+  if(mapTripPlan!==plan || !actionCurrent(target) || !map)return;
   map.getSource('vivi-trip-preview')?.setData({type:'Feature',geometry:{type:'LineString',coordinates:plan.route.coordinates}});
   $('#journey-origin').textContent=plan.origin.label || 'Điểm xuất phát';$('#journey-search').value=plan.selected.spoken_label || plan.selected.name;
   $('#journey-summary').hidden=false;$('#journey-controls').hidden=false;$('#journey-duration').textContent=formatDuration(plan.energy?.selected_plan?.total_seconds || plan.route.duration_s);$('#journey-distance').textContent=formatDistance(plan.route.distance_m);$('#journey-arrival').textContent='Xem trước';
   $('#journey-start span').textContent='Bắt đầu hành trình';$('#journey-start').disabled=plan.calculation_status!=='ready';$('#journey-next').hidden=true;
   $('#journey-steps').innerHTML=plan.route.steps.map(step=>`<li><b>${SIGN_ICONS[step.sign] || '↑'}</b><span>${escapeHtml(step.text)}</span></li>`).join('');
-  renderEnergy({...plan,alternatives:[]});setMessage('Xem trước kế hoạch · chưa bắt đầu hành trình');
-  if(window.vietmapgl){const bounds=plan.route.coordinates.reduce((box,point)=>box.extend(point),new vietmapgl.LngLatBounds(plan.route.coordinates[0],plan.route.coordinates[0]));map.fitBounds(bounds,{padding:fitPadding(),duration:500});}
+  renderEnergy({...plan,alternatives:owner==='trip'?[]:plan.alternatives});setMessage('Xem trước kế hoạch · chưa bắt đầu hành trình');renderMapAction();
+  if(typeof window!=='undefined' && window.vietmapgl){const bounds=plan.route.coordinates.reduce((box,point)=>box.extend(point),new vietmapgl.LngLatBounds(plan.route.coordinates[0],plan.route.coordinates[0]));map.fitBounds(bounds,{padding:fitPadding(),duration:500});}
 }
 function restoreNavigationView() {
-  if(!mapTripPlan)return;mapTripPlan=null;
+  if(!mapTripPlan)return;mapTripPlan=null;mapAction=null;
   map?.getSource('vivi-trip-preview')?.setData(emptyLine());$('#journey-start').disabled=false;
   if(backendNavigation){$('#journey-origin').textContent=backendNavigation.origin?.label || 'Chưa xác định';$('#journey-search').value=backendNavigation.selected?.name || '';renderRoute();renderEnergy(backendNavigation);}
 }
 
 export async function applyNavigation(payload) {
+  const incoming=payload.navigation;
+  if(incoming && backendNavigation && (incoming.revision<backendNavigation.revision || incoming.revision===backendNavigation.revision && (incoming.event_sequence || 0)<(backendNavigation.event_sequence || 0)))return;
+  if(payload.navigation_workspace)backendWorkspace=payload.navigation_workspace;
+  if(payload.steps && !payload.navigation && !payload.trip_plan)planningSteps=payload.steps;
+  if(Object.hasOwn(payload,'trip_plan') && payload.trip_plan===null){
+    if(backendTripPlan)retiredTripPlans.add(backendTripPlan.id);
+    backendTripPlan=null;
+    if(mapAction?.owner==='trip'){mapTripPlan=null;mapAction=null;map?.getSource('vivi-trip-preview')?.setData(emptyLine());}
+  }
   if(payload.trip_plan) {
     const plan=payload.trip_plan;
+    if(retiredTripPlans.has(plan.id))return;
     const different=plan.id!==backendTripPlan?.id;
     if(!backendTripPlan || different && (plan.event_sequence || 0)>=(backendTripPlan.event_sequence || 0) || !different && plan.revision>backendTripPlan.revision || !different && plan.revision===backendTripPlan.revision && (plan.event_sequence || 0)>=(backendTripPlan.event_sequence || 0)) {
-      if(mapTripPlan && (mapTripPlan.id!==plan.id || mapTripPlan.revision!==plan.revision || plan.calculation_status==='cancelled')) {restoreNavigationView();setView(sim.running?'mini':'hidden');}
+      if(plan.started_revision===plan.revision && (different || backendTripPlan?.started_revision!==plan.started_revision))rememberHiddenInformation(informationKey(plan,'Kế hoạch'));
+      if(mapAction?.owner==='trip' && mapTripPlan && (mapTripPlan.id!==plan.id || mapTripPlan.revision!==plan.revision || plan.calculation_status==='cancelled')) {restoreNavigationView();setView(sim.running?'mini':'hidden');}
+      if(different && payload.ui_events?.some(event=>event.type.startsWith('trip.'))) {journeyInformationHidden=false;rememberJourneyVisibility();}
       backendTripPlan=plan;
+      if(payload.steps)planningSteps=payload.steps;
       if(payload.ui_events?.some(event=>event.type.startsWith('trip.')))choiceOwner='trip';
     }
   }
@@ -845,47 +901,112 @@ export async function applyNavigation(payload) {
     config ||= await api('/api/v1/navigation/config');locate();
   }
   const next = payload.navigation;
-  if(payload.ui_events?.some(event=>event.type==='navigation.results'))choiceOwner='navigation';
   renderInformation();
   if (!next || (backendNavigation && next.revision < backendNavigation.revision)) return;
   if (backendNavigation && next.revision === backendNavigation.revision && (next.event_sequence || 0) < (backendNavigation.event_sequence || 0)) return;
   const previous = backendNavigation;
   backendNavigation = next;
+  if(view==='full' && previous?.status==='selecting' && next.status==='preview')setJourneyDetails(false);
+  if(next.request_id && next.request_id!==previous?.request_id && payload.ui_events?.some(e=>['navigation.results','navigation.preview'].includes(e.type))) {
+    journeyInformationHidden=false;rememberJourneyVisibility();
+  }
+
+  if(payload.ui_events?.some(event=>event.type==='navigation.clear')) {
+    if(backendTripPlan)retiredTripPlans.add(backendTripPlan.id);
+    backendTripPlan=null;mapTripPlan=null;planningSteps=[];hiddenInformation.clear();
+    document.querySelector('#trip-plan-card').hidden=true;
+    document.querySelector('#destination-choices').hidden=true;
+    map?.getSource('vivi-trip-preview')?.setData(emptyLine());
+  }
+  if(payload.steps)planningSteps=payload.steps;
+  if(payload.ui_events?.some(event=>['navigation.results','navigation.preview'].includes(event.type)))choiceOwner='navigation';
   renderInformation();
-  navigationGrant = payload.confirmation || (next.revision === previous?.revision ? navigationGrant : null);
+  navigationGrant = next.pending?.navigation?.offer?.grant || next.offer?.grant || null;
   const relevant = payload.ui_events?.some(event => event.type.startsWith('navigation.') && event.type !== 'navigation.progress');
   if(relevant && next.status==='running')restoreNavigationView();
   if (next.origin && !origin) setOrigin(next.origin);
-  const hasChosenDestination = !!(next.selected && next.route || next.pending?.navigation?.selected && next.pending?.navigation?.route);
-  if (relevant && hasChosenDestination && !next.clarification) await openJourney();
+  if(next.route && ['running','charging'].includes(next.status) && !map && !activeMapLoad && mapAdapter.status==='idle') {
+    activeMapLoad=prepareJourneyMap().then(()=>{
+      if(map && backendNavigation?.route){
+        map.getSource('vivi-route')?.setData({type:'Feature',geometry:{type:'LineString',coordinates:backendNavigation.route.coordinates}});
+        setOrigin(backendNavigation.origin || origin);
+        if(backendNavigation.selected)placeMarker('destination',[backendNavigation.selected.lng,backendNavigation.selected.lat],'destination');
+        renderStationMarkers(backendNavigation);
+      }
+    }).finally(()=>{activeMapLoad=null;});
+  }
+  if (backendNavigation !== next) return; // A newer response won while the map loaded.
   if (next.origin && (!markers.origin || next.origin.lat !== origin?.lat || next.origin.lng !== origin?.lng)) setOrigin(next.origin);
   if ((next.status === 'selecting' || next.pending?.status === 'selecting') && relevant) closeResults();
-  if (next.selected && next.route && map && (next.revision !== previous?.revision || !route || (previous?.pending && !next.pending))) {
-    if(sim.running && previous?.pending && !next.pending) stopSimulation(false,true);
+  const nextRouteIdentity=next.route && JSON.stringify([next.route_id,payload.navigation_workspace?.journey?.revision,
+    next.selected?.lat,next.selected?.lng,next.route.distance_m,next.route.duration_s,next.route.coordinates.length,
+    ['running','paused','charging','completed','ended'].includes(next.status)]);
+  if (next.selected && next.route && (nextRouteIdentity!==routeIdentity || !route)) {
+    if(sim.running)stopSimulation(false,true);
     destination = next.selected;
     $('#journey-search').value = destination.name;
     placeMarker('destination', [destination.lng, destination.lat], 'destination');
-    const cumulative = [0];
-    for (let i = 1; i < next.route.coordinates.length; i++) cumulative.push(cumulative[i-1] + haversine(next.route.coordinates[i-1], next.route.coordinates[i]));
-    route = { ...next.route, cumulative, length: cumulative.at(-1) || next.route.distance_m };
-    hooks.route({ coordinates: route.coordinates, cumulative });
-    map.getSource('vivi-route').setData({ type:'Feature', geometry:{ type:'LineString', coordinates:route.coordinates } });
+    route=DriveSimulation.prepare(next.route,haversine);
+    const cumulative=route.cumulative;
+    routeIdentity=nextRouteIdentity;
+    markRoundaboutExits();
+    const junctions=route.steps.slice(1).filter(step=>![4,5].includes(step.sign)).map(step=>cumulative[Math.min(step.point_index,cumulative.length-1)]);
+    hooks.route(['running','paused','charging'].includes(next.status)?{ coordinates: route.coordinates, cumulative, junctions }:null);
+    networkKey='';lastNetworkScan=0;hooks.network?.([]);
+    map?.getSource('vivi-traveled')?.setData(emptyLine());
+    map?.getSource('vivi-route')?.setData({ type:'Feature', geometry:{ type:'LineString', coordinates:route.coordinates } });
     renderRoute();
-    sim.traveled = next.progress_m / route.distance_m * route.length;
+    sim.traveled = next.progress_m / Math.max(1, route.distance_m) * route.length;
   }
-  if(!mapTripPlan){renderEnergy(next);renderStationMarkers(next);}
+  const energySignature=JSON.stringify([next.route_id,next.revision,next.status,next.energy?.status,next.energy?.selected_plan_id,next.stop_index]);
+  if(!mapTripPlan && energySignature!==lastEnergySignature){lastEnergySignature=energySignature;renderEnergy(next);renderStationMarkers(next);}
   if (next.status === 'preview' && sim.running) stopSimulation(false,true);
-  if (next.status === 'running' && !sim.running && route) { progressAt = performance.now(); startSimulation(true); }
-  if (next.status === 'charging') {
-    sim.traveled = next.progress_m / route.distance_m * route.length;
+  if(next.route && route && (next.status==='paused' || !sim.running))sim.traveled=next.progress_m / Math.max(1,route.distance_m) * route.length;
+  else if(next.status==='running' && route)sim.traveled=Math.max(sim.traveled,next.progress_m / Math.max(1,route.distance_m) * route.length);
+  if (next.status==='running' && !motionBlocked && !sim.running && route) { progressAt = performance.now(); startSimulation(true); }
+  if(previous?.pending && !next.pending && sim.running && relevant)setView(journeyInformationHidden?'hidden':'mini');
+  if(next.status!=='charging' && chargingTimer){clearInterval(chargingTimer);chargingTimer=null;}
+  if(next.status==='charging' && !chargingTimer) {
+    progressAt=performance.now();
+    chargingTimer=setInterval(()=>{
+      const now=performance.now();
+      if(backendNavigation?.status==='charging' && !progressPending)void sendProgress({kind:'charge',elapsed_s:Math.min(30,(now-progressAt)/1000*sim.speedup)},now);
+    },1000);
+  }
+  if (next.status === 'charging' && route) {
+    if(sim.running)stopSimulation(false,true);
+    sim.traveled = next.progress_m / Math.max(1, route.distance_m) * route.length;
     setMessage('Đang dừng sạc theo kế hoạch.');
   }
   if (next.status === 'completed' && previous?.status !== 'completed' && sim.running) finishSimulation();
-  else if (['paused','idle'].includes(next.status) && sim.running) stopSimulation(false,true);
+  else if (['paused','idle','ended'].includes(next.status) && sim.running) stopSimulation(false,true);
   if(next.pending?.navigation?.route && map && relevant) {
-    map.getSource('vivi-route').setData({type:'Feature',geometry:{type:'LineString',coordinates:next.pending.navigation.route.coordinates}});
+    map.getSource('vivi-pending-preview')?.setData({type:'Feature',geometry:{type:'LineString',coordinates:next.pending.navigation.route.coordinates}});
     setMessage(next.pending.message);
   }
+  if(!next.pending?.navigation?.route)map?.getSource('vivi-pending-preview')?.setData(emptyLine());
+  if(['completed','ended'].includes(next.status)){hooks.route(null);hooks.network?.([]);}
+  if(next.status==='idle' && !next.route) {
+    navigationGrant=null;route=null;routeIdentity=null;destination=null;sim.traveled=0;
+    removeMarker('car');removeMarker('destination');
+    map?.getSource('vivi-route')?.setData(emptyLine());
+    map?.getSource('vivi-traveled')?.setData(emptyLine());
+    hooks.route(null);hooks.network?.([]);
+    if(!mapTripPlan){renderRoute();setView('hidden');}
+  }
+  if(['paused','ended'].includes(next.status) && previous?.status!==next.status || journeyInformationHidden)setView('hidden');
+  if(mapAction && !actionCurrent(mapAction)){restoreNavigationView();}
+  renderMapAction();
+  renderJourneyHistory();
+}
+
+function renderJourneyHistory() {
+  const panel=document.querySelector('#journey-history');if(!panel)return;
+  panel.innerHTML='';const history=backendWorkspace?.history || [];panel.hidden=!history.length;
+  if(!history.length)return;
+  const title=document.createElement('summary');title.textContent='Lịch sử hành trình trong phiên';panel.append(title);
+  for(const item of [...history].reverse()) {const row=document.createElement('p');row.textContent=`${item.destination?.spoken_label || item.destination?.name || 'Hành trình'} · ${formatDistance(item.distance_m)} · ${item.status==='completed'?'Đã đến':'Đã kết thúc'}`;panel.append(row);}
+  const clear=document.createElement('button');clear.textContent='Xoá lịch sử';clear.addEventListener('click',()=>hooks.event?.({kind:'history_clear',id:crypto.randomUUID(),revision:backendNavigation?.revision || 0}));panel.append(clear);
 }
 
 export function getJourneyPosition() {
@@ -893,7 +1014,7 @@ export function getJourneyPosition() {
     const point = backendNavigation.route.coordinates.at(-1);
     return {lat:point[1],lng:point[0],label:'Vị trí sau hành trình',simulated:true};
   }
-  if (sim.running && route) {
+  if ((sim.running || backendNavigation?.status==='paused') && route) {
     const {point} = positionAt(sim.traveled);
     return {lat:point[1],lng:point[0],label:'Vị trí mô phỏng hiện tại',simulated:true};
   }
@@ -903,13 +1024,13 @@ export function getJourneyPosition() {
 function renderEnergy(next) {
   const element = document.querySelector('#journey-energy');
   if (!element) return;
-  const energy = next.pending?.navigation?.energy || next.energy;
+  const energy = next.energy;
   element.hidden = !energy;
   if (!energy) return;
   const plan = energy.selected_plan;
-  const summary = next.pending?.navigation?.summary || next.summary;
+  const summary = next.summary;
   const stops = summary?.stops || plan?.stops || [];
-  element.innerHTML = plan ? `<strong>${stops.length ? `${stops.length} điểm dừng sạc` : 'Không cần dừng sạc'} · khoảng ${formatDuration(plan.total_seconds)}</strong><p>Pin dự kiến khi đến: ${Math.floor(plan.arrival_soc)}%</p>${stops.map(stop => `<div class="route-stop"><strong>${escapeHtml(stop.label || stop.name)}</strong><p>${next.trip_kind==='round_trip'?(stop.phase===1?'Chiều về · ':'Chiều đi · '):''}Khoảng ${stop.minutes ?? Math.ceil(stop.charge_minutes)} phút · pin ${Math.floor(stop.arrival_soc)}% → ${Math.floor(stop.departure_soc)}%</p>${stop.road_context ? `<small>Gần ${escapeHtml(stop.road_context)}</small>` : ''}</div>`).join('')}${(next.pending?.navigation?.alternatives || next.alternatives || []).map(item => `<button type="button" data-plan="${escapeHtml(item.id)}">${{fewest_stops:'Ít dừng',fastest:'Nhanh nhất',higher_reserve:'Dự phòng cao'}[item.strategy]} · ${formatDuration(item.total_seconds)}</button>`).join('')}` : `<p>${escapeHtml(energy.message || 'Chưa có kế hoạch sạc khả thi.')}</p>`;
+  element.innerHTML = plan ? `<strong>${stops.length ? `${stops.length} điểm dừng sạc` : 'Không cần dừng sạc'} · khoảng ${formatDuration(plan.total_seconds)}</strong><p>Pin dự kiến khi đến: ${Math.floor(plan.arrival_soc)}%</p>${stops.map(stop => `<div class="route-stop"><strong>${escapeHtml(stop.label || stop.name)}</strong><p>${next.trip_kind==='round_trip'?(stop.phase===1?'Chiều về · ':'Chiều đi · '):''}Khoảng ${stop.minutes ?? Math.ceil(stop.charge_minutes)} phút · pin ${Math.floor(stop.arrival_soc)}% → ${Math.floor(stop.departure_soc)}%</p>${stop.road_context ? `<small>Gần ${escapeHtml(stop.road_context)}</small>` : ''}</div>`).join('')}${(next.status==='preview'?next.alternatives || []:[]).map(item => `<button type="button" data-plan="${escapeHtml(item.id)}">${{fewest_stops:'Ít dừng',fastest:'Nhanh nhất',higher_reserve:'Dự phòng cao'}[item.strategy]} · ${formatDuration(item.total_seconds)}</button>`).join('')}` : `<p>${escapeHtml(energy.message || 'Chưa có kế hoạch sạc khả thi.')}</p>`;
   element.querySelectorAll('[data-plan]').forEach(button => button.addEventListener('click', () => hooks.event?.({ kind:'select_plan', id:crypto.randomUUID(), revision:next.revision, plan_id:button.dataset.plan })));
   if (!plan) renderChargingChoices(element, energy);
   if (plan) {
@@ -924,21 +1045,6 @@ function renderEnergy(next) {
       details.append(source);
     }
     element.append(details);
-  }
-  if (next.pending) {
-    const message = document.createElement('p'); message.textContent = next.pending.message;
-    element.append(message);
-    if(next.pending.navigation) {
-      const button = document.createElement('button');
-      if(next.pending.status === 'preview' && navigationGrant) {
-        button.textContent='Xác nhận đổi tuyến';
-        button.addEventListener('click',()=>hooks.confirm?.(navigationGrant));
-      } else {
-        button.textContent='Xem phương án mới';
-        button.addEventListener('click',()=>hooks.command?.('Xem phương án mới',{capability:'navigation.start',arguments:{route_revision:next.revision,plan_id:'pending'}}));
-      }
-      element.append(button);
-    }
   }
 }
 
@@ -963,7 +1069,7 @@ function renderChargingChoices(element, energy) {
 
 function renderStationMarkers(next) {
   if (!map) return;
-  const energy = next.pending?.navigation?.energy || next.energy || {};
+  const energy = next.energy || {};
   const stations = energy.selected_plan?.stops || energy.station_candidates || [];
   const ids = new Set(stations.map(station => `charging:${station.id || station.station_id}`));
   for (const id of Object.keys(markers)) if (id.startsWith('charging:') && !ids.has(id)) removeMarker(id);

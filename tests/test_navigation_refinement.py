@@ -91,6 +91,7 @@ async def test_region_center_preserves_chain_and_requires_route_consent(services
             (s["status"], s["result"]) for s in done["steps"]
         ]
         assert gateway.vehicle.state_for("driver").driving and gateway.vehicle.state_for("driver").media_playing
+        assert done["navigation"]["status"] == "running" and not done["navigation"].get("offer")
     finally:
         graph.close()
 
@@ -114,7 +115,7 @@ async def test_specific_place_choice_and_named_reply_keep_region(services, tmp_p
         assert maps.queries[-1][0] == "Tràng An, Ninh Bình"
         assert reply["navigation"]["status"] == "selecting" and reply["navigation"]["selected"] is None
         reply = await invoke(graph, "Tràng An", "select-name")
-        assert reply["status"] == "confirmation_required"
+        assert reply["status"] == "answered" and reply["navigation"]["offer"]["status"] == "pending"
     finally:
         graph.close()
 

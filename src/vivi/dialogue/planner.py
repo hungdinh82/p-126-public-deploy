@@ -14,7 +14,7 @@ from src.vivi.dialogue.contracts import SemanticTurn, SessionState, semantic_sch
 from src.vivi.dialogue.parser import OfflineParser
 from src.vivi.structured_llm import strict_schema
 
-PROMPT_VERSION = "semantic-unified-14"
+PROMPT_VERSION = "semantic-unified-16"
 SEMANTIC_INSTRUCTION = """
 You interpret the complete CURRENT Vietnamese utterance into SemanticTurn JSON.
 Propose meaning; server code owns task IDs, scheduling, slot collection, consent,
@@ -115,6 +115,9 @@ The typed clarification.phase identifies the pending question:
   named. 'Không, về Thanh Hoá' changes region, NOT cancellation.
 - selecting candidates: single match yes selects its handle; multiple matches use
   ordinal/name/handle. Place acceptance is NOT permission to start driving.
+  A candidates[].handle belongs in place_handle with navigation.select/trip.select.
+  choice_handle is ONLY for clarification.choices[].handle, never a place handle.
+  Ordinals refer to the supplied list order; never reorder it using history.
   If the user says "đúng, bắt đầu đi luôn" while a place is still unselected,
   select its unique handle first. Do NOT propose trip.start without a ready plan.
   The map-result decision stage may proactively compute a preview for a clear
@@ -155,6 +158,16 @@ Specs/part locations/how-to -> manual.search, not navigation or live observation
 Explicit vehicle/edition -> requested_vehicle_model/year. Charging duration in the
 handbook requires question_kind=charging_duration and charging_mode null unless
 AC/DC was supplied; let the server collect it. Live status -> vehicle.get_status.
+
+NAVIGATION QUESTION OWNERSHIP
+pending_navigation_question identifies what a short yes/no answers. accept_place
+selects that candidate; change_destination yes asks for another destination and no
+keeps the verified center. Neither grants start consent. start_plan accepts only
+the current offer. Plans have no driving progress; the active journey continues
+until its replacement is accepted. navigation.stop pauses; navigation.end ends.
+Do not revive a completed planning step to start: use navigation.start with the
+current revision, or trip.start with its ID/revision. Never pick an old plan just
+because its map was viewed. Opening/hiding a map changes no journey or gear.
 
 SPEECH
 text is only a short Vietnamese user-facing reply, offer or clarification. Never
@@ -214,6 +227,16 @@ class SemanticResolver:
 
     async def resolve(self, text, session, *, requested="rules", history=None, memory=None, catalog=None):
         attempts = []
+        consent = self.parser.confirmation_reference(text, session)
+        if consent:
+            return consent, "rules", [{"provider": "rules", "outcome": "served", "latency_ms": 0,
+                                       "source": "pending_confirmation"}]
+        reference = self.parser.place_reference(text, session)
+        if reference:
+            return reference, "rules", [{
+                "provider": "rules", "outcome": "served", "latency_ms": 0,
+                "source": "candidate_reference",
+            }]
         prompt = json.dumps(
             {
                 "utterance": text,
@@ -305,6 +328,7 @@ class SemanticResolver:
             }
 
         return {
+            "pending_navigation_question": session.pending_question(),
             "active": task(session.active, "active"),
             "clarification": session.clarification.model_dump(mode="json") if session.clarification else None,
             "navigation": semantic_navigation_context(session.navigation.model_dump(mode="json")),

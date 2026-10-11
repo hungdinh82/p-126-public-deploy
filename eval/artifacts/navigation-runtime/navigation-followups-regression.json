@@ -1,0 +1,30 @@
+{
+  "backend": {
+    "passed": 154,
+    "failed": 3,
+    "baseline_failures": [
+      "tests/test_charging_discovery.py::test_model_context_keeps_station_handles_without_copying_road_polylines",
+      "tests/test_charging_discovery.py::test_missing_power_user_can_select_real_station_by_voice_then_confirm",
+      "tests/test_charging_discovery.py::test_confirmed_map_charging_stop_survives_restart_without_catalogue_lookup"
+    ],
+    "introduced_failures": [],
+    "scope": "API first, followups, service, controls, lifecycle, runtime review, followup review, charging, dialogue v2"
+  },
+  "new_regressions": {
+    "passed": 16,
+    "scope": "tests/test_navigation_followups.py"
+  },
+  "frontend": {
+    "passed": 67,
+    "failed": 0
+  },
+  "live_acceptance": {
+    "vietmap_with_fixture_semantics": "sam-son-followup-live-map.json",
+    "google": "not accepted; automatic approval review rejected repeat live-model payload egress"
+  },
+  "notes": [
+    "Selected earlier trip/refinement/decision run: 149 passed, 5 baseline failures.",
+    "Live map measurements are functional samples, not p95.",
+    "Operational session and databases were not modified."
+  ]
+}

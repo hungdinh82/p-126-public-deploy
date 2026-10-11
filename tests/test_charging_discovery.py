@@ -13,7 +13,7 @@ from src.vivi.dialogue.parser import OfflineParser, charging_poi_info
 from src.vivi.dialogue.planner import SemanticResolver
 from src.vivi.navigation.charging import VietMapChargingDiscovery, distance, route_context, sample_points
 from src.vivi.navigation.energy import EnergyPlanner
-from src.vivi.navigation.vietmap import Place, Route, VietMapClient
+from src.vivi.navigation.vietmap import Place, Route, VietMapClient, VietMapError
 from src.vivi.navigation.workflow import NavigationWorkflow
 from src.vivi.text import normalize_text
 from tests.test_dialogue_v2 import build, invoke
@@ -91,7 +91,7 @@ class Maps:
     async def route(self, a, b):
         self.roads.append((a, b))
         if self.missing_leg and (a, b) == (STOP, DEST):
-            raise RuntimeError("no access road")
+            raise VietMapError("no access road")
         lengths = {
             (ORIGIN, DEST): 180000,
             (ORIGIN, STOP): 70000,
@@ -157,7 +157,9 @@ def test_thanhhoa_is_a_region_and_charging_ordinal_uses_the_station_list():
 def test_model_context_keeps_station_handles_without_copying_road_polylines():
     route = road().model_dump()
     plan = {"id": "p1", "legs": [route], "arrival_soc": 15, "stops": [{"map_ref_id": "s1", "name": STOP_NAME}]}
+    # A replacement route is only kept beside a live journey.
     nav = NavigationState(
+        status="running",
         route=route,
         energy={"selected_plan": plan, "station_candidates": [{"handle": "charger"}]},
         alternatives=[plan],
@@ -360,7 +362,8 @@ async def test_missing_power_user_can_select_real_station_by_voice_then_confirm(
         assert "mô phỏng" not in blocked["response_text"] and not blocked.get("confirmation")
         selected = await invoke(graph, "đến trạm sạc đầu tiên", "choose-charger")
         assert selected["navigation"]["selected"]["ref_id"] == "s1"
-        assert selected["status"] == "confirmation_required" and not vehicle.vehicle.state_for("driver").driving
+        assert selected["status"] == "answered" and not vehicle.vehicle.state_for("driver").driving
+        assert selected["navigation"]["offer"]["status"] == "pending"
         running = await invoke(graph, "đồng ý", "start")
         assert running["navigation"]["status"] == "running" and running["navigation"]["selected"]["ref_id"] == "s1"
     finally:
@@ -388,7 +391,7 @@ async def test_confirmed_map_charging_stop_survives_restart_without_catalogue_lo
             }
         )
         preview = await invoke(graph, "chỗ đầu tiên", "choose")
-        assert preview["status"] == "confirmation_required"
+        assert preview["status"] == "answered" and preview["navigation"]["offer"]["status"] == "pending"
         assert preview["navigation"]["summary"]["stops"][0]["road_context"] == "Cao tốc TEST"
         running = await invoke(graph, "đồng ý", "start")
         stopped = await progress(graph, running["navigation"], "at-station", kind="progress", distance_m=70000)
@@ -396,6 +399,8 @@ async def test_confirmed_map_charging_stop_survives_restart_without_catalogue_lo
         before = len(maps.queries)
         graph, _, _ = build(services, tmp_path, store=ledger)
         nav = stopped["navigation"]
+        # A restart parks the journey; the driver resumes it before charging goes on.
+        await progress(graph, nav, "resume-charge", kind="resume")
         for index in range(12):
             nav = (await progress(graph, nav, f"charge-{index}", kind="charge", elapsed_s=30))["navigation"]
         assert nav["simulated_soc"] > 26.67 and len(maps.queries) == before

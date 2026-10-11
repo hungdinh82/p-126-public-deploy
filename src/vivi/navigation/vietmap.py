@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import math
 from typing import Any
 
@@ -86,6 +87,20 @@ class VietMapClient:
         self.map_style = config.vietmap_map_style
         self.timeout = config.vietmap_timeout_seconds
         self._transport = transport
+        self._http = None
+        self._loop = None
+
+    def http(self):
+        loop = asyncio.get_running_loop()
+        if self._http is None or self._http.is_closed or self._loop is not loop:
+            self._http = httpx.AsyncClient(base_url=self.base_url, timeout=self.timeout, transport=self._transport)
+            self._loop = loop
+        return self._http
+
+    async def aclose(self):
+        if self._http is not None:
+            await self._http.aclose()
+            self._http = None
 
     @property
     def available(self) -> bool:
@@ -115,18 +130,14 @@ class VietMapClient:
         y = int((1 - math.asinh(math.tan(math.radians(lat))) / math.pi) / 2 * scale)
         url = templates[0].replace("{z}", str(zoom)).replace("{x}", str(x)).replace("{y}", str(y))
         try:
-            async with httpx.AsyncClient(timeout=self.timeout, transport=self._transport) as client:
-                return (await client.get(url)).status_code
+            return (await self.http().get(url)).status_code
         except httpx.HTTPError as exc:
             raise VietMapError("Không kết nối được VietMap") from exc
 
     async def _get(self, path: str, params: list[tuple[str, str]], key: str | None = None) -> Any:
         query = [("apikey", key or self.api_key), *params]
         try:
-            async with httpx.AsyncClient(
-                base_url=self.base_url, timeout=self.timeout, transport=self._transport
-            ) as client:
-                response = await client.get(path, params=query)
+            response = await self.http().get(path, params=query)
         except httpx.HTTPError as exc:
             raise VietMapError("Không kết nối được VietMap") from exc
         if response.status_code != 200:

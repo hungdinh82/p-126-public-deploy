@@ -13,12 +13,14 @@ và luật, không gọi API, tải model hay chạy embedding.
 | Long-term | Tên, sở thích, yêu cầu/ghi chú, lệnh có tên | Theo hồ sơ người lái, dùng qua nhiều session/restart, tồn tại tới khi sửa hoặc xoá. |
 | Trạng thái xe và handbook | Số đo hiện tại, kiến thức kỹ thuật VF8 | Trạng thái đọc từ adapter; kiến thức đọc từ handbook. Memory không thay thế hai nguồn này. |
 
-Short-term là cửa sổ hội thoại gần đây, chưa có tóm tắt tự động hay LangGraph
-checkpointer. File lịch sử vẫn có thể chứa các lượt cũ ngoài cửa sổ 6 lượt.
+Short-term là cửa sổ hội thoại gần đây; LangGraph cũng lưu checkpoint điều phối. File lịch sử vẫn có thể chứa các lượt cũ ngoài cửa sổ 6 lượt.
 `store_transcripts` điều khiển transcript/EventStore và retention của monitor;
 SQLite conversation history hiện vẫn được ghi để phục vụ ngữ cảnh, kể cả khi cờ
-này tắt. **Reset history** trên monitor chỉ xoá lịch sử trình duyệt, không xoá
-SQLite history hay long-term memory.
+này tắt. **Reset lịch sử** trên monitor gọi `POST /api/v1/history/reset`: xoá hội thoại
+SQLite, checkpoint LangGraph (kể cả bản sao lưu migration tương ứng), log transcript/audio và cache giám sát của mọi phiên
+thuộc profile hiện tại. Reset từ chối khi có lượt đang xử lý. Trạng thái xe, hành
+trình, ledger chống thực thi trùng và long-term memory được giữ; xác nhận cũ bị
+vô hiệu hoá. Reset không tự bắt đầu hay dừng hành trình.
 
 ## Quy tắc ghi nhớ
 
@@ -162,6 +164,6 @@ sử riêng. `data/memory/` được bỏ qua bởi Git.
 `eval/memory_cases.jsonl` gồm 29 lượt theo các chuỗi nhớ/sửa/đổi phiên/restart/quên/
 reset/lệnh có tên và safety. Nhãn là bản draft để người dùng chỉnh. Runner dùng
 database tạm, cấm TCP, dùng xe mô phỏng và không đọc/ghi bộ nhớ thật của người
-dùng. Báo cáo ở `eval/results/memory-dev.json` gồm kết quả từng lượt và p50/p95
+dùng. Lệnh chạy lại sinh `eval/results/memory-dev.json` với kết quả từng lượt và p50/p95
 latency toàn graph. Đây là regression deterministic trên máy phát triển, chưa
 đo chất lượng SLM/STT hoặc latency khi cùng chạy STT/TTS/SLM trên AGX Xavier.

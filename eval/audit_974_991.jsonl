@@ -1,8 +1,0 @@
-{"id": 974, "query": "lập lộ trình sạc đi vào Huế", "status": "blocked", "expected": "trip.plan/query=Huế"}
-{"id": 984, "query": "lập lộ trình sạc từ đây về Đà Nẵng", "status": "clarify", "expected": "trip.plan/query=Đà Nẵng"}
-{"id": 986, "query": "chỉ đường đến Đà Nẵng", "status": "clarify", "expected": "verified default center, change_destination question"}
-{"id": 987, "query": "Chọn điểm đến", "status": "clarify", "expected": "specific-place question only"}
-{"id": 988, "query": "bãi biển sơn trà", "status": "clarify", "expected": "single candidate confirmation, no ordinal prompt"}
-{"id": 989, "query": "Chọn điểm đến", "status": "confirmation_required", "expected": "preview only, no driving"}
-{"id": 990, "query": "lập lộ trình đi và sạc  từ đây về Nghi Sơn Thanh Hoá và quay lại", "status": "clarify", "expected": "trip.plan round_trip, clean Nghi Sơn Thanh Hoá query"}
-{"id": 991, "query": "Chọn điểm đến", "status": "confirmation_required", "expected": "no outward-only no-charge result; keep return leg"}

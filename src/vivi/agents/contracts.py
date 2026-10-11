@@ -22,6 +22,7 @@ class ActionProposal(BaseModel):
         "navigation.refine",
         "navigation.start",
         "navigation.stop",
+        "navigation.set_gear",
         "navigation.cancel",
         "climate.set_temperature",
         "window.set_position",
@@ -55,6 +56,12 @@ class ConfirmationOutput(BaseModel):
 
 
 class AssistantOutput(BaseModel):
+    control_revision: int = 0
+    receipt: dict[str, Any] | None = None
+    control_receipts: list[dict[str, Any]] = Field(default_factory=list)
+    runtime_epoch: str | None = None
+    snapshot_sequence: int = 0
+    event_id: str | None = None
     session_id: str
     turn_id: str
     route: Route | Literal["invalid"]
@@ -73,6 +80,7 @@ class AssistantOutput(BaseModel):
     timings: dict[str, float] = Field(default_factory=dict)
     diagnostics: dict[str, Any] = Field(default_factory=dict)
     steps: list[dict[str, Any]] = Field(default_factory=list)
+    navigation_workspace: dict[str, Any] | None = None
     navigation: dict[str, Any] | None = None
     trip_plan: dict[str, Any] | None = None
     ui_events: list[dict[str, Any]] = Field(default_factory=list)

@@ -44,6 +44,49 @@ def reduce_turn(
     session: SessionState, value: SemanticTurn, *, revoke_consent_on_clarify=True
 ) -> tuple[SessionState, str | None]:
     state = expire(session)
+    # A yes/no answers the current typed place question before execution consent.
+    index = state.active.current_index() if state.active else None
+    current = state.active.steps[index] if index is not None else None
+    if (
+        value.act in {"confirm", "deny"}
+        and current
+        and current.status == "waiting_slot"
+        and current.draft.capability.startswith(("navigation.", "trip."))
+    ):
+        prefix = current.draft.capability.split(".")[0]
+        owner = state.trip_plan if prefix == "trip" else state.navigation
+        args = {"plan_id": owner.id, "route_revision": owner.revision} if prefix == "trip" else {}
+        question = owner.clarification or {}
+        action = None
+        if question.get("phase") == "change_destination":
+            kind = "specific" if value.act == "confirm" else "representative"
+            choice = next((c for c in question.get("choices", []) if c["kind"] == kind), None)
+            if choice:
+                action = ActionDraft(
+                    capability=f"{prefix}.refine", arguments={**args, "choice_handle": choice["handle"]}
+                )
+        elif not question and owner.candidates:
+            if value.act == "deny":
+                action = ActionDraft(capability=f"{prefix}.refine", arguments={**args, "reject_candidates": True})
+            elif len(owner.candidates) == 1:
+                action = ActionDraft(
+                    capability=f"{prefix}.select", arguments={**args, "place_handle": owner.candidates[0]["handle"]}
+                )
+        if action:
+            value = SemanticTurn(act="request", actions=[action])
+    if value.act in {"confirm", "deny"} and current is None and state.navigation_focus == "navigation":
+        nav = state.navigation
+        candidate = (nav.pending or {}).get("navigation") or nav.model_dump(mode="json")
+        if (candidate.get("offer") or {}).get("status") == "pending" and not candidate.get("clarification"):
+            value = SemanticTurn(
+                act="request",
+                actions=[
+                    ActionDraft(
+                        capability="navigation.start" if value.act == "confirm" else "navigation.decline",
+                        arguments={"route_revision": nav.revision},
+                    )
+                ],
+            )
     # All tiers, including typed UI, validate references before changing a task.
     for draft in value.drafts():
         if not draft.capability.startswith(("trip.", "navigation.")):
@@ -77,6 +120,7 @@ def reduce_turn(
     plan = state.trip_plan
     if (
         plan
+        and state.navigation_focus == "trip"
         and plan.offer
         and plan.offer.get("status") == "pending"
         and not plan.clarification
@@ -108,7 +152,23 @@ def reduce_turn(
             ):
                 return state, "Yêu cầu đã thay đổi. Bạn chọn lại nhé."
             if current.draft.capability.split(".")[0] == incoming.capability.split(".")[0]:
-                return reduce_turn(state, SemanticTurn(act="cancel", task_ref="active"))
+                prefix = incoming.capability.split(".")[0] + "."
+                for item in state.active.steps:
+                    if item.draft.capability.startswith(prefix) and item.status not in {"completed", "unknown", "running"}:
+                        item.status, item.confirmation = "cancelled", None
+                state.active.revision += 1
+                if prefix == "navigation.":
+                    nav = state.navigation
+                    nav.revision += 1
+                    nav.pending, nav.offer, nav.clarification, nav.candidates = None, None, None, []
+                    if nav.status in {"preview", "selecting"}:
+                        nav.status, nav.route, nav.selected, nav.energy = "idle", None, None, None
+                    state.navigation = nav
+                elif state.trip_plan:
+                    state.trip_plan.revision += 1
+                    state.trip_plan.calculation_status = "cancelled"
+                    state.trip_plan.offer, state.trip_plan.clarification = None, None
+                return state, None if state.active.current_index() is not None else "Đã huỷ yêu cầu lập tuyến."
         if (
             incoming.capability in {"trip.select", "trip.refine", "trip.start"}
             and current.status == "waiting_slot"
@@ -216,14 +276,16 @@ def reduce_turn(
             state.trip_plan.offer, state.trip_plan.clarification = None, None
             state.trip_plan.candidates = []
         if any(s.draft.capability.startswith("navigation.") for s in task.steps):
-            state.navigation.clarification = None
-            state.navigation.candidates = []
-            state.navigation.pending = None
-            state.navigation.revision += 1
-            if state.navigation.status in {"preview", "selecting"}:
-                state.navigation.status = "idle"
-                state.navigation.selected, state.navigation.route, state.navigation.energy = None, None, None
-                state.navigation.summary, state.navigation.alternatives = None, []
+            nav = state.navigation
+            nav.clarification = None
+            nav.candidates = []
+            nav.pending = None
+            nav.revision += 1
+            if nav.status in {"preview", "selecting"}:
+                nav.status = "idle"
+                nav.selected, nav.route, nav.energy = None, None, None
+                nav.summary, nav.alternatives = None, []
+            state.navigation = nav
         return state, "Mình đã hủy các bước chưa thực hiện."
     # Bind deictic targets from server-owned state for every provider. A model
     # cannot invent or silently override a referenced side.
@@ -381,8 +443,23 @@ def record_navigation(session, update):
     from src.vivi.dialogue.contracts import NavigationState
 
     state = session.model_copy(deep=True)
-    state.navigation = NavigationState.model_validate(update)
-    state.navigation.event_sequence = session.navigation.event_sequence + 1
+    nav = NavigationState.model_validate(update)
+    nav.event_sequence = session.navigation.event_sequence + 1
+    state.navigation = nav
+    if nav.status in {"ended", "completed"} and session.navigation.status not in {"ended", "completed"}:
+        state.navigation_workspace.history = [
+            *state.navigation_workspace.history[-19:],
+            {
+                "id": nav.route_id,
+                "destination": nav.selected,
+                "status": nav.status,
+                "distance_m": nav.progress_m,
+                "ended_at": datetime.now(UTC).isoformat(),
+            },
+        ]
+    before, after = session.navigation_workspace.draft, state.navigation_workspace.draft
+    if after and (not before or before.request_id != after.request_id or before.revision != after.revision):
+        state.navigation_focus = "navigation"
     return state
 
 
@@ -390,8 +467,37 @@ def record_trip_plan(session, update):
     from src.vivi.dialogue.contracts import TripPlanState
 
     state = session.model_copy(deep=True)
+    state.navigation_focus = "trip"
     state.trip_plan = TripPlanState.model_validate(update)
     state.trip_plan.event_sequence = (session.trip_plan.event_sequence if session.trip_plan else 0) + 1
+    return state
+
+
+def clear_journey(session):
+    """Clear journey references while retaining unrelated tasks and effect history."""
+    state = session.model_copy(deep=True)
+    state.trip_plan = None
+    for task in [state.active, *state.suspended]:
+        if task:
+            remaining = [step for step in task.steps if not step.draft.capability.startswith(("navigation.", "trip."))]
+            if len(remaining) != len(task.steps):
+                task.steps = remaining
+                task.revision += 1
+                for step in task.steps:
+                    if step.status in {"waiting_confirmation", "approved"}:
+                        step.status, step.confirmation, step.command_id, step.resolved_arguments = (
+                            "pending",
+                            None,
+                            None,
+                            None,
+                        )
+    if state.active and not state.active.steps:
+        state.active = None
+    state.suspended = [task for task in state.suspended if task.current_index() is not None]
+    if state.clarification and any(
+        draft.capability.startswith(("navigation.", "trip.")) for draft in state.clarification.drafts
+    ):
+        state.clarification = None
     return state
 
 
@@ -422,9 +528,11 @@ def upgrade_contract(session):
                     ):
                         # Older unique-match routes skipped the destination
                         # choice. Require it now without replaying any effects.
-                        state.navigation.status = "selecting"
-                        state.navigation.selected, state.navigation.route = None, None
-                        state.navigation.energy, state.navigation.alternatives = None, []
+                        nav = state.navigation
+                        nav.status = "selecting"
+                        nav.selected, nav.route = None, None
+                        nav.energy, nav.alternatives = None, []
+                        state.navigation = nav
                     step.status, step.confirmation, step.command_id, step.resolved_arguments = (
                         "pending",
                         None,

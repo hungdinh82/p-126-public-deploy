@@ -143,8 +143,9 @@ async def test_stt_deletes_temporary_audio_when_retention_is_disabled(client):
         assert path.exists()
         return "Xin chào ViVi"
 
-    with patch.object(runtime.store, "save_audio", return_value=None), patch.object(
-        runtime.stt, "transcribe", side_effect=fake_transcribe
+    with (
+        patch.object(runtime.store, "save_audio", return_value=None),
+        patch.object(runtime.stt, "transcribe", side_effect=fake_transcribe),
     ):
         response = await client.post(
             "/api/v1/stt",
@@ -163,12 +164,25 @@ async def test_durable_turn_status_and_cancel_api(client, monkeypatch, tmp_path)
     from src.vivi.api.routes import turns
     from src.vivi.api.runtime import build_runtime
     from src.vivi.config import Settings
-    local = build_runtime(Settings(data_dir=tmp_path, rag_history_db=tmp_path / "history.sqlite3",
-        rag_handbook_db=tmp_path / "handbook.sqlite3", rag_retrieval_mode="sqlite",
-        llm_provider="rules", stt_provider="off", tts_provider="off", vehicle_provider="memory", memory_enabled=False))
+
+    local = build_runtime(
+        Settings(
+            data_dir=tmp_path,
+            rag_history_db=tmp_path / "history.sqlite3",
+            rag_handbook_db=tmp_path / "handbook.sqlite3",
+            rag_retrieval_mode="sqlite",
+            llm_provider="rules",
+            stt_provider="off",
+            tts_provider="off",
+            vehicle_provider="memory",
+            memory_enabled=False,
+        )
+    )
     monkeypatch.setattr(turns, "runtime", local)
     try:
-        created = await client.post("/api/v1/turn", json={"session_id": "driver", "turn_id": "one", "transcript": "đặt nhiệt độ 25 độ"})
+        created = await client.post(
+            "/api/v1/turn", json={"session_id": "driver", "turn_id": "one", "transcript": "đặt nhiệt độ 25 độ"}
+        )
         assert created.status_code == 200
         status = await client.get("/api/v1/turns/one", params={"session_id": "driver"})
         assert status.status_code == 200
@@ -188,15 +202,41 @@ async def test_missing_default_model_falls_back_and_reports_actual_provider(clie
     from src.vivi.api.routes import turns
     from src.vivi.api.runtime import build_runtime
     from src.vivi.config import Settings
-    local = build_runtime(Settings(data_dir=tmp_path, rag_history_db=tmp_path / "history.sqlite3",
-        rag_handbook_db=tmp_path / "handbook.sqlite3", rag_retrieval_mode="sqlite",
-        llm_provider="google", google_api_key="", stt_provider="off", tts_provider="off", vehicle_provider="memory", memory_enabled=False))
+
+    local = build_runtime(
+        Settings(
+            data_dir=tmp_path,
+            rag_history_db=tmp_path / "history.sqlite3",
+            rag_handbook_db=tmp_path / "handbook.sqlite3",
+            rag_retrieval_mode="sqlite",
+            llm_provider="google",
+            google_api_key="",
+            stt_provider="off",
+            tts_provider="off",
+            vehicle_provider="memory",
+            memory_enabled=False,
+        )
+    )
     monkeypatch.setattr(turns, "runtime", local)
     try:
-        result = await client.post("/api/v1/turn", json={"session_id": "driver", "turn_id": "one", "transcript": "đặt nhiệt độ 30 độ"})
+        result = await client.post(
+            "/api/v1/turn", json={"session_id": "driver", "turn_id": "one", "transcript": "đặt nhiệt độ 30 độ"}
+        )
         assert result.status_code == 200
         assert result.json()["provider"] == "langgraph/rules"
         assert result.json()["vehicle_state"]["temperature_celsius"] == 30
         assert local.vehicle.state_for("driver").temperature_celsius == 30
     finally:
         local.close()
+
+
+@pytest.mark.asyncio
+async def test_navigation_snapshot_and_controller_asset_are_available(client):
+    snapshot = await client.get("/api/v1/navigation/snapshot", params={"session_id": "api-snapshot"})
+    assert snapshot.status_code == 200
+    payload = snapshot.json()
+    assert payload["runtime_epoch"]
+    assert payload["snapshot_sequence"] >= 0
+    assert payload["vehicle_state"]["driving"] is False
+    assert payload["navigation_workspace"]["version"] == 1
+    assert (await client.get("/navigation-state.js")).status_code == 200

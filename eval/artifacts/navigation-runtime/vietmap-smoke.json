@@ -1,0 +1,30 @@
+{
+  "configured": true,
+  "operations": [
+    {
+      "stage": "tiles",
+      "ok": true,
+      "http_status": 200,
+      "results": null,
+      "elapsed_ms": 923.4
+    },
+    {
+      "stage": "search",
+      "ok": true,
+      "http_status": null,
+      "results": 10,
+      "elapsed_ms": 196.45
+    },
+    {
+      "stage": "place_detail",
+      "ok": true,
+      "elapsed_ms": 303.02
+    },
+    {
+      "stage": "route",
+      "ok": true,
+      "distance_m": 12964.0,
+      "elapsed_ms": 181.6
+    }
+  ]
+}

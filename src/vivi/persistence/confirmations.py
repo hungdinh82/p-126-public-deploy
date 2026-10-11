@@ -1,4 +1,5 @@
 """Confirmation grants remain bound and single use across backend restarts."""
+
 from __future__ import annotations
 
 import json
@@ -20,23 +21,41 @@ class DurableConfirmations:
     def create(self, session_id, action, preview, vehicle_state):
         identifier = str(uuid4())
         expires = datetime.now(UTC) + timedelta(seconds=self.ttl_seconds)
-        payload = {"action": action.model_dump(mode="json"), "fingerprint": action_fingerprint(action),
-                   "vehicle_id": vehicle_state.vehicle_id, "state_version": vehicle_state.state_version,
-                   "expires_at": expires.isoformat()}
+        payload = {
+            "action": action.model_dump(mode="json"),
+            "fingerprint": action_fingerprint(action),
+            "vehicle_id": vehicle_state.vehicle_id,
+            "state_version": vehicle_state.state_version,
+            "expires_at": expires.isoformat(),
+        }
         with self.store.connect() as db:
             db.execute("BEGIN IMMEDIATE")
-            db.execute("UPDATE confirmation_grants SET used=1 WHERE session=?", (session_id,))
-            db.execute("INSERT INTO confirmation_grants VALUES (?,?,?,0)", (identifier, session_id, json.dumps(payload)))
-        return ConfirmationPreview(confirmation_id=identifier, preview=preview, action=action, expires_at=expires.isoformat())
+            db.execute(
+                "UPDATE confirmation_grants SET used=1 WHERE session=? AND json_extract(payload, '$.binding') IS NULL",
+                (session_id,),
+            )
+            db.execute(
+                "INSERT INTO confirmation_grants VALUES (?,?,?,0)", (identifier, session_id, json.dumps(payload))
+            )
+        return ConfirmationPreview(
+            confirmation_id=identifier, preview=preview, action=action, expires_at=expires.isoformat()
+        )
 
-    def cancel(self, session_id):
+    def cancel(self, session_id, confirmation_id=None):
         with self.store.connect() as db:
-            db.execute("UPDATE confirmation_grants SET used=1 WHERE session=?", (session_id,))
+            if confirmation_id:
+                db.execute(
+                    "UPDATE confirmation_grants SET used=1 WHERE session=? AND id=?", (session_id, confirmation_id)
+                )
+            else:
+                db.execute("UPDATE confirmation_grants SET used=1 WHERE session=?", (session_id,))
 
     def resolve(self, confirmation_id, session_id, decision, vehicle_state):
         with self.store.connect() as db:
             db.execute("BEGIN IMMEDIATE")
-            row = db.execute("SELECT * FROM confirmation_grants WHERE id=? AND session=?", (confirmation_id, session_id)).fetchone()
+            row = db.execute(
+                "SELECT * FROM confirmation_grants WHERE id=? AND session=?", (confirmation_id, session_id)
+            ).fetchone()
             if row is None or row["used"]:
                 return ConfirmationResolution("denied", "Xác nhận không hợp lệ hoặc đã được sử dụng.")
             db.execute("UPDATE confirmation_grants SET used=1 WHERE id=?", (confirmation_id,))
@@ -58,14 +77,17 @@ class DurableConfirmations:
         payload = {"binding": binding, "expires_at": expires.isoformat()}
         with self.store.connect() as db:
             db.execute("BEGIN IMMEDIATE")
-            db.execute("UPDATE confirmation_grants SET used=1 WHERE session=?", (session_id,))
-            db.execute("INSERT INTO confirmation_grants VALUES (?,?,?,0)", (identifier, session_id, json.dumps(payload)))
+            db.execute(
+                "INSERT INTO confirmation_grants VALUES (?,?,?,0)", (identifier, session_id, json.dumps(payload))
+            )
         return {"confirmation_id": identifier, "preview": preview, "expires_at": expires.isoformat()}
 
     def consume_generic(self, session_id, identifier, binding):
         with self.store.connect() as db:
             db.execute("BEGIN IMMEDIATE")
-            row = db.execute("SELECT * FROM confirmation_grants WHERE id=? AND session=?", (identifier, session_id)).fetchone()
+            row = db.execute(
+                "SELECT * FROM confirmation_grants WHERE id=? AND session=?", (identifier, session_id)
+            ).fetchone()
             if row is None or row["used"]:
                 return False
             db.execute("UPDATE confirmation_grants SET used=1 WHERE id=?", (identifier,))

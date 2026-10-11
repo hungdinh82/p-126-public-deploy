@@ -1,0 +1,50 @@
+{
+  "maps": "recorded_fixture",
+  "model": "semantic_fixture",
+  "turns": [
+    {
+      "text": "lập lộ trình đi và sạc tới bãi biển sầm sơn",
+      "wall_ms": 389.09,
+      "status": "verified",
+      "calculation_status": "ready",
+      "trip_kind": "one_way",
+      "message": "Tuyến đến Bãi Biển Sầm Sơn Thanh Hóa, Phường Sầm Sơn, khoảng 177 km, 3 giờ 15 phút. Không cần dừng sạc. Bạn muốn bắt đầu hành trình này không?",
+      "latency_ms": {
+        "context": 3.5,
+        "interpret": 37.95,
+        "reducer": 0.62,
+        "scheduler": 28.64,
+        "validate": 4.77,
+        "navigation_search": 0.02,
+        "navigation_route": 2.24,
+        "navigation_energy": 0.06,
+        "capability": 81.93,
+        "total": 370.13
+      },
+      "checkpoint_bytes": 21212,
+      "driving": false
+    },
+    {
+      "text": "tôi sẽ đến đấy chơi một chút xong quay về. lúc về cần sạc không",
+      "wall_ms": 1044.84,
+      "status": "verified",
+      "calculation_status": "incomplete",
+      "trip_kind": "round_trip",
+      "message": "Khứ hồi đến Bãi Biển Sầm Sơn Thanh Hóa, Phường Sầm Sơn, khoảng 354 km, 6 giờ 30 phút. Chưa có lộ trình sạc khả thi trong dữ liệu trạm hiện tại. Kế hoạch chưa hoàn chỉnh.",
+      "latency_ms": {
+        "context": 83.3,
+        "interpret": 46.89,
+        "reducer": 59.61,
+        "scheduler": 73.99000000000001,
+        "validate": 67.67,
+        "navigation_search": 0.02,
+        "navigation_route": 4.09,
+        "navigation_energy": 0.15,
+        "capability": 448.26,
+        "total": 1019.15
+      },
+      "checkpoint_bytes": 22370,
+      "driving": false
+    }
+  ]
+}

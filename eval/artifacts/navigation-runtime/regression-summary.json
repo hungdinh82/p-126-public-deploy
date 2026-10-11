@@ -1,0 +1,93 @@
+{
+  "base_revision": "caee730",
+  "full_regression": {
+    "passed": 662,
+    "failed": 38,
+    "skipped": 13,
+    "duration_seconds": 337.99,
+    "scope": "All Python tests before final cancellation-drain and uncertain snapshot additions"
+  },
+  "frontend": {
+    "passed": 67,
+    "failed": 0
+  },
+  "failures": [
+    "tests/test_charging_discovery.py::test_model_context_keeps_station_handles_without_copying_road_polylines",
+    "tests/test_charging_discovery.py::test_missing_power_user_can_select_real_station_by_voice_then_confirm",
+    "tests/test_charging_discovery.py::test_confirmed_map_charging_stop_survives_restart_without_catalogue_lookup",
+    "tests/test_destination_decisions.py::test_model_proposes_preview_without_extra_place_question_or_driving",
+    "tests/test_destination_dialogue_scenarios.py::test_candidate_answer_matrix[kh\\xf4ng-1-refine-trip]",
+    "tests/test_destination_dialogue_scenarios.py::test_candidate_answer_matrix[kh\\xf4ng \\u0111\\xfang ch\\u1ed7 n\\xe0y-1-refine-trip]",
+    "tests/test_destination_dialogue_scenarios.py::test_candidate_answer_matrix[kh\\xf4ng ch\\u1ed7 n\\xe0o-2-refine-trip]",
+    "tests/test_destination_dialogue_scenarios.py::test_candidate_answer_matrix[\\u0111\\u1ed5i sang Tr\\xe0ng An-2-refine-trip]",
+    "tests/test_destination_dialogue_scenarios.py::test_candidate_answer_matrix[ch\\u1ed7 th\\u1ee9 hai-2-select-trip]",
+    "tests/test_destination_dialogue_scenarios.py::test_candidate_answer_matrix[s\\u1ed1 2-2-select-trip]",
+    "tests/test_destination_dialogue_scenarios.py::test_candidate_answer_matrix[ch\\u1ecdn 2-2-select-trip]",
+    "tests/test_destination_dialogue_scenarios.py::test_candidate_answer_matrix[\\u0111\\u1ebfn \\u0111\\xf3-1-select-trip]",
+    "tests/test_destination_dialogue_scenarios.py::test_candidate_answer_matrix[\\u0111\\xfang-1-select-trip]",
+    "tests/test_dialogue_audit_oct09.py::test_all_latest_logged_turns[rules]",
+    "tests/test_dialogue_audit_oct09.py::test_all_latest_logged_turns[google]",
+    "tests/test_dialogue_audit_oct09.py::test_all_latest_logged_turns[local]",
+    "tests/test_dialogue_audit_oct10.py::test_search_setting_directions_preserves_order_and_voice_choice[rules-942]",
+    "tests/test_dialogue_audit_oct10.py::test_search_setting_directions_preserves_order_and_voice_choice[rules-946]",
+    "tests/test_dialogue_audit_oct10.py::test_search_setting_directions_preserves_order_and_voice_choice[rules-948]",
+    "tests/test_dialogue_audit_oct10.py::test_search_setting_directions_preserves_order_and_voice_choice[google-942]",
+    "tests/test_dialogue_audit_oct10.py::test_search_setting_directions_preserves_order_and_voice_choice[google-946]",
+    "tests/test_dialogue_audit_oct10.py::test_search_setting_directions_preserves_order_and_voice_choice[google-948]",
+    "tests/test_dialogue_audit_oct10.py::test_search_setting_directions_preserves_order_and_voice_choice[local-942]",
+    "tests/test_dialogue_audit_oct10.py::test_search_setting_directions_preserves_order_and_voice_choice[local-946]",
+    "tests/test_dialogue_audit_oct10.py::test_search_setting_directions_preserves_order_and_voice_choice[local-948]",
+    "tests/test_dialogue_audit_oct10.py::test_selection_keeps_pending_steps_and_early_start_does_not_replace_task[True]",
+    "tests/test_dialogue_audit_oct10.py::test_selection_keeps_pending_steps_and_early_start_does_not_replace_task[False]",
+    "tests/test_dialogue_audit_oct10.py::test_data_vf8_plus_profile_hand_calculation_and_charging_e2e[70-0]",
+    "tests/test_dialogue_audit_oct10.py::test_data_vf8_plus_profile_hand_calculation_and_charging_e2e[40-1]",
+    "tests/test_navigation_presentation.py::test_log_962_compound_turn_speaks_choices_once_and_retains_full_data[rules]",
+    "tests/test_navigation_presentation.py::test_log_962_compound_turn_speaks_choices_once_and_retains_full_data[google]",
+    "tests/test_navigation_presentation.py::test_log_962_compound_turn_speaks_choices_once_and_retains_full_data[local]",
+    "tests/test_navigation_presentation.py::test_log_963_preview_and_start_use_short_speech_with_precise_energy",
+    "tests/test_navigation_presentation.py::test_charging_speech_rounds_minutes_but_preserves_calculation",
+    "tests/test_navigation_refinement.py::test_region_center_preserves_chain_and_requires_route_consent[rules]",
+    "tests/test_navigation_refinement.py::test_region_center_preserves_chain_and_requires_route_consent[google]",
+    "tests/test_navigation_refinement.py::test_region_center_preserves_chain_and_requires_route_consent[local]",
+    "tests/test_navigation_refinement.py::test_specific_place_choice_and_named_reply_keep_region"
+  ],
+  "introduced_failures": [],
+  "resolved_failures": [],
+  "baseline_verification": {
+    "passed": 84,
+    "failed": 38,
+    "scope": "Original source, failed destination/dialogue modules only, temporary checkout"
+  },
+  "acceptance_limits": [
+    "38 pre-existing dialogue/destination contract failures remain",
+    "Full 3D/GPU steady-state and live network cold-start acceptance pending",
+    "Flat calculation DTO and some legacy render functions remain as compatibility adapters"
+  ],
+  "navigation_safety_regression": {
+    "passed": 85,
+    "failed": 0,
+    "duration_seconds": 27.13,
+    "modules": [
+      "test_navigation_service",
+      "test_navigation_controls",
+      "test_navigation_lifecycle",
+      "test_navigation_workflow",
+      "test_trip_plans",
+      "test_navigation_runtime_review"
+    ]
+  },
+  "final_cancellation_checks": {
+    "passed": 2,
+    "failed": 0,
+    "duration_seconds": 0.41,
+    "cases": [
+      "D cancelled twice settles before newer P",
+      "unknown receipt bootstrap freezes until newer P"
+    ]
+  },
+  "geometry_transport_check": {
+    "passed": 1,
+    "failed": 0,
+    "scope": "Skip cached geometry before traversing it; preserve full recovery snapshot and current SOC"
+  }
+}

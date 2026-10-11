@@ -1,0 +1,32 @@
+{
+  "other_load": "full pytest regression, browser E2E with video and live map browser running concurrently",
+  "results": [
+    {
+      "load": "normal",
+      "samples": 100,
+      "backend_p95_ms": 257.92,
+      "queue_p95_ms": 0.12,
+      "control_p95_ms": 87.84,
+      "ledger_p95_ms": 52.46,
+      "includes": "orchestration, navigation state/receipt and turn ledger; excludes HTTP and browser"
+    },
+    {
+      "load": "model_pending",
+      "samples": 100,
+      "backend_p95_ms": 254.98,
+      "queue_p95_ms": 0.1,
+      "control_p95_ms": 97.5,
+      "ledger_p95_ms": 55.64,
+      "includes": "orchestration, navigation state/receipt and turn ledger; excludes HTTP and browser"
+    },
+    {
+      "load": "vietmap_pending",
+      "samples": 100,
+      "backend_p95_ms": 228.99,
+      "queue_p95_ms": 0.11,
+      "control_p95_ms": 76.2,
+      "ledger_p95_ms": 56.68,
+      "includes": "orchestration, navigation state/receipt and turn ledger; excludes HTTP and browser"
+    }
+  ]
+}

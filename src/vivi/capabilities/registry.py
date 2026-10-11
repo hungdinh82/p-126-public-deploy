@@ -145,7 +145,11 @@ def merge_arguments(old, incoming):
 
 
 def catalog(navigation=False):
-    return [cap.spec.prompt_spec() for cap in REGISTRY.values() if navigation or cap.executor != "navigation"]
+    return [
+        cap.spec.prompt_spec()
+        for cap in REGISTRY.values()
+        if navigation or cap.executor != "navigation" or cap.name == "navigation.set_gear"
+    ]
 
 
 def transferable_arguments(old, new):

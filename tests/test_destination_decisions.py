@@ -84,7 +84,7 @@ async def test_model_proposes_preview_without_extra_place_question_or_driving(se
                 "position": {"lat": 21, "lng": 105.85, "simulated": False},
             }
         )
-        assert result["status"] == "confirmation_required"
+        assert result["status"] == "answered" and result["navigation"]["offer"]["status"] == "pending"
         assert result["navigation"]["selected"]["selection_decision"]["source"] == "google"
         assert "Đúng chỗ này" not in result["response_text"]
         assert not gateway.vehicle.state_for("driver").driving

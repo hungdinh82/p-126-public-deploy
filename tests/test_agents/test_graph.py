@@ -13,6 +13,6 @@ async def test_unified_graph_has_one_durable_and_one_ephemeral_state(tmp_path):
         result = await graph.ainvoke({'input_text': 'Xin chào', 'session_id': 's', 'turn_id': 't'})
         assert result['output']['response_text'] == 'Mình đây, bạn cần gì thế?'
         assert {'event', 'session', 'turn', 'output'} <= result.keys()
-        assert result['output']['diagnostics']['workflow_version'] == 'unified-5'
+        assert result['output']['diagnostics']['workflow_version'] == 'unified-6'
     finally:
         graph.close()

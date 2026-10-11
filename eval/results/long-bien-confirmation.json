@@ -1,0 +1,4934 @@
+{
+  "created_at": "2026-10-11T18:52:08.130791+07:00",
+  "revision": "2b65588af19ee2d78918360320ad6ca655774d86",
+  "working_tree_dirty": true,
+  "dataset": "/tmp/long-bien-cases.jsonl",
+  "dataset_sha256": "a2b398618b3489ff1280ced46ef5bc76f7fbf4def88d278ba2badb7dbcf71590",
+  "workflow_versions": [
+    "unified-6"
+  ],
+  "prompt_versions": [
+    "semantic-unified-16"
+  ],
+  "dataset_kind": "authored development regression; not held-out",
+  "repeats": 3,
+  "environment": {
+    "platform": "Linux-6.18.40.1-microsoft-standard-WSL2-x86_64-with-glibc2.43",
+    "processor": "",
+    "python": "3.12.12",
+    "langgraph": "1.2.14",
+    "langgraph_checkpoint_sqlite": "3.1.1"
+  },
+  "wall_ms": 11069.88,
+  "episodes": 12,
+  "passed": 12,
+  "by_group": {
+    "journey_lifecycle": {
+      "episodes": 12,
+      "passed": 12
+    }
+  },
+  "by_provider": {
+    "rules": {
+      "episodes": 6,
+      "passed": 6,
+      "served": {
+        "rules": 24
+      },
+      "operations": 24,
+      "correct": 24,
+      "turn_latency": {
+        "samples": 24,
+        "p50_ms": 161.91,
+        "p95_ms": 244.36
+      },
+      "cold_build": {
+        "samples": 6,
+        "p50_ms": 151.81,
+        "p95_ms": 212.83
+      }
+    },
+    "fixture": {
+      "episodes": 6,
+      "passed": 6,
+      "served": {
+        "fixture": 18,
+        "rules": 6
+      },
+      "operations": 24,
+      "correct": 24,
+      "turn_latency": {
+        "samples": 24,
+        "p50_ms": 170.44,
+        "p95_ms": 387.18
+      },
+      "cold_build": {
+        "samples": 6,
+        "p50_ms": 166.26,
+        "p95_ms": 273.92
+      }
+    }
+  },
+  "results": [
+    {
+      "id": "long-bien-prefixed-start",
+      "group": "journey_lifecycle",
+      "provider": "rules",
+      "repeat": 0,
+      "cold_build_ms": 146.28,
+      "passed": true,
+      "operations": [
+        {
+          "id": "plan",
+          "type": "turn",
+          "query": "Chỉ đường tới Long Biên.",
+          "passed": true,
+          "checks": {
+            "navigation.status": {
+              "passed": true,
+              "expected": "selecting",
+              "actual": "selecting"
+            }
+          },
+          "message": "Long Biên. Đúng chỗ này chứ?",
+          "status": "clarify",
+          "served": "rules",
+          "workflow_version": "unified-6",
+          "prompt_version": "semantic-unified-16",
+          "provider_attempts": [
+            {
+              "provider": "rules",
+              "outcome": "served",
+              "latency_ms": 6.14
+            }
+          ],
+          "node_spans": [
+            {
+              "node": "context",
+              "outcome": "ok",
+              "latency_ms": 3.41,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "interpret",
+              "outcome": "rules",
+              "latency_ms": 24.02,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "reducer",
+              "outcome": "ok",
+              "latency_ms": 0.93,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 0.84,
+              "step_id": "37760538-81d0-4720-afe1-b9e6837abbb4",
+              "provider": "rules"
+            },
+            {
+              "node": "validate",
+              "outcome": "running",
+              "latency_ms": 5.14,
+              "step_id": "37760538-81d0-4720-afe1-b9e6837abbb4",
+              "provider": "rules"
+            },
+            {
+              "node": "capability",
+              "outcome": "waiting_slot",
+              "latency_ms": 9.04,
+              "step_id": "37760538-81d0-4720-afe1-b9e6837abbb4",
+              "provider": "rules"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 2.7,
+              "step_id": "37760538-81d0-4720-afe1-b9e6837abbb4",
+              "provider": "rules"
+            }
+          ],
+          "dependency_ms": {
+            "context": 3.41,
+            "interpret": 24.02,
+            "reducer": 0.93,
+            "scheduler": 3.54,
+            "validate": 5.14,
+            "navigation_search": 0.04,
+            "navigation_route": 0.05,
+            "capability": 9.04,
+            "total": 137.89
+          },
+          "wall_ms": 141.77
+        },
+        {
+          "id": "center",
+          "type": "turn",
+          "query": "Không, đến trung tâm Long Biên.",
+          "passed": true,
+          "checks": {
+            "navigation.status": {
+              "passed": true,
+              "expected": "selecting",
+              "actual": "selecting"
+            }
+          },
+          "message": "đến trung tâm Long Biên.. Đúng chỗ này chứ?",
+          "status": "clarify",
+          "served": "rules",
+          "workflow_version": "unified-6",
+          "prompt_version": "semantic-unified-16",
+          "provider_attempts": [
+            {
+              "provider": "rules",
+              "outcome": "served",
+              "latency_ms": 3.08
+            }
+          ],
+          "node_spans": [
+            {
+              "node": "context",
+              "outcome": "ok",
+              "latency_ms": 3.34,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "interpret",
+              "outcome": "rules",
+              "latency_ms": 16.11,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "reducer",
+              "outcome": "ok",
+              "latency_ms": 1.5,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 0.71,
+              "step_id": "37760538-81d0-4720-afe1-b9e6837abbb4",
+              "provider": "rules"
+            },
+            {
+              "node": "validate",
+              "outcome": "running",
+              "latency_ms": 4.94,
+              "step_id": "37760538-81d0-4720-afe1-b9e6837abbb4",
+              "provider": "rules"
+            },
+            {
+              "node": "capability",
+              "outcome": "waiting_slot",
+              "latency_ms": 7.81,
+              "step_id": "37760538-81d0-4720-afe1-b9e6837abbb4",
+              "provider": "rules"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 0.98,
+              "step_id": "37760538-81d0-4720-afe1-b9e6837abbb4",
+              "provider": "rules"
+            }
+          ],
+          "dependency_ms": {
+            "context": 3.34,
+            "interpret": 16.11,
+            "reducer": 1.5,
+            "scheduler": 1.69,
+            "validate": 4.94,
+            "navigation_search": 0.03,
+            "navigation_route": 0.02,
+            "capability": 7.81,
+            "total": 118.86
+          },
+          "wall_ms": 121.91
+        },
+        {
+          "id": "place",
+          "type": "turn",
+          "query": "Đúng rồi",
+          "passed": true,
+          "checks": {
+            "navigation.status": {
+              "passed": true,
+              "expected": "preview",
+              "actual": "preview"
+            },
+            "execution.executed": {
+              "passed": true,
+              "expected": false,
+              "actual": false
+            }
+          },
+          "message": "Tuyến đến đến trung tâm Long Biên., khoảng 68 km, 57 phút. Không cần dừng sạc. Bạn xác nhận bắt đầu nhé.",
+          "status": "verified",
+          "served": "rules",
+          "workflow_version": "unified-6",
+          "prompt_version": "semantic-unified-16",
+          "provider_attempts": [
+            {
+              "provider": "rules",
+              "outcome": "served",
+              "latency_ms": 2.05
+            }
+          ],
+          "node_spans": [
+            {
+              "node": "context",
+              "outcome": "ok",
+              "latency_ms": 3.18,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "interpret",
+              "outcome": "rules",
+              "latency_ms": 50.13,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "reducer",
+              "outcome": "ok",
+              "latency_ms": 1.24,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 0.68,
+              "step_id": "37760538-81d0-4720-afe1-b9e6837abbb4",
+              "provider": "rules"
+            },
+            {
+              "node": "validate",
+              "outcome": "running",
+              "latency_ms": 7.79,
+              "step_id": "37760538-81d0-4720-afe1-b9e6837abbb4",
+              "provider": "rules"
+            },
+            {
+              "node": "capability",
+              "outcome": "completed",
+              "latency_ms": 12.04,
+              "step_id": "37760538-81d0-4720-afe1-b9e6837abbb4",
+              "provider": "rules"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 2.43,
+              "step_id": null,
+              "provider": "rules"
+            }
+          ],
+          "dependency_ms": {
+            "context": 3.18,
+            "interpret": 50.13,
+            "reducer": 1.24,
+            "scheduler": 3.1100000000000003,
+            "validate": 7.79,
+            "navigation_route": 0.03,
+            "navigation_energy": 0.06,
+            "capability": 12.04,
+            "total": 166.32
+          },
+          "wall_ms": 172.28
+        },
+        {
+          "id": "approve",
+          "type": "turn",
+          "query": "Ok, bắt đầu.",
+          "passed": true,
+          "checks": {
+            "navigation.status": {
+              "passed": true,
+              "expected": "running",
+              "actual": "running"
+            },
+            "execution.executed": {
+              "passed": true,
+              "expected": true,
+              "actual": true
+            },
+            "diagnostics.effective_provider": {
+              "passed": true,
+              "expected": "rules",
+              "actual": "rules"
+            }
+          },
+          "message": "Đã bắt đầu dẫn đường.",
+          "status": "verified",
+          "served": "rules",
+          "workflow_version": "unified-6",
+          "prompt_version": "semantic-unified-16",
+          "provider_attempts": [
+            {
+              "provider": "rules",
+              "outcome": "served",
+              "latency_ms": 0,
+              "source": "pending_confirmation"
+            }
+          ],
+          "node_spans": [
+            {
+              "node": "context",
+              "outcome": "ok",
+              "latency_ms": 7.3,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "interpret",
+              "outcome": "rules",
+              "latency_ms": 13.56,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "reducer",
+              "outcome": "ok",
+              "latency_ms": 1.76,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 1.4,
+              "step_id": "2ecd75d5-146c-4b68-99e4-d4820dc021d0",
+              "provider": "rules"
+            },
+            {
+              "node": "validate",
+              "outcome": "running",
+              "latency_ms": 6.65,
+              "step_id": "2ecd75d5-146c-4b68-99e4-d4820dc021d0",
+              "provider": "rules"
+            },
+            {
+              "node": "capability",
+              "outcome": "completed",
+              "latency_ms": 15.61,
+              "step_id": "2ecd75d5-146c-4b68-99e4-d4820dc021d0",
+              "provider": "rules"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 1.74,
+              "step_id": null,
+              "provider": "rules"
+            }
+          ],
+          "dependency_ms": {
+            "context": 7.3,
+            "interpret": 13.56,
+            "reducer": 1.76,
+            "scheduler": 3.1399999999999997,
+            "validate": 6.65,
+            "capability": 15.61,
+            "total": 132.78
+          },
+          "wall_ms": 138.83
+        }
+      ]
+    },
+    {
+      "id": "long-bien-prefixed-confirm",
+      "group": "journey_lifecycle",
+      "provider": "rules",
+      "repeat": 0,
+      "cold_build_ms": 212.83,
+      "passed": true,
+      "operations": [
+        {
+          "id": "plan",
+          "type": "turn",
+          "query": "Chỉ đường tới Long Biên.",
+          "passed": true,
+          "checks": {
+            "navigation.status": {
+              "passed": true,
+              "expected": "selecting",
+              "actual": "selecting"
+            }
+          },
+          "message": "Long Biên. Đúng chỗ này chứ?",
+          "status": "clarify",
+          "served": "rules",
+          "workflow_version": "unified-6",
+          "prompt_version": "semantic-unified-16",
+          "provider_attempts": [
+            {
+              "provider": "rules",
+              "outcome": "served",
+              "latency_ms": 3.74
+            }
+          ],
+          "node_spans": [
+            {
+              "node": "context",
+              "outcome": "ok",
+              "latency_ms": 2.68,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "interpret",
+              "outcome": "rules",
+              "latency_ms": 45.8,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "reducer",
+              "outcome": "ok",
+              "latency_ms": 0.78,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 0.77,
+              "step_id": "b98321cc-8db1-4417-9e88-c686e2128d14",
+              "provider": "rules"
+            },
+            {
+              "node": "validate",
+              "outcome": "running",
+              "latency_ms": 5.78,
+              "step_id": "b98321cc-8db1-4417-9e88-c686e2128d14",
+              "provider": "rules"
+            },
+            {
+              "node": "capability",
+              "outcome": "waiting_slot",
+              "latency_ms": 10.02,
+              "step_id": "b98321cc-8db1-4417-9e88-c686e2128d14",
+              "provider": "rules"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 1.52,
+              "step_id": "b98321cc-8db1-4417-9e88-c686e2128d14",
+              "provider": "rules"
+            }
+          ],
+          "dependency_ms": {
+            "context": 2.68,
+            "interpret": 45.8,
+            "reducer": 0.78,
+            "scheduler": 2.29,
+            "validate": 5.78,
+            "navigation_search": 0.08,
+            "navigation_route": 0.04,
+            "capability": 10.02,
+            "total": 174.98
+          },
+          "wall_ms": 180.86
+        },
+        {
+          "id": "center",
+          "type": "turn",
+          "query": "Không, đến trung tâm Long Biên.",
+          "passed": true,
+          "checks": {
+            "navigation.status": {
+              "passed": true,
+              "expected": "selecting",
+              "actual": "selecting"
+            }
+          },
+          "message": "đến trung tâm Long Biên.. Đúng chỗ này chứ?",
+          "status": "clarify",
+          "served": "rules",
+          "workflow_version": "unified-6",
+          "prompt_version": "semantic-unified-16",
+          "provider_attempts": [
+            {
+              "provider": "rules",
+              "outcome": "served",
+              "latency_ms": 0.35
+            }
+          ],
+          "node_spans": [
+            {
+              "node": "context",
+              "outcome": "ok",
+              "latency_ms": 4.52,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "interpret",
+              "outcome": "rules",
+              "latency_ms": 14.24,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "reducer",
+              "outcome": "ok",
+              "latency_ms": 1.39,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 1.38,
+              "step_id": "b98321cc-8db1-4417-9e88-c686e2128d14",
+              "provider": "rules"
+            },
+            {
+              "node": "validate",
+              "outcome": "running",
+              "latency_ms": 6.09,
+              "step_id": "b98321cc-8db1-4417-9e88-c686e2128d14",
+              "provider": "rules"
+            },
+            {
+              "node": "capability",
+              "outcome": "waiting_slot",
+              "latency_ms": 6.77,
+              "step_id": "b98321cc-8db1-4417-9e88-c686e2128d14",
+              "provider": "rules"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 0.87,
+              "step_id": "b98321cc-8db1-4417-9e88-c686e2128d14",
+              "provider": "rules"
+            }
+          ],
+          "dependency_ms": {
+            "context": 4.52,
+            "interpret": 14.24,
+            "reducer": 1.39,
+            "scheduler": 2.25,
+            "validate": 6.09,
+            "navigation_search": 0.02,
+            "navigation_route": 0.02,
+            "capability": 6.77,
+            "total": 136.6
+          },
+          "wall_ms": 141.08
+        },
+        {
+          "id": "place",
+          "type": "turn",
+          "query": "Đúng rồi",
+          "passed": true,
+          "checks": {
+            "navigation.status": {
+              "passed": true,
+              "expected": "preview",
+              "actual": "preview"
+            },
+            "execution.executed": {
+              "passed": true,
+              "expected": false,
+              "actual": false
+            }
+          },
+          "message": "Tuyến đến đến trung tâm Long Biên., khoảng 68 km, 57 phút. Không cần dừng sạc. Bạn xác nhận bắt đầu nhé.",
+          "status": "verified",
+          "served": "rules",
+          "workflow_version": "unified-6",
+          "prompt_version": "semantic-unified-16",
+          "provider_attempts": [
+            {
+              "provider": "rules",
+              "outcome": "served",
+              "latency_ms": 0.65
+            }
+          ],
+          "node_spans": [
+            {
+              "node": "context",
+              "outcome": "ok",
+              "latency_ms": 3.18,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "interpret",
+              "outcome": "rules",
+              "latency_ms": 20.7,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "reducer",
+              "outcome": "ok",
+              "latency_ms": 1.7,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 1.19,
+              "step_id": "b98321cc-8db1-4417-9e88-c686e2128d14",
+              "provider": "rules"
+            },
+            {
+              "node": "validate",
+              "outcome": "running",
+              "latency_ms": 5.0,
+              "step_id": "b98321cc-8db1-4417-9e88-c686e2128d14",
+              "provider": "rules"
+            },
+            {
+              "node": "capability",
+              "outcome": "completed",
+              "latency_ms": 11.29,
+              "step_id": "b98321cc-8db1-4417-9e88-c686e2128d14",
+              "provider": "rules"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 2.2,
+              "step_id": null,
+              "provider": "rules"
+            }
+          ],
+          "dependency_ms": {
+            "context": 3.18,
+            "interpret": 20.7,
+            "reducer": 1.7,
+            "scheduler": 3.39,
+            "validate": 5.0,
+            "navigation_route": 0.03,
+            "navigation_energy": 0.06,
+            "capability": 11.29,
+            "total": 135.74
+          },
+          "wall_ms": 140.07
+        },
+        {
+          "id": "approve",
+          "type": "turn",
+          "query": "Ok, xác nhận.",
+          "passed": true,
+          "checks": {
+            "navigation.status": {
+              "passed": true,
+              "expected": "running",
+              "actual": "running"
+            },
+            "execution.executed": {
+              "passed": true,
+              "expected": true,
+              "actual": true
+            },
+            "diagnostics.effective_provider": {
+              "passed": true,
+              "expected": "rules",
+              "actual": "rules"
+            }
+          },
+          "message": "Đã bắt đầu dẫn đường.",
+          "status": "verified",
+          "served": "rules",
+          "workflow_version": "unified-6",
+          "prompt_version": "semantic-unified-16",
+          "provider_attempts": [
+            {
+              "provider": "rules",
+              "outcome": "served",
+              "latency_ms": 0,
+              "source": "pending_confirmation"
+            }
+          ],
+          "node_spans": [
+            {
+              "node": "context",
+              "outcome": "ok",
+              "latency_ms": 3.87,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "interpret",
+              "outcome": "rules",
+              "latency_ms": 17.04,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "reducer",
+              "outcome": "ok",
+              "latency_ms": 2.19,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 2.71,
+              "step_id": "090f7f75-0941-4646-8569-9182a89b0e82",
+              "provider": "rules"
+            },
+            {
+              "node": "validate",
+              "outcome": "running",
+              "latency_ms": 7.63,
+              "step_id": "090f7f75-0941-4646-8569-9182a89b0e82",
+              "provider": "rules"
+            },
+            {
+              "node": "capability",
+              "outcome": "completed",
+              "latency_ms": 25.31,
+              "step_id": "090f7f75-0941-4646-8569-9182a89b0e82",
+              "provider": "rules"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 2.7,
+              "step_id": null,
+              "provider": "rules"
+            }
+          ],
+          "dependency_ms": {
+            "context": 3.87,
+            "interpret": 17.04,
+            "reducer": 2.19,
+            "scheduler": 5.41,
+            "validate": 7.63,
+            "capability": 25.31,
+            "total": 167.17
+          },
+          "wall_ms": 171.71
+        }
+      ]
+    },
+    {
+      "id": "long-bien-prefixed-start",
+      "group": "journey_lifecycle",
+      "provider": "rules",
+      "repeat": 1,
+      "cold_build_ms": 157.34,
+      "passed": true,
+      "operations": [
+        {
+          "id": "plan",
+          "type": "turn",
+          "query": "Chỉ đường tới Long Biên.",
+          "passed": true,
+          "checks": {
+            "navigation.status": {
+              "passed": true,
+              "expected": "selecting",
+              "actual": "selecting"
+            }
+          },
+          "message": "Long Biên. Đúng chỗ này chứ?",
+          "status": "clarify",
+          "served": "rules",
+          "workflow_version": "unified-6",
+          "prompt_version": "semantic-unified-16",
+          "provider_attempts": [
+            {
+              "provider": "rules",
+              "outcome": "served",
+              "latency_ms": 4.85
+            }
+          ],
+          "node_spans": [
+            {
+              "node": "context",
+              "outcome": "ok",
+              "latency_ms": 2.61,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "interpret",
+              "outcome": "rules",
+              "latency_ms": 34.04,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "reducer",
+              "outcome": "ok",
+              "latency_ms": 0.8,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 1.01,
+              "step_id": "816d9b68-7871-413d-8e58-1fb96f939b45",
+              "provider": "rules"
+            },
+            {
+              "node": "validate",
+              "outcome": "running",
+              "latency_ms": 7.89,
+              "step_id": "816d9b68-7871-413d-8e58-1fb96f939b45",
+              "provider": "rules"
+            },
+            {
+              "node": "capability",
+              "outcome": "waiting_slot",
+              "latency_ms": 7.33,
+              "step_id": "816d9b68-7871-413d-8e58-1fb96f939b45",
+              "provider": "rules"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 0.93,
+              "step_id": "816d9b68-7871-413d-8e58-1fb96f939b45",
+              "provider": "rules"
+            }
+          ],
+          "dependency_ms": {
+            "context": 2.61,
+            "interpret": 34.04,
+            "reducer": 0.8,
+            "scheduler": 1.94,
+            "validate": 7.89,
+            "navigation_search": 0.03,
+            "navigation_route": 0.02,
+            "capability": 7.33,
+            "total": 147.83
+          },
+          "wall_ms": 152.26
+        },
+        {
+          "id": "center",
+          "type": "turn",
+          "query": "Không, đến trung tâm Long Biên.",
+          "passed": true,
+          "checks": {
+            "navigation.status": {
+              "passed": true,
+              "expected": "selecting",
+              "actual": "selecting"
+            }
+          },
+          "message": "đến trung tâm Long Biên.. Đúng chỗ này chứ?",
+          "status": "clarify",
+          "served": "rules",
+          "workflow_version": "unified-6",
+          "prompt_version": "semantic-unified-16",
+          "provider_attempts": [
+            {
+              "provider": "rules",
+              "outcome": "served",
+              "latency_ms": 0.62
+            }
+          ],
+          "node_spans": [
+            {
+              "node": "context",
+              "outcome": "ok",
+              "latency_ms": 4.74,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "interpret",
+              "outcome": "rules",
+              "latency_ms": 13.46,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "reducer",
+              "outcome": "ok",
+              "latency_ms": 2.43,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 1.22,
+              "step_id": "816d9b68-7871-413d-8e58-1fb96f939b45",
+              "provider": "rules"
+            },
+            {
+              "node": "validate",
+              "outcome": "running",
+              "latency_ms": 9.68,
+              "step_id": "816d9b68-7871-413d-8e58-1fb96f939b45",
+              "provider": "rules"
+            },
+            {
+              "node": "capability",
+              "outcome": "waiting_slot",
+              "latency_ms": 15.11,
+              "step_id": "816d9b68-7871-413d-8e58-1fb96f939b45",
+              "provider": "rules"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 2.04,
+              "step_id": "816d9b68-7871-413d-8e58-1fb96f939b45",
+              "provider": "rules"
+            }
+          ],
+          "dependency_ms": {
+            "context": 4.74,
+            "interpret": 13.46,
+            "reducer": 2.43,
+            "scheduler": 3.26,
+            "validate": 9.68,
+            "navigation_search": 0.05,
+            "navigation_route": 0.08,
+            "capability": 15.11,
+            "total": 193.6
+          },
+          "wall_ms": 198.33
+        },
+        {
+          "id": "place",
+          "type": "turn",
+          "query": "Đúng rồi",
+          "passed": true,
+          "checks": {
+            "navigation.status": {
+              "passed": true,
+              "expected": "preview",
+              "actual": "preview"
+            },
+            "execution.executed": {
+              "passed": true,
+              "expected": false,
+              "actual": false
+            }
+          },
+          "message": "Tuyến đến đến trung tâm Long Biên., khoảng 68 km, 57 phút. Không cần dừng sạc. Bạn xác nhận bắt đầu nhé.",
+          "status": "verified",
+          "served": "rules",
+          "workflow_version": "unified-6",
+          "prompt_version": "semantic-unified-16",
+          "provider_attempts": [
+            {
+              "provider": "rules",
+              "outcome": "served",
+              "latency_ms": 0.33
+            }
+          ],
+          "node_spans": [
+            {
+              "node": "context",
+              "outcome": "ok",
+              "latency_ms": 4.91,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "interpret",
+              "outcome": "rules",
+              "latency_ms": 16.02,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "reducer",
+              "outcome": "ok",
+              "latency_ms": 4.06,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 1.05,
+              "step_id": "816d9b68-7871-413d-8e58-1fb96f939b45",
+              "provider": "rules"
+            },
+            {
+              "node": "validate",
+              "outcome": "running",
+              "latency_ms": 10.22,
+              "step_id": "816d9b68-7871-413d-8e58-1fb96f939b45",
+              "provider": "rules"
+            },
+            {
+              "node": "capability",
+              "outcome": "completed",
+              "latency_ms": 12.93,
+              "step_id": "816d9b68-7871-413d-8e58-1fb96f939b45",
+              "provider": "rules"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 7.92,
+              "step_id": null,
+              "provider": "rules"
+            }
+          ],
+          "dependency_ms": {
+            "context": 4.91,
+            "interpret": 16.02,
+            "reducer": 4.06,
+            "scheduler": 8.97,
+            "validate": 10.22,
+            "navigation_route": 0.03,
+            "navigation_energy": 0.23,
+            "capability": 12.93,
+            "total": 173.8
+          },
+          "wall_ms": 180.25
+        },
+        {
+          "id": "approve",
+          "type": "turn",
+          "query": "Ok, bắt đầu.",
+          "passed": true,
+          "checks": {
+            "navigation.status": {
+              "passed": true,
+              "expected": "running",
+              "actual": "running"
+            },
+            "execution.executed": {
+              "passed": true,
+              "expected": true,
+              "actual": true
+            },
+            "diagnostics.effective_provider": {
+              "passed": true,
+              "expected": "rules",
+              "actual": "rules"
+            }
+          },
+          "message": "Đã bắt đầu dẫn đường.",
+          "status": "verified",
+          "served": "rules",
+          "workflow_version": "unified-6",
+          "prompt_version": "semantic-unified-16",
+          "provider_attempts": [
+            {
+              "provider": "rules",
+              "outcome": "served",
+              "latency_ms": 0,
+              "source": "pending_confirmation"
+            }
+          ],
+          "node_spans": [
+            {
+              "node": "context",
+              "outcome": "ok",
+              "latency_ms": 5.25,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "interpret",
+              "outcome": "rules",
+              "latency_ms": 15.1,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "reducer",
+              "outcome": "ok",
+              "latency_ms": 2.26,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 1.13,
+              "step_id": "dc873abd-5287-43c2-bbcb-15b4db423195",
+              "provider": "rules"
+            },
+            {
+              "node": "validate",
+              "outcome": "running",
+              "latency_ms": 6.54,
+              "step_id": "dc873abd-5287-43c2-bbcb-15b4db423195",
+              "provider": "rules"
+            },
+            {
+              "node": "capability",
+              "outcome": "completed",
+              "latency_ms": 20.89,
+              "step_id": "dc873abd-5287-43c2-bbcb-15b4db423195",
+              "provider": "rules"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 2.41,
+              "step_id": null,
+              "provider": "rules"
+            }
+          ],
+          "dependency_ms": {
+            "context": 5.25,
+            "interpret": 15.1,
+            "reducer": 2.26,
+            "scheduler": 3.54,
+            "validate": 6.54,
+            "capability": 20.89,
+            "total": 146.39
+          },
+          "wall_ms": 151.1
+        }
+      ]
+    },
+    {
+      "id": "long-bien-prefixed-confirm",
+      "group": "journey_lifecycle",
+      "provider": "rules",
+      "repeat": 1,
+      "cold_build_ms": 142.85,
+      "passed": true,
+      "operations": [
+        {
+          "id": "plan",
+          "type": "turn",
+          "query": "Chỉ đường tới Long Biên.",
+          "passed": true,
+          "checks": {
+            "navigation.status": {
+              "passed": true,
+              "expected": "selecting",
+              "actual": "selecting"
+            }
+          },
+          "message": "Long Biên. Đúng chỗ này chứ?",
+          "status": "clarify",
+          "served": "rules",
+          "workflow_version": "unified-6",
+          "prompt_version": "semantic-unified-16",
+          "provider_attempts": [
+            {
+              "provider": "rules",
+              "outcome": "served",
+              "latency_ms": 2.45
+            }
+          ],
+          "node_spans": [
+            {
+              "node": "context",
+              "outcome": "ok",
+              "latency_ms": 3.21,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "interpret",
+              "outcome": "rules",
+              "latency_ms": 24.76,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "reducer",
+              "outcome": "ok",
+              "latency_ms": 0.87,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 0.8,
+              "step_id": "0740e70f-aba8-4d33-81da-21751d2792f0",
+              "provider": "rules"
+            },
+            {
+              "node": "validate",
+              "outcome": "running",
+              "latency_ms": 8.62,
+              "step_id": "0740e70f-aba8-4d33-81da-21751d2792f0",
+              "provider": "rules"
+            },
+            {
+              "node": "capability",
+              "outcome": "waiting_slot",
+              "latency_ms": 10.43,
+              "step_id": "0740e70f-aba8-4d33-81da-21751d2792f0",
+              "provider": "rules"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 0.96,
+              "step_id": "0740e70f-aba8-4d33-81da-21751d2792f0",
+              "provider": "rules"
+            }
+          ],
+          "dependency_ms": {
+            "context": 3.21,
+            "interpret": 24.76,
+            "reducer": 0.87,
+            "scheduler": 1.76,
+            "validate": 8.62,
+            "navigation_search": 0.03,
+            "navigation_route": 0.03,
+            "capability": 10.43,
+            "total": 144.38
+          },
+          "wall_ms": 149.26
+        },
+        {
+          "id": "center",
+          "type": "turn",
+          "query": "Không, đến trung tâm Long Biên.",
+          "passed": true,
+          "checks": {
+            "navigation.status": {
+              "passed": true,
+              "expected": "selecting",
+              "actual": "selecting"
+            }
+          },
+          "message": "đến trung tâm Long Biên.. Đúng chỗ này chứ?",
+          "status": "clarify",
+          "served": "rules",
+          "workflow_version": "unified-6",
+          "prompt_version": "semantic-unified-16",
+          "provider_attempts": [
+            {
+              "provider": "rules",
+              "outcome": "served",
+              "latency_ms": 0.77
+            }
+          ],
+          "node_spans": [
+            {
+              "node": "context",
+              "outcome": "ok",
+              "latency_ms": 3.76,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "interpret",
+              "outcome": "rules",
+              "latency_ms": 47.84,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "reducer",
+              "outcome": "ok",
+              "latency_ms": 3.58,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 1.41,
+              "step_id": "0740e70f-aba8-4d33-81da-21751d2792f0",
+              "provider": "rules"
+            },
+            {
+              "node": "validate",
+              "outcome": "running",
+              "latency_ms": 14.31,
+              "step_id": "0740e70f-aba8-4d33-81da-21751d2792f0",
+              "provider": "rules"
+            },
+            {
+              "node": "capability",
+              "outcome": "waiting_slot",
+              "latency_ms": 15.51,
+              "step_id": "0740e70f-aba8-4d33-81da-21751d2792f0",
+              "provider": "rules"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 2.05,
+              "step_id": "0740e70f-aba8-4d33-81da-21751d2792f0",
+              "provider": "rules"
+            }
+          ],
+          "dependency_ms": {
+            "context": 3.76,
+            "interpret": 47.84,
+            "reducer": 3.58,
+            "scheduler": 3.46,
+            "validate": 14.31,
+            "navigation_search": 0.07,
+            "navigation_route": 0.1,
+            "capability": 15.51,
+            "total": 258.13
+          },
+          "wall_ms": 268.23
+        },
+        {
+          "id": "place",
+          "type": "turn",
+          "query": "Đúng rồi",
+          "passed": true,
+          "checks": {
+            "navigation.status": {
+              "passed": true,
+              "expected": "preview",
+              "actual": "preview"
+            },
+            "execution.executed": {
+              "passed": true,
+              "expected": false,
+              "actual": false
+            }
+          },
+          "message": "Tuyến đến đến trung tâm Long Biên., khoảng 68 km, 57 phút. Không cần dừng sạc. Bạn xác nhận bắt đầu nhé.",
+          "status": "verified",
+          "served": "rules",
+          "workflow_version": "unified-6",
+          "prompt_version": "semantic-unified-16",
+          "provider_attempts": [
+            {
+              "provider": "rules",
+              "outcome": "served",
+              "latency_ms": 0.88
+            }
+          ],
+          "node_spans": [
+            {
+              "node": "context",
+              "outcome": "ok",
+              "latency_ms": 6.55,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "interpret",
+              "outcome": "rules",
+              "latency_ms": 34.05,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "reducer",
+              "outcome": "ok",
+              "latency_ms": 2.31,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 1.18,
+              "step_id": "0740e70f-aba8-4d33-81da-21751d2792f0",
+              "provider": "rules"
+            },
+            {
+              "node": "validate",
+              "outcome": "running",
+              "latency_ms": 10.73,
+              "step_id": "0740e70f-aba8-4d33-81da-21751d2792f0",
+              "provider": "rules"
+            },
+            {
+              "node": "capability",
+              "outcome": "completed",
+              "latency_ms": 16.18,
+              "step_id": "0740e70f-aba8-4d33-81da-21751d2792f0",
+              "provider": "rules"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 2.23,
+              "step_id": null,
+              "provider": "rules"
+            }
+          ],
+          "dependency_ms": {
+            "context": 6.55,
+            "interpret": 34.05,
+            "reducer": 2.31,
+            "scheduler": 3.41,
+            "validate": 10.73,
+            "navigation_route": 0.03,
+            "navigation_energy": 0.05,
+            "capability": 16.18,
+            "total": 198.72
+          },
+          "wall_ms": 203.77
+        },
+        {
+          "id": "approve",
+          "type": "turn",
+          "query": "Ok, xác nhận.",
+          "passed": true,
+          "checks": {
+            "navigation.status": {
+              "passed": true,
+              "expected": "running",
+              "actual": "running"
+            },
+            "execution.executed": {
+              "passed": true,
+              "expected": true,
+              "actual": true
+            },
+            "diagnostics.effective_provider": {
+              "passed": true,
+              "expected": "rules",
+              "actual": "rules"
+            }
+          },
+          "message": "Đã bắt đầu dẫn đường.",
+          "status": "verified",
+          "served": "rules",
+          "workflow_version": "unified-6",
+          "prompt_version": "semantic-unified-16",
+          "provider_attempts": [
+            {
+              "provider": "rules",
+              "outcome": "served",
+              "latency_ms": 0,
+              "source": "pending_confirmation"
+            }
+          ],
+          "node_spans": [
+            {
+              "node": "context",
+              "outcome": "ok",
+              "latency_ms": 4.26,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "interpret",
+              "outcome": "rules",
+              "latency_ms": 12.29,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "reducer",
+              "outcome": "ok",
+              "latency_ms": 1.97,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 0.95,
+              "step_id": "82b71d34-e49d-415d-99b3-a2b9303f55b5",
+              "provider": "rules"
+            },
+            {
+              "node": "validate",
+              "outcome": "running",
+              "latency_ms": 4.76,
+              "step_id": "82b71d34-e49d-415d-99b3-a2b9303f55b5",
+              "provider": "rules"
+            },
+            {
+              "node": "capability",
+              "outcome": "completed",
+              "latency_ms": 20.81,
+              "step_id": "82b71d34-e49d-415d-99b3-a2b9303f55b5",
+              "provider": "rules"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 2.69,
+              "step_id": null,
+              "provider": "rules"
+            }
+          ],
+          "dependency_ms": {
+            "context": 4.26,
+            "interpret": 12.29,
+            "reducer": 1.97,
+            "scheduler": 3.6399999999999997,
+            "validate": 4.76,
+            "capability": 20.81,
+            "total": 139.02
+          },
+          "wall_ms": 144.4
+        }
+      ]
+    },
+    {
+      "id": "long-bien-prefixed-start",
+      "group": "journey_lifecycle",
+      "provider": "rules",
+      "repeat": 2,
+      "cold_build_ms": 181.06,
+      "passed": true,
+      "operations": [
+        {
+          "id": "plan",
+          "type": "turn",
+          "query": "Chỉ đường tới Long Biên.",
+          "passed": true,
+          "checks": {
+            "navigation.status": {
+              "passed": true,
+              "expected": "selecting",
+              "actual": "selecting"
+            }
+          },
+          "message": "Long Biên. Đúng chỗ này chứ?",
+          "status": "clarify",
+          "served": "rules",
+          "workflow_version": "unified-6",
+          "prompt_version": "semantic-unified-16",
+          "provider_attempts": [
+            {
+              "provider": "rules",
+              "outcome": "served",
+              "latency_ms": 3.22
+            }
+          ],
+          "node_spans": [
+            {
+              "node": "context",
+              "outcome": "ok",
+              "latency_ms": 3.5,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "interpret",
+              "outcome": "rules",
+              "latency_ms": 25.85,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "reducer",
+              "outcome": "ok",
+              "latency_ms": 0.83,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 0.83,
+              "step_id": "e5855bc8-22a9-4b65-aefc-d6ce38ab1905",
+              "provider": "rules"
+            },
+            {
+              "node": "validate",
+              "outcome": "running",
+              "latency_ms": 8.92,
+              "step_id": "e5855bc8-22a9-4b65-aefc-d6ce38ab1905",
+              "provider": "rules"
+            },
+            {
+              "node": "capability",
+              "outcome": "waiting_slot",
+              "latency_ms": 9.61,
+              "step_id": "e5855bc8-22a9-4b65-aefc-d6ce38ab1905",
+              "provider": "rules"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 0.96,
+              "step_id": "e5855bc8-22a9-4b65-aefc-d6ce38ab1905",
+              "provider": "rules"
+            }
+          ],
+          "dependency_ms": {
+            "context": 3.5,
+            "interpret": 25.85,
+            "reducer": 0.83,
+            "scheduler": 1.79,
+            "validate": 8.92,
+            "navigation_search": 0.04,
+            "navigation_route": 0.03,
+            "capability": 9.61,
+            "total": 149.07
+          },
+          "wall_ms": 153.41
+        },
+        {
+          "id": "center",
+          "type": "turn",
+          "query": "Không, đến trung tâm Long Biên.",
+          "passed": true,
+          "checks": {
+            "navigation.status": {
+              "passed": true,
+              "expected": "selecting",
+              "actual": "selecting"
+            }
+          },
+          "message": "đến trung tâm Long Biên.. Đúng chỗ này chứ?",
+          "status": "clarify",
+          "served": "rules",
+          "workflow_version": "unified-6",
+          "prompt_version": "semantic-unified-16",
+          "provider_attempts": [
+            {
+              "provider": "rules",
+              "outcome": "served",
+              "latency_ms": 0.98
+            }
+          ],
+          "node_spans": [
+            {
+              "node": "context",
+              "outcome": "ok",
+              "latency_ms": 5.48,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "interpret",
+              "outcome": "rules",
+              "latency_ms": 21.85,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "reducer",
+              "outcome": "ok",
+              "latency_ms": 1.31,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 0.76,
+              "step_id": "e5855bc8-22a9-4b65-aefc-d6ce38ab1905",
+              "provider": "rules"
+            },
+            {
+              "node": "validate",
+              "outcome": "running",
+              "latency_ms": 7.46,
+              "step_id": "e5855bc8-22a9-4b65-aefc-d6ce38ab1905",
+              "provider": "rules"
+            },
+            {
+              "node": "capability",
+              "outcome": "waiting_slot",
+              "latency_ms": 11.87,
+              "step_id": "e5855bc8-22a9-4b65-aefc-d6ce38ab1905",
+              "provider": "rules"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 1.65,
+              "step_id": "e5855bc8-22a9-4b65-aefc-d6ce38ab1905",
+              "provider": "rules"
+            }
+          ],
+          "dependency_ms": {
+            "context": 5.48,
+            "interpret": 21.85,
+            "reducer": 1.31,
+            "scheduler": 2.41,
+            "validate": 7.46,
+            "navigation_search": 0.06,
+            "navigation_route": 0.06,
+            "capability": 11.87,
+            "total": 152.87
+          },
+          "wall_ms": 157.86
+        },
+        {
+          "id": "place",
+          "type": "turn",
+          "query": "Đúng rồi",
+          "passed": true,
+          "checks": {
+            "navigation.status": {
+              "passed": true,
+              "expected": "preview",
+              "actual": "preview"
+            },
+            "execution.executed": {
+              "passed": true,
+              "expected": false,
+              "actual": false
+            }
+          },
+          "message": "Tuyến đến đến trung tâm Long Biên., khoảng 68 km, 57 phút. Không cần dừng sạc. Bạn xác nhận bắt đầu nhé.",
+          "status": "verified",
+          "served": "rules",
+          "workflow_version": "unified-6",
+          "prompt_version": "semantic-unified-16",
+          "provider_attempts": [
+            {
+              "provider": "rules",
+              "outcome": "served",
+              "latency_ms": 0.35
+            }
+          ],
+          "node_spans": [
+            {
+              "node": "context",
+              "outcome": "ok",
+              "latency_ms": 3.08,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "interpret",
+              "outcome": "rules",
+              "latency_ms": 14.16,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "reducer",
+              "outcome": "ok",
+              "latency_ms": 2.18,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 0.76,
+              "step_id": "e5855bc8-22a9-4b65-aefc-d6ce38ab1905",
+              "provider": "rules"
+            },
+            {
+              "node": "validate",
+              "outcome": "running",
+              "latency_ms": 6.95,
+              "step_id": "e5855bc8-22a9-4b65-aefc-d6ce38ab1905",
+              "provider": "rules"
+            },
+            {
+              "node": "capability",
+              "outcome": "completed",
+              "latency_ms": 12.21,
+              "step_id": "e5855bc8-22a9-4b65-aefc-d6ce38ab1905",
+              "provider": "rules"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 1.86,
+              "step_id": null,
+              "provider": "rules"
+            }
+          ],
+          "dependency_ms": {
+            "context": 3.08,
+            "interpret": 14.16,
+            "reducer": 2.18,
+            "scheduler": 2.62,
+            "validate": 6.95,
+            "navigation_route": 0.02,
+            "navigation_energy": 0.05,
+            "capability": 12.21,
+            "total": 137.69
+          },
+          "wall_ms": 144.18
+        },
+        {
+          "id": "approve",
+          "type": "turn",
+          "query": "Ok, bắt đầu.",
+          "passed": true,
+          "checks": {
+            "navigation.status": {
+              "passed": true,
+              "expected": "running",
+              "actual": "running"
+            },
+            "execution.executed": {
+              "passed": true,
+              "expected": true,
+              "actual": true
+            },
+            "diagnostics.effective_provider": {
+              "passed": true,
+              "expected": "rules",
+              "actual": "rules"
+            }
+          },
+          "message": "Đã bắt đầu dẫn đường.",
+          "status": "verified",
+          "served": "rules",
+          "workflow_version": "unified-6",
+          "prompt_version": "semantic-unified-16",
+          "provider_attempts": [
+            {
+              "provider": "rules",
+              "outcome": "served",
+              "latency_ms": 0,
+              "source": "pending_confirmation"
+            }
+          ],
+          "node_spans": [
+            {
+              "node": "context",
+              "outcome": "ok",
+              "latency_ms": 6.28,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "interpret",
+              "outcome": "rules",
+              "latency_ms": 22.04,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "reducer",
+              "outcome": "ok",
+              "latency_ms": 2.12,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 1.14,
+              "step_id": "9c92801f-45c8-4c15-994a-440679881874",
+              "provider": "rules"
+            },
+            {
+              "node": "validate",
+              "outcome": "running",
+              "latency_ms": 6.45,
+              "step_id": "9c92801f-45c8-4c15-994a-440679881874",
+              "provider": "rules"
+            },
+            {
+              "node": "capability",
+              "outcome": "completed",
+              "latency_ms": 29.85,
+              "step_id": "9c92801f-45c8-4c15-994a-440679881874",
+              "provider": "rules"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 1.79,
+              "step_id": null,
+              "provider": "rules"
+            }
+          ],
+          "dependency_ms": {
+            "context": 6.28,
+            "interpret": 22.04,
+            "reducer": 2.12,
+            "scheduler": 2.9299999999999997,
+            "validate": 6.45,
+            "capability": 29.85,
+            "total": 159.01
+          },
+          "wall_ms": 165.95
+        }
+      ]
+    },
+    {
+      "id": "long-bien-prefixed-confirm",
+      "group": "journey_lifecycle",
+      "provider": "rules",
+      "repeat": 2,
+      "cold_build_ms": 132.89,
+      "passed": true,
+      "operations": [
+        {
+          "id": "plan",
+          "type": "turn",
+          "query": "Chỉ đường tới Long Biên.",
+          "passed": true,
+          "checks": {
+            "navigation.status": {
+              "passed": true,
+              "expected": "selecting",
+              "actual": "selecting"
+            }
+          },
+          "message": "Long Biên. Đúng chỗ này chứ?",
+          "status": "clarify",
+          "served": "rules",
+          "workflow_version": "unified-6",
+          "prompt_version": "semantic-unified-16",
+          "provider_attempts": [
+            {
+              "provider": "rules",
+              "outcome": "served",
+              "latency_ms": 5.56
+            }
+          ],
+          "node_spans": [
+            {
+              "node": "context",
+              "outcome": "ok",
+              "latency_ms": 3.46,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "interpret",
+              "outcome": "rules",
+              "latency_ms": 41.94,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "reducer",
+              "outcome": "ok",
+              "latency_ms": 0.87,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 1.27,
+              "step_id": "2e286c28-4511-4bc8-9672-086be68e0859",
+              "provider": "rules"
+            },
+            {
+              "node": "validate",
+              "outcome": "running",
+              "latency_ms": 8.47,
+              "step_id": "2e286c28-4511-4bc8-9672-086be68e0859",
+              "provider": "rules"
+            },
+            {
+              "node": "capability",
+              "outcome": "waiting_slot",
+              "latency_ms": 10.87,
+              "step_id": "2e286c28-4511-4bc8-9672-086be68e0859",
+              "provider": "rules"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 1.78,
+              "step_id": "2e286c28-4511-4bc8-9672-086be68e0859",
+              "provider": "rules"
+            }
+          ],
+          "dependency_ms": {
+            "context": 3.46,
+            "interpret": 41.94,
+            "reducer": 0.87,
+            "scheduler": 3.05,
+            "validate": 8.47,
+            "navigation_search": 0.06,
+            "navigation_route": 0.05,
+            "capability": 10.87,
+            "total": 200.87
+          },
+          "wall_ms": 209.89
+        },
+        {
+          "id": "center",
+          "type": "turn",
+          "query": "Không, đến trung tâm Long Biên.",
+          "passed": true,
+          "checks": {
+            "navigation.status": {
+              "passed": true,
+              "expected": "selecting",
+              "actual": "selecting"
+            }
+          },
+          "message": "đến trung tâm Long Biên.. Đúng chỗ này chứ?",
+          "status": "clarify",
+          "served": "rules",
+          "workflow_version": "unified-6",
+          "prompt_version": "semantic-unified-16",
+          "provider_attempts": [
+            {
+              "provider": "rules",
+              "outcome": "served",
+              "latency_ms": 0.76
+            }
+          ],
+          "node_spans": [
+            {
+              "node": "context",
+              "outcome": "ok",
+              "latency_ms": 5.98,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "interpret",
+              "outcome": "rules",
+              "latency_ms": 33.77,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "reducer",
+              "outcome": "ok",
+              "latency_ms": 1.85,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 0.83,
+              "step_id": "2e286c28-4511-4bc8-9672-086be68e0859",
+              "provider": "rules"
+            },
+            {
+              "node": "validate",
+              "outcome": "running",
+              "latency_ms": 18.8,
+              "step_id": "2e286c28-4511-4bc8-9672-086be68e0859",
+              "provider": "rules"
+            },
+            {
+              "node": "capability",
+              "outcome": "waiting_slot",
+              "latency_ms": 16.34,
+              "step_id": "2e286c28-4511-4bc8-9672-086be68e0859",
+              "provider": "rules"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 2.33,
+              "step_id": "2e286c28-4511-4bc8-9672-086be68e0859",
+              "provider": "rules"
+            }
+          ],
+          "dependency_ms": {
+            "context": 5.98,
+            "interpret": 33.77,
+            "reducer": 1.85,
+            "scheduler": 3.16,
+            "validate": 18.8,
+            "navigation_search": 0.06,
+            "navigation_route": 0.05,
+            "capability": 16.34,
+            "total": 238.23
+          },
+          "wall_ms": 244.36
+        },
+        {
+          "id": "place",
+          "type": "turn",
+          "query": "Đúng rồi",
+          "passed": true,
+          "checks": {
+            "navigation.status": {
+              "passed": true,
+              "expected": "preview",
+              "actual": "preview"
+            },
+            "execution.executed": {
+              "passed": true,
+              "expected": false,
+              "actual": false
+            }
+          },
+          "message": "Tuyến đến đến trung tâm Long Biên., khoảng 68 km, 57 phút. Không cần dừng sạc. Bạn xác nhận bắt đầu nhé.",
+          "status": "verified",
+          "served": "rules",
+          "workflow_version": "unified-6",
+          "prompt_version": "semantic-unified-16",
+          "provider_attempts": [
+            {
+              "provider": "rules",
+              "outcome": "served",
+              "latency_ms": 0.74
+            }
+          ],
+          "node_spans": [
+            {
+              "node": "context",
+              "outcome": "ok",
+              "latency_ms": 5.18,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "interpret",
+              "outcome": "rules",
+              "latency_ms": 31.11,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "reducer",
+              "outcome": "ok",
+              "latency_ms": 2.37,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 0.91,
+              "step_id": "2e286c28-4511-4bc8-9672-086be68e0859",
+              "provider": "rules"
+            },
+            {
+              "node": "validate",
+              "outcome": "running",
+              "latency_ms": 15.68,
+              "step_id": "2e286c28-4511-4bc8-9672-086be68e0859",
+              "provider": "rules"
+            },
+            {
+              "node": "capability",
+              "outcome": "completed",
+              "latency_ms": 17.66,
+              "step_id": "2e286c28-4511-4bc8-9672-086be68e0859",
+              "provider": "rules"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 2.31,
+              "step_id": null,
+              "provider": "rules"
+            }
+          ],
+          "dependency_ms": {
+            "context": 5.18,
+            "interpret": 31.11,
+            "reducer": 2.37,
+            "scheduler": 3.22,
+            "validate": 15.68,
+            "navigation_route": 0.16,
+            "navigation_energy": 0.13,
+            "capability": 17.66,
+            "total": 201.63
+          },
+          "wall_ms": 207.69
+        },
+        {
+          "id": "approve",
+          "type": "turn",
+          "query": "Ok, xác nhận.",
+          "passed": true,
+          "checks": {
+            "navigation.status": {
+              "passed": true,
+              "expected": "running",
+              "actual": "running"
+            },
+            "execution.executed": {
+              "passed": true,
+              "expected": true,
+              "actual": true
+            },
+            "diagnostics.effective_provider": {
+              "passed": true,
+              "expected": "rules",
+              "actual": "rules"
+            }
+          },
+          "message": "Đã bắt đầu dẫn đường.",
+          "status": "verified",
+          "served": "rules",
+          "workflow_version": "unified-6",
+          "prompt_version": "semantic-unified-16",
+          "provider_attempts": [
+            {
+              "provider": "rules",
+              "outcome": "served",
+              "latency_ms": 0,
+              "source": "pending_confirmation"
+            }
+          ],
+          "node_spans": [
+            {
+              "node": "context",
+              "outcome": "ok",
+              "latency_ms": 5.18,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "interpret",
+              "outcome": "rules",
+              "latency_ms": 23.1,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "reducer",
+              "outcome": "ok",
+              "latency_ms": 2.16,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 2.34,
+              "step_id": "b2a4356e-ec4e-4435-b174-12a598cd0d9a",
+              "provider": "rules"
+            },
+            {
+              "node": "validate",
+              "outcome": "running",
+              "latency_ms": 8.83,
+              "step_id": "b2a4356e-ec4e-4435-b174-12a598cd0d9a",
+              "provider": "rules"
+            },
+            {
+              "node": "capability",
+              "outcome": "completed",
+              "latency_ms": 25.07,
+              "step_id": "b2a4356e-ec4e-4435-b174-12a598cd0d9a",
+              "provider": "rules"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 7.22,
+              "step_id": null,
+              "provider": "rules"
+            }
+          ],
+          "dependency_ms": {
+            "context": 5.18,
+            "interpret": 23.1,
+            "reducer": 2.16,
+            "scheduler": 9.559999999999999,
+            "validate": 8.83,
+            "capability": 25.07,
+            "total": 188.65
+          },
+          "wall_ms": 192.88
+        }
+      ]
+    },
+    {
+      "id": "long-bien-prefixed-start",
+      "group": "journey_lifecycle",
+      "provider": "fixture",
+      "repeat": 0,
+      "cold_build_ms": 156.46,
+      "passed": true,
+      "operations": [
+        {
+          "id": "plan",
+          "type": "turn",
+          "query": "Chỉ đường tới Long Biên.",
+          "passed": true,
+          "checks": {
+            "navigation.status": {
+              "passed": true,
+              "expected": "selecting",
+              "actual": "selecting"
+            }
+          },
+          "message": "Long Biên. Đúng chỗ này chứ?",
+          "status": "clarify",
+          "served": "fixture",
+          "workflow_version": "unified-6",
+          "prompt_version": "semantic-unified-16",
+          "provider_attempts": [
+            {
+              "provider": "fixture",
+              "outcome": "served",
+              "latency_ms": 14.76,
+              "model_semantic": {
+                "act": "request",
+                "actions": [
+                  {
+                    "capability": "navigation.plan",
+                    "arguments": {
+                      "query": "Long Biên",
+                      "destination_scope": "place",
+                      "trip_kind": "one_way"
+                    },
+                    "exclusion_mode": "add",
+                    "referenced_target": false
+                  }
+                ],
+                "step_updates": [],
+                "append_actions": [],
+                "clarification_drafts": [],
+                "negated": false,
+                "conditional": false,
+                "scheduled": false,
+                "conflicting": false,
+                "unresolved": []
+              }
+            }
+          ],
+          "node_spans": [
+            {
+              "node": "context",
+              "outcome": "ok",
+              "latency_ms": 3.92,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "interpret",
+              "outcome": "fixture",
+              "latency_ms": 47.79,
+              "step_id": null,
+              "provider": "fixture"
+            },
+            {
+              "node": "reducer",
+              "outcome": "ok",
+              "latency_ms": 0.78,
+              "step_id": null,
+              "provider": "fixture"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 1.31,
+              "step_id": "95a9c689-8875-4e1b-b028-e20eaac3e872",
+              "provider": "fixture"
+            },
+            {
+              "node": "validate",
+              "outcome": "running",
+              "latency_ms": 7.33,
+              "step_id": "95a9c689-8875-4e1b-b028-e20eaac3e872",
+              "provider": "fixture"
+            },
+            {
+              "node": "capability",
+              "outcome": "waiting_slot",
+              "latency_ms": 12.07,
+              "step_id": "95a9c689-8875-4e1b-b028-e20eaac3e872",
+              "provider": "fixture"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 1.25,
+              "step_id": "95a9c689-8875-4e1b-b028-e20eaac3e872",
+              "provider": "fixture"
+            }
+          ],
+          "dependency_ms": {
+            "context": 3.92,
+            "interpret": 47.79,
+            "reducer": 0.78,
+            "scheduler": 2.56,
+            "validate": 7.33,
+            "navigation_search": 0.05,
+            "navigation_route": 0.04,
+            "capability": 12.07,
+            "total": 179.64
+          },
+          "wall_ms": 185.83
+        },
+        {
+          "id": "center",
+          "type": "turn",
+          "query": "Không, đến trung tâm Long Biên.",
+          "passed": true,
+          "checks": {
+            "navigation.status": {
+              "passed": true,
+              "expected": "selecting",
+              "actual": "selecting"
+            }
+          },
+          "message": "đến trung tâm Long Biên.. Đúng chỗ này chứ?",
+          "status": "clarify",
+          "served": "fixture",
+          "workflow_version": "unified-6",
+          "prompt_version": "semantic-unified-16",
+          "provider_attempts": [
+            {
+              "provider": "fixture",
+              "outcome": "served",
+              "latency_ms": 8.32,
+              "model_semantic": {
+                "act": "request",
+                "actions": [
+                  {
+                    "capability": "navigation.refine",
+                    "arguments": {
+                      "query": "đến trung tâm Long Biên."
+                    },
+                    "exclusion_mode": "add",
+                    "referenced_target": false
+                  }
+                ],
+                "step_updates": [],
+                "append_actions": [],
+                "clarification_drafts": [],
+                "negated": false,
+                "conditional": false,
+                "scheduled": false,
+                "conflicting": false,
+                "unresolved": []
+              }
+            }
+          ],
+          "node_spans": [
+            {
+              "node": "context",
+              "outcome": "ok",
+              "latency_ms": 4.12,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "interpret",
+              "outcome": "fixture",
+              "latency_ms": 25.54,
+              "step_id": null,
+              "provider": "fixture"
+            },
+            {
+              "node": "reducer",
+              "outcome": "ok",
+              "latency_ms": 1.32,
+              "step_id": null,
+              "provider": "fixture"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 1.04,
+              "step_id": "95a9c689-8875-4e1b-b028-e20eaac3e872",
+              "provider": "fixture"
+            },
+            {
+              "node": "validate",
+              "outcome": "running",
+              "latency_ms": 5.88,
+              "step_id": "95a9c689-8875-4e1b-b028-e20eaac3e872",
+              "provider": "fixture"
+            },
+            {
+              "node": "capability",
+              "outcome": "waiting_slot",
+              "latency_ms": 9.06,
+              "step_id": "95a9c689-8875-4e1b-b028-e20eaac3e872",
+              "provider": "fixture"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 1.14,
+              "step_id": "95a9c689-8875-4e1b-b028-e20eaac3e872",
+              "provider": "fixture"
+            }
+          ],
+          "dependency_ms": {
+            "context": 4.12,
+            "interpret": 25.54,
+            "reducer": 1.32,
+            "scheduler": 2.1799999999999997,
+            "validate": 5.88,
+            "navigation_search": 0.05,
+            "navigation_route": 0.03,
+            "capability": 9.06,
+            "total": 160.76
+          },
+          "wall_ms": 166.71
+        },
+        {
+          "id": "place",
+          "type": "turn",
+          "query": "Đúng rồi",
+          "passed": true,
+          "checks": {
+            "navigation.status": {
+              "passed": true,
+              "expected": "preview",
+              "actual": "preview"
+            },
+            "execution.executed": {
+              "passed": true,
+              "expected": false,
+              "actual": false
+            }
+          },
+          "message": "Tuyến đến đến trung tâm Long Biên., khoảng 68 km, 57 phút. Không cần dừng sạc. Bạn xác nhận bắt đầu nhé.",
+          "status": "verified",
+          "served": "fixture",
+          "workflow_version": "unified-6",
+          "prompt_version": "semantic-unified-16",
+          "provider_attempts": [
+            {
+              "provider": "fixture",
+              "outcome": "served",
+              "latency_ms": 24.89,
+              "model_semantic": {
+                "act": "confirm",
+                "task_ref": "active",
+                "actions": [],
+                "step_updates": [],
+                "append_actions": [],
+                "clarification_drafts": [],
+                "negated": false,
+                "conditional": false,
+                "scheduled": false,
+                "conflicting": false,
+                "unresolved": []
+              }
+            }
+          ],
+          "node_spans": [
+            {
+              "node": "context",
+              "outcome": "ok",
+              "latency_ms": 3.9,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "interpret",
+              "outcome": "fixture",
+              "latency_ms": 54.0,
+              "step_id": null,
+              "provider": "fixture"
+            },
+            {
+              "node": "reducer",
+              "outcome": "ok",
+              "latency_ms": 3.08,
+              "step_id": null,
+              "provider": "fixture"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 1.42,
+              "step_id": "95a9c689-8875-4e1b-b028-e20eaac3e872",
+              "provider": "fixture"
+            },
+            {
+              "node": "validate",
+              "outcome": "running",
+              "latency_ms": 7.85,
+              "step_id": "95a9c689-8875-4e1b-b028-e20eaac3e872",
+              "provider": "fixture"
+            },
+            {
+              "node": "capability",
+              "outcome": "completed",
+              "latency_ms": 12.02,
+              "step_id": "95a9c689-8875-4e1b-b028-e20eaac3e872",
+              "provider": "fixture"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 3.46,
+              "step_id": null,
+              "provider": "fixture"
+            }
+          ],
+          "dependency_ms": {
+            "context": 3.9,
+            "interpret": 54.0,
+            "reducer": 3.08,
+            "scheduler": 4.88,
+            "validate": 7.85,
+            "navigation_route": 0.04,
+            "navigation_energy": 0.05,
+            "capability": 12.02,
+            "total": 207.83
+          },
+          "wall_ms": 213.16
+        },
+        {
+          "id": "approve",
+          "type": "turn",
+          "query": "Ok, bắt đầu.",
+          "passed": true,
+          "checks": {
+            "navigation.status": {
+              "passed": true,
+              "expected": "running",
+              "actual": "running"
+            },
+            "execution.executed": {
+              "passed": true,
+              "expected": true,
+              "actual": true
+            },
+            "diagnostics.effective_provider": {
+              "passed": true,
+              "expected": "rules",
+              "actual": "rules"
+            }
+          },
+          "message": "Đã bắt đầu dẫn đường.",
+          "status": "verified",
+          "served": "rules",
+          "workflow_version": "unified-6",
+          "prompt_version": "semantic-unified-16",
+          "provider_attempts": [
+            {
+              "provider": "rules",
+              "outcome": "served",
+              "latency_ms": 0,
+              "source": "pending_confirmation"
+            }
+          ],
+          "node_spans": [
+            {
+              "node": "context",
+              "outcome": "ok",
+              "latency_ms": 6.03,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "interpret",
+              "outcome": "rules",
+              "latency_ms": 14.62,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "reducer",
+              "outcome": "ok",
+              "latency_ms": 2.74,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 1.48,
+              "step_id": "3b013d48-ca47-4360-b6eb-cfa2c05530f2",
+              "provider": "rules"
+            },
+            {
+              "node": "validate",
+              "outcome": "running",
+              "latency_ms": 9.67,
+              "step_id": "3b013d48-ca47-4360-b6eb-cfa2c05530f2",
+              "provider": "rules"
+            },
+            {
+              "node": "capability",
+              "outcome": "completed",
+              "latency_ms": 25.7,
+              "step_id": "3b013d48-ca47-4360-b6eb-cfa2c05530f2",
+              "provider": "rules"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 2.89,
+              "step_id": null,
+              "provider": "rules"
+            }
+          ],
+          "dependency_ms": {
+            "context": 6.03,
+            "interpret": 14.62,
+            "reducer": 2.74,
+            "scheduler": 4.37,
+            "validate": 9.67,
+            "capability": 25.7,
+            "total": 168.99
+          },
+          "wall_ms": 173.64
+        }
+      ]
+    },
+    {
+      "id": "long-bien-prefixed-confirm",
+      "group": "journey_lifecycle",
+      "provider": "fixture",
+      "repeat": 0,
+      "cold_build_ms": 165.93,
+      "passed": true,
+      "operations": [
+        {
+          "id": "plan",
+          "type": "turn",
+          "query": "Chỉ đường tới Long Biên.",
+          "passed": true,
+          "checks": {
+            "navigation.status": {
+              "passed": true,
+              "expected": "selecting",
+              "actual": "selecting"
+            }
+          },
+          "message": "Long Biên. Đúng chỗ này chứ?",
+          "status": "clarify",
+          "served": "fixture",
+          "workflow_version": "unified-6",
+          "prompt_version": "semantic-unified-16",
+          "provider_attempts": [
+            {
+              "provider": "fixture",
+              "outcome": "served",
+              "latency_ms": 11.68,
+              "model_semantic": {
+                "act": "request",
+                "actions": [
+                  {
+                    "capability": "navigation.plan",
+                    "arguments": {
+                      "query": "Long Biên",
+                      "destination_scope": "place",
+                      "trip_kind": "one_way"
+                    },
+                    "exclusion_mode": "add",
+                    "referenced_target": false
+                  }
+                ],
+                "step_updates": [],
+                "append_actions": [],
+                "clarification_drafts": [],
+                "negated": false,
+                "conditional": false,
+                "scheduled": false,
+                "conflicting": false,
+                "unresolved": []
+              }
+            }
+          ],
+          "node_spans": [
+            {
+              "node": "context",
+              "outcome": "ok",
+              "latency_ms": 3.48,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "interpret",
+              "outcome": "fixture",
+              "latency_ms": 34.84,
+              "step_id": null,
+              "provider": "fixture"
+            },
+            {
+              "node": "reducer",
+              "outcome": "ok",
+              "latency_ms": 0.88,
+              "step_id": null,
+              "provider": "fixture"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 1.56,
+              "step_id": "7b8e4a04-01eb-430f-acd6-f1258da1951b",
+              "provider": "fixture"
+            },
+            {
+              "node": "validate",
+              "outcome": "running",
+              "latency_ms": 6.77,
+              "step_id": "7b8e4a04-01eb-430f-acd6-f1258da1951b",
+              "provider": "fixture"
+            },
+            {
+              "node": "capability",
+              "outcome": "waiting_slot",
+              "latency_ms": 10.43,
+              "step_id": "7b8e4a04-01eb-430f-acd6-f1258da1951b",
+              "provider": "fixture"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 1.08,
+              "step_id": "7b8e4a04-01eb-430f-acd6-f1258da1951b",
+              "provider": "fixture"
+            }
+          ],
+          "dependency_ms": {
+            "context": 3.48,
+            "interpret": 34.84,
+            "reducer": 0.88,
+            "scheduler": 2.64,
+            "validate": 6.77,
+            "navigation_search": 0.03,
+            "navigation_route": 0.03,
+            "capability": 10.43,
+            "total": 161.07
+          },
+          "wall_ms": 165.9
+        },
+        {
+          "id": "center",
+          "type": "turn",
+          "query": "Không, đến trung tâm Long Biên.",
+          "passed": true,
+          "checks": {
+            "navigation.status": {
+              "passed": true,
+              "expected": "selecting",
+              "actual": "selecting"
+            }
+          },
+          "message": "đến trung tâm Long Biên.. Đúng chỗ này chứ?",
+          "status": "clarify",
+          "served": "fixture",
+          "workflow_version": "unified-6",
+          "prompt_version": "semantic-unified-16",
+          "provider_attempts": [
+            {
+              "provider": "fixture",
+              "outcome": "served",
+              "latency_ms": 11.08,
+              "model_semantic": {
+                "act": "request",
+                "actions": [
+                  {
+                    "capability": "navigation.refine",
+                    "arguments": {
+                      "query": "đến trung tâm Long Biên."
+                    },
+                    "exclusion_mode": "add",
+                    "referenced_target": false
+                  }
+                ],
+                "step_updates": [],
+                "append_actions": [],
+                "clarification_drafts": [],
+                "negated": false,
+                "conditional": false,
+                "scheduled": false,
+                "conflicting": false,
+                "unresolved": []
+              }
+            }
+          ],
+          "node_spans": [
+            {
+              "node": "context",
+              "outcome": "ok",
+              "latency_ms": 3.72,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "interpret",
+              "outcome": "fixture",
+              "latency_ms": 32.74,
+              "step_id": null,
+              "provider": "fixture"
+            },
+            {
+              "node": "reducer",
+              "outcome": "ok",
+              "latency_ms": 2.15,
+              "step_id": null,
+              "provider": "fixture"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 1.78,
+              "step_id": "7b8e4a04-01eb-430f-acd6-f1258da1951b",
+              "provider": "fixture"
+            },
+            {
+              "node": "validate",
+              "outcome": "running",
+              "latency_ms": 6.05,
+              "step_id": "7b8e4a04-01eb-430f-acd6-f1258da1951b",
+              "provider": "fixture"
+            },
+            {
+              "node": "capability",
+              "outcome": "waiting_slot",
+              "latency_ms": 14.66,
+              "step_id": "7b8e4a04-01eb-430f-acd6-f1258da1951b",
+              "provider": "fixture"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 1.08,
+              "step_id": "7b8e4a04-01eb-430f-acd6-f1258da1951b",
+              "provider": "fixture"
+            }
+          ],
+          "dependency_ms": {
+            "context": 3.72,
+            "interpret": 32.74,
+            "reducer": 2.15,
+            "scheduler": 2.8600000000000003,
+            "validate": 6.05,
+            "navigation_search": 0.02,
+            "navigation_route": 0.02,
+            "capability": 14.66,
+            "total": 162.65
+          },
+          "wall_ms": 168.83
+        },
+        {
+          "id": "place",
+          "type": "turn",
+          "query": "Đúng rồi",
+          "passed": true,
+          "checks": {
+            "navigation.status": {
+              "passed": true,
+              "expected": "preview",
+              "actual": "preview"
+            },
+            "execution.executed": {
+              "passed": true,
+              "expected": false,
+              "actual": false
+            }
+          },
+          "message": "Tuyến đến đến trung tâm Long Biên., khoảng 68 km, 57 phút. Không cần dừng sạc. Bạn xác nhận bắt đầu nhé.",
+          "status": "verified",
+          "served": "fixture",
+          "workflow_version": "unified-6",
+          "prompt_version": "semantic-unified-16",
+          "provider_attempts": [
+            {
+              "provider": "fixture",
+              "outcome": "served",
+              "latency_ms": 12.97,
+              "model_semantic": {
+                "act": "confirm",
+                "task_ref": "active",
+                "actions": [],
+                "step_updates": [],
+                "append_actions": [],
+                "clarification_drafts": [],
+                "negated": false,
+                "conditional": false,
+                "scheduled": false,
+                "conflicting": false,
+                "unresolved": []
+              }
+            }
+          ],
+          "node_spans": [
+            {
+              "node": "context",
+              "outcome": "ok",
+              "latency_ms": 4.14,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "interpret",
+              "outcome": "fixture",
+              "latency_ms": 28.76,
+              "step_id": null,
+              "provider": "fixture"
+            },
+            {
+              "node": "reducer",
+              "outcome": "ok",
+              "latency_ms": 1.32,
+              "step_id": null,
+              "provider": "fixture"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 1.89,
+              "step_id": "7b8e4a04-01eb-430f-acd6-f1258da1951b",
+              "provider": "fixture"
+            },
+            {
+              "node": "validate",
+              "outcome": "running",
+              "latency_ms": 6.07,
+              "step_id": "7b8e4a04-01eb-430f-acd6-f1258da1951b",
+              "provider": "fixture"
+            },
+            {
+              "node": "capability",
+              "outcome": "completed",
+              "latency_ms": 12.4,
+              "step_id": "7b8e4a04-01eb-430f-acd6-f1258da1951b",
+              "provider": "fixture"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 1.56,
+              "step_id": null,
+              "provider": "fixture"
+            }
+          ],
+          "dependency_ms": {
+            "context": 4.14,
+            "interpret": 28.76,
+            "reducer": 1.32,
+            "scheduler": 3.45,
+            "validate": 6.07,
+            "navigation_route": 0.02,
+            "navigation_energy": 0.04,
+            "capability": 12.4,
+            "total": 147.24
+          },
+          "wall_ms": 153.33
+        },
+        {
+          "id": "approve",
+          "type": "turn",
+          "query": "Ok, xác nhận.",
+          "passed": true,
+          "checks": {
+            "navigation.status": {
+              "passed": true,
+              "expected": "running",
+              "actual": "running"
+            },
+            "execution.executed": {
+              "passed": true,
+              "expected": true,
+              "actual": true
+            },
+            "diagnostics.effective_provider": {
+              "passed": true,
+              "expected": "rules",
+              "actual": "rules"
+            }
+          },
+          "message": "Đã bắt đầu dẫn đường.",
+          "status": "verified",
+          "served": "rules",
+          "workflow_version": "unified-6",
+          "prompt_version": "semantic-unified-16",
+          "provider_attempts": [
+            {
+              "provider": "rules",
+              "outcome": "served",
+              "latency_ms": 0,
+              "source": "pending_confirmation"
+            }
+          ],
+          "node_spans": [
+            {
+              "node": "context",
+              "outcome": "ok",
+              "latency_ms": 9.07,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "interpret",
+              "outcome": "rules",
+              "latency_ms": 13.21,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "reducer",
+              "outcome": "ok",
+              "latency_ms": 2.95,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 1.03,
+              "step_id": "e8afb417-5add-432d-babd-5b019d5039f9",
+              "provider": "rules"
+            },
+            {
+              "node": "validate",
+              "outcome": "running",
+              "latency_ms": 8.29,
+              "step_id": "e8afb417-5add-432d-babd-5b019d5039f9",
+              "provider": "rules"
+            },
+            {
+              "node": "capability",
+              "outcome": "completed",
+              "latency_ms": 30.65,
+              "step_id": "e8afb417-5add-432d-babd-5b019d5039f9",
+              "provider": "rules"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 3.82,
+              "step_id": null,
+              "provider": "rules"
+            }
+          ],
+          "dependency_ms": {
+            "context": 9.07,
+            "interpret": 13.21,
+            "reducer": 2.95,
+            "scheduler": 4.85,
+            "validate": 8.29,
+            "capability": 30.65,
+            "total": 176.29
+          },
+          "wall_ms": 181.36
+        }
+      ]
+    },
+    {
+      "id": "long-bien-prefixed-start",
+      "group": "journey_lifecycle",
+      "provider": "fixture",
+      "repeat": 1,
+      "cold_build_ms": 155.17,
+      "passed": true,
+      "operations": [
+        {
+          "id": "plan",
+          "type": "turn",
+          "query": "Chỉ đường tới Long Biên.",
+          "passed": true,
+          "checks": {
+            "navigation.status": {
+              "passed": true,
+              "expected": "selecting",
+              "actual": "selecting"
+            }
+          },
+          "message": "Long Biên. Đúng chỗ này chứ?",
+          "status": "clarify",
+          "served": "fixture",
+          "workflow_version": "unified-6",
+          "prompt_version": "semantic-unified-16",
+          "provider_attempts": [
+            {
+              "provider": "fixture",
+              "outcome": "served",
+              "latency_ms": 11.34,
+              "model_semantic": {
+                "act": "request",
+                "actions": [
+                  {
+                    "capability": "navigation.plan",
+                    "arguments": {
+                      "query": "Long Biên",
+                      "destination_scope": "place",
+                      "trip_kind": "one_way"
+                    },
+                    "exclusion_mode": "add",
+                    "referenced_target": false
+                  }
+                ],
+                "step_updates": [],
+                "append_actions": [],
+                "clarification_drafts": [],
+                "negated": false,
+                "conditional": false,
+                "scheduled": false,
+                "conflicting": false,
+                "unresolved": []
+              }
+            }
+          ],
+          "node_spans": [
+            {
+              "node": "context",
+              "outcome": "ok",
+              "latency_ms": 2.74,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "interpret",
+              "outcome": "fixture",
+              "latency_ms": 35.58,
+              "step_id": null,
+              "provider": "fixture"
+            },
+            {
+              "node": "reducer",
+              "outcome": "ok",
+              "latency_ms": 1.41,
+              "step_id": null,
+              "provider": "fixture"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 0.59,
+              "step_id": "51f0ac56-22d0-4df9-81ca-6bbd8256097b",
+              "provider": "fixture"
+            },
+            {
+              "node": "validate",
+              "outcome": "running",
+              "latency_ms": 5.54,
+              "step_id": "51f0ac56-22d0-4df9-81ca-6bbd8256097b",
+              "provider": "fixture"
+            },
+            {
+              "node": "capability",
+              "outcome": "waiting_slot",
+              "latency_ms": 9.26,
+              "step_id": "51f0ac56-22d0-4df9-81ca-6bbd8256097b",
+              "provider": "fixture"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 1.69,
+              "step_id": "51f0ac56-22d0-4df9-81ca-6bbd8256097b",
+              "provider": "fixture"
+            }
+          ],
+          "dependency_ms": {
+            "context": 2.74,
+            "interpret": 35.58,
+            "reducer": 1.41,
+            "scheduler": 2.28,
+            "validate": 5.54,
+            "navigation_search": 0.03,
+            "navigation_route": 0.02,
+            "capability": 9.26,
+            "total": 154.34
+          },
+          "wall_ms": 159.69
+        },
+        {
+          "id": "center",
+          "type": "turn",
+          "query": "Không, đến trung tâm Long Biên.",
+          "passed": true,
+          "checks": {
+            "navigation.status": {
+              "passed": true,
+              "expected": "selecting",
+              "actual": "selecting"
+            }
+          },
+          "message": "đến trung tâm Long Biên.. Đúng chỗ này chứ?",
+          "status": "clarify",
+          "served": "fixture",
+          "workflow_version": "unified-6",
+          "prompt_version": "semantic-unified-16",
+          "provider_attempts": [
+            {
+              "provider": "fixture",
+              "outcome": "served",
+              "latency_ms": 12.38,
+              "model_semantic": {
+                "act": "request",
+                "actions": [
+                  {
+                    "capability": "navigation.refine",
+                    "arguments": {
+                      "query": "đến trung tâm Long Biên."
+                    },
+                    "exclusion_mode": "add",
+                    "referenced_target": false
+                  }
+                ],
+                "step_updates": [],
+                "append_actions": [],
+                "clarification_drafts": [],
+                "negated": false,
+                "conditional": false,
+                "scheduled": false,
+                "conflicting": false,
+                "unresolved": []
+              }
+            }
+          ],
+          "node_spans": [
+            {
+              "node": "context",
+              "outcome": "ok",
+              "latency_ms": 4.74,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "interpret",
+              "outcome": "fixture",
+              "latency_ms": 34.59,
+              "step_id": null,
+              "provider": "fixture"
+            },
+            {
+              "node": "reducer",
+              "outcome": "ok",
+              "latency_ms": 1.47,
+              "step_id": null,
+              "provider": "fixture"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 0.74,
+              "step_id": "51f0ac56-22d0-4df9-81ca-6bbd8256097b",
+              "provider": "fixture"
+            },
+            {
+              "node": "validate",
+              "outcome": "running",
+              "latency_ms": 7.97,
+              "step_id": "51f0ac56-22d0-4df9-81ca-6bbd8256097b",
+              "provider": "fixture"
+            },
+            {
+              "node": "capability",
+              "outcome": "waiting_slot",
+              "latency_ms": 11.02,
+              "step_id": "51f0ac56-22d0-4df9-81ca-6bbd8256097b",
+              "provider": "fixture"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 1.71,
+              "step_id": "51f0ac56-22d0-4df9-81ca-6bbd8256097b",
+              "provider": "fixture"
+            }
+          ],
+          "dependency_ms": {
+            "context": 4.74,
+            "interpret": 34.59,
+            "reducer": 1.47,
+            "scheduler": 2.45,
+            "validate": 7.97,
+            "navigation_search": 0.04,
+            "navigation_route": 0.04,
+            "capability": 11.02,
+            "total": 156.84
+          },
+          "wall_ms": 160.84
+        },
+        {
+          "id": "place",
+          "type": "turn",
+          "query": "Đúng rồi",
+          "passed": true,
+          "checks": {
+            "navigation.status": {
+              "passed": true,
+              "expected": "preview",
+              "actual": "preview"
+            },
+            "execution.executed": {
+              "passed": true,
+              "expected": false,
+              "actual": false
+            }
+          },
+          "message": "Tuyến đến đến trung tâm Long Biên., khoảng 68 km, 57 phút. Không cần dừng sạc. Bạn xác nhận bắt đầu nhé.",
+          "status": "verified",
+          "served": "fixture",
+          "workflow_version": "unified-6",
+          "prompt_version": "semantic-unified-16",
+          "provider_attempts": [
+            {
+              "provider": "fixture",
+              "outcome": "served",
+              "latency_ms": 10.63,
+              "model_semantic": {
+                "act": "confirm",
+                "task_ref": "active",
+                "actions": [],
+                "step_updates": [],
+                "append_actions": [],
+                "clarification_drafts": [],
+                "negated": false,
+                "conditional": false,
+                "scheduled": false,
+                "conflicting": false,
+                "unresolved": []
+              }
+            }
+          ],
+          "node_spans": [
+            {
+              "node": "context",
+              "outcome": "ok",
+              "latency_ms": 5.94,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "interpret",
+              "outcome": "fixture",
+              "latency_ms": 23.54,
+              "step_id": null,
+              "provider": "fixture"
+            },
+            {
+              "node": "reducer",
+              "outcome": "ok",
+              "latency_ms": 1.99,
+              "step_id": null,
+              "provider": "fixture"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 0.92,
+              "step_id": "51f0ac56-22d0-4df9-81ca-6bbd8256097b",
+              "provider": "fixture"
+            },
+            {
+              "node": "validate",
+              "outcome": "running",
+              "latency_ms": 6.13,
+              "step_id": "51f0ac56-22d0-4df9-81ca-6bbd8256097b",
+              "provider": "fixture"
+            },
+            {
+              "node": "capability",
+              "outcome": "completed",
+              "latency_ms": 9.52,
+              "step_id": "51f0ac56-22d0-4df9-81ca-6bbd8256097b",
+              "provider": "fixture"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 1.98,
+              "step_id": null,
+              "provider": "fixture"
+            }
+          ],
+          "dependency_ms": {
+            "context": 5.94,
+            "interpret": 23.54,
+            "reducer": 1.99,
+            "scheduler": 2.9,
+            "validate": 6.13,
+            "navigation_route": 0.02,
+            "navigation_energy": 0.04,
+            "capability": 9.52,
+            "total": 146.14
+          },
+          "wall_ms": 152.99
+        },
+        {
+          "id": "approve",
+          "type": "turn",
+          "query": "Ok, bắt đầu.",
+          "passed": true,
+          "checks": {
+            "navigation.status": {
+              "passed": true,
+              "expected": "running",
+              "actual": "running"
+            },
+            "execution.executed": {
+              "passed": true,
+              "expected": true,
+              "actual": true
+            },
+            "diagnostics.effective_provider": {
+              "passed": true,
+              "expected": "rules",
+              "actual": "rules"
+            }
+          },
+          "message": "Đã bắt đầu dẫn đường.",
+          "status": "verified",
+          "served": "rules",
+          "workflow_version": "unified-6",
+          "prompt_version": "semantic-unified-16",
+          "provider_attempts": [
+            {
+              "provider": "rules",
+              "outcome": "served",
+              "latency_ms": 0,
+              "source": "pending_confirmation"
+            }
+          ],
+          "node_spans": [
+            {
+              "node": "context",
+              "outcome": "ok",
+              "latency_ms": 4.32,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "interpret",
+              "outcome": "rules",
+              "latency_ms": 15.65,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "reducer",
+              "outcome": "ok",
+              "latency_ms": 1.9,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 1.8,
+              "step_id": "daf6799a-40b4-4734-858d-47b9b148fd9b",
+              "provider": "rules"
+            },
+            {
+              "node": "validate",
+              "outcome": "running",
+              "latency_ms": 8.57,
+              "step_id": "daf6799a-40b4-4734-858d-47b9b148fd9b",
+              "provider": "rules"
+            },
+            {
+              "node": "capability",
+              "outcome": "completed",
+              "latency_ms": 18.21,
+              "step_id": "daf6799a-40b4-4734-858d-47b9b148fd9b",
+              "provider": "rules"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 2.97,
+              "step_id": null,
+              "provider": "rules"
+            }
+          ],
+          "dependency_ms": {
+            "context": 4.32,
+            "interpret": 15.65,
+            "reducer": 1.9,
+            "scheduler": 4.7700000000000005,
+            "validate": 8.57,
+            "capability": 18.21,
+            "total": 157.39
+          },
+          "wall_ms": 164.11
+        }
+      ]
+    },
+    {
+      "id": "long-bien-prefixed-confirm",
+      "group": "journey_lifecycle",
+      "provider": "fixture",
+      "repeat": 1,
+      "cold_build_ms": 166.6,
+      "passed": true,
+      "operations": [
+        {
+          "id": "plan",
+          "type": "turn",
+          "query": "Chỉ đường tới Long Biên.",
+          "passed": true,
+          "checks": {
+            "navigation.status": {
+              "passed": true,
+              "expected": "selecting",
+              "actual": "selecting"
+            }
+          },
+          "message": "Long Biên. Đúng chỗ này chứ?",
+          "status": "clarify",
+          "served": "fixture",
+          "workflow_version": "unified-6",
+          "prompt_version": "semantic-unified-16",
+          "provider_attempts": [
+            {
+              "provider": "fixture",
+              "outcome": "served",
+              "latency_ms": 15.35,
+              "model_semantic": {
+                "act": "request",
+                "actions": [
+                  {
+                    "capability": "navigation.plan",
+                    "arguments": {
+                      "query": "Long Biên",
+                      "destination_scope": "place",
+                      "trip_kind": "one_way"
+                    },
+                    "exclusion_mode": "add",
+                    "referenced_target": false
+                  }
+                ],
+                "step_updates": [],
+                "append_actions": [],
+                "clarification_drafts": [],
+                "negated": false,
+                "conditional": false,
+                "scheduled": false,
+                "conflicting": false,
+                "unresolved": []
+              }
+            }
+          ],
+          "node_spans": [
+            {
+              "node": "context",
+              "outcome": "ok",
+              "latency_ms": 3.56,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "interpret",
+              "outcome": "fixture",
+              "latency_ms": 41.89,
+              "step_id": null,
+              "provider": "fixture"
+            },
+            {
+              "node": "reducer",
+              "outcome": "ok",
+              "latency_ms": 0.98,
+              "step_id": null,
+              "provider": "fixture"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 1.34,
+              "step_id": "a15aff4a-4d58-4e01-ab4a-c1ef14b20fe1",
+              "provider": "fixture"
+            },
+            {
+              "node": "validate",
+              "outcome": "running",
+              "latency_ms": 8.31,
+              "step_id": "a15aff4a-4d58-4e01-ab4a-c1ef14b20fe1",
+              "provider": "fixture"
+            },
+            {
+              "node": "capability",
+              "outcome": "waiting_slot",
+              "latency_ms": 16.13,
+              "step_id": "a15aff4a-4d58-4e01-ab4a-c1ef14b20fe1",
+              "provider": "fixture"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 2.01,
+              "step_id": "a15aff4a-4d58-4e01-ab4a-c1ef14b20fe1",
+              "provider": "fixture"
+            }
+          ],
+          "dependency_ms": {
+            "context": 3.56,
+            "interpret": 41.89,
+            "reducer": 0.98,
+            "scheduler": 3.3499999999999996,
+            "validate": 8.31,
+            "navigation_search": 0.07,
+            "navigation_route": 0.1,
+            "capability": 16.13,
+            "total": 193.79
+          },
+          "wall_ms": 199.94
+        },
+        {
+          "id": "center",
+          "type": "turn",
+          "query": "Không, đến trung tâm Long Biên.",
+          "passed": true,
+          "checks": {
+            "navigation.status": {
+              "passed": true,
+              "expected": "selecting",
+              "actual": "selecting"
+            }
+          },
+          "message": "đến trung tâm Long Biên.. Đúng chỗ này chứ?",
+          "status": "clarify",
+          "served": "fixture",
+          "workflow_version": "unified-6",
+          "prompt_version": "semantic-unified-16",
+          "provider_attempts": [
+            {
+              "provider": "fixture",
+              "outcome": "served",
+              "latency_ms": 20.91,
+              "model_semantic": {
+                "act": "request",
+                "actions": [
+                  {
+                    "capability": "navigation.refine",
+                    "arguments": {
+                      "query": "đến trung tâm Long Biên."
+                    },
+                    "exclusion_mode": "add",
+                    "referenced_target": false
+                  }
+                ],
+                "step_updates": [],
+                "append_actions": [],
+                "clarification_drafts": [],
+                "negated": false,
+                "conditional": false,
+                "scheduled": false,
+                "conflicting": false,
+                "unresolved": []
+              }
+            }
+          ],
+          "node_spans": [
+            {
+              "node": "context",
+              "outcome": "ok",
+              "latency_ms": 3.04,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "interpret",
+              "outcome": "fixture",
+              "latency_ms": 44.32,
+              "step_id": null,
+              "provider": "fixture"
+            },
+            {
+              "node": "reducer",
+              "outcome": "ok",
+              "latency_ms": 2.28,
+              "step_id": null,
+              "provider": "fixture"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 0.97,
+              "step_id": "a15aff4a-4d58-4e01-ab4a-c1ef14b20fe1",
+              "provider": "fixture"
+            },
+            {
+              "node": "validate",
+              "outcome": "running",
+              "latency_ms": 7.48,
+              "step_id": "a15aff4a-4d58-4e01-ab4a-c1ef14b20fe1",
+              "provider": "fixture"
+            },
+            {
+              "node": "capability",
+              "outcome": "waiting_slot",
+              "latency_ms": 11.72,
+              "step_id": "a15aff4a-4d58-4e01-ab4a-c1ef14b20fe1",
+              "provider": "fixture"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 0.94,
+              "step_id": "a15aff4a-4d58-4e01-ab4a-c1ef14b20fe1",
+              "provider": "fixture"
+            }
+          ],
+          "dependency_ms": {
+            "context": 3.04,
+            "interpret": 44.32,
+            "reducer": 2.28,
+            "scheduler": 1.91,
+            "validate": 7.48,
+            "navigation_search": 0.04,
+            "navigation_route": 0.04,
+            "capability": 11.72,
+            "total": 174.43
+          },
+          "wall_ms": 178.92
+        },
+        {
+          "id": "place",
+          "type": "turn",
+          "query": "Đúng rồi",
+          "passed": true,
+          "checks": {
+            "navigation.status": {
+              "passed": true,
+              "expected": "preview",
+              "actual": "preview"
+            },
+            "execution.executed": {
+              "passed": true,
+              "expected": false,
+              "actual": false
+            }
+          },
+          "message": "Tuyến đến đến trung tâm Long Biên., khoảng 68 km, 57 phút. Không cần dừng sạc. Bạn xác nhận bắt đầu nhé.",
+          "status": "verified",
+          "served": "fixture",
+          "workflow_version": "unified-6",
+          "prompt_version": "semantic-unified-16",
+          "provider_attempts": [
+            {
+              "provider": "fixture",
+              "outcome": "served",
+              "latency_ms": 8.05,
+              "model_semantic": {
+                "act": "confirm",
+                "task_ref": "active",
+                "actions": [],
+                "step_updates": [],
+                "append_actions": [],
+                "clarification_drafts": [],
+                "negated": false,
+                "conditional": false,
+                "scheduled": false,
+                "conflicting": false,
+                "unresolved": []
+              }
+            }
+          ],
+          "node_spans": [
+            {
+              "node": "context",
+              "outcome": "ok",
+              "latency_ms": 2.99,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "interpret",
+              "outcome": "fixture",
+              "latency_ms": 20.12,
+              "step_id": null,
+              "provider": "fixture"
+            },
+            {
+              "node": "reducer",
+              "outcome": "ok",
+              "latency_ms": 2.56,
+              "step_id": null,
+              "provider": "fixture"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 0.92,
+              "step_id": "a15aff4a-4d58-4e01-ab4a-c1ef14b20fe1",
+              "provider": "fixture"
+            },
+            {
+              "node": "validate",
+              "outcome": "running",
+              "latency_ms": 5.11,
+              "step_id": "a15aff4a-4d58-4e01-ab4a-c1ef14b20fe1",
+              "provider": "fixture"
+            },
+            {
+              "node": "capability",
+              "outcome": "completed",
+              "latency_ms": 10.68,
+              "step_id": "a15aff4a-4d58-4e01-ab4a-c1ef14b20fe1",
+              "provider": "fixture"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 1.53,
+              "step_id": null,
+              "provider": "fixture"
+            }
+          ],
+          "dependency_ms": {
+            "context": 2.99,
+            "interpret": 20.12,
+            "reducer": 2.56,
+            "scheduler": 2.45,
+            "validate": 5.11,
+            "navigation_route": 0.02,
+            "navigation_energy": 0.05,
+            "capability": 10.68,
+            "total": 127.99
+          },
+          "wall_ms": 133.23
+        },
+        {
+          "id": "approve",
+          "type": "turn",
+          "query": "Ok, xác nhận.",
+          "passed": true,
+          "checks": {
+            "navigation.status": {
+              "passed": true,
+              "expected": "running",
+              "actual": "running"
+            },
+            "execution.executed": {
+              "passed": true,
+              "expected": true,
+              "actual": true
+            },
+            "diagnostics.effective_provider": {
+              "passed": true,
+              "expected": "rules",
+              "actual": "rules"
+            }
+          },
+          "message": "Đã bắt đầu dẫn đường.",
+          "status": "verified",
+          "served": "rules",
+          "workflow_version": "unified-6",
+          "prompt_version": "semantic-unified-16",
+          "provider_attempts": [
+            {
+              "provider": "rules",
+              "outcome": "served",
+              "latency_ms": 0,
+              "source": "pending_confirmation"
+            }
+          ],
+          "node_spans": [
+            {
+              "node": "context",
+              "outcome": "ok",
+              "latency_ms": 4.56,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "interpret",
+              "outcome": "rules",
+              "latency_ms": 12.95,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "reducer",
+              "outcome": "ok",
+              "latency_ms": 3.86,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 1.04,
+              "step_id": "b0e0545f-2c6d-443f-9a9b-cf1aad95c5f1",
+              "provider": "rules"
+            },
+            {
+              "node": "validate",
+              "outcome": "running",
+              "latency_ms": 5.27,
+              "step_id": "b0e0545f-2c6d-443f-9a9b-cf1aad95c5f1",
+              "provider": "rules"
+            },
+            {
+              "node": "capability",
+              "outcome": "completed",
+              "latency_ms": 23.81,
+              "step_id": "b0e0545f-2c6d-443f-9a9b-cf1aad95c5f1",
+              "provider": "rules"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 1.92,
+              "step_id": null,
+              "provider": "rules"
+            }
+          ],
+          "dependency_ms": {
+            "context": 4.56,
+            "interpret": 12.95,
+            "reducer": 3.86,
+            "scheduler": 2.96,
+            "validate": 5.27,
+            "capability": 23.81,
+            "total": 145.9
+          },
+          "wall_ms": 150.81
+        }
+      ]
+    },
+    {
+      "id": "long-bien-prefixed-start",
+      "group": "journey_lifecycle",
+      "provider": "fixture",
+      "repeat": 2,
+      "cold_build_ms": 188.55,
+      "passed": true,
+      "operations": [
+        {
+          "id": "plan",
+          "type": "turn",
+          "query": "Chỉ đường tới Long Biên.",
+          "passed": true,
+          "checks": {
+            "navigation.status": {
+              "passed": true,
+              "expected": "selecting",
+              "actual": "selecting"
+            }
+          },
+          "message": "Long Biên. Đúng chỗ này chứ?",
+          "status": "clarify",
+          "served": "fixture",
+          "workflow_version": "unified-6",
+          "prompt_version": "semantic-unified-16",
+          "provider_attempts": [
+            {
+              "provider": "fixture",
+              "outcome": "served",
+              "latency_ms": 11.51,
+              "model_semantic": {
+                "act": "request",
+                "actions": [
+                  {
+                    "capability": "navigation.plan",
+                    "arguments": {
+                      "query": "Long Biên",
+                      "destination_scope": "place",
+                      "trip_kind": "one_way"
+                    },
+                    "exclusion_mode": "add",
+                    "referenced_target": false
+                  }
+                ],
+                "step_updates": [],
+                "append_actions": [],
+                "clarification_drafts": [],
+                "negated": false,
+                "conditional": false,
+                "scheduled": false,
+                "conflicting": false,
+                "unresolved": []
+              }
+            }
+          ],
+          "node_spans": [
+            {
+              "node": "context",
+              "outcome": "ok",
+              "latency_ms": 2.35,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "interpret",
+              "outcome": "fixture",
+              "latency_ms": 34.02,
+              "step_id": null,
+              "provider": "fixture"
+            },
+            {
+              "node": "reducer",
+              "outcome": "ok",
+              "latency_ms": 0.93,
+              "step_id": null,
+              "provider": "fixture"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 0.88,
+              "step_id": "7e2980d9-05eb-448a-8a3e-330b1e6c317a",
+              "provider": "fixture"
+            },
+            {
+              "node": "validate",
+              "outcome": "running",
+              "latency_ms": 5.58,
+              "step_id": "7e2980d9-05eb-448a-8a3e-330b1e6c317a",
+              "provider": "fixture"
+            },
+            {
+              "node": "capability",
+              "outcome": "waiting_slot",
+              "latency_ms": 14.32,
+              "step_id": "7e2980d9-05eb-448a-8a3e-330b1e6c317a",
+              "provider": "fixture"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 1.8,
+              "step_id": "7e2980d9-05eb-448a-8a3e-330b1e6c317a",
+              "provider": "fixture"
+            }
+          ],
+          "dependency_ms": {
+            "context": 2.35,
+            "interpret": 34.02,
+            "reducer": 0.93,
+            "scheduler": 2.68,
+            "validate": 5.58,
+            "navigation_search": 0.05,
+            "navigation_route": 0.04,
+            "capability": 14.32,
+            "total": 170.24
+          },
+          "wall_ms": 174.82
+        },
+        {
+          "id": "center",
+          "type": "turn",
+          "query": "Không, đến trung tâm Long Biên.",
+          "passed": true,
+          "checks": {
+            "navigation.status": {
+              "passed": true,
+              "expected": "selecting",
+              "actual": "selecting"
+            }
+          },
+          "message": "đến trung tâm Long Biên.. Đúng chỗ này chứ?",
+          "status": "clarify",
+          "served": "fixture",
+          "workflow_version": "unified-6",
+          "prompt_version": "semantic-unified-16",
+          "provider_attempts": [
+            {
+              "provider": "fixture",
+              "outcome": "served",
+              "latency_ms": 15.51,
+              "model_semantic": {
+                "act": "request",
+                "actions": [
+                  {
+                    "capability": "navigation.refine",
+                    "arguments": {
+                      "query": "đến trung tâm Long Biên."
+                    },
+                    "exclusion_mode": "add",
+                    "referenced_target": false
+                  }
+                ],
+                "step_updates": [],
+                "append_actions": [],
+                "clarification_drafts": [],
+                "negated": false,
+                "conditional": false,
+                "scheduled": false,
+                "conflicting": false,
+                "unresolved": []
+              }
+            }
+          ],
+          "node_spans": [
+            {
+              "node": "context",
+              "outcome": "ok",
+              "latency_ms": 5.82,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "interpret",
+              "outcome": "fixture",
+              "latency_ms": 37.98,
+              "step_id": null,
+              "provider": "fixture"
+            },
+            {
+              "node": "reducer",
+              "outcome": "ok",
+              "latency_ms": 1.45,
+              "step_id": null,
+              "provider": "fixture"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 0.94,
+              "step_id": "7e2980d9-05eb-448a-8a3e-330b1e6c317a",
+              "provider": "fixture"
+            },
+            {
+              "node": "validate",
+              "outcome": "running",
+              "latency_ms": 8.17,
+              "step_id": "7e2980d9-05eb-448a-8a3e-330b1e6c317a",
+              "provider": "fixture"
+            },
+            {
+              "node": "capability",
+              "outcome": "waiting_slot",
+              "latency_ms": 7.49,
+              "step_id": "7e2980d9-05eb-448a-8a3e-330b1e6c317a",
+              "provider": "fixture"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 1.49,
+              "step_id": "7e2980d9-05eb-448a-8a3e-330b1e6c317a",
+              "provider": "fixture"
+            }
+          ],
+          "dependency_ms": {
+            "context": 5.82,
+            "interpret": 37.98,
+            "reducer": 1.45,
+            "scheduler": 2.4299999999999997,
+            "validate": 8.17,
+            "navigation_search": 0.03,
+            "navigation_route": 0.04,
+            "capability": 7.49,
+            "total": 165.86
+          },
+          "wall_ms": 172.05
+        },
+        {
+          "id": "place",
+          "type": "turn",
+          "query": "Đúng rồi",
+          "passed": true,
+          "checks": {
+            "navigation.status": {
+              "passed": true,
+              "expected": "preview",
+              "actual": "preview"
+            },
+            "execution.executed": {
+              "passed": true,
+              "expected": false,
+              "actual": false
+            }
+          },
+          "message": "Tuyến đến đến trung tâm Long Biên., khoảng 68 km, 57 phút. Không cần dừng sạc. Bạn xác nhận bắt đầu nhé.",
+          "status": "verified",
+          "served": "fixture",
+          "workflow_version": "unified-6",
+          "prompt_version": "semantic-unified-16",
+          "provider_attempts": [
+            {
+              "provider": "fixture",
+              "outcome": "served",
+              "latency_ms": 12.07,
+              "model_semantic": {
+                "act": "confirm",
+                "task_ref": "active",
+                "actions": [],
+                "step_updates": [],
+                "append_actions": [],
+                "clarification_drafts": [],
+                "negated": false,
+                "conditional": false,
+                "scheduled": false,
+                "conflicting": false,
+                "unresolved": []
+              }
+            }
+          ],
+          "node_spans": [
+            {
+              "node": "context",
+              "outcome": "ok",
+              "latency_ms": 3.7,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "interpret",
+              "outcome": "fixture",
+              "latency_ms": 28.35,
+              "step_id": null,
+              "provider": "fixture"
+            },
+            {
+              "node": "reducer",
+              "outcome": "ok",
+              "latency_ms": 1.95,
+              "step_id": null,
+              "provider": "fixture"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 0.84,
+              "step_id": "7e2980d9-05eb-448a-8a3e-330b1e6c317a",
+              "provider": "fixture"
+            },
+            {
+              "node": "validate",
+              "outcome": "running",
+              "latency_ms": 9.6,
+              "step_id": "7e2980d9-05eb-448a-8a3e-330b1e6c317a",
+              "provider": "fixture"
+            },
+            {
+              "node": "capability",
+              "outcome": "completed",
+              "latency_ms": 14.17,
+              "step_id": "7e2980d9-05eb-448a-8a3e-330b1e6c317a",
+              "provider": "fixture"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 2.39,
+              "step_id": null,
+              "provider": "fixture"
+            }
+          ],
+          "dependency_ms": {
+            "context": 3.7,
+            "interpret": 28.35,
+            "reducer": 1.95,
+            "scheduler": 3.23,
+            "validate": 9.6,
+            "navigation_route": 0.03,
+            "navigation_energy": 0.06,
+            "capability": 14.17,
+            "total": 160.01
+          },
+          "wall_ms": 168.59
+        },
+        {
+          "id": "approve",
+          "type": "turn",
+          "query": "Ok, bắt đầu.",
+          "passed": true,
+          "checks": {
+            "navigation.status": {
+              "passed": true,
+              "expected": "running",
+              "actual": "running"
+            },
+            "execution.executed": {
+              "passed": true,
+              "expected": true,
+              "actual": true
+            },
+            "diagnostics.effective_provider": {
+              "passed": true,
+              "expected": "rules",
+              "actual": "rules"
+            }
+          },
+          "message": "Đã bắt đầu dẫn đường.",
+          "status": "verified",
+          "served": "rules",
+          "workflow_version": "unified-6",
+          "prompt_version": "semantic-unified-16",
+          "provider_attempts": [
+            {
+              "provider": "rules",
+              "outcome": "served",
+              "latency_ms": 0,
+              "source": "pending_confirmation"
+            }
+          ],
+          "node_spans": [
+            {
+              "node": "context",
+              "outcome": "ok",
+              "latency_ms": 6.5,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "interpret",
+              "outcome": "rules",
+              "latency_ms": 15.23,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "reducer",
+              "outcome": "ok",
+              "latency_ms": 2.3,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 1.37,
+              "step_id": "a47a9b15-ff47-4bef-b0a9-49678a46d83f",
+              "provider": "rules"
+            },
+            {
+              "node": "validate",
+              "outcome": "running",
+              "latency_ms": 6.93,
+              "step_id": "a47a9b15-ff47-4bef-b0a9-49678a46d83f",
+              "provider": "rules"
+            },
+            {
+              "node": "capability",
+              "outcome": "completed",
+              "latency_ms": 19.23,
+              "step_id": "a47a9b15-ff47-4bef-b0a9-49678a46d83f",
+              "provider": "rules"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 2.87,
+              "step_id": null,
+              "provider": "rules"
+            }
+          ],
+          "dependency_ms": {
+            "context": 6.5,
+            "interpret": 15.23,
+            "reducer": 2.3,
+            "scheduler": 4.24,
+            "validate": 6.93,
+            "capability": 19.23,
+            "total": 153.24
+          },
+          "wall_ms": 157.87
+        }
+      ]
+    },
+    {
+      "id": "long-bien-prefixed-confirm",
+      "group": "journey_lifecycle",
+      "provider": "fixture",
+      "repeat": 2,
+      "cold_build_ms": 273.92,
+      "passed": true,
+      "operations": [
+        {
+          "id": "plan",
+          "type": "turn",
+          "query": "Chỉ đường tới Long Biên.",
+          "passed": true,
+          "checks": {
+            "navigation.status": {
+              "passed": true,
+              "expected": "selecting",
+              "actual": "selecting"
+            }
+          },
+          "message": "Long Biên. Đúng chỗ này chứ?",
+          "status": "clarify",
+          "served": "fixture",
+          "workflow_version": "unified-6",
+          "prompt_version": "semantic-unified-16",
+          "provider_attempts": [
+            {
+              "provider": "fixture",
+              "outcome": "served",
+              "latency_ms": 22.42,
+              "model_semantic": {
+                "act": "request",
+                "actions": [
+                  {
+                    "capability": "navigation.plan",
+                    "arguments": {
+                      "query": "Long Biên",
+                      "destination_scope": "place",
+                      "trip_kind": "one_way"
+                    },
+                    "exclusion_mode": "add",
+                    "referenced_target": false
+                  }
+                ],
+                "step_updates": [],
+                "append_actions": [],
+                "clarification_drafts": [],
+                "negated": false,
+                "conditional": false,
+                "scheduled": false,
+                "conflicting": false,
+                "unresolved": []
+              }
+            }
+          ],
+          "node_spans": [
+            {
+              "node": "context",
+              "outcome": "ok",
+              "latency_ms": 2.72,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "interpret",
+              "outcome": "fixture",
+              "latency_ms": 81.21,
+              "step_id": null,
+              "provider": "fixture"
+            },
+            {
+              "node": "reducer",
+              "outcome": "ok",
+              "latency_ms": 1.68,
+              "step_id": null,
+              "provider": "fixture"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 1.89,
+              "step_id": "4d539a24-1ce4-4ca1-b969-8e559c9b5cce",
+              "provider": "fixture"
+            },
+            {
+              "node": "validate",
+              "outcome": "running",
+              "latency_ms": 13.47,
+              "step_id": "4d539a24-1ce4-4ca1-b969-8e559c9b5cce",
+              "provider": "fixture"
+            },
+            {
+              "node": "capability",
+              "outcome": "waiting_slot",
+              "latency_ms": 20.39,
+              "step_id": "4d539a24-1ce4-4ca1-b969-8e559c9b5cce",
+              "provider": "fixture"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 2.17,
+              "step_id": "4d539a24-1ce4-4ca1-b969-8e559c9b5cce",
+              "provider": "fixture"
+            }
+          ],
+          "dependency_ms": {
+            "context": 2.72,
+            "interpret": 81.21,
+            "reducer": 1.68,
+            "scheduler": 4.06,
+            "validate": 13.47,
+            "navigation_search": 0.11,
+            "navigation_route": 0.06,
+            "capability": 20.39,
+            "total": 349.19
+          },
+          "wall_ms": 357.14
+        },
+        {
+          "id": "center",
+          "type": "turn",
+          "query": "Không, đến trung tâm Long Biên.",
+          "passed": true,
+          "checks": {
+            "navigation.status": {
+              "passed": true,
+              "expected": "selecting",
+              "actual": "selecting"
+            }
+          },
+          "message": "đến trung tâm Long Biên.. Đúng chỗ này chứ?",
+          "status": "clarify",
+          "served": "fixture",
+          "workflow_version": "unified-6",
+          "prompt_version": "semantic-unified-16",
+          "provider_attempts": [
+            {
+              "provider": "fixture",
+              "outcome": "served",
+              "latency_ms": 31.85,
+              "model_semantic": {
+                "act": "request",
+                "actions": [
+                  {
+                    "capability": "navigation.refine",
+                    "arguments": {
+                      "query": "đến trung tâm Long Biên."
+                    },
+                    "exclusion_mode": "add",
+                    "referenced_target": false
+                  }
+                ],
+                "step_updates": [],
+                "append_actions": [],
+                "clarification_drafts": [],
+                "negated": false,
+                "conditional": false,
+                "scheduled": false,
+                "conflicting": false,
+                "unresolved": []
+              }
+            }
+          ],
+          "node_spans": [
+            {
+              "node": "context",
+              "outcome": "ok",
+              "latency_ms": 6.98,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "interpret",
+              "outcome": "fixture",
+              "latency_ms": 68.28,
+              "step_id": null,
+              "provider": "fixture"
+            },
+            {
+              "node": "reducer",
+              "outcome": "ok",
+              "latency_ms": 2.58,
+              "step_id": null,
+              "provider": "fixture"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 1.83,
+              "step_id": "4d539a24-1ce4-4ca1-b969-8e559c9b5cce",
+              "provider": "fixture"
+            },
+            {
+              "node": "validate",
+              "outcome": "running",
+              "latency_ms": 19.7,
+              "step_id": "4d539a24-1ce4-4ca1-b969-8e559c9b5cce",
+              "provider": "fixture"
+            },
+            {
+              "node": "capability",
+              "outcome": "waiting_slot",
+              "latency_ms": 37.7,
+              "step_id": "4d539a24-1ce4-4ca1-b969-8e559c9b5cce",
+              "provider": "fixture"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 2.13,
+              "step_id": "4d539a24-1ce4-4ca1-b969-8e559c9b5cce",
+              "provider": "fixture"
+            }
+          ],
+          "dependency_ms": {
+            "context": 6.98,
+            "interpret": 68.28,
+            "reducer": 2.58,
+            "scheduler": 3.96,
+            "validate": 19.7,
+            "navigation_search": 0.06,
+            "navigation_route": 0.05,
+            "capability": 37.7,
+            "total": 442.7
+          },
+          "wall_ms": 458.42
+        },
+        {
+          "id": "place",
+          "type": "turn",
+          "query": "Đúng rồi",
+          "passed": true,
+          "checks": {
+            "navigation.status": {
+              "passed": true,
+              "expected": "preview",
+              "actual": "preview"
+            },
+            "execution.executed": {
+              "passed": true,
+              "expected": false,
+              "actual": false
+            }
+          },
+          "message": "Tuyến đến đến trung tâm Long Biên., khoảng 68 km, 57 phút. Không cần dừng sạc. Bạn xác nhận bắt đầu nhé.",
+          "status": "verified",
+          "served": "fixture",
+          "workflow_version": "unified-6",
+          "prompt_version": "semantic-unified-16",
+          "provider_attempts": [
+            {
+              "provider": "fixture",
+              "outcome": "served",
+              "latency_ms": 34.45,
+              "model_semantic": {
+                "act": "confirm",
+                "task_ref": "active",
+                "actions": [],
+                "step_updates": [],
+                "append_actions": [],
+                "clarification_drafts": [],
+                "negated": false,
+                "conditional": false,
+                "scheduled": false,
+                "conflicting": false,
+                "unresolved": []
+              }
+            }
+          ],
+          "node_spans": [
+            {
+              "node": "context",
+              "outcome": "ok",
+              "latency_ms": 6.67,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "interpret",
+              "outcome": "fixture",
+              "latency_ms": 149.44,
+              "step_id": null,
+              "provider": "fixture"
+            },
+            {
+              "node": "reducer",
+              "outcome": "ok",
+              "latency_ms": 2.84,
+              "step_id": null,
+              "provider": "fixture"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 1.66,
+              "step_id": "4d539a24-1ce4-4ca1-b969-8e559c9b5cce",
+              "provider": "fixture"
+            },
+            {
+              "node": "validate",
+              "outcome": "running",
+              "latency_ms": 7.75,
+              "step_id": "4d539a24-1ce4-4ca1-b969-8e559c9b5cce",
+              "provider": "fixture"
+            },
+            {
+              "node": "capability",
+              "outcome": "completed",
+              "latency_ms": 23.3,
+              "step_id": "4d539a24-1ce4-4ca1-b969-8e559c9b5cce",
+              "provider": "fixture"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 3.11,
+              "step_id": null,
+              "provider": "fixture"
+            }
+          ],
+          "dependency_ms": {
+            "context": 6.67,
+            "interpret": 149.44,
+            "reducer": 2.84,
+            "scheduler": 4.77,
+            "validate": 7.75,
+            "navigation_route": 0.05,
+            "navigation_energy": 0.12,
+            "capability": 23.3,
+            "total": 375.08
+          },
+          "wall_ms": 387.18
+        },
+        {
+          "id": "approve",
+          "type": "turn",
+          "query": "Ok, xác nhận.",
+          "passed": true,
+          "checks": {
+            "navigation.status": {
+              "passed": true,
+              "expected": "running",
+              "actual": "running"
+            },
+            "execution.executed": {
+              "passed": true,
+              "expected": true,
+              "actual": true
+            },
+            "diagnostics.effective_provider": {
+              "passed": true,
+              "expected": "rules",
+              "actual": "rules"
+            }
+          },
+          "message": "Đã bắt đầu dẫn đường.",
+          "status": "verified",
+          "served": "rules",
+          "workflow_version": "unified-6",
+          "prompt_version": "semantic-unified-16",
+          "provider_attempts": [
+            {
+              "provider": "rules",
+              "outcome": "served",
+              "latency_ms": 0,
+              "source": "pending_confirmation"
+            }
+          ],
+          "node_spans": [
+            {
+              "node": "context",
+              "outcome": "ok",
+              "latency_ms": 4.84,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "interpret",
+              "outcome": "rules",
+              "latency_ms": 16.16,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "reducer",
+              "outcome": "ok",
+              "latency_ms": 1.96,
+              "step_id": null,
+              "provider": "rules"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 1.03,
+              "step_id": "d0fe0ab9-9601-406a-be34-218f18d0fd6d",
+              "provider": "rules"
+            },
+            {
+              "node": "validate",
+              "outcome": "running",
+              "latency_ms": 8.51,
+              "step_id": "d0fe0ab9-9601-406a-be34-218f18d0fd6d",
+              "provider": "rules"
+            },
+            {
+              "node": "capability",
+              "outcome": "completed",
+              "latency_ms": 25.05,
+              "step_id": "d0fe0ab9-9601-406a-be34-218f18d0fd6d",
+              "provider": "rules"
+            },
+            {
+              "node": "scheduler",
+              "outcome": "ok",
+              "latency_ms": 3.27,
+              "step_id": null,
+              "provider": "rules"
+            }
+          ],
+          "dependency_ms": {
+            "context": 4.84,
+            "interpret": 16.16,
+            "reducer": 1.96,
+            "scheduler": 4.3,
+            "validate": 8.51,
+            "capability": 25.05,
+            "total": 168.79
+          },
+          "wall_ms": 176.63
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "Model fixture is a semantic contract stub, not model NLU accuracy.",
+    "Maps, car and energy are labelled synthetic fixtures; SQLite/checkpoints/policy are real.",
+    "No real STT/TTS, GPU/browser, VietMap, physical vehicle or cloud inference is measured.",
+    "Episode latency samples are functional regression, not a 100-sample P/D performance gate."
+  ]
+}

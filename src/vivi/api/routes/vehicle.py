@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from uuid import uuid4
+
 from fastapi import APIRouter, HTTPException, Query
 
 from src.vivi.api.runtime import runtime
-from src.vivi.domain.models import DemoDrivingRequest, VehicleState
+from src.vivi.domain.models import DemoDrivingRequest, TurnRequest, VehicleState
 from src.vivi.vehicle.alerts import AlertSnapshot
 from src.vivi.vehicle.memory import VehicleSimulator
 
@@ -40,6 +42,21 @@ async def set_demo_driving(request: DemoDrivingRequest):
             detail="Chế độ lái demo chỉ khả dụng với VIVI_VEHICLE_PROVIDER=memory.",
         )
     try:
-        return runtime.vehicle.set_driving(request.session_id, request.driving)
+        response = await runtime.orchestrator.run(
+            TurnRequest(
+                session_id=request.session_id,
+                turn_id=str(uuid4()),
+                transcript="Đổi chế độ lái",
+                navigation_event={
+                    "kind": "gear",
+                    "gear": "D" if request.driving else "P",
+                    "id": str(uuid4()),
+                    "revision": 0,
+                },
+            )
+        )
+        if response.status == "blocked":
+            raise HTTPException(status_code=409, detail=response.message)
+        return response.vehicle_state
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc

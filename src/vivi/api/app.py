@@ -7,7 +7,19 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from src.vivi.api.routes import engineer, health, memory, metrics, navigation, roles, speech, turns, vehicle, web
+from src.vivi.api.routes import (
+    engineer,
+    health,
+    history,
+    memory,
+    metrics,
+    navigation,
+    roles,
+    speech,
+    turns,
+    vehicle,
+    web,
+)
 from src.vivi.api.runtime import runtime
 
 logger = logging.getLogger(__name__)
@@ -39,7 +51,8 @@ async def lifespan(app: FastAPI):
         metrics.stop_gpu_sampler()
         for task in background:
             task.cancel()
-        runtime.close()
+        await asyncio.gather(*background, return_exceptions=True)
+        await runtime.aclose()
 
 
 def create_app() -> FastAPI:
@@ -61,6 +74,7 @@ def create_app() -> FastAPI:
     for router in (
         health.router,
         memory.router,
+        history.router,
         metrics.router,
         vehicle.router,
         navigation.router,

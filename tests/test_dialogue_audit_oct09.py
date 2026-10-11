@@ -72,7 +72,7 @@ async def test_all_latest_logged_turns(services, tmp_path, tier):
     )
     graph.default_provider = tier
     rows = [
-        json.loads(line) for line in (Path(__file__).parents[1] / "eval/audit_854_897.jsonl").read_text().splitlines()
+        json.loads(line) for line in (Path(__file__).parents[1] / "tests/fixtures/dialogue_audits/audit_854_897.jsonl").read_text().splitlines()
     ]
     assert [r["row"] for r in rows] == list(range(854, 898))
     for item in rows:
