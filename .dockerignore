@@ -7,6 +7,8 @@ __pycache__
 .pytest_cache
 .ruff_cache
 data/*
+!data/energy/
+!data/energy/*.json
 !data/handbooks/
 data/handbooks/*
 !data/handbooks/handbook.sqlite3
