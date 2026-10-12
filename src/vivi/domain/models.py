@@ -222,6 +222,12 @@ class Evidence(BaseModel):
     section: str | None = None
     source_url: str | None = None
     excerpt: str = ""
+    title: str | None = None
+    kind: str | None = None
+    published_at: str | None = None
+    retrieved_at: str | None = None
+    valid_date: str | None = None
+    timezone: str | None = None
 
 
 class TraceSpan(BaseModel):
@@ -274,6 +280,8 @@ class TurnRequest(BaseModel):
 
 
 class TurnResponse(BaseModel):
+    answer_kind: str | None = None
+    answer_basis: str | None = None
     control_revision: int = 0
     receipt: dict[str, Any] | None = None
     control_receipts: list[dict[str, Any]] = Field(default_factory=list)

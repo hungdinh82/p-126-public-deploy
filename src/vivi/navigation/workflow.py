@@ -865,12 +865,18 @@ class NavigationWorkflow:
                         <= nav.route["distance_m"] + self.discovery.max_detour_m
                     ]
                 powered = EnergyPlanner(self.energy.profile, stations).compatible_stations()
+                progress = {s.id: s.route_progress_m for s in powered}
                 await collect_edges(
                     (a, b)
                     for a in ["origin", *(["destination"] if round_trip else []), *(s.id for s in powered)]
                     if a != "destination" or round_trip
                     for b in ["destination", *(["return"] if round_trip else []), *(s.id for s in powered)]
                     if b != "origin" and a != b and (a, b) not in edges
+                    # One-way corridor plans visit later route segments. Avoid
+                    # expanding permutations that drive back through earlier
+                    # chargers and exhaust the bounded solver before arrival.
+                    and not (self.discovery and not round_trip and a in progress and b in progress
+                             and progress[a] is not None and progress[b] is not None and progress[b] <= progress[a])
                 )
         except TimeoutError:
             logger.warning("Charging route calculation budget exceeded", exc_info=True)

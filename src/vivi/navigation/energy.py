@@ -178,7 +178,10 @@ class EnergyPlanner:
         nodes = {s.id: s for s in stations}
         frontier = [("origin", float(soc), 0.0, [], [], frozenset(), 0)]
         solutions = []
-        for _ in range((min(len(stations), 5) + 1) * len(waypoints)):
+        # Visiting a station does not necessarily mean charging there. The
+        # previous five-visit bound could stop a valid long corridor before
+        # its final leg even though all discovered road edges were feasible.
+        for _ in range((min(len(stations), 12) + 1) * len(waypoints)):
             following, labels = [], {}
             for current, arrival, elapsed, stops, legs, visited, phase in frontier:
                 available = allowed_stations_by_phase.get(phase, []) if allowed_stations_by_phase is not None else nodes

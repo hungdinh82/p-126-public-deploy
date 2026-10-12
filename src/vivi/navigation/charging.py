@@ -31,7 +31,7 @@ def geometry(route):
     return points, cumulative
 
 
-def sample_points(route, maximum=6):
+def sample_points(route, maximum=24):
     points, cumulative = geometry(route)
     count = min(maximum, max(2, math.ceil(route["distance_m"] / 35000) + 1))
     samples, segment = [], 0
@@ -100,6 +100,10 @@ class VietMapChargingDiscovery:
 
     async def discover(self, route):
         result, groups, rest_groups, rest_places = StationDiscovery(), {}, {}, []
+        samples = sample_points(route)
+        if route["distance_m"] > (len(samples) - 1) * 35000:
+            result.incomplete = True
+            result.errors.append("route_sampling_limit")
         semaphore = asyncio.Semaphore(4)
 
         async def search(point, query):
@@ -197,15 +201,20 @@ class VietMapChargingDiscovery:
                 await asyncio.gather(
                     *(
                         search(point, query)
-                        for point in sample_points(route)
+                        for point in samples
                         for query in ("trạm sạc", "trạm dừng nghỉ")
                     )
                 )
                 found = {}
                 # Round robin across route samples: dense origin results must
                 # not consume the whole detail budget before later segments.
+                # Merge both query variants per sample before round robin.
+                # Response completion order must not favor the origin or let
+                # duplicate queries consume coverage of later route segments.
+                sampled_groups = [list({p.ref_id: p for query in ("trạm sạc", "trạm dừng nghỉ")
+                    for p in groups.get((point, query), [])}.values()) for point in samples]
                 for rank in range(10):
-                    for group in groups.values():
+                    for group in sampled_groups:
                         if rank < len(group):
                             place = group[rank]
                             found.setdefault(place.ref_id, place)
@@ -237,7 +246,12 @@ class VietMapChargingDiscovery:
             rest = [s for s in ordered if s.rest_area_name or charging_poi_info(s.name)["rest_area"]]
             for station in rest[:3]:
                 if station not in chosen:
-                    chosen[-1 - rest.index(station)] = station
+                    # Prefer a rest area only within its own corridor segment.
+                    # Replacing the final slots with earlier rest areas removes
+                    # late-route coverage and can make long trips impossible.
+                    index = min(range(len(chosen)), key=lambda i: abs(chosen[i].route_progress_m - station.route_progress_m))
+                    if abs(chosen[index].route_progress_m - station.route_progress_m) <= route["distance_m"] / ((len(chosen) - 1) * 3):
+                        chosen[index] = station
             ordered = sorted(chosen, key=lambda station: station.route_progress_m)
             result.incomplete = True
         result.stations, result.errors = ordered, sorted(set(result.errors))

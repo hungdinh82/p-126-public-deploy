@@ -21,7 +21,8 @@ class TripWorkflow(NavigationWorkflow):
         speech = nav.summary["speech"]
         complete = (nav.energy or {}).get("selected_plan") is not None
         if not complete:
-            speech += " Kế hoạch chưa hoàn chỉnh."
+            if not (nav.energy or {}).get("message"):
+                speech += " Kế hoạch chưa hoàn chỉnh."
         return self.result(nav, speech, "completed", "trip.summary")
 
     @staticmethod
@@ -120,6 +121,7 @@ class TripWorkflow(NavigationWorkflow):
             {
                 "profile": self.energy.profile.model_dump(mode="json") if self.energy.profile else None,
                 "assumptions": assumptions.model_dump(mode="json") if assumptions else None,
+                "charging_algorithm": "corridor-coverage-2",
             }
         )
 

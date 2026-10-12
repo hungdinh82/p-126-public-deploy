@@ -180,6 +180,11 @@ monitor không xoá SQLite history hay long-term memory.
 - `google`, `openai`, `openrouter`: semantic planner qua API, cần khóa tương ứng và
   `rag_local_only = false`. Config repo hiện chọn Google.
 
+Planner Google dùng JSON mode kèm schema trong prompt vì endpoint từ chối schema
+semantic đầy đủ với HTTP 400. Server vẫn kiểm tra `SemanticTurn`, sửa JSON lỗi
+một lần và áp dụng guard/policy trước khi chạy capability. Các đáp án ngắn tiếp
+tục dùng structured output.
+
 Mọi provider và nút điều khiển có kiểu đi qua cùng reducer/scheduler/policy.
 Cloud → local → parser chỉ khi tầng trước lỗi; câu hỏi làm rõ hay policy từ chối
 không gây fallback. Đổi provider giữ nguyên session và pending task. Local chỉ
@@ -301,3 +306,18 @@ Restart backend sau khi build index mới.
 Output handbook được ánh xạ vào `TurnResponse.evidence`; UI hiển thị câu trả lời cùng link
 nguồn trong panel Cẩm nang. `/api/v1/turn/stream` chỉ phát câu trả lời sau khi grounding,
 safety và verify tương ứng đã hoàn tất—không stream sớm nội dung chưa được kiểm chứng.
+
+## Hội thoại và thông tin internet
+
+ViVi hỗ trợ trò chuyện, kiến thức phổ thông và truyện ngắn bằng model đang cấu hình.
+Information Service dùng Tavily cho tìm kiếm web, Open-Meteo cho thời tiết và Wikipedia
+cho thông tin lịch sử/văn hóa. Khi đang tới Ninh Bình, “Ở đó có gì chơi?” lấy điểm đến từ
+NavigationService để tìm thông tin; yêu cầu dẫn đường tới địa điểm được chọn vẫn đi qua
+luồng lập tuyến/xác nhận hiện có. Search được model tổng hợp thành một câu ngắn,
+có kiểm tra trích dẫn và một lượt sửa đáp án nếu cần; nguồn hiển thị dưới câu trả lời.
+Model tổng hợp được chọn độc lập với kết quả fallback của planner.
+
+Thêm `TAVILY_API_KEY` vào `.env` để bật live web search; hai nguồn còn lại không cần key.
+Ứng dụng mặc định giới hạn 900 Tavily basic request/tháng. `offline_only` hoặc
+`rag_local_only` chặn mọi HTTP của Information Service. Xem [cấu hình, kiến trúc và giới
+hạn](docs/conversation_open_world_plan.md), bao gồm dự báo ngày và cách xử lý nguồn giá vàng.

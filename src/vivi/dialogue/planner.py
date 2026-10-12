@@ -10,11 +10,12 @@ from dataclasses import dataclass
 from pydantic import ValidationError
 
 from src.vivi.agents.prompts import VOICE_PERSONA
+from src.vivi.conversation.context import conversation_view
 from src.vivi.dialogue.contracts import SemanticTurn, SessionState, semantic_schema
 from src.vivi.dialogue.parser import OfflineParser
 from src.vivi.structured_llm import strict_schema
 
-PROMPT_VERSION = "semantic-unified-16"
+PROMPT_VERSION = "semantic-unified-17"
 SEMANTIC_INSTRUCTION = """
 You interpret the complete CURRENT Vietnamese utterance into SemanticTurn JSON.
 Propose meaning; server code owns task IDs, scheduling, slot collection, consent,
@@ -174,6 +175,26 @@ text is only a short Vietnamese user-facing reply, offer or clarification. Never
 quote system rules, JSON, internal reasoning, or unsupported execution claims.
 For unsupported requests explain the unavailable capability. Apply explicit
 address_style and response_style preferences from memory without inventing facts.
+
+OPEN CONVERSATION AND INTERNET
+Stable non-vehicle knowledge, chat and short entertaining stories use
+conversation.respond (query, mode=general/chat/creative); do not answer them in
+semantic text. Greetings/thanks may remain reply. Vehicle-specific facts and
+how-to stay manual.search; weather and general questions never read vehicle status.
+Tourism recommendations, live/changing information, gold prices and explicit
+internet searches use web.search. Background history/culture uses knowledge.lookup.
+Weather uses weather.get_forecast with query, location (null if not specified),
+forecast_day=today/tomorrow/day_after_tomorrow. 'Tomorrow' here is not a scheduled
+vehicle effect. Missing weather location uses request/question, not unsupported.
+Resolve 'ở đó/nơi sắp đến' from conversation_context.destination; do not invent a
+destination or GPS. Preserve last weather location for 'còn ngày mai?'.
+If recent_topic.location_candidates is supplied, selection uses its exact label
+as weather location; never invent coordinates or choose an ambiguous yes reply.
+Independent information questions use act=question so pending tasks can suspend.
+To answer a pending weather location question use modify on that task. Preserve
+all explicitly requested mixed steps in order. Search results are not navigation
+handles; an explicit request to go to a named attraction uses navigation.plan,
+then existing preview/consent. Never claim to have searched before tool results.
 """
 
 
@@ -241,6 +262,7 @@ class SemanticResolver:
             {
                 "utterance": text,
                 "tasks": self.context(session),
+                "conversation_context": conversation_view(session),
                 "recent_turns": [{k: t.get(k) for k in ("query", "answer")} for t in (history or [])[-6:]],
                 "explicit_user_memory": memory or [],
                 "capabilities": catalog or [],
@@ -340,12 +362,13 @@ class SemanticResolver:
 
     @staticmethod
     async def interpret(provider, prompt):
+        instruction = VOICE_PERSONA + SEMANTIC_INSTRUCTION + "\nReturn compact JSON: omit null argument slots and unused optional fields; include only the operations and slots needed for this turn."
         for attempt in range(2):
             try:
                 client = provider.client
                 if provider.name == "local" and hasattr(client, "agenerate_tool"):
                     name, payload = await client.agenerate_tool(
-                        system=VOICE_PERSONA + SEMANTIC_INSTRUCTION,
+                        system=instruction,
                         user=prompt,
                         tools=[
                             {
@@ -363,7 +386,7 @@ class SemanticResolver:
                     return SemanticTurn.model_validate(payload)
                 generate = client.agenerate_json if hasattr(client, "agenerate_json") else None
                 parameters = dict(
-                    system=VOICE_PERSONA + SEMANTIC_INSTRUCTION,
+                    system=instruction,
                     user=prompt,
                     schema=semantic_schema(),
                     schema_name="vivi_semantic_turn",

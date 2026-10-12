@@ -232,10 +232,6 @@ def reduce_turn(
         )
         return state, value.text or "Bạn nói rõ thao tác muốn thực hiện ngay nhé."
     if value.act in {"clarify", "unsupported", "reply"}:
-        if value.act == "reply" and state.active and any(s.status == "offer" for s in state.active.steps):
-            for step in state.active.steps:
-                if step.status == "offer":
-                    step.status = "cancelled"
         return state, value.text or "Bạn nói rõ yêu cầu nhé."
     if value.act in {"confirm", "deny"} and value.task_ref != "active":
         return state, "Mình đã bỏ qua yêu cầu đó." if value.act == "deny" else "Mình chưa có đề xuất đang chờ xác nhận."

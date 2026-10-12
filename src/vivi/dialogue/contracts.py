@@ -18,6 +18,9 @@ class Arguments(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     query: str | None = None
+    mode: Literal["chat", "general", "creative"] | None = None
+    location: str | None = Field(default=None, max_length=200)
+    forecast_day: Literal["today", "tomorrow", "day_after_tomorrow"] | None = None
     gear: Literal["P", "D"] | None = None
     value_celsius: StrictFloat | None = None
     position_percent: StrictInt | None = None
@@ -380,6 +383,7 @@ class SessionState(BaseModel):
     navigation_workspace: NavigationWorkspace = Field(default_factory=NavigationWorkspace)
     trip_plan: TripPlanState | None = None
     navigation_focus: Literal["navigation", "trip"] = "navigation"
+    conversation_context: dict = Field(default_factory=dict)
 
     @model_validator(mode="before")
     @classmethod

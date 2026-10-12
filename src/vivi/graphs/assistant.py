@@ -360,6 +360,10 @@ class AssistantGraph:
 def build_assistant_graph(services, saver, store=None, provider=None, *, resolver=None, generators=None, budgets=None):
     runtime_epoch = str(uuid4())
     resolver = resolver or SemanticResolver()
+    if services.conversation is None:
+        from src.vivi.conversation.service import ConversationService
+
+        services.conversation = ConversationService(resolver.providers, fallback_chains=resolver.fallback_chains)
     runtime = CapabilityRuntime(
         services, store, generators, budgets, resolver.breaker_seconds, provider_chains=resolver.fallback_chains
     )
@@ -543,11 +547,12 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
                     requested=event.provider,
                     history=turn["history"],
                     memory=turn["memory"],
-                    catalog=catalog(services.navigation is not None),
+                    catalog=catalog(services.navigation is not None, conversation=services.conversation.enabled,
+                                    information=services.information is not None and services.information.online),
                 ),
                 fence=lambda resolved: (
                     resolved[0].act in {"confirm", "deny", "modify", "resume", "cancel"}
-                    or any(d.capability != "manual.search" for d in resolved[0].drafts())
+                    or any(REGISTRY.get(d.capability) and not REGISTRY[d.capability].spec.read_only for d in resolved[0].drafts())
                 ),
             )
         # Domain invalidity is a clarification, never a reason to ask a weaker model.
@@ -689,6 +694,19 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
                 result = await external_read(
                     runtime.handbook(event, arguments, turn["effective_provider"], turn["history"]), fence=False
                 )
+            elif spec.executor == "conversation":
+                from src.vivi.conversation.context import conversation_view
+
+                result = await external_read(services.conversation.respond(
+                    arguments["query"], provider=event.provider, mode=arguments.get("mode", "general"),
+                    history=turn["history"], memory=turn["memory"], context=conversation_view(session)), fence=False)
+            elif spec.executor == "information":
+                if services.information is None:
+                    result = {"status": "blocked", "message": "Mình chưa kết nối dịch vụ thông tin internet.", "error_code": "information_not_configured"}
+                else:
+                    result = await external_read(services.information.execute(
+                        step.draft.capability, arguments, event, session, provider=event.provider,
+                        history=turn["history"], memory=turn["memory"]), fence=False)
             else:
                 result = await external_read(
                     domain.execute(event, session, step, arguments, command_id, turn["effective_provider"]), fence=False
@@ -702,10 +720,12 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
                 event.turn_id,
                 step.draft.capability,
             )
-            result = {
-                "status": "unknown",
-                "message": "Mình chưa xác minh được kết quả bước này. Bạn kiểm tra trước khi yêu cầu lại nhé.",
-            }
+            result = (
+                {"status": "blocked", "message": "Mình chưa tạo được câu trả lời đáng tin cậy. Bạn thử lại nhé.",
+                 "error_code": "answer_unavailable"}
+                if spec.executor in {"conversation", "information"}
+                else {"status": "unknown", "message": "Mình chưa xác minh được kết quả bước này. Bạn kiểm tra trước khi yêu cầu lại nhé."}
+            )
             turn["errors"] = [
                 *turn["errors"],
                 {"stage": "capability", "error_type": type(exc).__name__, "message": str(exc)},
@@ -731,6 +751,13 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
             confirmation=result.get("confirmation"),
             command_id=command_id if result["status"] != "waiting_slot" else None,
         )
+        if spec.executor in {"conversation", "information"}:
+            session.conversation_context = {
+                **(result.get("information_context") or {"capability": step.draft.capability, "query": arguments.get("query")}),
+                "focus": "information",
+            }
+        elif spec.executor == "navigation":
+            session.conversation_context.pop("focus", None)
         session = await domain.hydrate(session, event.session_id)
         turn["results"] = [
             *turn["results"],
@@ -774,7 +801,7 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
             "handbook"
             if last.get("capability") == "manual.search"
             else "conversation"
-            if last.get("capability", "").startswith(("memory.", "navigation.", "trip."))
+            if last.get("capability", "").startswith(("memory.", "navigation.", "trip.", "conversation.", "web.", "weather.", "knowledge."))
             else "action"
             if last
             else "unsupported"
@@ -788,7 +815,7 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
             "waiting_slot": "clarify",
             "waiting_confirmation": "confirmation_required",
             "blocked": "insufficient_evidence" if route == "handbook" else "blocked",
-            "unknown": "action_unverified",
+            "unknown": "generation_error" if route == "conversation" else "action_unverified",
         }.get(
             last.get("status"),
             "unsupported" if semantic.act == "unsupported" else "clarify" if semantic.act == "clarify" else "answered",
@@ -851,6 +878,10 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
             "suspended_tasks": len(session.suspended),
             "generation_provider": last.get("generation_provider"),
             "generation_attempts": last.get("generation_attempts", []),
+            "information_provider": last.get("information_provider"),
+            "information_cache_hit": last.get("cache_hit"),
+            "source_count": last.get("source_count"),
+            "error_code": last.get("error_code"),
         }
         output = AssistantOutput(
             runtime_epoch=runtime_epoch,
@@ -871,13 +902,15 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
             status=status,
             response_text=message,
             tts_text=message,
+            answer_kind=last.get("answer_kind"),
+            answer_basis=last.get("answer_basis"),
             action_proposal=action,
             execution=last.get("execution"),
             confirmation=confirmation,
             vehicle_state=next(
                 (item["vehicle_state"] for item in reversed(results) if item.get("vehicle_state")), None
             ),
-            citations=last.get("citations", []),
+            citations=list({item["source_id"]: item for result in results for item in result.get("citations", [])}.values()),
             grounding_status=last.get("grounding_status", "not_applicable"),
             errors=turn["errors"],
             timings=turn["timings"],

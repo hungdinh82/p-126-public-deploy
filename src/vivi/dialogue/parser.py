@@ -10,6 +10,7 @@ import re
 from dataclasses import dataclass
 
 from src.vivi.capabilities.registry import DEFAULT_CLIMATE_DELTA_CELSIUS, compatible_change
+from src.vivi.conversation.context import resolve_query
 from src.vivi.dialogue.contracts import ActionDraft, SemanticTurn, SessionState
 from src.vivi.navigation.destinations import region_for
 from src.vivi.text import normalize_text
@@ -117,6 +118,13 @@ class Lexer:
             part
             for clause in raw
             for part in re.split(
+                r"\s+(?:và|va|rồi|roi|sau đó|sau do)\s+(?=(?:cho (?:tôi |toi |mình |minh )?biết (?:thời tiết|thoi tiet)|hỏi thời tiết|hoi thoi tiet|kể chuyện|ke chuyen|tra (?:trên |tren )?mạng|tra mang)\b)", clause, flags=re.I
+            )
+        ]
+        raw = [
+            part
+            for clause in raw
+            for part in re.split(
                 r"\s+(?:và|va|rồi|roi)\s+(?=(?:thêm|them)\s+(?:bật|bat|tắt|tat|phát|phat|mở|mo)\b)", clause, flags=re.I
             )
         ]
@@ -188,6 +196,8 @@ class OfflineParser:
             return self.request(replacement.capability, replacement.arguments.model_dump(exclude_none=True))
         if scoped := self.scoped_patch(value, session):
             return scoped
+        if open_turn := self.open_world(text, value, session):
+            return open_turn
         clarification = session.clarification
         if clarification and len(clarification.unresolved) == 1:
             replacement = re.sub(r"^(?:ý là|y la|à|a|đổi thành|doi thanh)\s+", "", text.strip(), flags=re.I)
@@ -321,7 +331,8 @@ class OfflineParser:
         if re.fullmatch(r"(?:xin )?chao(?: vivi| ban)?|vivi|hello|hi", value):
             name = next((item["value"] for item in memory or [] if item.get("key") == "display_name"), None)
             return SemanticTurn(
-                act="reply", text=f"Mình đây, {name}. Bạn cần gì thế?" if name else "Mình đây, bạn cần gì thế?"
+                act="reply", text=(f"Mình đây, {name}." if name else "Mình đây.") if live
+                else f"Mình đây, {name}. Bạn cần gì thế?" if name else "Mình đây, bạn cần gì thế?"
             )
         if re.fullmatch(r"toi bao co sao ban khong mo nhac(?: luon)?", value):
             return self.request("media.play")
@@ -445,6 +456,10 @@ class OfflineParser:
                     act="unsupported", text="Mình không hướng dẫn can thiệp hệ thống an toàn hoặc điện cao áp."
                 )
             # Explicit measurement cues distinguish observations from handbook facts.
+            referenced = self.question_reference(text, history or [])
+            vehicle_topic = re.search(r"\b(?:xe|vf\d+|vinfast|pin|sac|lop|phanh|cua|kinh|dieu hoa|cabin|cruise|lka|adas|tui khi|capo|cop|vo lang|dong co|den|ghe|cam bien|dau|nuoc lam mat|ho tro lai)\b", self.lexer.normalize(referenced))
+            if not vehicle_topic:
+                return self.request("conversation.respond", {"query": text, "mode": "general"}, act="question")
             if re.search(r"hien tai|bay gio|con bao nhieu|con di duoc", value) and not re.search(
                 r"cach|huong dan|tai sao", value
             ):
@@ -457,8 +472,8 @@ class OfflineParser:
             value,
         ):
             return self.request("vehicle.get_status")
-        if re.search(r"thoi tiet|gia ban|khuyen mai", value):
-            return SemanticTurn(act="unsupported", text="Mình chưa có dịch vụ phù hợp để kiểm tra thông tin đó.")
+        if re.search(r"gia ban|khuyen mai", value):
+            return self.request("web.search", {"query": text}, act="question")
         clauses = self.lexer.clauses(text)
         if len(clauses) > 5:
             return self.ask("Bạn chia yêu cầu thành tối đa năm thao tác mỗi lần nhé.")
@@ -486,6 +501,87 @@ class OfflineParser:
         if live and len(actions) == 1 and (value.startswith(("khong", "chi", "doi")) or actions[0].referenced_target):
             return SemanticTurn(act="modify", task_ref="active", actions=actions)
         return SemanticTurn(act="request", actions=actions)
+
+    def open_world(self, text, value, session):
+        """Bounded open-world grammar, before navigation and scheduled effects."""
+        # Preserve commands, memory writes and consent ownership.
+        if self.command(value) or re.match(r"^(?:ghi nho|nho rang|quen|mo|dong|dat|chinh|bat|tat|phat|khoa|dan|dua|di den|di toi|bat dau)\b", value):
+            return None
+        if re.search(r"\b(?:neu|lat nua|sau do|thi)\b.*\b(?:mo|dong|dat|bat|tat|phat|khoa|ha|chinh)\b", value):
+            return None
+        current = session.active.steps[session.active.current_index()] if session.active and session.active.current_index() is not None else None
+        if (session.conversation_context.get("focus") == "information" and affirmed(value)
+            and (current is None or current.draft.capability in {"conversation.respond", "web.search", "weather.get_forecast", "knowledge.lookup"})):
+            return SemanticTurn(act="clarify", text="Bạn nói rõ yêu cầu muốn tiếp tục nhé; mình chưa xác nhận thao tác nào.", unresolved=[text])
+        if current and current.draft.capability == "weather.get_forecast" and current.status == "waiting_slot":
+            choices = session.conversation_context.get("location_candidates", [])
+            ordinal = re.fullmatch(r"(?:(?:dia diem|cho|noi) )?(?:thu )?(1|2|3|mot|hai|ba|dau tien)", value)
+            if choices and ordinal:
+                index = {"1": 0, "mot": 0, "dau tien": 0, "2": 1, "hai": 1, "3": 2, "ba": 2}[ordinal[1]]
+                if index >= len(choices):
+                    return self.ask("Bạn chọn một địa điểm trong danh sách vừa nêu nhé.")
+                args = current.draft.arguments.model_dump(exclude_none=True)
+                args["location"] = choices[index]["label"]
+                return SemanticTurn(act="modify", task_ref="active", actions=[ActionDraft(capability="weather.get_forecast", arguments=args)])
+            if choices and affirmed(value):
+                return self.ask("Bạn chọn địa điểm thứ mấy trong danh sách nhé?")
+        if (current and current.draft.capability == "weather.get_forecast" and current.status == "waiting_slot"
+            and re.fullmatch(r"[\w\s,.-]{2,100}", text, re.UNICODE)
+            and len(text.split()) <= 7 and not re.search(r"\b(?:khong|co|huy|thoi|cam on|chao|ke|tai sao|vi sao|la gi|ngay mai|ngay kia|lich su|van hoa|du lich|noi chuyen|tam su|met|lo trinh|ke hoach|thoi tiet|du bao)\b", value)):
+            args = current.draft.arguments.model_dump(exclude_none=True)
+            location = self.weather_location(text, slot_reply=True)
+            if location:
+                args.update(location=location, query=current.draft.arguments.query or "Thời tiết")
+                return SemanticTurn(act="modify", task_ref="active", actions=[ActionDraft(capability="weather.get_forecast", arguments=args)])
+        # Let the existing ordered-clause parser preserve mixed command chains.
+        if len(self.lexer.clauses(text)) > 1:
+            return None
+        if re.search(r"\b(?:ke (?:cho .+ )?(?:chuyen|truyen)|ke tiep|truyen ngan|chuyen vui)\b", value):
+            return self.request("conversation.respond", {"query": text, "mode": "creative"}, act="question")
+        previous = session.conversation_context
+        date_followup = re.fullmatch(r"(?:con |the )?(?:ngay mai|ngay kia)(?: thi sao)?[?.! ]*", value)
+        if re.search(r"\b(?:thoi tiet|du bao|troi.*(?:mua|nang)|co mua|mua khong)\b", value) or (date_followup and previous.get("capability") == "weather.get_forecast"):
+            query = resolve_query(text, session)
+            location = self.weather_location(query)
+            day = "day_after_tomorrow" if "ngay kia" in value else "tomorrow" if "ngay mai" in value else "today"
+            args = {"query": text, "forecast_day": day}
+            if location:
+                args["location"] = location
+            return self.request("weather.get_forecast", args, act="question")
+        if re.search(r"\b(?:tim (?:tren )?mang|tra (?:tren )?mang|internet|google|tim kiem tren|tin moi|moi nhat|gia vang|du lich|tham quan|gi choi|choi gi|gi vui|cho nao dang di)\b", value):
+            return self.request("web.search", {"query": resolve_query(text, session)}, act="question")
+        if re.search(r"\b(?:wikipedia|lich su|van hoa|nguon goc)\b", value) and not re.search(r"\b(?:xe|vf\d+|vinfast|pin|sac)\b", value):
+            query = re.sub(r"^(?:tìm hiểu|tra|tìm|cho (?:tôi|mình) biết)\s+", "", resolve_query(text, session), flags=re.I)
+            return self.request("knowledge.lookup", {"query": query}, act="question")
+        if re.search(r"\b(?:noi chuyen|tam su|hom nay.*met|toi met qua|minh met qua)\b", value):
+            return self.request("conversation.respond", {"query": text, "mode": "chat"}, act="question")
+        return None
+
+    @staticmethod
+    def weather_location(text, *, slot_reply=False):
+        """Extract a place span, excluding the speaker and question/date tails."""
+        raw = text.strip(" ?.!,;:")
+        value = normalize_text(raw)
+        match = re.search(r"\b(?:o|tai)\s+(.+)", value)
+        if match:
+            raw = raw[match.start(1):]
+        elif not slot_reply:
+            match = re.search(r"\b(?:du bao )?thoi tiet\s+(.+)", value)
+            if not match:
+                return None
+            raw = raw[match.start(1):]
+        value = normalize_text(raw)
+        leading = re.match(r"(?:(?:hom nay|ngay mai|ngay kia)\s+)+", value)
+        if leading:
+            raw = raw[leading.end():]
+        value = normalize_text(raw)
+        tail = re.search(r"\b(?:hom nay|ngay mai|ngay kia|chieu nay|chieu mai|co mua|co nang|mua khong|nang khong|the nao|nhu (?:the nao|nao)|ra sao|nhi|nhe)\b", value)
+        if tail:
+            raw = raw[:tail.start()]
+        raw = raw.strip(" ?.!,;:")
+        if normalize_text(raw) in {"", "day", "hien tai", "bay gio", "minh", "toi"}:
+            return None
+        return raw
 
     @staticmethod
     def ask(text):
@@ -948,7 +1044,7 @@ class OfflineParser:
         """Parse journey grammar into slots; vendor queries contain only names."""
         normalized = normalize_text(raw).strip()
         prefix = re.match(
-            r"^(?:(?:lap (?:ke hoach|lo trinh)|ke hoach|lo trinh|duong di)(?: di)?(?: va(?: lo trinh)? sac| sac)?|(?:chi duong|dan duong|dan (?:toi|minh)|di|ve))(?: den| toi)?\s+(.+)$",
+            r"^(?:(?:(?:lap|len) (?:ke hoach|lo trinh)|ke hoach|lo trinh|duong di)(?: di)?(?: va(?: lo trinh)? sac| sac)?(?: va di)?|(?:chi duong|dan duong|dan (?:toi|minh)|di|ve))(?: den| toi)?\s+(.+)$",
             normalized,
         )
         if not prefix:
@@ -1292,6 +1388,18 @@ class OfflineParser:
         value = self.lexer.normalize(text)
         result = semantic.model_copy(deep=True)
         bounded = self.interpret(text, session, memory, history)
+        if session.active and session.active.current_index() is not None and re.fullmatch(r"(?:xin )?chao(?: vivi| ban)?|vivi|hello|hi", value):
+            return bounded
+        # Explicit internet/weather/story requests cannot be answered as stale
+        # model text or mistaken for handbook/live vehicle observations.
+        if (bounded.act in {"request", "question", "modify"} and bounded.actions
+            and all(a.capability in {"conversation.respond", "web.search", "weather.get_forecast", "knowledge.lookup"} for a in bounded.actions)):
+            if (bounded.act != "modify" and result.act == bounded.act
+                and [a.capability for a in result.actions] == [a.capability for a in bounded.actions]):
+                # The model can resolve richer locations and follow-ups. The
+                # bounded grammar repairs routing; it must not erase valid slots.
+                return result
+            return bounded
         if bounded.negated or bounded.conditional or bounded.scheduled or bounded.conflicting:
             return bounded
         reference = self.place_reference(text, session)

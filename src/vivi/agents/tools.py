@@ -171,7 +171,20 @@ class ToolSpec:
         }
 
 
+class ConversationQuery(SearchQuery):
+    mode: Literal["chat", "general", "creative"] = "general"
+
+
+class WeatherQuery(SearchQuery):
+    location: str | None = Field(default=None, max_length=200)
+    forecast_day: Literal["today", "tomorrow", "day_after_tomorrow"] = "today"
+
+
 TOOLS = (
+    ToolSpec("conversation.respond", "Trò chuyện, kiến thức phổ thông ổn định hoặc truyện ngắn giải trí. Không báo dữ liệu live hoặc thực thi xe.", ConversationQuery, "Bạn muốn trò chuyện về điều gì?", True),
+    ToolSpec("web.search", "Tìm thông tin internet có nguồn: du lịch, địa điểm tham quan, tin mới, giá vàng. Không lập tuyến hay bắt đầu dẫn đường.", SearchQuery, "Bạn muốn tìm thông tin gì?", True),
+    ToolSpec("weather.get_forecast", "Thời tiết hôm nay/ngày mai tại địa điểm hoặc vị trí hiện tại. Không lấy nhiệt độ điều hoà xe.", WeatherQuery, "Bạn muốn xem thời tiết ở đâu?", True),
+    ToolSpec("knowledge.lookup", "Tra Wikipedia cho thông tin nền: địa danh, lịch sử, văn hóa. Không tra giá hoặc thời tiết mới nhất.", SearchQuery, "Bạn muốn tìm hiểu chủ đề nào?", True),
     ToolSpec(
         "memory.recall",
         "Đọc thông tin người dùng đã yêu cầu lưu. Không suy diễn từ lịch sử.",

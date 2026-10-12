@@ -114,6 +114,28 @@ function setResponseText(text) {
   $('#response-text').classList.remove('live');
   $('#response-text').textContent = text;
 }
+function renderAnswerSources(evidence = [], answerKind = '') {
+  const response = $('#response');
+  if (response?.classList) response.classList.toggle('expanded-answer', ['creative', 'general', 'web', 'knowledge'].includes(answerKind));
+  const container = $('#answer-sources');
+  if (!container) return;
+  container.replaceChildren();
+  for (const item of evidence) {
+    let url;
+    try { url = new URL(item.source_url); } catch { continue; }
+    if (!['https:', 'http:'].includes(url.protocol)) continue;
+    const source = document.createElement('a');
+    source.href = url.href;
+    source.target = '_blank';
+    source.rel = 'noopener noreferrer';
+    source.textContent = item.title || item.section || item.source_id || url.hostname;
+    const date = item.valid_date || item.published_at;
+    if (date) source.textContent += ` · ${date}`;
+    if (item.retrieved_at) source.title = `Truy xuất: ${item.retrieved_at}`;
+    container.append(source);
+  }
+  container.hidden = !container.childElementCount;
+}
 function renderLiveCaption(final, interim) {
   const caption = $('#response-text');
   if (!caption.classList.contains('live')) { caption.textContent = ''; caption.classList.add('live'); liveWords = []; }
@@ -668,6 +690,7 @@ async function runBackendCommand(command, turnId = makeId(), { autoConfirm = fal
   followUpArmed = false;
   rememberEdgeCommand(command);
   renderTurnSteps([]);
+  renderAnswerSources();
   state.busy = true; state.lastCommand = command; lockControls(true); $('#command-input').value = '';
   try {
     setPhase('thinking', `“${command}”`);
@@ -787,6 +810,7 @@ async function runBackendCommand(command, turnId = makeId(), { autoConfirm = fal
       ? 'speaking'
       : payload.status === 'confirmation_required' ? 'confirm' : payload.status;
     setPhase(phase, payload.message);
+    renderAnswerSources(payload.evidence || [], payload.answer_kind);
     if (payload.status === 'verified') {
       const intent = payload.action?.intent || '';
       const card = DOCK_BY_INTENT[intent.split('.')[0]] || null;

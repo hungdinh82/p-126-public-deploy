@@ -89,13 +89,16 @@ def test_google_portable_schema_keeps_semantic_validation(tmp_path):
 
     client = google_client(configuration(tmp_path))
     original = semantic_schema()
-    payload = client._request_payload("ViVi", "test", original, "vivi_semantic_turn")
+    payload = client._request_payload("ViVi", "test", original, "schema_probe")
     schema = payload["response_format"]["json_schema"]["schema"]
     arguments = schema["$defs"]["Arguments"]["properties"]
     assert "minimum" not in arguments["route_revision"]["anyOf"][0]
     assert schema["additionalProperties"] is False
     assert schema["$defs"]["ActionDraft"]["properties"]["capability"]["enum"]
     assert original["$defs"]["Arguments"]["properties"]["route_revision"]["anyOf"][0]["minimum"] == 1
+    semantic_payload = client._request_payload("ViVi", "test", original, "vivi_semantic_turn")
+    assert semantic_payload["response_format"] == {"type": "json_object"}
+    assert '"ActionDraft"' in semantic_payload["messages"][0]["content"]
     with pytest.raises(ValidationError):
         SemanticTurn.model_validate(
             {"act": "request", "actions": [{"capability": "navigation.start", "arguments": {"route_revision": -1}}]}
@@ -108,7 +111,7 @@ async def test_google_graph_calls_intent_and_grounded_answer(tmp_path):
 
     def handler(request):
         body = json.loads(request.content)
-        name = body["response_format"]["json_schema"]["name"]
+        name = "vivi_semantic_turn" if body["response_format"]["type"] == "json_object" else body["response_format"]["json_schema"]["name"]
         requests.append(name)
         if name == "vivi_semantic_turn":
             result = {

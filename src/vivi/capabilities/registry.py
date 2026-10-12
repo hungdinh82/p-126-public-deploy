@@ -87,7 +87,11 @@ for name in TOOL_REGISTRY:
     if fields.intersection({"zone", "zones"}):
         transferable |= {"target_side", "target_row"}
     executor = (
-        "memory"
+        "conversation"
+        if name == "conversation.respond"
+        else "information"
+        if name in {"web.search", "weather.get_forecast", "knowledge.lookup"}
+        else "memory"
         if name.startswith("memory.")
         else "handbook"
         if name == "manual.search"
@@ -144,11 +148,13 @@ def merge_arguments(old, incoming):
     return merged
 
 
-def catalog(navigation=False):
+def catalog(navigation=False, *, conversation=True, information=True):
     return [
         cap.spec.prompt_spec()
         for cap in REGISTRY.values()
-        if navigation or cap.executor != "navigation" or cap.name == "navigation.set_gear"
+        if (navigation or cap.executor != "navigation" or cap.name == "navigation.set_gear")
+        and (conversation or cap.executor != "conversation")
+        and (information or cap.executor != "information")
     ]
 
 

@@ -260,6 +260,9 @@ class LangGraphOrchestrator:
                 }
                 if any(a.get("capability") == "manual.search" for a in turn.get("semantic", {}).get("actions", [])):
                     yield {"type": "progress", "text": random.choice(PROGRESS_MESSAGES)}
+                elif any(a.get("capability") in {"web.search", "knowledge.lookup", "weather.get_forecast"}
+                         for a in turn.get("semantic", {}).get("actions", [])):
+                    yield {"type": "progress", "text": "Mình đang tra thông tin, bạn chờ một chút nhé."}
             elif "capability" in chunk or "validate" in chunk:
                 update = chunk.get("capability", chunk.get("validate")) or {}
                 turn = update.get("turn", {})
@@ -361,6 +364,7 @@ class LangGraphOrchestrator:
                 source_id=item.get("source_id", ""),
                 section=" > ".join(item.get("section_path") or []),
                 source_url=item.get("source_url"),
+                **{key: item.get(key) for key in ("title", "kind", "published_at", "retrieved_at", "valid_date", "timezone")},
             )
             for item in output.citations
         ]
@@ -412,6 +416,8 @@ class LangGraphOrchestrator:
             grounding_status=output.grounding_status,
             vehicle_state=vehicle_state,
             message=output.response_text,
+            answer_kind=output.answer_kind,
+            answer_basis=output.answer_basis,
             error="; ".join(item["message"] for item in output.errors) or None,
             latency_ms={**output.timings, "total": round(sum(output.timings.values()), 2)},
             trace=trace,
@@ -582,6 +588,11 @@ def create_langgraph_orchestrator(
     resolver = SemanticResolver(
         providers, breaker_seconds=config.provider_breaker_seconds, fallback_chains=fallback_chains
     )
+    from src.vivi.conversation.service import ConversationService
+    from src.vivi.information.service import InformationService
+
+    services.conversation = ConversationService(providers, fallback_chains=fallback_chains, enabled=config.conversation_enabled)
+    services.information = InformationService(config, services.conversation)
     saver = ThreadedSqliteSaver(config.data_dir / "runtime" / "conversation-v3.sqlite3")
     graph = build_assistant_graph(
         services,

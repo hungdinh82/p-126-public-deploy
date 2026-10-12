@@ -69,6 +69,8 @@ class AssistantOutput(BaseModel):
     status: str
     response_text: str
     tts_text: str
+    answer_kind: str | None = None
+    answer_basis: str | None = None
     action_proposal: ActionProposal | None = None
     requires_execution: bool = False
     execution: ActionExecution | None = None

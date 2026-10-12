@@ -29,12 +29,21 @@ def test_offer_acceptance_executes_after_restart_once(services, yes):
     assert third["execution"] is None
 
 
-@pytest.mark.parametrize("interruption", ["không", "thôi", "xin chào", "dừng nhạc"])
-def test_cancel_or_topic_switch_clears_offer(services, interruption):
+@pytest.mark.parametrize("interruption", ["không", "thôi", "dừng nhạc"])
+def test_cancel_or_replacement_clears_offer(services, interruption):
     invoke(services, "hôm nay tôi buồn quá")
     invoke(services, interruption)
     result = invoke(services, "có")["output"]
     assert result["execution"] is None
+
+
+def test_greeting_preserves_offer_without_executing(services):
+    first = invoke(services, "hôm nay tôi buồn quá")
+    greeting = invoke(services, "xin chào")
+    assert greeting["output"]["execution"] is None
+    assert greeting["session"]["active"]["id"] == first["session"]["active"]["id"]
+    assert greeting["session"]["active"]["steps"][0]["status"] == "offer"
+    assert invoke(services, "có")["output"]["execution"]["verified"]
 
 
 def test_offer_is_session_and_profile_scoped(services):

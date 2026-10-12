@@ -211,3 +211,7 @@ body.journey-open .information-rail{visibility:hidden;pointer-events:none}
  .journey:not(.details-expanded) .journey-point.destination{border-top:0}
 }
 @media(max-width:760px){.journey.details-expanded .journey-recenter{display:none}}
+.answer-sources { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: 8px; }
+.answer-sources[hidden] { display: none; }
+.answer-sources a { color: inherit; font-size: 12px; padding: 4px 8px; border: 1px solid currentColor; border-radius: 8px; }
+.response.expanded-answer p { display: block; -webkit-line-clamp: unset; max-height: 120px; overflow-y: auto; }
