@@ -23,6 +23,7 @@ let motionBlocked = false;
 let chargingTimer = null;
 let activeMapLoad = null;
 let lastEnergySignature = null;
+const spokenChargingEvents = new Set();
 let pauseRequest = null;
 let journeyInformationHidden = false;
 const retiredTripPlans = new Set();
@@ -302,6 +303,47 @@ function updateSummary(traveled) {
   $('#journey-arrival').textContent = formatClock(new Date(Date.now() + seconds * 1000));
   return { remaining, arrival: new Date(Date.now() + seconds * 1000) };
 }
+
+function currentLeg(traveled = sim.traveled) {
+  const nav = backendNavigation;
+  const plan = nav?.energy?.selected_plan;
+  const stop = plan?.stops?.[nav.stop_index || 0];
+  const progress = route?.length ? traveled / route.length * route.distance_m : nav?.progress_m || 0;
+  let end = nav?.route?.distance_m || 0;
+  let label = destination?.spoken_label || destination?.name || '';
+  if (stop) {
+    // leg_index distinguishes repeated visits to one station on a return trip.
+    let legIndex = stop.leg_index;
+    if (legIndex == null) {
+      let from = 0;
+      for (const item of plan.stops.slice(0, (nav.stop_index || 0) + 1)) {
+        legIndex = plan.legs.findIndex((leg, i) => i >= from && leg.to === item.station_id);
+        from = legIndex + 1;
+      }
+    }
+    end = plan.legs.slice(0, legIndex + 1).reduce((total, leg) => total + leg.distance_m, 0);
+    label = `Trạm sạc thứ ${(nav.stop_index || 0) + 1}: ${stop.label || stop.name}`;
+  } else if (nav?.trip_kind === 'round_trip') {
+    let traveled = 0;
+    for (const leg of plan?.legs || []) {
+      traveled += leg.distance_m;
+      if (leg.to === 'destination') {
+        if (progress < traveled) end = traveled;
+        else label = nav.origin?.label || 'Điểm xuất phát';
+        break;
+      }
+    }
+  }
+  let seconds = 0, start = 0;
+  for (const leg of plan?.legs || []) {
+    const overlap = Math.max(0, Math.min(end, start + leg.distance_m) - Math.max(progress, start));
+    seconds += leg.duration_s * overlap / Math.max(1, leg.distance_m);
+    start += leg.distance_m;
+  }
+  if (!plan) seconds = (route?.duration_s || 0) * Math.max(0, end - progress) / Math.max(1, end);
+  return {destination:label,remaining:Math.max(0, end - progress),arrival:new Date(Date.now() + seconds * 1000),
+    chargingMinutes:nav?.status === 'charging' && stop ? Math.ceil(Math.max(0, stop.charge_minutes * 60 - (nav.charge_elapsed_s || 0)) / 60) : null};
+}
 // Displayed speed is the real-world pace of the route (not the simulation
 // speed-up), easing off before each manoeuvre.
 function cruiseSpeed(now, upcoming) {
@@ -460,13 +502,13 @@ function tick(now) {
   if (now - sim.lastPaint > 200) {
     sim.lastPaint = now;
     if(view!=='hidden' && !mapTripPlan)map?.getSource('vivi-traveled')?.setData({ type: 'Feature', geometry: { type: 'LineString', coordinates: [...route.coordinates.slice(0, index + 1), point] } });
-    const summary = updateSummary(sim.traveled);
+    updateSummary(sim.traveled);
     const stepIndex = stepAt(index);
     const upcoming = showNextManeuver(stepIndex, sim.traveled);
     hooks.progress({
       speedKmh: cruiseSpeed(now, upcoming),
       next: upcoming ? { sign: upcoming.next.sign, exitTurn: upcoming.next.exitTurn, icon: SIGN_ICONS[upcoming.next.sign] ?? '↑', text: upcoming.next.text, distance: upcoming.distance } : null,
-      heading, remaining: summary.remaining, arrival: summary.arrival, destination: destination.name,
+      heading, ...currentLeg(),
       // Inside a roundabout: the next step starts at its exit.
       roundabout: route.steps[stepIndex]?.sign === 6 ? route.steps[stepIndex].exitTurn ?? 0 : null
     });
@@ -627,6 +669,7 @@ export function resetJourneyRuntime(){
   stopSimulation(false,true);
   if(chargingTimer)clearInterval(chargingTimer);
   chargingTimer=null;backendNavigation=null;backendWorkspace=null;backendTripPlan=null;
+  spokenChargingEvents.clear();
   routeIdentity=null;lastEnergySignature=null;route=null;activeMapLoad=null;
 }
 export function setJourneyMotionBlocked(blocked) {
@@ -906,6 +949,13 @@ export async function applyNavigation(payload) {
   if (backendNavigation && next.revision === backendNavigation.revision && (next.event_sequence || 0) < (backendNavigation.event_sequence || 0)) return;
   const previous = backendNavigation;
   backendNavigation = next;
+  for (const event of payload.ui_events || []) {
+    if (!['navigation.charging','navigation.next_leg'].includes(event.type) || !event.message ||
+        event.route_id !== next.route_id || spokenChargingEvents.has(event.id)) continue;
+    spokenChargingEvents.add(event.id);
+    if (spokenChargingEvents.size > 100) spokenChargingEvents.delete(spokenChargingEvents.values().next().value);
+    hooks.announce(event.message);
+  }
   if(view==='full' && previous?.status==='selecting' && next.status==='preview')setJourneyDetails(false);
   if(next.request_id && next.request_id!==previous?.request_id && payload.ui_events?.some(e=>['navigation.results','navigation.preview'].includes(e.type))) {
     journeyInformationHidden=false;rememberJourneyVisibility();
@@ -976,7 +1026,9 @@ export async function applyNavigation(payload) {
   if (next.status === 'charging' && route) {
     if(sim.running)stopSimulation(false,true);
     sim.traveled = next.progress_m / Math.max(1, route.distance_m) * route.length;
-    setMessage('Đang dừng sạc theo kế hoạch.');
+    const leg = currentLeg();
+    setMessage(`${leg.destination}. Dự kiến còn ${leg.chargingMinutes} phút sạc rồi đi tiếp.`);
+    hooks.progress({speedKmh:0,next:null,heading:sim.bearing,...leg});
   }
   if (next.status === 'completed' && previous?.status !== 'completed' && sim.running) finishSimulation();
   else if (['paused','idle','ended'].includes(next.status) && sim.running) stopSimulation(false,true);
@@ -1014,7 +1066,7 @@ export function getJourneyPosition() {
     const point = backendNavigation.route.coordinates.at(-1);
     return {lat:point[1],lng:point[0],label:'Vị trí sau hành trình',simulated:true};
   }
-  if ((sim.running || backendNavigation?.status==='paused') && route) {
+  if ((sim.running || ['paused','charging'].includes(backendNavigation?.status)) && route) {
     const {point} = positionAt(sim.traveled);
     return {lat:point[1],lng:point[0],label:'Vị trí mô phỏng hiện tại',simulated:true};
   }

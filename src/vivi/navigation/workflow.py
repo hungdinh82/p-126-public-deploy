@@ -12,10 +12,19 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from src.vivi.navigation.destinations import administrative_match, region_for
+from src.vivi.navigation.destinations import administrative_match, center_requested, region_for
 from src.vivi.navigation.effects import vehicle_effect
 from src.vivi.navigation.energy import ChargingStation, EnergyPlanner
-from src.vivi.navigation.presentation import choice_message, place_label, route_summary, short_address, station_label
+from src.vivi.navigation.presentation import (
+    charging_message,
+    choice_message,
+    next_leg_message,
+    place_label,
+    resume_message,
+    route_summary,
+    short_address,
+    station_label,
+)
 from src.vivi.navigation.selection import decide_place, distinct_places
 from src.vivi.navigation.vietmap import VietMapError
 from src.vivi.turn_control import current_control
@@ -568,7 +577,7 @@ class NavigationWorkflow:
         if selected_plan:
             nav.route = self.compose_route(selected_plan)
         nav.status = "preview"
-        if default_region:
+        if default_region and not center_requested(binding_arguments.get("query")):
             nav.summary = route_summary(nav, ask_start=False)
             label = default_region.get("representative_label", "trung tâm " + default_region["name"])
             question = f"Mình lấy {label}. Bạn muốn đổi sang địa điểm cụ thể khác không?"
@@ -612,9 +621,7 @@ class NavigationWorkflow:
             kwargs["category"] = categories[category]
         places = await self.services.navigation.search(arguments["query"], **kwargs)
         missing = [place for place in places[:10] if place.lat is None or place.lng is None]
-        details = await read_many(
-            self.services.navigation, [("place", (place.ref_id,), {}) for place in missing]
-        )
+        details = await read_many(self.services.navigation, [("place", (place.ref_id,), {}) for place in missing])
         details = dict(zip((place.ref_id for place in missing), details))
         candidates = []
         for place in places[:10]:
@@ -671,12 +678,13 @@ class NavigationWorkflow:
                 pass
         reachable = []
         indexed = [
-            (index, place) for index, place in enumerate(candidates)
+            (index, place)
+            for index, place in enumerate(candidates)
             if not (distances and index < len(distances) and (distances[index] is None or distances[index] < 0))
         ]
-        routes = await read_many(self.services.navigation, [
-            ("route", (coordinates(origin), coordinates(place)), {}) for _, place in indexed
-        ])
+        routes = await read_many(
+            self.services.navigation, [("route", (coordinates(origin), coordinates(place)), {}) for _, place in indexed]
+        )
         for (index, place), route in zip(indexed, routes):
             if isinstance(route, Exception):
                 continue
@@ -795,9 +803,11 @@ class NavigationWorkflow:
             try:
                 async with asyncio.timeout(read_budget(getattr(self.discovery, "budget_seconds", 8))):
                     work = self.discovery.discover(nav.route)
-                    discovered = await self.services.navigation.run_read(work) if hasattr(
-                        self.services.navigation, "run_read"
-                    ) else await work
+                    discovered = (
+                        await self.services.navigation.run_read(work)
+                        if hasattr(self.services.navigation, "run_read")
+                        else await work
+                    )
             except TimeoutError:
                 discovered = StationDiscovery(incomplete=True, errors=["station_search_budget"])
             stations = discovered.stations
@@ -825,11 +835,12 @@ class NavigationWorkflow:
         points = {"origin": origin, "destination": destination, **{s.id: (s.lat, s.lng) for s in stations}}
         if round_trip:
             points["return"] = origin
+
         async def collect_edges(pairs):
             pairs = list(pairs)
-            results = await read_many(self.services.navigation, [
-                ("route", (points[a], points[b]), {}) for a, b in pairs
-            ])
+            results = await read_many(
+                self.services.navigation, [("route", (points[a], points[b]), {}) for a, b in pairs]
+            )
             for (a, b), result in zip(pairs, results):
                 if isinstance(result, (VietMapError, TimeoutError)):
                     assessment["routing_incomplete"] = True
@@ -866,17 +877,33 @@ class NavigationWorkflow:
                     ]
                 powered = EnergyPlanner(self.energy.profile, stations).compatible_stations()
                 progress = {s.id: s.route_progress_m for s in powered}
+                capacities = {s.id: s.max_soc for s in powered}
+                from src.vivi.navigation.charging import distance
+
                 await collect_edges(
                     (a, b)
                     for a in ["origin", *(["destination"] if round_trip else []), *(s.id for s in powered)]
                     if a != "destination" or round_trip
                     for b in ["destination", *(["return"] if round_trip else []), *(s.id for s in powered)]
-                    if b != "origin" and a != b and (a, b) not in edges
+                    if b != "origin"
+                    and a != b
+                    and (a, b) not in edges
                     # One-way corridor plans visit later route segments. Avoid
                     # expanding permutations that drive back through earlier
                     # chargers and exhaust the bounded solver before arrival.
-                    and not (self.discovery and not round_trip and a in progress and b in progress
-                             and progress[a] is not None and progress[b] is not None and progress[b] <= progress[a])
+                    and not (
+                        self.discovery
+                        and not round_trip
+                        and a in progress
+                        and b in progress
+                        and progress[a] is not None
+                        and progress[b] is not None
+                        and progress[b] <= progress[a]
+                    )
+                    # Air distance is a lower bound on every road route. Do
+                    # not request roads that cannot fit even a full charge.
+                    and self.energy.soc_cost(distance(points[a], points[b]))
+                    <= capacities.get(a, soc if a == "origin" else 100) - self.energy.reserve
                 )
         except TimeoutError:
             logger.warning("Charging route calculation budget exceeded", exc_info=True)
@@ -1024,20 +1051,6 @@ class NavigationWorkflow:
         nav.selected["spoken_label"] = name
         energy = nav.energy or {}
         suffix = energy.get("message", "")
-        plan = energy.get("selected_plan")
-        if plan:
-            suffix = f" Dự kiến còn khoảng {math.floor(plan['arrival_soc'])}% pin khi đến."
-            if plan["stops"]:
-                suffix += (
-                    " Dừng sạc: "
-                    + "; ".join(
-                        f"{station_label(s)}"
-                        + (f", gần {s['road_context']}" if s.get("road_context") else "")
-                        + f" khoảng {math.ceil(s['charge_minutes'])} phút"
-                        for s in plan["stops"]
-                    )
-                    + "."
-                )
         if energy.get("status") in {
             "no_feasible_plan",
             "charging_required",
@@ -1163,7 +1176,10 @@ class NavigationWorkflow:
         nav.candidates, nav.clarification, nav.pending = [], None, None
         result = self.result(
             nav,
-            "Đã thay tuyến. Chuyển D để tiếp tục." if keep_parked else "Đã bắt đầu dẫn đường.",
+            "Đã thay tuyến. Chuyển D để tiếp tục."
+            if keep_parked
+            else "Đã bắt đầu dẫn đường."
+            + (" " + next_leg_message(nav) if ((nav.energy or {}).get("selected_plan") or {}).get("stops") else ""),
             "completed",
             "navigation.start",
         )
@@ -1257,7 +1273,7 @@ class NavigationWorkflow:
         except ValueError as exc:
             return {"status": "blocked", "message": str(exc), "error_code": "simulation_policy"}
         nav.status, nav.resume_status = nav.resume_status, None
-        result = self.result(nav, "Đã chuyển D, tiếp tục hành trình.", "completed", "navigation.resume")
+        result = self.result(nav, resume_message(nav), "completed", "navigation.resume")
         result["vehicle_state"] = vehicle.model_dump(mode="json")
         return result
 
@@ -1562,7 +1578,14 @@ class NavigationWorkflow:
                 nav.status = "completed"
                 await vehicle_effect(self.services.action_gateway.vehicle.set_driving, event.session_id, False)
         nav.applied_events = [*nav.applied_events[-99:], value.id]
-        result = self.result(nav, "", "completed", "navigation.progress")
+        message, ui_type = "", "navigation.progress"
+        if value.kind == "progress" and nav.status == "charging" and session.navigation.status != "charging":
+            message, ui_type = charging_message(nav), "navigation.charging"
+        elif value.kind == "charge" and nav.stop_index > session.navigation.stop_index:
+            message, ui_type = "Đã sạc đủ pin. " + next_leg_message(nav), "navigation.next_leg"
+        result = self.result(nav, message, "completed", ui_type)
+        if message:
+            result["ui_events"][0].update(message=message, id=value.id, route_id=nav.route_id)
         if value.kind in {"progress", "charge"}:
             observed = await self.services.action_gateway.vehicle.get_state(event.session_id)
             result["vehicle_state"] = observed.model_dump(mode="json")

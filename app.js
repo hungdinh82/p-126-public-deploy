@@ -1,4 +1,4 @@
-import { closeJourney, initJourney, openJourney, applyNavigation, getJourneyPosition, setJourneyMotionBlocked, resetJourneyRuntime } from './journey.js?v=23';
+import { closeJourney, initJourney, openJourney, applyNavigation, getJourneyPosition, setJourneyMotionBlocked, resetJourneyRuntime } from './journey.js?v=24';
 import { GearController } from './navigation-state.js?v=2';
 import { NavigationStore, MissingRouteError } from './navigation-store.js?v=1';
 import { createCabinMusic } from './music.js?v=2';
@@ -233,7 +233,7 @@ function updateHud() {
   const driving = state.driving && !gearController.frozen;
   const speed = driving ? Math.round(nav?.speedKmh ?? cruise.speed) : 0;
   $('#gear-letter').textContent = state.driving ? 'D' : 'P';
-  $('#mode-label').textContent = gearController.status!=='idle' ? (gearController.status==='unknown'?'CHƯA ĐỒNG BỘ':gearController.status==='syncing'?'ĐANG ĐỒNG BỘ':`ĐANG CHUYỂN ${gearController.desired}`) : driving ? (nav ? `ĐẾN ${nav.destination.toUpperCase()}` : 'ĐANG DI CHUYỂN') : 'ĐỖ XE';
+  $('#mode-label').textContent = gearController.status!=='idle' ? (gearController.status==='unknown'?'CHƯA ĐỒNG BỘ':gearController.status==='syncing'?'ĐANG ĐỒNG BỘ':`ĐANG CHUYỂN ${gearController.desired}`) : driving ? (nav ? `ĐẾN ${nav.destination.toUpperCase()}` : 'ĐANG DI CHUYỂN') : nav?.chargingMinutes != null ? `ĐANG SẠC · CÒN KHOẢNG ${nav.chargingMinutes} PHÚT` : 'ĐỖ XE';
   $('#hud-primary').innerHTML = driving ? `${speed}<small>km/h</small>` : `${state.battery}<small>%</small>`;
   $('#hud-primary-label').textContent = driving ? 'TỐC ĐỘ' : 'PIN';
   $('#hud-range').textContent = driving ? `Pin ${state.battery}% · ${state.range} km` : `${state.range} km`;

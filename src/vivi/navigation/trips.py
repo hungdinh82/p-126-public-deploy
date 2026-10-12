@@ -121,7 +121,7 @@ class TripWorkflow(NavigationWorkflow):
             {
                 "profile": self.energy.profile.model_dump(mode="json") if self.energy.profile else None,
                 "assumptions": assumptions.model_dump(mode="json") if assumptions else None,
-                "charging_algorithm": "corridor-coverage-2",
+                "charging_algorithm": "corridor-coverage-3",
             }
         )
 

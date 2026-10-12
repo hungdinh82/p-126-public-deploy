@@ -1044,7 +1044,7 @@ class OfflineParser:
         """Parse journey grammar into slots; vendor queries contain only names."""
         normalized = normalize_text(raw).strip()
         prefix = re.match(
-            r"^(?:(?:(?:lap|len) (?:ke hoach|lo trinh)|ke hoach|lo trinh|duong di)(?: di)?(?: va(?: lo trinh)? sac| sac)?(?: va di)?|(?:chi duong|dan duong|dan (?:toi|minh)|di|ve))(?: den| toi)?\s+(.+)$",
+            r"^(?:(?:(?:lap|len) (?:ke hoach|lo trinh)|ke hoach|lo trinh|duong di)(?: di)?(?: va(?: lo trinh)? sac| sac)?(?: va di)?|(?:chi duong|dan duong|dan (?:toi|minh)|dua (?:toi|minh)|di|ve))(?: den| toi)?\s+(.+)$",
             normalized,
         )
         if not prefix:
@@ -1402,6 +1402,11 @@ class OfflineParser:
             return bounded
         if bounded.negated or bounded.conditional or bounded.scheduled or bounded.conflicting:
             return bounded
+        journey = self.journey_arguments(text)
+        if journey and region_for(journey[1]["query"]):
+            # A newly named city/centre is destination evidence, not consent
+            # to select an unrelated POI handle left over from an old search.
+            return self.request("trip.plan" if journey[0] else "navigation.plan", journey[1])
         reference = self.place_reference(text, session)
         if reference:
             return reference

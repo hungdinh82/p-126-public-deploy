@@ -1,6 +1,7 @@
 """Destination evidence and configurable aliases, independent of graph routing."""
 
 import json
+import re
 from functools import lru_cache
 from pathlib import Path
 
@@ -13,17 +14,27 @@ def regions():
     return json.loads(path.read_text(encoding="utf-8"))["regions"]
 
 
+def center_requested(query):
+    return bool(re.match(r"^trung tam\s+", normalize_text(query or "").strip()))
+
+
+def region_name(query):
+    value = re.sub(r"[.,]+", " ", normalize_text(query or ""))
+    value = re.sub(r"\s+", " ", value).strip()
+    return re.sub(r"^trung tam\s+(?:cua\s+)?", "", value)
+
+
 def region_for(query):
-    value = normalize_text(query or "")
+    value = region_name(query)
     for region in regions():
         aliases = [region["name"], *region.get("aliases", [])]
         if any(
             value
             in {
-                normalize_text(name),
-                "tinh " + normalize_text(name),
-                "thanh pho " + normalize_text(name),
-                "tp " + normalize_text(name),
+                region_name(name),
+                "tinh " + region_name(name),
+                "thanh pho " + region_name(name),
+                "tp " + region_name(name),
             }
             for name in aliases
         ):
