@@ -55,7 +55,10 @@ def evaluate(dataset: Path, directory: Path) -> dict:
             if "driving" in case:
                 services.action_gateway.vehicle.set_driving(session, case["driving"])
             started = time.perf_counter()
-            output = graph.invoke({"input_text": case["query"], "session_id": session, "turn_id": case["id"]})["output"]
+            try:
+                output = graph.invoke({"input_text": case["query"], "session_id": session, "turn_id": case["id"]})["output"]
+            finally:
+                graph.close()
             latency = round((time.perf_counter() - started) * 1000, 2)
             memories = {item["key"]: item["value"] for item in services.memory.list(services.memory_profile_id)}
             vehicle = services.action_gateway.vehicle.state_for(session)

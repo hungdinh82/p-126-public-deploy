@@ -3,19 +3,24 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import math
 import time
 from datetime import UTC, datetime
 from typing import Literal
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from src.vivi.navigation.destinations import administrative_match, region_for
+from src.vivi.navigation.effects import vehicle_effect
 from src.vivi.navigation.energy import ChargingStation, EnergyPlanner
 from src.vivi.navigation.presentation import choice_message, place_label, route_summary, short_address, station_label
 from src.vivi.navigation.selection import decide_place, distinct_places
 from src.vivi.navigation.vietmap import VietMapError
+from src.vivi.turn_control import current_control
+
+logger = logging.getLogger(__name__)
 
 
 class Position(BaseModel):
@@ -29,20 +34,74 @@ class Position(BaseModel):
 
 class NavigationEvent(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    kind: Literal["position", "point", "progress", "charge", "select_plan"]
+    kind: Literal[
+        "position",
+        "point",
+        "progress",
+        "charge",
+        "select_plan",
+        "pause",
+        "resume",
+        "clear",
+        "gear",
+        "end",
+        "history_clear",
+    ]
     id: str = Field(min_length=1, max_length=100)
     revision: int = Field(ge=0)
     position: Position | None = None
     distance_m: float | None = Field(default=None, ge=0)
     elapsed_s: float | None = Field(default=None, ge=0, le=30)
+    gear: Literal["P", "D"] | None = None
     plan_id: str | None = None
+    target_id: str | None = Field(default=None, max_length=100)
+    client_id: str | None = Field(default=None, min_length=1, max_length=100)
+    control_sequence: int | None = Field(default=None, ge=1)
+    runtime_epoch: str | None = Field(default=None, max_length=100)
+    expected_vehicle_version: int | None = Field(default=None, ge=0)
+    expected_control_revision: int | None = Field(default=None, ge=0)
+
+    @model_validator(mode="after")
+    def ordered_control(self):
+        if (self.client_id is None) != (self.control_sequence is None):
+            raise ValueError("client_id and control_sequence must be provided together")
+        return self
 
 
 def coordinates(value):
     return value["lat"], value["lng"]
 
 
-def route_position(route, distance):
+async def read_many(client, operations):
+    if hasattr(client, "batch"):
+        return await client.batch(operations)
+    semaphore = asyncio.Semaphore(3)
+
+    async def single(operation):
+        async with semaphore:
+            name, args, kwargs = operation
+            try:
+                return await getattr(client, name)(*args, **kwargs)
+            except (VietMapError, TimeoutError) as exc:
+                return exc
+
+    async with asyncio.TaskGroup() as group:
+        tasks = [group.create_task(single(operation)) for operation in operations]
+    return [task.result() for task in tasks]
+
+
+def read_budget(maximum):
+    control = current_control.get()
+    # Reserve time for the domain commit, response, checkpoint and turn receipt.
+    return max(0.01, min(maximum, control.deadline - time.monotonic() - 5)) if control else maximum
+
+
+async def route_position(route, distance):
+    """Interpolate off the event loop; the worker only reads the route."""
+    return await asyncio.to_thread(_route_position, route, distance)
+
+
+def _route_position(route, distance):
     points = route["coordinates"]
     lengths = []
     for a, b in zip(points, points[1:]):
@@ -52,7 +111,7 @@ def route_position(route, distance):
             + math.cos(lat1) * math.cos(lat2) * math.sin(math.radians(b[0] - a[0]) / 2) ** 2
         )
         lengths.append(6371000 * 2 * math.asin(min(1, math.sqrt(angle))))
-    remaining = min(1, distance / max(1, route["distance_m"])) * sum(lengths)
+    remaining = max(0, min(1, distance / max(1, route["distance_m"]))) * sum(lengths)
     for a, b, length in zip(points, points[1:], lengths):
         if remaining <= length:
             ratio = remaining / max(1e-9, length)
@@ -64,6 +123,18 @@ def route_position(route, distance):
             }
         remaining -= length
     return {"lat": points[-1][1], "lng": points[-1][0], "label": "Vị trí mô phỏng hiện tại", "simulated": True}
+
+
+async def current_origin(nav):
+    """Use the actual last position rather than the route's departure point."""
+    if nav.route and nav.status in {"running", "charging", "paused", "completed", "ended"}:
+        distance = nav.route["distance_m"] if nav.status == "completed" else nav.progress_m
+        return await route_position(nav.route, distance)
+    return nav.origin
+
+
+def has_active_journey(nav):
+    return nav.status in {"running", "charging"} or nav.status == "paused" and nav.resume_status is not None
 
 
 class NavigationWorkflow:
@@ -92,7 +163,7 @@ class NavigationWorkflow:
             ],
         }
         nav.candidates = []
-        if nav.status in {"running", "charging"}:
+        if has_active_journey(nav):
             nav.pending = {"status": "selecting", "message": question}
         else:
             nav.status = "selecting"
@@ -103,34 +174,46 @@ class NavigationWorkflow:
     async def execute(self, event, session, step, arguments, command_id, effective_provider="rules"):
         nav = session.navigation.model_copy(deep=True)
         name = step.draft.capability
+        if name == "navigation.set_gear":
+            return await self.event(
+                event.model_copy(
+                    update={
+                        "navigation_event": {
+                            "kind": "gear",
+                            "gear": arguments["gear"],
+                            "id": command_id,
+                            "revision": nav.revision,
+                        }
+                    }
+                ),
+                session,
+            )
         binding_arguments = dict(arguments)
         if name in {"navigation.plan", "navigation.search"} and not (
             step.result and step.result.get("status") == "waiting_slot"
         ):
             nav.request_id = "nav:" + str(uuid4())
+        if name == "navigation.decline":
+            if arguments.get("route_revision") != nav.revision:
+                return {"status": "blocked", "message": "Tuyến đã thay đổi."}
+            target = nav.pending.get("navigation") if nav.pending else None
+            offer = target.get("offer") if target else nav.offer
+            if offer:
+                offer["status"] = "declined"
+            return self.result(nav, "Mình giữ kế hoạch để bạn xem lại.", "completed", "navigation.decline")
         if name == "navigation.cancel":
             if arguments["route_revision"] != nav.revision:
                 return {"status": "blocked", "message": "Yêu cầu đã thay đổi.", "error_code": "stale_route"}
             nav.revision += 1
             nav.clarification, nav.pending, nav.candidates = None, None, []
-            if nav.status not in {"running", "charging"}:
+            if not has_active_journey(nav):
                 nav.status, nav.selected, nav.route, nav.energy = "idle", None, None, None
                 nav.summary, nav.alternatives = None, []
             return self.result(nav, "Đã huỷ tìm địa điểm.", "completed", "navigation.cancel")
+        if name == "navigation.end":
+            return await self.end(event, nav)
         if name == "navigation.stop":
-            nav.clarification = None
-            nav.candidates = []
-            nav.pending = None
-            vehicle = None
-            if hasattr(self.services.action_gateway.vehicle, "set_driving"):
-                vehicle = await asyncio.to_thread(
-                    self.services.action_gateway.vehicle.set_driving, event.session_id, False
-                )
-            nav.status = "paused" if nav.route else "idle"
-            result = self.result(nav, "Mình đã dừng hành trình.", "completed", "navigation.stop")
-            if vehicle:
-                result["vehicle_state"] = vehicle.model_dump(mode="json")
-            return result
+            return await self.pause(event, nav)
         if self.services.navigation is None:
             return {
                 "status": "blocked",
@@ -142,6 +225,9 @@ class NavigationWorkflow:
                 from src.vivi.dialogue.contracts import NavigationState
 
                 nav = NavigationState.model_validate(nav.pending["navigation"])
+            refreshed = await self.revalidate_preview(event, nav, session.navigation, step, arguments, command_id)
+            if refreshed is not None:
+                return refreshed
             binding = {
                 "command_id": command_id,
                 "capability": name,
@@ -161,6 +247,30 @@ class NavigationWorkflow:
                 }
             return await self.start(event, nav, command_id, arguments, name)
         if name == "navigation.start":
+            from src.vivi.dialogue.contracts import NavigationState
+
+            candidate = nav
+            if nav.pending and nav.pending.get("navigation"):
+                candidate = NavigationState.model_validate(nav.pending["navigation"])
+            offer = candidate.offer
+            if arguments.get("route_revision") == nav.revision and offer and not candidate.clarification:
+                refreshed = await self.revalidate_preview(event, candidate, nav, step, arguments, command_id)
+                if refreshed is not None:
+                    return refreshed
+                binding = offer["binding"]
+                consumed = await asyncio.to_thread(
+                    self.services.action_gateway.confirmations.consume_generic,
+                    event.session_id,
+                    offer["grant"]["confirmation_id"],
+                    binding,
+                )
+                if not consumed:
+                    renewed = await self.preview(event, candidate, step, arguments, command_id, nav, brief=True)
+                    renewed["message"] = "Xác nhận trước không còn hiệu lực. " + renewed["message"]
+                    return renewed
+                keep_parked = nav.status == "paused" and nav.resume_status is not None
+                candidate.offer = None
+                return await self.start(event, candidate, command_id, arguments, keep_parked=keep_parked)
             if nav.trip_kind is None:
                 return {
                     "status": "blocked",
@@ -184,8 +294,8 @@ class NavigationWorkflow:
             return await self.preview(event, nav, step, arguments, command_id, brief=nav.status == "preview")
         if event.position:
             nav.origin = Position.model_validate(event.position).model_dump(mode="json")
-        elif nav.status in {"running", "charging"} and nav.route:
-            nav.origin = route_position(nav.route, nav.progress_m)
+        elif nav.status in {"running", "charging", "paused", "completed"} and nav.route:
+            nav.origin = await current_origin(nav)
         if (
             step.result
             and step.result.get("status") == "waiting_confirmation"
@@ -344,7 +454,7 @@ class NavigationWorkflow:
             nav.clarification = None
             nav.status = "selecting"
             nav.selected = None
-            if session.navigation.status not in {"running", "charging"}:
+            if not has_active_journey(session.navigation):
                 nav.route, nav.energy, nav.alternatives, nav.summary = None, None, [], None
             if not nav.candidates:
                 if representative:
@@ -358,7 +468,7 @@ class NavigationWorkflow:
                         revision=nav.revision,
                         question="Mình chưa xác minh được điểm đại diện. Bạn muốn đến địa điểm cụ thể nào?",
                     )
-                    if session.navigation.status in {"running", "charging"}:
+                    if has_active_journey(session.navigation):
                         active = session.navigation.model_copy(deep=True)
                         active.revision, active.clarification, active.candidates = nav.revision, nav.clarification, []
                         active.pending = {"status": "selecting", "message": nav.clarification["question"]}
@@ -395,7 +505,7 @@ class NavigationWorkflow:
                 message = (
                     "Chọn điểm đến cụ thể: " if arguments.get("destination_scope") == "region" else ""
                 ) + choice_message(nav.candidates)
-                if session.navigation.status in {"running", "charging"}:
+                if has_active_journey(session.navigation):
                     active = session.navigation.model_copy(deep=True)
                     active.candidates, active.revision = nav.candidates, nav.revision
                     active.clarification = None
@@ -422,8 +532,12 @@ class NavigationWorkflow:
         if nav.trip_kind == "round_trip":
             try:
                 returning = await self.services.navigation.route(coordinates(selected), coordinates(nav.origin))
-            except Exception:
+            except (VietMapError, TimeoutError):
+                logger.warning(
+                    "Return route unavailable session=%s turn=%s", event.session_id, event.turn_id, exc_info=True
+                )
                 nav.energy = {
+                    "error_code": "return_route_unavailable",
                     "status": "incomplete",
                     "message": "Chưa tính được đường về; kế hoạch khứ hồi chưa hoàn chỉnh.",
                 }
@@ -434,8 +548,12 @@ class NavigationWorkflow:
                 {"legs": nav.waypoint_routes, "distance_m": sum(r["distance_m"] for r in nav.waypoint_routes)}
             )
         nav.revision += 1
+        nav.route_id = "route:" + str(uuid4())
+        nav.pending, nav.resume_status = None, None
         observed = await self.services.action_gateway.vehicle.get_state(event.session_id)
         nav.initial_soc, nav.progress_m, nav.stop_index = observed.battery_percent, 0, 0
+        nav.simulated_soc, nav.charge_elapsed_s = None, 0
+        nav.last_assessment_m, nav.last_assessment_soc, nav.alerts = 0, None, []
         if self.energy.profile and (
             self.energy.profile.vehicle_model != event.vehicle_model
             or self.energy.profile.model_year != event.model_year
@@ -469,7 +587,7 @@ class NavigationWorkflow:
                     {"handle": "choice:" + str(uuid4()), "label": "Đổi địa điểm", "kind": "specific"},
                 ],
             }
-            if session.navigation.status in {"running", "charging"}:
+            if has_active_journey(session.navigation):
                 active = session.navigation.model_copy(deep=True)
                 active.revision, active.request_id, active.clarification, active.candidates = (
                     nav.revision,
@@ -493,6 +611,11 @@ class NavigationWorkflow:
         if category and categories.get(category):
             kwargs["category"] = categories[category]
         places = await self.services.navigation.search(arguments["query"], **kwargs)
+        missing = [place for place in places[:10] if place.lat is None or place.lng is None]
+        details = await read_many(
+            self.services.navigation, [("place", (place.ref_id,), {}) for place in missing]
+        )
+        details = dict(zip((place.ref_id for place in missing), details))
         candidates = []
         for place in places[:10]:
             if representative and not administrative_match(place.model_dump(), arguments["query"].split(",")[0]):
@@ -511,13 +634,12 @@ class NavigationWorkflow:
                 if not poi_matches(place.name, category):
                     continue
             if place.lat is None or place.lng is None:
-                try:
-                    detail = await self.services.navigation.place(place.ref_id)
-                    place = place.model_copy(
-                        update={"lat": detail.lat, "lng": detail.lng, "address": place.address or detail.address}
-                    )
-                except Exception:
+                detail = details.get(place.ref_id)
+                if detail is None or isinstance(detail, Exception):
                     continue
+                place = place.model_copy(
+                    update={"lat": detail.lat, "lng": detail.lng, "address": place.address or detail.address}
+                )
                 if category and not categories.get(category) and not poi_matches(place.name, category):
                     continue
             if place.lat is None or place.lng is None:
@@ -548,12 +670,15 @@ class NavigationWorkflow:
             except Exception:
                 pass
         reachable = []
-        for index, place in enumerate(candidates):
-            if distances and index < len(distances) and (distances[index] is None or distances[index] < 0):
-                continue
-            try:
-                route = await self.services.navigation.route(coordinates(origin), coordinates(place))
-            except Exception:
+        indexed = [
+            (index, place) for index, place in enumerate(candidates)
+            if not (distances and index < len(distances) and (distances[index] is None or distances[index] < 0))
+        ]
+        routes = await read_many(self.services.navigation, [
+            ("route", (coordinates(origin), coordinates(place)), {}) for _, place in indexed
+        ])
+        for (index, place), route in zip(indexed, routes):
+            if isinstance(route, Exception):
                 continue
             place["distance_m"], place["duration_s"] = route.distance_m, route.duration_s
             place["_rank_distance"] = (
@@ -567,6 +692,85 @@ class NavigationWorkflow:
         for place in reachable:
             place.pop("_rank_distance")
         return reachable[:3]
+
+    async def revalidate_preview(self, event, nav, current, step, arguments, command_id):
+        observed = await self.services.action_gateway.vehicle.get_state(event.session_id)
+        origin = event.position or await current_origin(current) or nav.origin
+        moved = (
+            math.hypot((origin["lat"] - nav.origin["lat"]) * 111000, (origin["lng"] - nav.origin["lng"]) * 103000) > 100
+        )
+        if not moved and nav.initial_soc is not None and abs(observed.battery_percent - nav.initial_soc) < 1:
+            return None
+        candidate = nav.model_copy(deep=True)
+        candidate.origin = origin
+        try:
+            await self.refresh_remaining_route(candidate, nav)
+            candidate.energy, candidate.alternatives = await self.plan_energy(
+                candidate, observed.battery_percent, "rules"
+            )
+        except (VietMapError, TimeoutError):
+            logger.warning(
+                "Route confirmation revalidation unavailable session=%s turn=%s",
+                event.session_id,
+                event.turn_id,
+                exc_info=True,
+            )
+            return {
+                "status": "blocked",
+                "message": "Vị trí hoặc pin đã thay đổi; chưa cập nhật được tuyến. Bạn tính lại nhé.",
+                "error_code": "route_revalidation_unavailable",
+            }
+        candidate.revision = max(nav.revision, current.revision) + 1
+        candidate.route_id = "route:" + str(uuid4())
+        candidate.initial_soc, candidate.progress_m, candidate.stop_index = observed.battery_percent, 0, 0
+        candidate.simulated_soc, candidate.charge_elapsed_s = None, 0
+        candidate.last_assessment_m, candidate.last_assessment_soc, candidate.alerts = 0, None, []
+        candidate.status = "preview"
+        plan = (candidate.energy or {}).get("selected_plan")
+        if plan:
+            candidate.route = self.compose_route(plan)
+        result = await self.preview(event, candidate, step, arguments, command_id, current)
+        result["message"] = "Vị trí hoặc pin đã thay đổi; mình cập nhật tuyến. " + result["message"]
+        return result
+
+    async def refresh_remaining_route(self, candidate, previous):
+        if previous.trip_kind == "round_trip":
+            traveled, outbound_end = 0, None
+            for leg in ((previous.energy or {}).get("selected_plan") or {}).get("legs", []):
+                traveled += leg["distance_m"]
+                if leg.get("to") == "destination":
+                    outbound_end = traveled
+                    break
+            if outbound_end is None:
+                if len(previous.waypoint_routes) != 2:
+                    raise VietMapError("Missing round-trip waypoint evidence")
+                outbound_end = previous.waypoint_routes[0]["distance_m"]
+            if previous.progress_m >= outbound_end:
+                # Once the outward destination is passed, route only to the
+                # original endpoint, never back to that outward destination.
+                lng, lat = previous.route["coordinates"][-1]
+                candidate.trip_kind = "one_way"
+                candidate.selected = {
+                    "lat": lat,
+                    "lng": lng,
+                    "name": (previous.origin or {}).get("label", "Điểm xuất phát ban đầu"),
+                    "address": "",
+                    "handle": "place:" + str(uuid4()),
+                }
+            else:
+                outgoing = await self.services.navigation.route(
+                    coordinates(candidate.origin), coordinates(candidate.selected)
+                )
+                lng, lat = previous.route["coordinates"][-1]
+                returning = await self.services.navigation.route(coordinates(candidate.selected), (lat, lng))
+                candidate.waypoint_routes = [outgoing.model_dump(), returning.model_dump()]
+                candidate.route = self.compose_route(
+                    {"legs": candidate.waypoint_routes, "distance_m": outgoing.distance_m + returning.distance_m}
+                )
+                return
+        route = await self.services.navigation.route(coordinates(candidate.origin), coordinates(candidate.selected))
+        candidate.waypoint_routes = [route.model_dump()]
+        candidate.route = route.model_dump()
 
     async def plan_energy(self, nav, soc, provider):
         assessment = self.energy.assess(nav.route, soc)
@@ -586,7 +790,16 @@ class NavigationWorkflow:
             return {**assessment, "selected_plan": choices[0]}, choices
         started = time.monotonic()
         if self.discovery:
-            discovered = await self.discovery.discover(nav.route)
+            from src.vivi.navigation.charging import StationDiscovery
+
+            try:
+                async with asyncio.timeout(read_budget(getattr(self.discovery, "budget_seconds", 8))):
+                    work = self.discovery.discover(nav.route)
+                    discovered = await self.services.navigation.run_read(work) if hasattr(
+                        self.services.navigation, "run_read"
+                    ) else await work
+            except TimeoutError:
+                discovered = StationDiscovery(incomplete=True, errors=["station_search_budget"])
             stations = discovered.stations
             assessment["station_search"] = {
                 "source": "vietmap",
@@ -612,23 +825,27 @@ class NavigationWorkflow:
         points = {"origin": origin, "destination": destination, **{s.id: (s.lat, s.lng) for s in stations}}
         if round_trip:
             points["return"] = origin
-        semaphore = asyncio.Semaphore(4)
-
-        async def edge(a, b):
-            async with semaphore:
-                try:
-                    route = await self.services.navigation.route(points[a], points[b])
-                    edges[a, b] = route.model_dump()
-                except Exception:
+        async def collect_edges(pairs):
+            pairs = list(pairs)
+            results = await read_many(self.services.navigation, [
+                ("route", (points[a], points[b]), {}) for a, b in pairs
+            ])
+            for (a, b), result in zip(pairs, results):
+                if isinstance(result, (VietMapError, TimeoutError)):
                     assessment["routing_incomplete"] = True
+                    assessment.setdefault("routing_errors", []).append(
+                        {"from": a, "to": b, "error_type": type(result).__name__}
+                    )
+                elif isinstance(result, Exception):
+                    raise result
+                else:
+                    edges[a, b] = result.model_dump()
 
         try:
-            async with asyncio.timeout(max(0.01, 25 - (time.monotonic() - started))):
+            async with asyncio.timeout(read_budget(max(0.01, 25 - (time.monotonic() - started)))):
                 # Both legs are mandatory. A rest area on the opposite
                 # carriageway may require a long detour despite looking nearby.
-                await asyncio.gather(
-                    *(edge(a, b) for s in stations for a, b in (("origin", s.id), (s.id, "destination")))
-                )
+                await collect_edges((a, b) for s in stations for a, b in (("origin", s.id), (s.id, "destination")))
                 if self.discovery and not round_trip:
                     stations = [
                         s.model_copy(
@@ -648,17 +865,17 @@ class NavigationWorkflow:
                         <= nav.route["distance_m"] + self.discovery.max_detour_m
                     ]
                 powered = EnergyPlanner(self.energy.profile, stations).compatible_stations()
-                await asyncio.gather(
-                    *(
-                        edge(a, b)
-                        for a in ["origin", *(["destination"] if round_trip else []), *(s.id for s in powered)]
-                        if a != "destination" or round_trip
-                        for b in ["destination", *(["return"] if round_trip else []), *(s.id for s in powered)]
-                        if b != "origin" and a != b and (a, b) not in edges
-                    )
+                await collect_edges(
+                    (a, b)
+                    for a in ["origin", *(["destination"] if round_trip else []), *(s.id for s in powered)]
+                    if a != "destination" or round_trip
+                    for b in ["destination", *(["return"] if round_trip else []), *(s.id for s in powered)]
+                    if b != "origin" and a != b and (a, b) not in edges
                 )
         except TimeoutError:
+            logger.warning("Charging route calculation budget exceeded", exc_info=True)
             assessment["routing_incomplete"] = True
+            assessment.setdefault("routing_errors", []).append({"error_type": "TimeoutError", "stage": "route_budget"})
             if self.discovery and not round_trip:
                 stations = [
                     s
@@ -832,7 +1049,7 @@ class NavigationWorkflow:
                     f"cách khoảng {round(first['distance_m'] / 1000)} km. {suffix} "
                     "Bạn có thể chọn đến trạm một."
                 )
-            if previous and previous.status in {"running", "charging"}:
+            if previous and has_active_journey(previous):
                 previous = previous.model_copy(deep=True)
                 nav.pending = None
                 previous.pending = {
@@ -854,14 +1071,15 @@ class NavigationWorkflow:
         grant = await asyncio.to_thread(
             self.services.action_gateway.confirmations.create_generic, event.session_id, binding, message
         )
-        if previous and previous.status in {"running", "charging"}:
+        nav.offer = {"grant": grant, "binding": binding, "question": message, "status": "pending"}
+        if previous and has_active_journey(previous):
             active = previous.model_copy(deep=True)
             active.revision = nav.revision
             active.clarification, active.candidates = None, []
             nav.pending = None
             active.pending = {"status": "preview", "navigation": nav.model_dump(mode="json"), "message": message}
             nav = active
-        result = self.result(nav, message, "waiting_confirmation", "navigation.preview")
+        result = self.result(nav, message, "completed", "navigation.preview")
         result.update(
             confirmation=grant,
             action={"intent": step.draft.capability, "arguments": arguments},
@@ -869,7 +1087,7 @@ class NavigationWorkflow:
         )
         return result
 
-    async def start(self, event, nav, command_id, arguments, capability="navigation.start"):
+    async def start(self, event, nav, command_id, arguments, capability="navigation.start", *, keep_parked=False):
         assumed_stops = [
             s
             for s in ((nav.energy or {}).get("selected_plan") or {}).get("stops", [])
@@ -930,9 +1148,19 @@ class NavigationWorkflow:
                 command_id,
                 {"intent": capability, "arguments": arguments},
             )
-        vehicle = await asyncio.to_thread(self.services.action_gateway.vehicle.set_driving, event.session_id, True)
-        nav.status = "running"
-        result = self.result(nav, "Đã bắt đầu dẫn đường.", "completed", "navigation.start")
+        vehicle = await vehicle_effect(
+            self.services.action_gateway.vehicle.set_driving, event.session_id, not keep_parked
+        )
+        nav.status = "paused" if keep_parked else "running"
+        nav.resume_status = "running" if keep_parked else None
+        nav.offer = None
+        nav.candidates, nav.clarification, nav.pending = [], None, None
+        result = self.result(
+            nav,
+            "Đã thay tuyến. Chuyển D để tiếp tục." if keep_parked else "Đã bắt đầu dẫn đường.",
+            "completed",
+            "navigation.start",
+        )
         result.update(
             verified=True,
             vehicle_state=vehicle.model_dump(mode="json"),
@@ -947,6 +1175,84 @@ class NavigationWorkflow:
         )
         if self.ledger:
             await asyncio.to_thread(self.ledger.finish_command, event.session_id, command_id, result)
+        return result
+
+    async def end(self, event, nav):
+        if not nav.route or nav.status not in {"running", "charging", "paused"}:
+            return {"status": "blocked", "message": "Không có hành trình đang hoạt động."}
+        result = await self.pause(event, nav)
+        nav.status, nav.resume_status = "ended", None
+        nav.offer = None
+        ended = self.result(nav, "Đã kết thúc hành trình.", "completed", "navigation.end")
+        ended["vehicle_state"] = result.get("vehicle_state")
+        return ended
+
+    async def pause(self, event, nav):
+        if nav.status in {"running", "charging"}:
+            nav.resume_status, nav.status = nav.status, "paused"
+        vehicle = None
+        if hasattr(self.services.action_gateway.vehicle, "set_driving"):
+            vehicle = await vehicle_effect(self.services.action_gateway.vehicle.set_driving, event.session_id, False)
+        message = "Đã về P, hành trình tạm dừng. Chuyển D để tiếp tục." if nav.status == "paused" else "Đã chuyển về P."
+        result = self.result(nav, message, "completed", "navigation.pause")
+        if vehicle:
+            result["vehicle_state"] = vehicle.model_dump(mode="json")
+        return result
+
+    async def resume(self, event, nav):
+        if nav.status != "paused" or not nav.route:
+            return {"status": "blocked", "message": "Không có hành trình đang tạm dừng.", "error_code": "not_paused"}
+        if nav.resume_status is None:
+            # Legacy previews may have been marked paused without ever starting.
+            result = self.result(
+                nav, "Bạn xác nhận lại tuyến trước khi tiếp tục nhé.", "completed", "navigation.preview"
+            )
+            result["request_action"] = {"capability": "navigation.start", "arguments": {"route_revision": nav.revision}}
+            return result
+        if not hasattr(self.services.action_gateway.vehicle, "set_driving"):
+            return {"status": "blocked", "message": "Xe hiện tại chưa hỗ trợ chuyển D qua mô phỏng."}
+        observed = await self.services.action_gateway.vehicle.get_state(event.session_id)
+        if any(door.open for _, door in observed.door_states) or observed.hood_open or observed.trunk_open:
+            return {
+                "status": "blocked",
+                "message": "Chưa thể chuyển D khi cửa, capo hoặc cốp đang mở.",
+                "error_code": "simulation_policy",
+            }
+        if self.energy.profile and nav.resume_status == "running":
+            next_distance = nav.route["distance_m"]
+            plan = (nav.energy or {}).get("selected_plan") or {}
+            stops = plan.get("stops", [])
+            if nav.stop_index < len(stops):
+                stop = stops[nav.stop_index]
+                end = stop.get("leg_index")
+                if end is None:
+                    end = next(
+                        (i for i, leg in enumerate(plan.get("legs", [])) if leg.get("to") == stop["station_id"]), None
+                    )
+                if end is not None:
+                    next_distance = sum(leg["distance_m"] for leg in plan["legs"][: end + 1])
+            if observed.battery_percent - self.energy.soc_cost(max(0, next_distance - nav.progress_m)) < 15:
+                return {
+                    "status": "blocked",
+                    "message": "Pin chưa đủ dự phòng tới điểm dừng tiếp theo. Bạn cập nhật kế hoạch sạc nhé.",
+                    "error_code": "insufficient_energy",
+                }
+        try:
+            vehicle = await vehicle_effect(
+                self.services.action_gateway.vehicle.set_driving,
+                event.session_id,
+                nav.resume_status == "running",
+                **(
+                    {"expected_state_version": event.navigation_event["expected_vehicle_version"]}
+                    if (event.navigation_event or {}).get("expected_vehicle_version") is not None
+                    else {}
+                ),
+            )
+        except ValueError as exc:
+            return {"status": "blocked", "message": str(exc), "error_code": "simulation_policy"}
+        nav.status, nav.resume_status = nav.resume_status, None
+        result = self.result(nav, "Đã chuyển D, tiếp tục hành trình.", "completed", "navigation.resume")
+        result["vehicle_state"] = vehicle.model_dump(mode="json")
         return result
 
     @staticmethod
@@ -969,8 +1275,79 @@ class NavigationWorkflow:
         nav = session.navigation.model_copy(deep=True)
         if value.id in nav.applied_events:
             return self.result(nav, "", "completed", "navigation.progress")
-        if value.revision != nav.revision:
+        if value.kind != "gear" and value.revision != nav.revision:
             return {"status": "blocked", "message": "Sự kiện thuộc tuyến cũ.", "error_code": "stale_route"}
+        if value.kind == "history_clear":
+            nav.applied_events = [*nav.applied_events[-99:], value.id]
+            result = self.result(nav, "Đã xoá lịch sử hành trình trong phiên.", "completed", "navigation.history_clear")
+            result["clear_navigation_history"] = True
+            return result
+        if value.kind == "gear":
+            if value.gear not in {"P", "D"}:
+                return {"status": "blocked", "message": "Thiếu trạng thái P hoặc D."}
+            if value.gear == "P":
+                if nav.status == "charging":
+                    result = self.result(nav, "Xe đang ở P để sạc.", "completed", "navigation.gear")
+                    result["vehicle_state"] = (
+                        await self.services.action_gateway.vehicle.get_state(event.session_id)
+                    ).model_dump(mode="json")
+                else:
+                    result = await self.pause(event, nav)
+            elif nav.status == "paused":
+                result = await self.resume(event, nav)
+            elif nav.status == "charging":
+                return {
+                    "status": "blocked",
+                    "message": "Xe đang sạc tới mức pin cần thiết để tiếp tục.",
+                    "error_code": "charging",
+                }
+            elif hasattr(self.services.action_gateway.vehicle, "set_driving"):
+                try:
+                    vehicle = await vehicle_effect(
+                        self.services.action_gateway.vehicle.set_driving,
+                        event.session_id,
+                        True,
+                        **(
+                            {"expected_state_version": value.expected_vehicle_version}
+                            if value.expected_vehicle_version is not None
+                            else {}
+                        ),
+                    )
+                except ValueError as exc:
+                    return {"status": "blocked", "message": str(exc), "error_code": "simulation_policy"}
+                result = self.result(nav, "Đã chuyển D.", "completed", "navigation.gear")
+                result["vehicle_state"] = vehicle.model_dump(mode="json")
+            else:
+                return {"status": "blocked", "message": "Xe chưa hỗ trợ đổi chế độ lái qua mô phỏng."}
+            if result.get("navigation_update"):
+                result["navigation_update"]["applied_events"] = [*nav.applied_events[-99:], value.id]
+            return result
+        if value.kind in {"pause", "resume", "clear", "end"}:
+            if value.kind == "pause":
+                result = await self.pause(event, nav)
+            elif value.kind == "resume":
+                result = await self.resume(event, nav)
+            elif value.kind == "end":
+                result = await self.end(event, nav)
+            else:
+                from src.vivi.dialogue.contracts import NavigationState
+
+                vehicle = await self.services.action_gateway.vehicle.get_state(event.session_id)
+                if nav.status in {"running", "charging"} or vehicle.driving:
+                    return {
+                        "status": "blocked",
+                        "message": "Chuyển P trước khi xoá hành trình.",
+                        "error_code": "journey_running",
+                    }
+                origin = await current_origin(nav)
+                nav = NavigationState(origin=origin, revision=nav.revision + 1)
+                result = self.result(
+                    nav, "Đã xoá tuyến và kế hoạch đã lưu trong phiên.", "completed", "navigation.clear"
+                )
+                result["clear_journey"] = True
+            if result.get("navigation_update"):
+                result["navigation_update"]["applied_events"] = [*nav.applied_events[-99:], value.id]
+            return result
         if value.kind == "point":
             nav.request_id = "nav:" + str(uuid4())
             if not value.position:
@@ -982,6 +1359,7 @@ class NavigationWorkflow:
                 "handle": "place:" + str(uuid4()),
             }
             nav.candidates = [place]
+            nav.clarification, nav.pending = None, None
             nav.applied_events = [*nav.applied_events[-99:], value.id]
             result = self.result(nav, "", "completed", "navigation.results")
             result["request_action"] = {
@@ -997,15 +1375,17 @@ class NavigationWorkflow:
             nav.origin = value.position.model_dump(mode="json")
         elif value.kind == "select_plan":
             target = nav
-            if nav.pending and nav.pending.get("navigation") and nav.status in {"running", "charging"}:
+            if nav.pending and nav.pending.get("navigation") and has_active_journey(nav):
                 from src.vivi.dialogue.contracts import NavigationState
 
                 target = NavigationState.model_validate(nav.pending["navigation"])
             plan = next((p for p in target.alternatives if p["id"] == value.plan_id), None)
             if not plan or target.status != "preview":
                 return {"status": "blocked", "message": "Phương án không thuộc tuyến xem trước hiện tại."}
+            target.offer = None
             target.energy["selected_plan"] = plan
             target.route = self.compose_route(plan)
+            target.route_id = "route:" + str(uuid4())
             nav.revision += 1
             target.revision = nav.revision
             if target is not nav:
@@ -1069,21 +1449,13 @@ class NavigationWorkflow:
                 nav.progress_m = min(value.distance_m, limit)
                 if nav.stop_index < len(stop_distances) and nav.progress_m >= limit:
                     nav.status = "charging"
+            if nav.status != session.navigation.status and nav.status in {"running", "charging"}:
+                await vehicle_effect(
+                    self.services.action_gateway.vehicle.set_driving, event.session_id, nav.status == "running"
+                )
             if self.energy.profile:
                 observed = await self.services.action_gateway.vehicle.get_state(event.session_id)
                 expected_observed = nav.simulated_soc if nav.simulated_soc is not None else nav.initial_soc
-                # The memory simulator starts empty after process restart. Restore
-                # its authorized journey energy from checkpoint, not from browser
-                # telemetry. This branch cannot issue effects through MQTT.
-                if observed.state_version == 0 and not observed.driving and expected_observed is not None:
-                    await asyncio.to_thread(
-                        self.services.action_gateway.vehicle.set_energy,
-                        event.session_id,
-                        expected_observed,
-                        expected_observed / self.energy.soc_cost(1000),
-                    )
-                    await asyncio.to_thread(self.services.action_gateway.vehicle.set_driving, event.session_id, True)
-                    observed = await self.services.action_gateway.vehicle.get_state(event.session_id)
                 if expected_observed is not None and abs(observed.battery_percent - math.floor(expected_observed)) >= 1:
                     nav.initial_soc += observed.battery_percent - expected_observed
                 charged = sum(s["departure_soc"] - s["arrival_soc"] for _, s in stop_distances[: nav.stop_index])
@@ -1143,21 +1515,22 @@ class NavigationWorkflow:
                             if announce:
                                 nav.last_alert_at, nav.last_alert_severity = now, severity
                             candidate = nav.model_copy(deep=True)
-                            candidate.origin = route_position(nav.route, nav.progress_m)
+                            candidate.origin = await route_position(nav.route, nav.progress_m)
                             candidate.pending, candidate.alerts = None, []
                             try:
-                                fresh = await self.services.navigation.route(
-                                    coordinates(candidate.origin), coordinates(nav.selected)
-                                )
-                                candidate.route = fresh.model_dump()
+                                await self.refresh_remaining_route(candidate, nav)
                                 candidate.energy, candidate.alternatives = await self.plan_energy(
                                     candidate, soc, "rules"
                                 )
                                 candidate.initial_soc, candidate.progress_m, candidate.stop_index = soc, 0, 0
+                                candidate.route_id = "route:" + str(uuid4())
+                                candidate.simulated_soc, candidate.charge_elapsed_s = None, 0
+                                candidate.last_assessment_m, candidate.last_assessment_soc = 0, None
                                 candidate.status = "preview"
                                 plan = candidate.energy.get("selected_plan")
                                 if plan:
                                     candidate.route = self.compose_route(plan)
+                                candidate.summary = route_summary(candidate, ask_start=False)
                                 nav.pending = {
                                     "status": candidate.energy["status"],
                                     "navigation": candidate.model_dump(mode="json"),
@@ -1165,7 +1538,13 @@ class NavigationWorkflow:
                                     if plan
                                     else "Không có trạm sạc có thể tới trong dữ liệu hiện tại.",
                                 }
-                            except Exception:
+                            except (VietMapError, TimeoutError):
+                                logger.warning(
+                                    "Charging replan unavailable session=%s turn=%s",
+                                    event.session_id,
+                                    event.turn_id,
+                                    exc_info=True,
+                                )
                                 nav.pending = {
                                     "status": "unavailable",
                                     "message": "Chưa tính lại được đường đến trạm sạc.",
@@ -1175,7 +1554,7 @@ class NavigationWorkflow:
                     nav.last_assessment_m, nav.last_assessment_soc = nav.progress_m, soc
             if nav.progress_m >= nav.route["distance_m"] and nav.status != "charging":
                 nav.status = "completed"
-                await asyncio.to_thread(self.services.action_gateway.vehicle.set_driving, event.session_id, False)
+                await vehicle_effect(self.services.action_gateway.vehicle.set_driving, event.session_id, False)
         nav.applied_events = [*nav.applied_events[-99:], value.id]
         result = self.result(nav, "", "completed", "navigation.progress")
         if value.kind in {"progress", "charge"}:

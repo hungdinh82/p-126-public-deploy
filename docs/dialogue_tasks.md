@@ -118,12 +118,11 @@ không phải bằng chứng model 1.7B đã đủ năng lực.
 - `tests/test_native_tools.py`: payload native, đúng một tool, validation, timeout.
 - Benchmark voice hỗ trợ episode, bộ nhớ tạm riêng, p50/p95 mỗi lượt và error_count.
   Mạng bên ngoài bị chặn trong eval; xe dùng simulator.
-- Kết quả rules: `eval/results/tasks-rules-dev.json`,
-  `conversation-tasks-dev.json`, `voice-tasks-dev.json`.
-- Kết quả SLM thật: `eval/results/tasks-local-native-dev.json`.
-  Hai báo cáo `tasks-local-native-before-guard.json` và
-  `tasks-local-native-before-stop.json` giữ nguyên những lần thử thất bại để tránh
-  che mất lỗi phát hiện trong quá trình kiểm tra.
+- Runner và kết quả LangGraph hiện tại: [eval](../eval/README.md),
+  [report](../eval/results/report.md). Các snapshot thử model cũ đã dọn;
+  có thể tra lịch sử Git nếu cần đối chiếu.
+
+Các số liệu bên dưới là lịch sử, không phải benchmark revision hiện tại.
 
 Lần chạy cuối: rules qua 6/6 task episode (14 lượt), 12/12 conversation episode
 (18 lượt) và 57/57 voice case. Local native sau các chặn đạt route/intent đúng trên

@@ -10,6 +10,8 @@ class TurnControl:
     deadline: float
     cancelled: threading.Event = field(default_factory=threading.Event)
     dispatched: bool = False
+    stage: str = "queue"
+    timings: dict = field(default_factory=dict)
     lock: threading.Lock = field(default_factory=threading.Lock)
 
     def cancel(self):

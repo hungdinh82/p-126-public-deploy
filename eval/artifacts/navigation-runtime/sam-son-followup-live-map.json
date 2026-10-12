@@ -1,0 +1,55 @@
+{
+  "maps": "live_vietmap",
+  "model": "semantic_fixture",
+  "turns": [
+    {
+      "text": "lập lộ trình đi và sạc tới bãi biển sầm sơn",
+      "wall_ms": 1387.36,
+      "status": "verified",
+      "calculation_status": "ready",
+      "trip_kind": "one_way",
+      "message": "Tuyến đến Bãi Biển Sầm Sơn Thanh Hóa, Phường Sầm Sơn, khoảng 177 km, 3 giờ 15 phút. Không cần dừng sạc. Bạn muốn bắt đầu hành trình này không?",
+      "latency_ms": {
+        "context": 3.05,
+        "interpret": 24.51,
+        "reducer": 0.72,
+        "scheduler": 30.82,
+        "validate": 5.12,
+        "navigation_search": 670.93,
+        "navigation_place_detail": 36.8,
+        "navigation_matrix": 46.09,
+        "navigation_route": 264.82,
+        "navigation_energy": 0.07,
+        "capability": 1080.53,
+        "total": 1363.28
+      },
+      "checkpoint_bytes": 21505,
+      "driving": false
+    },
+    {
+      "text": "tôi sẽ đến đấy chơi một chút xong quay về. lúc về cần sạc không",
+      "wall_ms": 14311.22,
+      "status": "verified",
+      "calculation_status": "ready",
+      "trip_kind": "round_trip",
+      "message": "Khứ hồi đến Bãi Biển Sầm Sơn Thanh Hóa, Phường Sầm Sơn, khoảng 355 km, 6 giờ 54 phút. Dừng Trạm sạc gần Trạm Dừng Nghỉ An Tâm khoảng 23 phút. Bạn muốn bắt đầu hành trình này không?",
+      "latency_ms": {
+        "context": 118.88,
+        "interpret": 49.42,
+        "reducer": 48.63,
+        "scheduler": 93.46,
+        "validate": 131.93,
+        "navigation_search": 456.19,
+        "navigation_place_detail": 100.99,
+        "navigation_matrix": 63.79,
+        "navigation_route": 17487.98,
+        "navigation_energy": 4388.73,
+        "navigation_charging_discovery": 1544.15,
+        "capability": 13580.55,
+        "total": 14275.1
+      },
+      "checkpoint_bytes": 57299,
+      "driving": false
+    }
+  ]
+}

@@ -37,70 +37,73 @@ def main():
         )
         services = create_services(config, provider=args.provider)
         graph = build_graph(services)
-        for case in cases:
-            services.memory.reset(services.memory_profile_id)
-            started = time.perf_counter()
-            turns = case.get("turns") or [case]
-            turn_results = []
-            for index, turn in enumerate(turns):
-                turn_started = time.perf_counter()
-                output = graph.invoke(
-                    {"session_id": case["id"], "turn_id": f"eval-{index}", "input_text": turn["query"]}
-                )["output"]
-                answer_checks = all(
-                    term.casefold() in output["response_text"].casefold()
-                    for term in turn.get("required_answer_terms", [])
-                ) and all(
-                    term.casefold() not in output["response_text"].casefold()
-                    for term in turn.get("forbidden_answer_terms", [])
-                )
-                argument_checks = (
-                    "expected_value_celsius" not in turn
-                    or (output.get("action_proposal") or {}).get("arguments", {}).get("value_celsius")
-                    == turn["expected_value_celsius"]
-                )
-                if "expected_arguments" in turn:
-                    argument_checks = argument_checks and (output.get("action_proposal") or {}).get("arguments") == turn["expected_arguments"]
-                execution_checks = ("expected_executed" not in turn or
-                                    bool((output.get("execution") or {}).get("executed")) == turn["expected_executed"])
-                memory_checks = ("expected_memory_count" not in turn or
-                                 len(services.memory.list(services.memory_profile_id)) == turn["expected_memory_count"])
-                status_checks = "expected_status" not in turn or output["status"] == turn["expected_status"]
-                route_checks = output["route"] == turn["expected_route"] and output["intent"] == turn["expected_intent"]
-                turn_results.append(
+        try:
+            for case in cases:
+                services.memory.reset(services.memory_profile_id)
+                started = time.perf_counter()
+                turns = case.get("turns") or [case]
+                turn_results = []
+                for index, turn in enumerate(turns):
+                    turn_started = time.perf_counter()
+                    output = graph.invoke(
+                        {"session_id": case["id"], "turn_id": f"eval-{index}", "input_text": turn["query"]}
+                    )["output"]
+                    answer_checks = all(
+                        term.casefold() in output["response_text"].casefold()
+                        for term in turn.get("required_answer_terms", [])
+                    ) and all(
+                        term.casefold() not in output["response_text"].casefold()
+                        for term in turn.get("forbidden_answer_terms", [])
+                    )
+                    argument_checks = (
+                        "expected_value_celsius" not in turn
+                        or (output.get("action_proposal") or {}).get("arguments", {}).get("value_celsius")
+                        == turn["expected_value_celsius"]
+                    )
+                    if "expected_arguments" in turn:
+                        argument_checks = argument_checks and (output.get("action_proposal") or {}).get("arguments") == turn["expected_arguments"]
+                    execution_checks = ("expected_executed" not in turn or
+                                        bool((output.get("execution") or {}).get("executed")) == turn["expected_executed"])
+                    memory_checks = ("expected_memory_count" not in turn or
+                                     len(services.memory.list(services.memory_profile_id)) == turn["expected_memory_count"])
+                    status_checks = "expected_status" not in turn or output["status"] == turn["expected_status"]
+                    route_checks = output["route"] == turn["expected_route"] and output["intent"] == turn["expected_intent"]
+                    turn_results.append(
+                        {
+                            **turn,
+                            "route": output["route"],
+                            "intent": output["intent"],
+                            "status": output["status"],
+                            "action_proposal": output.get("action_proposal"),
+                            "execution": output.get("execution"),
+                            "timings": output.get("timings", {}),
+                            "answer": output["response_text"],
+                            "characters": len(output["response_text"]),
+                            "citations": output["citations"],
+                            "errors": output["errors"],
+                            "answer_checks": answer_checks and execution_checks and memory_checks,
+                            "execution_checks": execution_checks,
+                            "memory_checks": memory_checks,
+                            "latency_ms": round((time.perf_counter() - turn_started) * 1000, 2),
+                            "argument_checks": argument_checks,
+                            "status_checks": status_checks,
+                            "route_checks": route_checks,
+                        }
+                    )
+                results.append(
                     {
-                        **turn,
-                        "route": output["route"],
-                        "intent": output["intent"],
-                        "status": output["status"],
-                        "action_proposal": output.get("action_proposal"),
-                        "execution": output.get("execution"),
-                        "timings": output.get("timings", {}),
-                        "answer": output["response_text"],
-                        "characters": len(output["response_text"]),
-                        "citations": output["citations"],
-                        "errors": output["errors"],
-                        "answer_checks": answer_checks and execution_checks and memory_checks,
-                        "execution_checks": execution_checks,
-                        "memory_checks": memory_checks,
-                        "latency_ms": round((time.perf_counter() - turn_started) * 1000, 2),
-                        "argument_checks": argument_checks,
-                        "status_checks": status_checks,
-                        "route_checks": route_checks,
+                        **case,
+                        **turn_results[-1],
+                        "turn_results": turn_results,
+                        "answer_checks": all(row["answer_checks"] and row["status_checks"] for row in turn_results),
+                        "argument_checks": all(row["argument_checks"] for row in turn_results),
+                        "route_checks": all(row["route_checks"] for row in turn_results),
+                        "errors": [error for row in turn_results for error in row["errors"]],
+                        "latency_ms": round((time.perf_counter() - started) * 1000, 2),
                     }
                 )
-            results.append(
-                {
-                    **case,
-                    **turn_results[-1],
-                    "turn_results": turn_results,
-                    "answer_checks": all(row["answer_checks"] and row["status_checks"] for row in turn_results),
-                    "argument_checks": all(row["argument_checks"] for row in turn_results),
-                    "route_checks": all(row["route_checks"] for row in turn_results),
-                    "errors": [error for row in turn_results for error in row["errors"]],
-                    "latency_ms": round((time.perf_counter() - started) * 1000, 2),
-                }
-            )
+        finally:
+            graph.close()
     correct = sum(case["route_checks"] for case in results)
     latencies = sorted(row["latency_ms"] for case in results for row in case["turn_results"])
     report = {

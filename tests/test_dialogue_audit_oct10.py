@@ -14,7 +14,7 @@ from tests.test_long_term_memory import services as services
 from tests.test_navigation_workflow import HANOI, IntercityMaps
 
 ROOT = Path(__file__).parents[1]
-AUDIT = {r["row"]: r for r in map(json.loads, (ROOT / "eval/audit_925_958.jsonl").read_text().splitlines())}
+AUDIT = {r["row"]: r for r in map(json.loads, (ROOT / "tests/fixtures/dialogue_audits/audit_925_958.jsonl").read_text().splitlines())}
 
 
 class NearbyMaps:

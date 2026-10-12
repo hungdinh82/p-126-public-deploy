@@ -1,4 +1,6 @@
-import { closeJourney, initJourney, openJourney, pauseJourney, applyNavigation, getJourneyPosition } from './journey.js?v=17';
+import { closeJourney, initJourney, openJourney, applyNavigation, getJourneyPosition, setJourneyMotionBlocked, resetJourneyRuntime } from './journey.js?v=23';
+import { GearController } from './navigation-state.js?v=2';
+import { NavigationStore, MissingRouteError } from './navigation-store.js?v=1';
 import { createCabinMusic } from './music.js?v=2';
 import { neonBorder } from './neon.js?v=2';
 import { createWave } from './wave.js?v=2';
@@ -14,6 +16,19 @@ const makeId = () => globalThis.crypto?.randomUUID?.() || `vivi-${Date.now()}-${
 const sessionId = localStorage.getItem('vivi-session-id') || makeId();
 localStorage.setItem('vivi-session-id', sessionId);
 const state = { phase: 'idle', temp: 23, window: false, music: false, driving: false, powerState: 'off', battery: 82, range: 328, powertrainTemp: 45, tirePressures: {}, windows: {}, doors: {}, seatHeatLevels: {}, doorLocked: false, doorOpen: false, hoodOpen: false, trunkOpen: false, seatHeat: 0, alerts: [], alertSequence: 0, reduced: motionPreference.matches, sound: true, busy: false, backendAvailable: false, vehicleProvider: '', sttAvailable: false, sttProvider: '', sttStreaming: false, sttDevice: '', ttsAvailable: false, ttsProvider: '', ttsVoice: '', ttsDevice: '', ttsOptions: [], storeAudio: false, storeTranscripts: false, llmProvider: '', llmOptions: [], lastCommand: '', manualAnswer: '', manualEvidence: [], progress: 0 };
+const navigationStore = new NavigationStore();
+const snapshotOrder = navigationStore.order;
+let syncRequest = null;
+const gearController = new GearController({
+  send: event=>sendNavigationEvent({...event,revision:currentNavigationRevision}),
+  synchronize: ()=>synchronizeNavigation(),
+  changed: gear=>{
+    setJourneyMotionBlocked(gear.frozen);
+    updateDriveUI();
+    if(gear.status==='unknown')setPhase('blocked','Chưa đồng bộ trạng thái xe. Bấm số để đồng bộ lại.');
+  },
+  id:makeId
+});
 const edgeCommandHistoryKey = 'vivi-command-history';
 function readEdgeCommandHistory() {
   try {
@@ -67,7 +82,7 @@ const NEON_BY_PHASE = {
   blocked: { speed: 4, borderSize: 50, color: '#D6AE78' }
 };
 
-import('./scene3d.js?v=42')
+import('./scene3d.js?v=43')
   .then(module => {
     scene = module.createScene($('#space'), { reduced: state.reduced });
     scene.setRoute(plannedRoute);
@@ -193,10 +208,10 @@ function updateBodyPanel() {
 const formatKm = (meters) => meters < 1000 ? `${Math.round(meters / 10) * 10} m` : `${(meters / 1000).toLocaleString('vi-VN', { maximumFractionDigits: 1 })} km`;
 // Left HUD: battery while parked, speed while driving; nothing else competes for attention.
 function updateHud() {
-  const driving = state.driving;
-  const speed = Math.round(nav?.speedKmh ?? cruise.speed);
-  $('#gear-letter').textContent = driving ? 'D' : 'P';
-  $('#mode-label').textContent = driving ? (nav ? `ĐẾN ${nav.destination.toUpperCase()}` : 'ĐANG DI CHUYỂN') : 'ĐỖ XE';
+  const driving = state.driving && !gearController.frozen;
+  const speed = driving ? Math.round(nav?.speedKmh ?? cruise.speed) : 0;
+  $('#gear-letter').textContent = state.driving ? 'D' : 'P';
+  $('#mode-label').textContent = gearController.status!=='idle' ? (gearController.status==='unknown'?'CHƯA ĐỒNG BỘ':gearController.status==='syncing'?'ĐANG ĐỒNG BỘ':`ĐANG CHUYỂN ${gearController.desired}`) : driving ? (nav ? `ĐẾN ${nav.destination.toUpperCase()}` : 'ĐANG DI CHUYỂN') : 'ĐỖ XE';
   $('#hud-primary').innerHTML = driving ? `${speed}<small>km/h</small>` : `${state.battery}<small>%</small>`;
   $('#hud-primary-label').textContent = driving ? 'TỐC ĐỘ' : 'PIN';
   $('#hud-range').textContent = driving ? `Pin ${state.battery}% · ${state.range} km` : `${state.range} km`;
@@ -252,16 +267,23 @@ function onBlink(side) {
   document.querySelectorAll('.blinkers [data-blink]').forEach(arrow => arrow.classList.toggle('on', Number(arrow.dataset.blink) === side));
   blinkerTick(side !== 0);
 }
-let shownDriving = false;
 function updateDriveUI() {
-  // Only a D → P change pauses the trip; the trip itself shifts P → D on start.
-  if (shownDriving && !state.driving) pauseJourney();
-  shownDriving = state.driving;
   $('#drive-toggle').setAttribute('aria-pressed', String(state.driving));
   $('#drive-toggle').setAttribute('aria-label', state.driving ? 'Chuyển về đỗ xe' : 'Chuyển sang lái xe');
-  $('#drive-toggle span').textContent = state.driving ? 'D' : 'P';
-  document.body.classList.toggle('driving', state.driving);
-  scene?.setMode(state.driving ? 'driving' : 'parked');
+  const shifting=gearController.status!=='idle';
+  const label=gearController.status==='unknown'?'Chưa đồng bộ':gearController.status==='syncing'?'Đang đồng bộ':shifting?`Đang chuyển ${gearController.desired}`:'';
+  $('#drive-toggle span').textContent=shifting?`${gearController.desired || (state.driving?'D':'P')}…`:state.driving?'D':'P';
+  $('#drive-toggle').title=label || (state.driving?'Chuyển về P':'Chuyển sang D');
+  $('#drive-toggle').setAttribute('aria-busy',String(shifting));
+  $('#drive-toggle').classList.toggle('shifting',shifting);
+  if(state.backendAvailable) {
+    $('#drive-toggle').disabled=!state.navigationSynced || state.vehicleProvider!=='memory'
+      || state.busy && !state.driving && gearController.desired!=='D'
+      || shifting && gearController.desired==='P' && !state.driving && gearController.status!=='unknown';
+  }
+  document.body.classList.toggle('driving',state.driving && !gearController.frozen);
+  scene?.setMode(state.driving && !gearController.frozen?'driving':'parked');
+  if(gearController.frozen)scene?.setSpeed(0);
   updateHud();
 }
 // Without a route the demo cruises at a gently varying city speed.
@@ -338,7 +360,7 @@ async function pollVehicleAlerts() {
     const response = await fetch(`${API_BASE}/api/v1/vehicle/alerts?session_id=${encodeURIComponent(sessionId)}`);
     if (!response.ok) return;
     const snapshot = await response.json();
-    applyBackendState(snapshot.vehicle_state);
+    await synchronizeNavigation();
     renderAlerts(snapshot);
     announceNewAlerts(snapshot.active_alerts || []);
   } catch { /* Polling resumes automatically after a temporary disconnect. */ }
@@ -508,7 +530,8 @@ function lockControls(locked) {
   document.querySelectorAll('#climate-pop button, #body-pop button, #window-pop button, #music-toggle, #drive-toggle, .send-button').forEach(button => { button.disabled = locked; });
   // The mic stays enabled while recording so a second tap can stop it.
   $('#demo-mic').disabled = !state.backendAvailable || !state.sttAvailable;
-  if (state.backendAvailable && state.vehicleProvider !== 'memory') $('#drive-toggle').disabled = true;
+  if (state.backendAvailable && (!state.navigationSynced || state.vehicleProvider !== 'memory')) $('#drive-toggle').disabled = true;
+  else if(state.driving || gearController.desired==='D')$('#drive-toggle').disabled=false; // P remains available while ViVi is answering.
   $('#command-form').setAttribute('aria-busy', String(locked));
 }
 function applyBackendState(vehicle) {
@@ -541,28 +564,69 @@ function applyBackendState(vehicle) {
 
 let activeTurn = null;
 let currentNavigationRevision = 0;
-let navigationResponseSerial = 0;
-async function acceptNavigationResponse(payload) {
-  currentNavigationRevision = Math.max(currentNavigationRevision, payload.navigation?.revision || 0);
-  if (payload.diagnostics?.observation_available !== false) applyBackendState(payload.vehicle_state);
-  await applyNavigation(payload);
-  const alerts = payload.navigation?.alerts || [];
-  announceNewAlerts(alerts);
+async function acceptNavigationResponse(payload,authoritative=false) {
+  let accepted;
+  try{accepted=navigationStore.receive(payload,authoritative);}catch(error){
+    if(error instanceof MissingRouteError){void synchronizeNavigation();return false;}throw error;
+  }
+  if(!accepted) {
+    if(payload.runtime_epoch && payload.runtime_epoch!==snapshotOrder.epoch && !snapshotOrder.retired.has(payload.runtime_epoch))void synchronizeNavigation();
+    return false;
+  }
+  payload=accepted;
+  const restarted=state.runtimeEpoch && state.runtimeEpoch!==snapshotOrder.epoch;
+  state.runtimeEpoch=snapshotOrder.epoch;
+  if(restarted){state.vehicleVersion=null;currentNavigationRevision=0;resetJourneyRuntime();}
+  state.navigationSynced=true;
+  currentNavigationRevision=Math.max(currentNavigationRevision,payload.navigation?.revision || 0);
+  if(payload.diagnostics?.observation_available!==false)applyBackendState(payload.vehicle_state);
+  gearController.observe(payload,authoritative);
+  // Rendering the route/map cannot delay vehicle controls.
+  queueNavigationRender(payload);
+  announceNewAlerts(payload.navigation?.alerts || []);
+  return true;
+}
+let navigationRenderPayload=null,navigationRenderScheduled=false;
+function queueNavigationRender(payload){
+  navigationRenderPayload=payload;
+  if(navigationRenderScheduled)return;
+  navigationRenderScheduled=true;
+  queueMicrotask(()=>{
+    navigationRenderScheduled=false;
+    const next=navigationRenderPayload;navigationRenderPayload=null;
+    Promise.resolve(applyNavigation(next)).catch(error=>console.warn('Navigation view failed:',error.message));
+  });
+}
+async function synchronizeNavigation() {
+  if(syncRequest)return syncRequest;
+  syncRequest=(async()=>{
+    const response=await fetch(`${API_BASE}/api/v1/navigation/snapshot?session_id=${encodeURIComponent(sessionId)}${gearController.pending?`&event_id=${encodeURIComponent(gearController.pending.id)}`:''}`);
+    if(!response.ok)throw Error('Chưa đồng bộ được trạng thái xe');
+    const payload=await response.json();
+    await acceptNavigationResponse(payload,true);
+    return payload;
+  })().finally(()=>{syncRequest=null;});
+  return syncRequest;
 }
 async function sendNavigationEvent(event) {
-  const serial = ++navigationResponseSerial;
-  const response = await fetch(`${API_BASE}/api/v1/turn`, {
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({ transcript:'Cập nhật hành trình', session_id:sessionId, turn_id:makeId(), navigation_event:event, llm_provider:state.llmProvider })
+  const journey=navigationStore.select().journey;
+  event={runtime_epoch:state.runtimeEpoch,...event};
+  if(journey && ['progress','charge','pause','resume','end'].includes(event.kind))event.target_id ||= journey.route_id;
+  const response = await fetch(`${API_BASE}/api/v1/navigation/events`, {
+    method:'POST', signal:AbortSignal.timeout(8000), headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({session_id:sessionId,event,known_routes:navigationStore.knownRoutes})
   });
   const payload = await response.json();
   if (!response.ok) throw new Error(payload.detail || 'Không cập nhật được hành trình');
-  if (serial !== navigationResponseSerial || (payload.navigation?.revision || 0) < currentNavigationRevision) return;
-  await acceptNavigationResponse(payload);
-  if (event.kind === 'position' && payload.message) {
-    setPhase(payload.confirmation ? 'confirm' : payload.status === 'clarify' ? 'clarify' : 'idle',payload.message);
-    if(state.sound) queueAnnouncement(payload.message,0,`navigation-position:${event.id}`);
+  if(!await acceptNavigationResponse(payload)) {
+    const snapshot=await synchronizeNavigation();
+    return {...snapshot,status:'blocked',message:'Trạng thái xe đã thay đổi.'};
   }
+  if (['position','pause','resume','clear','gear','end'].includes(event.kind) && payload.message) {
+    setPhase(payload.confirmation ? 'confirm' : payload.status === 'clarify' ? 'clarify' : 'idle',payload.message);
+    if(state.sound && event.kind!=='gear') queueAnnouncement(payload.message,0,`navigation-position:${event.id}`);
+  }
+  return payload;
 }
 async function confirmNavigation(grant) {
   const revision = currentNavigationRevision;
@@ -636,9 +700,12 @@ async function runBackendCommand(command, turnId = makeId(), { autoConfirm = fal
         state.effectiveProvider = event.provider;
         updateModelStatus();
       }
-      if (event.type === 'trip_plan') applyNavigation(event).catch(error => console.warn('Trip plan display:', error.message));
+      if (event.type === 'trip_plan' && event.committed!==false) acceptNavigationResponse(event).catch(error => console.warn('Trip plan display:', error.message));
       if (event.type === 'step' && event.step?.message) setPhase('thinking', event.step.message);
-      if (event.type === 'error') throw new Error(event.detail || 'Pipeline streaming bị lỗi');
+      if (event.type === 'error') {
+        if (event.error_code === 'turn_timeout') void synchronizeNavigation();
+        throw new Error(event.detail || 'Pipeline streaming bị lỗi');
+      }
       if (event.type === 'progress' && event.text) {
         // Slow turns (handbook lookup) announce the wait; the answer is queued
         // on the same playback so it follows without cutting this phrase off.
@@ -710,9 +777,7 @@ async function runBackendCommand(command, turnId = makeId(), { autoConfirm = fal
     state.generationProvider = payload.diagnostics?.generation_provider || '';
     updateModelStatus();
     renderTurnSteps(payload.steps || []);
-    currentNavigationRevision = Math.max(currentNavigationRevision,payload.navigation?.revision || 0);
-    await applyNavigation(payload);
-    if (payload.diagnostics?.observation_available !== false) applyBackendState(payload.vehicle_state);
+    await acceptNavigationResponse(payload);
     if (payload.route === 'handbook' && payload.status === 'verified') {
       state.manualAnswer = payload.message;
       state.manualEvidence = payload.evidence || [];
@@ -970,11 +1035,11 @@ async function checkBackend() {
     $('#backend-status').classList.remove('offline'); $('#backend-status').innerHTML = '<i></i> Local · <span id="backend-model"></span>';
     $('#backend-model').textContent = state.effectiveProvider || state.llmProvider;
     $('#backend-status').title = `STT ${health.stt.available ? 'sẵn sàng' : 'chưa cài'} · TTS ${state.ttsAvailable ? ttsVoiceLabel(state.ttsVoice) : 'chưa cài'} · LLM ${state.llmProvider}`;
-    $('#drive-toggle').disabled = state.vehicleProvider !== 'memory';
+    $('#drive-toggle').disabled = true;
     try {
-      const vehicleResponse = await fetch(`${API_BASE}/api/v1/vehicle/state?session_id=${encodeURIComponent(sessionId)}`);
-      if (vehicleResponse.ok) applyBackendState(await vehicleResponse.json());
-    } catch { /* An external simulator may be temporarily offline. */ }
+      await synchronizeNavigation();
+      lockControls(state.busy);
+    } catch { state.navigationSynced=false;setPhase('blocked','Đang chờ đồng bộ trạng thái xe.'); }
   } catch {
     state.backendAvailable = false; $('#backend-status').classList.add('offline'); $('#backend-status').innerHTML = '<i></i> Backend offline';
     $('#backend-status').title = 'Chế độ prototype · hãy chạy python run.py';
@@ -1038,9 +1103,15 @@ async function setDemoDriving(driving) {
   applyBackendState(payload);
 }
 $('#drive-toggle').addEventListener('click', async () => {
-  if (state.busy) return;
+  if (state.busy && !state.driving && gearController.desired!=='D') return;
+  if (state.busy) interruptActiveTurn();
   lockControls(true);
   try {
+    if(state.backendAvailable){
+      if(!state.navigationSynced){await synchronizeNavigation();return;}
+      await gearController.request(gearController.desired==='D'?'P':state.driving?'P':'D',snapshotOrder.epoch);
+      return;
+    }
     await setDemoDriving(!state.driving);
   } catch (error) {
     setPhase('blocked', error.message);
@@ -1191,11 +1262,6 @@ initJourney({
   onClose: () => openPanel('home'),
   // Navigation prompts surface in the assistant line and use ViVi's voice.
   announce: text => { setResponseText(text); queueAnnouncement(text); },
-  setDriving: driving => {
-    if (state.driving === driving) return;
-    // The car cannot leave P (door or hood open): keep it still on the map as well.
-    setDemoDriving(driving).catch(error => { if (driving) { pauseJourney(); setPhase('blocked', error.message); } });
-  },
   progress: progress => { nav = progress; updateHud(); },
   route: route => { plannedRoute = route; scene?.setRoute(route); },
   travel: distance => scene?.setRouteDistance(distance),
@@ -1203,7 +1269,10 @@ initJourney({
   command: (text, action) => runBackendCommand(text, makeId(), { action }),
   confirm: grant => confirmNavigation(grant),
   position: position => sendNavigationEvent({ kind:'position', id:makeId(), revision:currentNavigationRevision, position }),
-  event: event => sendNavigationEvent(event)
+  event: event => sendNavigationEvent(event),
+  gear: async target=>{await gearController.request(target,snapshotOrder.epoch);return true;},
+  synchronize:synchronizeNavigation,
+  transportLost:()=>{gearController.status="unknown";gearController.changed(gearController);void gearController.reconcile();}
 });
 function applyReducedMotion(reduced) {
   state.reduced = reduced;
@@ -1279,3 +1348,16 @@ document.addEventListener('keydown', event => {
 function updateClock() { $('#clock').textContent = new Intl.DateTimeFormat('vi-VN', { hour: '2-digit', minute: '2-digit' }).format(new Date()); }
 if (location.hash === '#journey') openPanel('journey');
 updateClock(); setInterval(updateClock, 60000); updateVehicle(); checkBackend().then(pollVehicleAlerts); setInterval(pollVehicleAlerts, 1500);
+
+window.addEventListener('storage', event => {
+  if (event.key !== 'vivi-history-reset') return;
+  edgeCommandHistory = [];
+  state.lastCommand = '';
+  state.manualAnswer = '';
+  state.manualEvidence = [];
+  renderTurnSteps([]);
+  renderLiveCaption('', '');
+  if (activePanelView === 'manual') openPanel('manual');
+  if (!state.busy) setPhase('idle', 'Đã xoá lịch sử hội thoại.');
+  synchronizeNavigation().catch(() => {});
+});

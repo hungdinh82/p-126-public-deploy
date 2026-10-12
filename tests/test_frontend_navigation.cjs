@@ -4,17 +4,19 @@ const vm=require('node:vm');
 const {test}=require('node:test');
 
 function harness({withEnergy=false}={}) {
-  const elements=new Map(),commands=[],events=[],driving=[],announcements=[];
-  const element=()=>({hidden:false,value:'',textContent:'',innerHTML:'',children:[],listeners:{},append(...nodes){this.children.push(...nodes);},addEventListener(type,handler){this.listeners[type]=handler;},classList:{add(){},remove(){},toggle(){}},setAttribute(){},scrollIntoView(){},querySelectorAll:()=>[]});
-  const sandbox={console,crypto:{randomUUID:()=>String(events.length+1)},performance:{now:()=>1000},requestAnimationFrame:()=>1,cancelAnimationFrame(){},setTimeout:()=>1,
+  const elements=new Map(),commands=[],events=[],driving=[],announcements=[],sources=new Map(),routes=[];
+  const element=()=>{const classes=new Set();return {hidden:false,value:'',textContent:'',children:[],listeners:{},get innerHTML(){return '';},set innerHTML(value){this.children=[];},append(...nodes){for(const node of nodes){node.parentElement=this;this.children.push(node);}},addEventListener(type,handler){this.listeners[type]=handler;},classList:{add:name=>classes.add(name),remove:name=>classes.delete(name),contains:name=>classes.has(name),toggle(name,on){if(on)classes.add(name);else classes.delete(name);}},setAttribute(){},scrollIntoView(){},querySelectorAll:()=>[]};};
+  const sandbox={console,crypto:{randomUUID:()=>String(events.length+1)},performance:{now:()=>1000},requestAnimationFrame:()=>1,cancelAnimationFrame(){},setTimeout:()=>1,setInterval:()=>1,clearInterval(){},
     document:{createElement:tag=>({...element(),tagName:tag}),querySelector:selector=>{if(selector==='#journey-energy'&&!withEnergy)return null;if(!elements.has(selector))elements.set(selector,element());return elements.get(selector);},querySelectorAll:()=>[],body:element()},
-    stubMap:{flyTo(){},easeTo(){},jumpTo(){},getStyle:()=>({sources:{}}),getSource:()=>({setData(){}})},
+    stubMap:{flyTo(){},easeTo(){},jumpTo(){},resize(){},getStyle:()=>({sources:{}}),getSource:name=>{if(!sources.has(name))sources.set(name,{setData(data){this.data=data;}});return sources.get(name);}},
+    reportRoute:value=>routes.push(value),
     command:(...args)=>commands.push(args),event:async value=>events.push(value),setDriving:value=>driving.push(value),announce:text=>announcements.push(text),
   };
   vm.createContext(sandbox);
-  vm.runInContext(readFileSync('journey.js','utf8').replace(/export /g,''),sandbox);
-  vm.runInContext(`map=stubMap; hooks={command,event,setDriving,announce,progress(){},route(){},travel(){},confirm:grant=>command('confirm',grant)}; openJourney=async()=>{}; placeMarker=(name,point)=>{markers[name]={point,setRotation(){},remove(){}};return markers[name];}; planRoute=()=>{throw Error('Client must not recompute server route');};`,sandbox);
-  return {sandbox,commands,events,driving,announcements,elements};
+  for(const file of ['journey-map.js','journey-simulation.js','journey-renderer.js'])vm.runInContext(readFileSync(file,'utf8').replace(/export /g,''),sandbox);
+  vm.runInContext(readFileSync('journey.js','utf8').replace(/^import .*$/gm,'').replace(/export /g,''),sandbox);
+  vm.runInContext(`map=stubMap; hooks={command,event,setDriving,announce,progress(){},route:reportRoute,travel(){},confirm:grant=>command('confirm',grant)}; realOpenJourney=openJourney; openJourney=async()=>{}; placeMarker=(name,point)=>{markers[name]={point,setRotation(){},remove(){}};return markers[name];}; planRoute=()=>{throw Error('Client must not recompute server route');};`,sandbox);
+  return {sandbox,commands,events,driving,announcements,elements,sources,routes};
 }
 function nav(status='preview',revision=1,sequence=1) {
   return {revision,event_sequence:sequence,status,origin:{lat:21,lng:105.8,label:'TEST',simulated:true},candidates:[],selected:{name:'TEST destination',lat:21,lng:105.9},route:{distance_m:10000,duration_s:500,coordinates:[[105.8,21],[105.9,21]],steps:[]},progress_m:0,energy:null,alternatives:[],pending:null};
@@ -26,7 +28,7 @@ test('server preview waits for consent and active simulation ignores old route/s
   await apply(h,nav(),{confirmation_id:'grant-1'});
   vm.runInContext('startSimulation()',h.sandbox);
   assert.equal(vm.runInContext('sim.running',h.sandbox),false);
-  assert.equal(h.commands[0][0],'confirm');
+  assert.equal(h.commands[0][1].capability,'navigation.start');
   await apply(h,nav('running',2,2));
   assert.equal(vm.runInContext('sim.running',h.sandbox),true);
   assert.equal(vm.runInContext('view',h.sandbox),'mini');
@@ -53,14 +55,14 @@ test('pending route keeps current simulation; completing waits for authoritative
   assert.match(h.announcements.at(-1),/đã đến/i);
 });
 
-test('destination results stay in voice UI until a place is explicitly chosen',async()=>{
+test('destination results and ready plans stay on home until map is explicitly opened',async()=>{
   const h=harness();h.sandbox.opened=0;
   vm.runInContext('openJourney=async()=>{opened++;}',h.sandbox);
   await apply(h,{...nav('selecting'),selected:null,route:null,candidates:[]});
   assert.equal(h.sandbox.opened,0);
   assert.equal(vm.runInContext('sim.running',h.sandbox),false);
   await apply(h,nav('preview',2,2));
-  assert.equal(h.sandbox.opened,1);
+  assert.equal(h.sandbox.opened,0);
   assert.equal(vm.runInContext('sim.running',h.sandbox),false);
 });
 
@@ -168,7 +170,7 @@ test('trip planning presents a card without opening map or changing running rout
   await apply(h,nav('running',2,1));const before=vm.runInContext('JSON.stringify(route)',h.sandbox);
   h.sandbox.payload={trip_plan:{...nav(),id:'trip:1',event_sequence:2,trip_kind:'round_trip',calculation_status:'ready',offer:{status:'pending'},summary:null},navigation:nav('running',2,2),ui_events:[{type:'trip.summary'}]};
   await vm.runInContext('applyNavigation(payload)',h.sandbox);
-  assert.equal(h.sandbox.opened,1); // only the running navigation opened the map
+  assert.equal(h.sandbox.opened,0); // driving and trip planning leave the 3D scene visible
   assert.equal(vm.runInContext('JSON.stringify(route)',h.sandbox),before);
   assert.equal(vm.runInContext('sim.running',h.sandbox),true);
   assert.equal(h.elements.get('#trip-plan-card').hidden,false);
@@ -190,4 +192,262 @@ test('server arrival retains its route and supplies the actual endpoint for the 
   roundTrip.route.coordinates=[[105.8,21],[105.9,21],[105.8,21]];
   await apply(h,roundTrip);
   assert.equal(vm.runInContext('getJourneyPosition().lng',h.sandbox),105.8);
+});
+
+
+test('delayed explicit map opening cannot restore a cancelled route',async()=>{
+  const h=harness();let release;
+  await apply(h,nav('preview',1,1));
+  h.sandbox.waitForMap=()=>new Promise(resolve=>{release=resolve;});
+  vm.runInContext('openJourney=waitForMap;',h.sandbox);
+  const opening=vm.runInContext("showPlanMap(backendNavigation,'navigation')",h.sandbox);
+  await apply(h,{...nav('idle',2,2),route:null,selected:null});
+  release();await opening;
+  assert.equal(vm.runInContext('backendNavigation.revision',h.sandbox),2);
+  assert.equal(vm.runInContext('route',h.sandbox),null);
+  assert.equal(vm.runInContext('sim.running',h.sandbox),false);
+});
+
+test('stale navigation list cannot hide the current trip choices',async()=>{
+  const h=harness();await apply(h,nav('preview',4,4));
+  h.sandbox.trip={id:'trip:new',revision:1,event_sequence:5,status:'selecting',calculation_status:'draft',route:null,candidates:[{handle:'trip:place',name:'Trip destination'}]};
+  await vm.runInContext("applyNavigation({trip_plan:trip,ui_events:[{type:'trip.results'}]})",h.sandbox);
+  h.sandbox.oldList={...nav('selecting',3,3),route:null,selected:null};
+  await vm.runInContext("applyNavigation({navigation:oldList,ui_events:[{type:'navigation.results'}]})",h.sandbox);
+  assert.equal(vm.runInContext('choiceOwner',h.sandbox),'trip');
+  assert.equal(h.elements.get('#destination-choices').hidden,false);
+});
+
+test('a zero-distance route sends a finite completion progress',async()=>{
+  const h=harness();const same=nav('running');same.route={...same.route,distance_m:0,duration_s:0,coordinates:[[105.8,21],[105.8,21]]};
+  await apply(h,same);
+  vm.runInContext('tick(2500)',h.sandbox);
+  assert.equal(h.events[0].distance_m,0);
+  assert.equal(Number.isFinite(vm.runInContext('sim.traveled',h.sandbox)),true);
+});
+
+test('starting and repeated responses reveal the 3D screen instead of reopening the full map',async()=>{
+  const h=harness();vm.runInContext('openJourney=realOpenJourney;',h.sandbox);
+  await apply(h,nav('preview',1,1));
+  assert.equal(h.sandbox.document.body.classList.contains('journey-open'),false);
+  await vm.runInContext('openJourney()',h.sandbox);
+  assert.equal(h.sandbox.document.body.classList.contains('journey-open'),true);
+  await apply(h,nav('running',1,2));
+  assert.equal(vm.runInContext('view',h.sandbox),'mini');
+  assert.equal(h.sandbox.document.body.classList.contains('journey-open'),false);
+  assert.equal(vm.runInContext('sim.running',h.sandbox),true);
+  await apply(h,nav('running',1,3));
+  assert.equal(vm.runInContext('view',h.sandbox),'mini');
+  assert.equal(h.sandbox.document.body.classList.contains('journey-open'),false);
+  await vm.runInContext('openJourney()',h.sandbox);
+  await apply(h,nav('running',1,4));
+  assert.equal(vm.runInContext('view',h.sandbox),'full'); // explicitly opening the map still works
+});
+
+test('starting a trip from home loads the map without covering the 3D simulation',async()=>{
+  const h=harness();vm.runInContext('map=null; ensureMap=async()=>{map=stubMap;}; openJourney=realOpenJourney;',h.sandbox);
+  h.sandbox.started={trip_plan:{...nav(),id:'trip:started',calculation_status:'ready',started_revision:1,offer:{status:'accepted'}},navigation:nav('running',2,2),ui_events:[{type:'navigation.start'}]};
+  await vm.runInContext('applyNavigation(started)',h.sandbox);
+  assert.equal(vm.runInContext('view',h.sandbox),'mini');
+  assert.equal(vm.runInContext('sim.running',h.sandbox),true);
+  assert.equal(h.sandbox.document.body.classList.contains('journey-open'),false);
+  assert.equal(h.elements.get('#planning-controls').hidden,true);
+});
+
+test('home cancellation remains available after closing the preview and clears the cancelled route',async()=>{
+  const h=harness();vm.runInContext('openJourney=realOpenJourney;',h.sandbox);
+  await apply(h,nav('preview',1,1));
+  await vm.runInContext('closeJourney()',h.sandbox);
+  const panel=h.elements.get('#trip-plan-card'),cancel=panel.children.at(-1);
+  assert.equal(panel.hidden,false);assert.equal(cancel.textContent,'Huỷ kế hoạch');
+  await cancel.listeners.click();
+  assert.equal(h.commands[0][1].capability,'navigation.cancel');
+  assert.equal(h.commands[0][1].arguments.route_revision,1);
+  await apply(h,{...nav('idle',2,2),route:null,selected:null});
+  assert.equal(panel.hidden,true);
+  assert.equal(vm.runInContext('route',h.sandbox),null);
+  assert.equal(vm.runInContext('destination',h.sandbox),null);
+  assert.equal(vm.runInContext('view',h.sandbox),'hidden');
+  const count=h.commands.length;await cancel.listeners.click();assert.equal(h.commands.length,count);
+});
+
+test('hidden trip card hides its cancellation action until the card is reopened',async()=>{
+  const h=harness();h.sandbox.plan={...nav(),id:'trip:cancel',calculation_status:'ready',offer:{status:'pending'}};
+  await vm.runInContext("applyNavigation({trip_plan:plan,ui_events:[{type:'trip.summary'}]})",h.sandbox);
+  const card=h.elements.get('#trip-plan-card');card.children[0].children[1].listeners.click();
+  assert.equal(card.hidden,true);
+  const controls=h.elements.get('#planning-controls');assert.equal(controls.hidden,true);
+  h.elements.get('#information-tabs').children[0].listeners.click();
+  const cancel=card.children.at(-1);assert.equal(card.hidden,false);assert.equal(cancel.textContent,'Huỷ kế hoạch');
+  await cancel.listeners.click();
+  assert.equal(h.commands[0][1].capability,'trip.cancel');
+  assert.equal(h.commands[0][1].arguments.plan_id,'trip:cancel');
+  assert.equal(h.commands[0][1].arguments.route_revision,1);
+  await vm.runInContext("applyNavigation({trip_plan:{...plan,revision:2,event_sequence:2,calculation_status:'cancelled'},ui_events:[{type:'trip.cancel'}]})",h.sandbox);
+  assert.equal(controls.hidden,true);assert.equal(card.hidden,true);
+  const count=h.commands.length;await cancel.listeners.click();assert.equal(h.commands.length,count);
+});
+
+test('a draft without origin or map results can be cancelled from home',async()=>{
+  const h=harness();h.sandbox.draft={navigation:{...nav('idle',0,1),origin:null,route:null,selected:null},steps:[{capability:'navigation.plan',status:'waiting_slot'}]};
+  await vm.runInContext('applyNavigation(draft)',h.sandbox);
+  const panel=h.elements.get('#planning-controls');assert.equal(panel.hidden,false);
+  await panel.children[0].listeners.click();
+  assert.equal(h.commands[0][1].capability,'navigation.cancel');
+  assert.equal(h.commands[0][1].arguments.route_revision,0);
+});
+
+test('cancelling a pending route preserves the running simulation',async()=>{
+  const h=harness();vm.runInContext('openJourney=realOpenJourney;',h.sandbox);
+  await apply(h,nav('running',1,1));
+  const next=nav('running',2,2);next.pending={navigation:nav('preview',2,2),message:'Đổi tuyến'};
+  await apply(h,next);
+  const cancel=h.elements.get('#trip-plan-card').children.at(-1);await cancel.listeners.click();
+  assert.equal(h.commands[0][1].capability,'navigation.cancel');
+  await apply(h,nav('running',3,3));
+  assert.equal(vm.runInContext('sim.running',h.sandbox),true);
+  assert.equal(vm.runInContext('view',h.sandbox),'mini');
+  assert.equal(h.elements.get('#planning-controls').hidden,true);
+});
+
+test('changing destination replaces the map and 3D route even at the same revision',async()=>{
+  const h=harness();await apply(h,nav('running',1,1));
+  const changed=nav('running',1,2);changed.route_id='route:vinhomes';changed.selected={name:'Vinhomes',lat:21,lng:106};changed.route.coordinates=[[105.8,21],[106,21]];
+  await apply(h,changed);
+  assert.equal(vm.runInContext('destination.name',h.sandbox),'Vinhomes');
+  assert.equal(vm.runInContext('route.coordinates.at(-1)[0]',h.sandbox),106);
+  assert.equal(h.routes.at(-1).coordinates.at(-1)[0],106);
+  assert.equal(h.sources.get('vivi-route').data.geometry.coordinates.at(-1)[0],106);
+  assert.equal(h.sources.get('vivi-traveled').data.geometry.coordinates.length,0);
+  assert.equal(vm.runInContext('sim.traveled',h.sandbox),0);
+});
+
+test('a pending Vinhomes route does not overwrite the current map or 3D route',async()=>{
+  const h=harness();await apply(h,nav('running',1,1));
+  const next=nav('running',2,2);next.pending={navigation:nav('preview',2,2),message:'Tuyến mới chờ xác nhận'};
+  next.pending.navigation.selected.name='Vinhomes';next.pending.navigation.route.coordinates=[[105.8,21],[106,21]];
+  await apply(h,next);
+  assert.equal(h.sources.get('vivi-route').data.geometry.coordinates.at(-1)[0],105.9);
+  assert.equal(h.sources.get('vivi-pending-preview').data.geometry.coordinates.at(-1)[0],106);
+  assert.equal(h.routes.at(-1).coordinates.at(-1)[0],105.9);
+  assert.match(h.elements.get('#journey-state').textContent,/Đang đi.*TEST destination.*Chờ xác nhận: Vinhomes/);
+});
+
+test('P stops immediately, ignores in-flight running state, and D resumes at server progress',async()=>{
+  const h=harness();await apply(h,nav('running',1,1));
+  vm.runInContext('setJourneyMotionBlocked(true)',h.sandbox);
+  await vm.runInContext('pauseJourney()',h.sandbox);
+  assert.equal(h.events[0].kind,'pause');
+  assert.equal(vm.runInContext('sim.running',h.sandbox),false);
+  assert.equal(vm.runInContext('view',h.sandbox),'hidden');
+  await apply(h,nav('running',1,2));
+  assert.equal(vm.runInContext('sim.running',h.sandbox),false);
+  const paused={...nav('paused',1,3),resume_status:'running',progress_m:1000};await apply(h,paused);
+  await vm.runInContext('closeJourney()',h.sandbox);assert.equal(vm.runInContext('view',h.sandbox),'hidden');
+  await vm.runInContext('changeJourneyDriving(true)',h.sandbox);
+  assert.equal(h.events.at(-1).kind,'gear');assert.equal(h.events.at(-1).gear,'D');
+  h.sandbox.resumed={...paused,status:'running',event_sequence:4,resume_status:null};
+  vm.runInContext('setJourneyMotionBlocked(false)',h.sandbox);
+  await vm.runInContext("applyNavigation({navigation:resumed,ui_events:[{type:'navigation.resume'}]})",h.sandbox);
+  assert.equal(vm.runInContext('sim.running',h.sandbox),true);
+  assert.ok(Math.abs(vm.runInContext('sim.traveled/route.length',h.sandbox)-0.1)<1e-9);
+  assert.equal(vm.runInContext('view',h.sandbox),'mini');
+});
+
+test('hide all removes the parked map, planning controls and reopen tabs until explicit opening',async()=>{
+  const h=harness();await apply(h,nav('paused',1,1));
+  h.sandbox.plan={...nav(),id:'trip:hidden',calculation_status:'ready',offer:{status:'pending'}};
+  await vm.runInContext("applyNavigation({trip_plan:plan,ui_events:[{type:'trip.summary'}]}); hideInformation(informationKey(plan,'Kế hoạch')); hideJourneyInformation();",h.sandbox);
+  assert.equal(h.elements.get('#information-rail').classList.contains('journey-information-hidden'),true);
+  assert.equal(vm.runInContext('view',h.sandbox),'hidden');
+  await apply(h,nav('paused',1,2));
+  assert.equal(h.elements.get('#information-rail').classList.contains('journey-information-hidden'),true);
+  vm.runInContext('openJourney=realOpenJourney;',h.sandbox);await vm.runInContext('openJourney()',h.sandbox);
+  assert.equal(h.elements.get('#information-rail').classList.contains('journey-information-hidden'),false);
+  await apply(h,nav('paused',1,3));
+  assert.equal(vm.runInContext('view',h.sandbox),'full');
+});
+
+test('clearing removes saved plan and route, and stale responses cannot restore them',async()=>{
+  const h=harness();await apply(h,nav('paused',1,1));
+  h.sandbox.saved={...nav(),id:'trip:old',calculation_status:'ready',offer:{status:'pending'}};
+  await vm.runInContext("applyNavigation({trip_plan:saved,ui_events:[{type:'trip.summary'}]})",h.sandbox);
+  h.sandbox.cleared={...nav('idle',2,2),route:null,selected:null};
+  await vm.runInContext("applyNavigation({navigation:cleared,trip_plan:null,ui_events:[{type:'navigation.clear'}]})",h.sandbox);
+  assert.equal(vm.runInContext('backendTripPlan',h.sandbox),null);
+  assert.equal(vm.runInContext('route',h.sandbox),null);
+  assert.equal(h.elements.get('#information-tabs').children.length,0);
+  assert.equal(h.elements.get('#journey-toolbar').hidden,true);
+  await vm.runInContext("applyNavigation({trip_plan:saved,ui_events:[{type:'trip.summary'}]})",h.sandbox);
+  assert.equal(vm.runInContext('backendTripPlan',h.sandbox),null);
+  assert.equal(h.elements.get('#trip-plan-card').hidden,true);
+});
+
+test('gear button uses the journey reducer and does not overwrite a blocked resume',async()=>{
+  let click;const phases=[],changes=[],fixtures=[];
+  const sandbox={state:{busy:false,driving:false,backendAvailable:true,navigationSynced:true},$:()=>({addEventListener:(type,handler)=>{click=handler;}}),lockControls(){},snapshotOrder:{epoch:'test'},gearController:{request:async target=>{changes.push(target);phases.push('blocked');return true;}},setDemoDriving:async value=>fixtures.push(value),setPhase:phase=>phases.push(phase)};
+  vm.createContext(sandbox);const app=readFileSync('app.js','utf8');
+  vm.runInContext(app.slice(app.indexOf("$('#drive-toggle').addEventListener"),app.indexOf('function setSound')),sandbox);
+  await click();assert.deepEqual(changes,["D"]);assert.deepEqual(fixtures,[]);assert.deepEqual(phases,['blocked']);
+});
+
+test('roundabout presentation leaves server route data unchanged for replay',async()=>{
+  const h=harness(),next=nav('running',1,1);
+  next.route.steps=[{sign:6,point_index:0,text:'Vòng xuyến'},{sign:2,point_index:1,text:'Rẽ phải'}];
+  const original=JSON.stringify(next.route);await apply(h,next);
+  assert.equal(JSON.stringify(next.route),original);
+  const count=h.routes.length;await apply(h,{...next,event_sequence:2});
+  assert.equal(h.routes.length,count);
+});
+
+test('P remains available during an assistant turn and interrupts it before pausing',async()=>{
+  let click,interrupts=0;const changes=[];
+  const sandbox={state:{busy:true,driving:true,backendAvailable:true,navigationSynced:true},$:()=>({addEventListener:(type,handler)=>{click=handler;}}),lockControls(){},interruptActiveTurn:()=>{interrupts++;sandbox.state.busy=false;},snapshotOrder:{epoch:'test'},gearController:{request:async target=>{changes.push(target);return true;}},setDemoDriving:async()=>{throw Error('Must pause through the journey reducer');},setPhase(){}};
+  vm.createContext(sandbox);const app=readFileSync('app.js','utf8');
+  vm.runInContext(app.slice(app.indexOf("$('#drive-toggle').addEventListener"),app.indexOf('function setSound')),sandbox);
+  await click();assert.equal(interrupts,1);assert.deepEqual(changes,["P"]);
+});
+
+test('stale navigation cannot restore cleared workspace history',async()=>{
+  const h=harness();h.sandbox.current=nav('paused',3,4);
+  await vm.runInContext('applyNavigation({navigation:current,navigation_workspace:{history:[]}})',h.sandbox);
+  h.sandbox.old=nav('paused',2,3);
+  await vm.runInContext("applyNavigation({navigation:old,navigation_workspace:{history:[{id:'old'}]}})",h.sandbox);
+  assert.equal(vm.runInContext('backendWorkspace.history.length',h.sandbox),0);
+});
+
+test('P during charging does not freeze the charging clock',async()=>{
+  const h=harness();await apply(h,nav('charging',1,1));
+  await vm.runInContext('changeJourneyDriving(false)',h.sandbox);
+  assert.equal(vm.runInContext('motionBlocked',h.sandbox),false);
+  assert.equal(vm.runInContext('sim.running',h.sandbox),false);
+  assert.notEqual(vm.runInContext('chargingTimer',h.sandbox),null);
+  assert.equal(h.events.at(-1).gear,'P');
+});
+
+test('a newly requested trip opens information but progress preserves hidden state',async()=>{
+  const h=harness();await apply(h,nav('idle',1,1));
+  vm.runInContext('journeyInformationHidden=true',h.sandbox);
+  h.sandbox.plan={...nav(),id:'trip:new',calculation_status:'ready'};
+  await vm.runInContext("applyNavigation({trip_plan:plan,ui_events:[{type:'trip.summary'}]})",h.sandbox);
+  assert.equal(vm.runInContext('journeyInformationHidden',h.sandbox),false);
+  vm.runInContext('journeyInformationHidden=true',h.sandbox);
+  await vm.runInContext("applyNavigation({trip_plan:plan,ui_events:[{type:'trip.summary'}]})",h.sandbox);
+  assert.equal(vm.runInContext('journeyInformationHidden',h.sandbox),true);
+});
+
+test('map SDK failure does not prevent accepted route from reaching the 3D controller',async()=>{
+  const h=harness();vm.runInContext("map=null;ensureMap=async()=>{throw Error('Map unavailable');};",h.sandbox);
+  await apply(h,nav('running',1,1));
+  assert.equal(vm.runInContext('sim.running',h.sandbox),true);
+  assert.ok(h.routes.at(-1).coordinates.length>1);
+  await new Promise(setImmediate);
+  assert.equal(vm.runInContext('backendNavigation.status',h.sandbox),'running');
+});
+
+test('running snapshots never move interpolated distance backwards',async()=>{
+  const h=harness();await apply(h,nav('running',1,1));
+  vm.runInContext('sim.traveled=route.length*.5',h.sandbox);
+  await apply(h,{...nav('running',1,2),progress_m:1000});
+  assert.equal(vm.runInContext('sim.traveled/route.length',h.sandbox),.5);
 });

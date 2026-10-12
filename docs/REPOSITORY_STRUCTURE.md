@@ -16,7 +16,7 @@ API routes
     ↓
 Runtime composition → LangGraph orchestration
                          ↓
-             agents / domain policies
+             capability / domain services
                   ↓             ↓
              RAG/history    vehicle gateway
                                   ↓
@@ -29,8 +29,8 @@ Quy tắc import:
 - `agents/` làm việc với contracts và services, không biết FastAPI.
 - `api/routes/` chỉ validate HTTP, chọn provider và gọi runtime service.
 - `api/runtime.py` là composition root duy nhất được phép khởi tạo adapter cụ thể.
-- Vehicle action luôn đi qua `VehicleActionGateway`; không gọi adapter trực tiếp từ
-  classifier, graph node hoặc route.
+- Vehicle capability đi qua `VehicleActionGateway`. Điều khiển navigation mô phỏng đi qua
+  `NavigationService` và `NavigationTransitions`, có receipt/revision guard; route và renderer không gọi adapter trực tiếp.
 - Secret và lựa chọn provider chỉ đọc qua `Settings`.
 
 ## 2. Cây thư mục
@@ -64,6 +64,7 @@ P-126/
 │   │   ├── whisper_cpp.py       # Low-memory STT adapter
 │   │   └── tts.py               # TTS factory, off/ZeroTTS adapters
 │   ├── dialogue/                 # Semantic contract, resolver/parser và task reducer
+│   ├── navigation/              # Domain service/store/transitions, route/energy và VietMap
 │   ├── graphs/                   # Một workflow LangGraph thống nhất
 │   ├── capabilities/             # Registry, validation và execution adapters
 │   ├── rag/                      # Retrieval, generation, grounding, vector stores

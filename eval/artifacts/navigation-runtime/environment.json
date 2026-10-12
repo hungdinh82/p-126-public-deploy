@@ -1,0 +1,14 @@
+{
+  "python": "3.12.12",
+  "node": "20.20.2",
+  "playwright": "1.64.0",
+  "chromium": "156.0.8078.4",
+  "platform": "Linux x86_64",
+  "cpu": "Intel Core i5-11300H @ 3.10 GHz",
+  "memory_visible_kib": 5964152,
+  "backend": "single worker, vehicle simulator, real SQLite, deterministic provider/navigation fixtures",
+  "browser_controls": "Three.js loaded, software WebGL animation paused; 100 toggles per viewport",
+  "browser_frames": "real journey/DOM, 10k route, SDK drawing fixture, 5 seconds visible + 1 second hidden",
+  "live_map": "real SDK/style/tiles read-only smoke; output omits credentials and URLs",
+  "large_artifacts": "/tmp/vivi-ui-check/navigation-*-trace.zip and /tmp/vivi-ui-check/videos/"
+}

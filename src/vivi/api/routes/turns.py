@@ -46,7 +46,7 @@ def _reject_inline_confirmation(request: TurnRequest) -> None:
 @router.post("/turn", response_model=TurnResponse)
 async def turn(request: TurnRequest):
     _reject_inline_confirmation(request)
-    provider = await _provider(request.llm_provider)
+    provider = "rules" if request.navigation_event else await _provider(request.llm_provider)
     started = time.perf_counter()
     received_at = time.time()
     try:
@@ -69,7 +69,7 @@ async def turn(request: TurnRequest):
 @router.post("/turn/stream")
 async def turn_stream(request: TurnRequest):
     _reject_inline_confirmation(request)
-    provider = await _provider(request.llm_provider)
+    provider = "rules" if request.navigation_event else await _provider(request.llm_provider)
 
     async def events():
         started = time.perf_counter()
@@ -82,6 +82,11 @@ async def turn_stream(request: TurnRequest):
                 yield json.dumps(event, ensure_ascii=False) + "\n"
         except asyncio.CancelledError:
             yield json.dumps({"type": "cancelled", "turn_id": request.turn_id}, ensure_ascii=False) + "\n"
+        except TimeoutError:
+            yield json.dumps({
+                "type": "error", "turn_id": request.turn_id, "error_code": "turn_timeout",
+                "detail": "Lượt xử lý đã vượt thời gian chờ. Bạn có thể xem lại kế hoạch đã lưu hoặc thử lại.",
+            }, ensure_ascii=False) + "\n"
         except Exception as exc:
             yield json.dumps(
                 {"type": "error", "detail": f"Không xử lý được lượt hội thoại: {exc}"},

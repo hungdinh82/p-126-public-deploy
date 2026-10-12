@@ -51,10 +51,28 @@ class RuntimeStore:
                 if row["fingerprint"] != key:
                     raise ValueError("turn_id đã được dùng cho một yêu cầu khác.")
                 if row["response"]:
-                    return json.loads(row["response"])
+                    response = json.loads(row["response"])
+                    if response.get("history_cleared"):
+                        raise ValueError("Lượt này thuộc lịch sử đã xoá. Hãy gửi một lượt mới.")
+                    return response
                 raise ValueError("Lượt này đang xử lý hoặc cần kiểm tra lại kết quả sau gián đoạn.")
             db.execute("INSERT INTO turn_ledger VALUES (?,?,?,'running',NULL)", (session, turn, key))
         return None
+
+    def sessions(self, profile_id):
+        prefix = profile_id + ":"
+        with self.connect() as db:
+            rows = db.execute("SELECT DISTINCT session FROM turn_ledger").fetchall()
+        return [row[0][len(prefix):] for row in rows if row[0].startswith(prefix)]
+
+    def clear_history(self, profile_id, session_ids):
+        with self.connect() as db:
+            for session_id in session_ids:
+                session = f"{profile_id}:{session_id}"
+                db.execute("UPDATE turn_ledger SET response=? WHERE session=?",
+                           ('{"history_cleared":true}', session))
+                db.execute("DELETE FROM dialogue_sessions WHERE session=?", (session,))
+                db.execute("DELETE FROM suspended_tasks WHERE session=?", (session,))
 
     def finish_turn(self, session: str, turn: str, response: dict):
         with self.connect() as db:

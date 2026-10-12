@@ -15,6 +15,7 @@ class EventStore:
     def __init__(self, config: Settings):
         self.config = config
         self._lock = threading.Lock()
+        self._erased_turns: set[tuple[str, str]] = set()
         self.last_event: dict[str, Any] | None = None
         self.last_tts: dict[str, Any] | None = None
         self.recent_events: list[dict[str, Any]] = []
@@ -36,11 +37,16 @@ class EventStore:
             return None
         ext = suffix.lower() if suffix.lower() in {".wav", ".webm", ".ogg", ".mp3", ".m4a"} else ".bin"
         path = self._day_dir() / f"{self._safe(session_id)}_{self._safe(turn_id)}{ext}"
-        path.write_bytes(content)
+        with self._lock:
+            if (session_id, turn_id) in self._erased_turns:
+                return None
+            path.write_bytes(content)
         return path
 
     def append_event(self, event: dict[str, Any]) -> None:
         with self._lock:
+            if (event.get("session_id"), event.get("turn_id")) in self._erased_turns:
+                return
             self.last_event = event
             self.recent_events.append(event)
             del self.recent_events[:-30]
@@ -73,6 +79,8 @@ class EventStore:
     def record_tts(self, session_id: str, turn_id: str, measurement: dict[str, Any]) -> None:
         key = (session_id, turn_id)
         with self._lock:
+            if key in self._erased_turns:
+                return
             chunks = self.tts_by_turn.setdefault(key, [])
             self.tts_by_turn.move_to_end(key)
             chunks.append(measurement)
@@ -106,3 +114,38 @@ class EventStore:
                 {key: list(value) for key, value in self.tts_by_turn.items()},
                 dict(self.last_tts) if self.last_tts is not None else None,
             )
+
+    def clear_sessions(self, session_ids):
+        """Erase retained conversations while preserving records of other sessions."""
+        sessions = set(session_ids)
+        removed = 0
+        with self._lock:
+            self._erased_turns.update(key for collection in (self.input_starts, self.tts_by_turn) for key in collection if key[0] in sessions)
+            self._erased_turns.update((event.get("session_id"), event.get("turn_id")) for event in self.recent_events if event.get("session_id") in sessions)
+            for path in self.config.data_dir.glob("????-??-??/turns.jsonl"):
+                lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+                kept = []
+                for line in lines:
+                    event = json.loads(line)
+                    if event.get("session_id") in sessions:
+                        self._erased_turns.add((event.get("session_id"), event.get("turn_id")))
+                    else:
+                        kept.append(line)
+                removed += len(lines) - len(kept)
+                if len(kept) != len(lines):
+                    temporary = path.with_suffix(".jsonl.reset")
+                    temporary.write_text("".join(kept), encoding="utf-8")
+                    temporary.replace(path)
+            for directory in self.config.data_dir.glob("????-??-??"):
+                prefixes = tuple(self._safe(sid) + "_" for sid in sessions)
+                for path in directory.iterdir():
+                    if path.is_file() and path.suffix in {".wav", ".webm", ".ogg", ".mp3", ".m4a", ".bin"} and path.name.startswith(prefixes):
+                        path.unlink()
+            self.recent_events = [event for event in self.recent_events if event.get("session_id") not in sessions]
+            self.last_event = self.recent_events[-1] if self.recent_events else None
+            for collection in (self.tts_by_turn, self.input_starts):
+                for key in list(collection):
+                    if key[0] in sessions:
+                        del collection[key]
+            self.last_tts = None
+        return removed

@@ -2,7 +2,7 @@
 
 :root{color-scheme:dark;--bg:#04050a;--muted:#858b99;--text:#eef1f7;--cyan:#d6dcea;--teal:#b4c0d8;--line:rgba(196,206,230,.09);font-family:'Be Vietnam Pro',system-ui,sans-serif;font-synthesis:none;background:var(--bg);color:var(--text)}
 
-*{box-sizing:border-box}body{margin:0;min-height:100vh;background:var(--bg);overflow-x:hidden}button,input,a{-webkit-tap-highlight-color:transparent}button,input{font:inherit}button{cursor:pointer;color:inherit;border:0;background:none}button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid var(--teal);outline-offset:4px}button:disabled{cursor:wait;opacity:.45}
+*{box-sizing:border-box}[hidden]{display:none!important}body{margin:0;min-height:100vh;background:var(--bg);overflow-x:hidden}button,input,a{-webkit-tap-highlight-color:transparent}button,input{font:inherit}button{cursor:pointer;color:inherit;border:0;background:none}button:focus-visible,a:focus-visible,input:focus-visible{outline:2px solid var(--teal);outline-offset:4px}button:disabled{cursor:wait;opacity:.45}
 svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}.icon-library{position:absolute;width:0;height:0;overflow:hidden}
 @keyframes pulse{from{opacity:.55}to{opacity:1}}
 
@@ -162,10 +162,15 @@ body{--information-width:clamp(240px,24vw,300px);--information-gap:28px}
 .information-rail .destination-choices{display:flex;flex-direction:column;gap:10px}
 .information-rail [hidden]{display:none}
 .information-heading{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.information-rail .information-heading{position:sticky;top:0;z-index:2;background:#11151ef5;border-radius:8px;padding:4px 0}
 .information-heading strong{font-size:13px;color:#e4e7ef;font-weight:500}
 .information-heading button,.information-tabs button{padding:8px 12px;border:1px solid #c1c8d82a;border-radius:10px;font-size:11px;color:#ccd3e3;background:#1e2430}
 .information-tabs{display:flex;gap:8px;flex-wrap:wrap}.information-tabs:empty,.mini-map-slot:empty{display:none}
 .information-cancel{color:#ad9299;font-size:11px;padding:10px;text-align:left}
+.planning-controls{position:sticky;top:0;z-index:2;display:flex;gap:8px;flex-wrap:wrap;padding:2px 0 4px}
+.journey-toolbar{display:flex;flex-direction:column;gap:8px;padding:10px;border:1px solid var(--line);border-radius:12px;background:#11151eb8;backdrop-filter:blur(12px);font-size:11px;color:#c4cddc;line-height:1.5}.journey-toolbar>div{display:flex;gap:8px;flex-wrap:wrap}.journey-toolbar button{padding:7px 9px;border:1px solid var(--line);border-radius:8px;color:#c4cddc;background:#1e2430}.journey-toolbar button:disabled{opacity:.4;cursor:default}
+.information-rail.journey-information-hidden>#journey-toolbar,.information-rail.journey-information-hidden>#planning-controls,.information-rail.journey-information-hidden>#information-tabs,.information-rail.journey-information-hidden>#destination-choices,.information-rail.journey-information-hidden>#trip-plan-card,.information-rail.journey-information-hidden>#mini-map-slot{display:none}
+.planning-cancel{padding:10px 13px;border:1px solid #d09aa54d;border-radius:12px;background:#211b25e6;color:#eed3d9;font-size:12px;backdrop-filter:blur(12px)}.planning-cancel:hover{background:#382633}.planning-cancel:focus-visible{outline:2px solid #eed3d9;outline-offset:2px}
 .destination-choice-heading{margin:0;font-size:12px;line-height:1.6}.default-destination{margin:0;font-size:12px;line-height:1.6;color:#e5cca4}
 .trip-plan-card p{font-size:12px;line-height:1.65;color:#abb5c8;margin:12px 0}.trip-plan-card .trip-destination{color:#e1e7f2}.trip-plan-card .route-stop{padding:10px 0;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:5px;font-size:12px;line-height:1.5}.trip-plan-card small{color:#a5b1c7;font-size:11px}
 .trip-actions{display:flex;gap:7px;flex-wrap:wrap;margin-top:14px}.trip-actions button{padding:10px;border:1px solid #c1c8d82a;border-radius:10px;color:#d4dcec;background:#252c39;font-size:11px}.trip-actions button:disabled{opacity:.4;cursor:default}
@@ -190,3 +195,19 @@ body.journey-open .information-rail{visibility:hidden;pointer-events:none}
 .information-rail .maneuver{position:static;inset:auto;transform:none;min-width:0;width:100%;max-width:none;padding:12px;gap:10px}.information-rail .maneuver strong{font-size:18px}.information-rail .maneuver small{display:none}
 
 .information-rail .destination-choice-card{padding:10px;min-height:52px;background:#1a1f297a;gap:8px}.information-rail .destination-choice-card:hover{background:#303949e0}.information-rail .destination-choice-card small{line-height:1.4}
+.dock-button.gear.shifting{color:var(--teal);border-color:#9caec044}
+
+/* A compact map sheet leaves the route visible; details expand on demand. */
+.journey-details-toggle{display:none}
+@media(max-width:760px){
+ .journey-details-toggle{display:block;margin-left:auto;padding:8px;color:#c4cddc;font-size:11px;border:1px solid var(--line);border-radius:8px}
+ .journey-panel{top:auto;bottom:90px;height:auto;max-height:min(48dvh,430px);padding:14px 16px;gap:9px}
+ .journey:not(.details-expanded) .journey-scroll,.journey:not(.details-expanded) .journey-summary,.journey:not(.details-expanded) .journey-next{display:none}
+ .journey.details-expanded .journey-panel{height:calc(100dvh - 110px);max-height:calc(100dvh - 110px)}
+}
+@media(max-height:650px) and (max-width:760px){
+ .journey:not(.details-expanded) .journey-point.origin{display:none}
+ .journey:not(.details-expanded) .journey-points:before{display:none}
+ .journey:not(.details-expanded) .journey-point.destination{border-top:0}
+}
+@media(max-width:760px){.journey.details-expanded .journey-recenter{display:none}}
