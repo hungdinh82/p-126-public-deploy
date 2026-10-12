@@ -11,7 +11,7 @@ from src.vivi.navigation.energy import EnergyPlanner, EnergyProfile, load_statio
 from src.vivi.navigation.vietmap import Place, Route
 from tests.test_dialogue_v2 import ScriptedModel, build, invoke
 from tests.test_long_term_memory import services as services
-from tests.test_navigation_workflow import HANOI, IntercityMaps
+from tests.test_navigation_workflow import HANOI, IntercityMaps, profile
 
 ROOT = Path(__file__).parents[1]
 AUDIT = {r["row"]: r for r in map(json.loads, (ROOT / "tests/fixtures/dialogue_audits/audit_925_958.jsonl").read_text().splitlines())}
@@ -23,8 +23,9 @@ class NearbyMaps:
 
     async def search(self, text, **kwargs):
         self.queries.append(text)
+        # Named after the query, as a real map is: unrelated names fail the POI evidence check.
         return [
-            Place(ref_id=str(i), name=f"Quán phở TEST {i + 1}", address="Địa chỉ mô phỏng", lat=21, lng=105.9 + i / 100)
+            Place(ref_id=str(i), name=f"{text} TEST {i + 1}", address="Địa chỉ mô phỏng", lat=21, lng=105.9 + i / 100)
             for i in range(self.count)
         ]
 
@@ -73,7 +74,9 @@ async def test_greeting_comfort_and_dislike_never_invent_climate_setting(service
 @pytest.mark.asyncio
 async def test_search_setting_directions_preserves_order_and_voice_choice(services, tmp_path, row, tier):
     maps = NearbyMaps()
-    services = replace(services, navigation=maps)
+    # Without a battery profile a route is never offered (configuration_required).
+    services = replace(services, navigation=maps, energy_planner=EnergyPlanner(profile()))
+    services.action_gateway.vehicle.set_energy("driver", 82, 246)
     model = ScriptedModel([AUDIT[row]["recorded_semantic"]])
     graph, _, gateway = build(
         services, tmp_path, model if tier == "google" else None, local=model if tier == "local" else None
@@ -101,7 +104,8 @@ async def test_search_setting_directions_preserves_order_and_voice_choice(servic
     graph.default_provider = "rules"
     chosen = await invoke(graph, "chỗ thứ hai", "choice")
     assert chosen["session"]["active"]["id"] == task_id
-    assert len(chosen["steps"]) == 3 and chosen["status"] == "confirmation_required"
+    assert len(chosen["steps"]) == 3 and chosen["status"] == "answered"
+    assert chosen["navigation"]["offer"]["status"] == "pending" and not gateway.vehicle.state_for("driver").driving
     assert chosen["navigation"]["selected"]["name"].endswith("2")
     started = await invoke(graph, "đồng ý", "start")
     assert all(s["status"] == "completed" for s in started["steps"])
@@ -113,7 +117,8 @@ async def test_search_setting_directions_preserves_order_and_voice_choice(servic
 @pytest.mark.parametrize("typed", [True, False])
 @pytest.mark.asyncio
 async def test_selection_keeps_pending_steps_and_early_start_does_not_replace_task(services, tmp_path, typed):
-    services = replace(services, navigation=NearbyMaps(1))
+    services = replace(services, navigation=NearbyMaps(1), energy_planner=EnergyPlanner(profile()))
+    services.action_gateway.vehicle.set_energy("driver", 82, 246)
     model = ScriptedModel(
         [
             {
@@ -195,7 +200,9 @@ async def test_data_vf8_plus_profile_hand_calculation_and_charging_e2e(services,
         {
             "session_id": "driver",
             "turn_id": "plan",
-            "input_text": "lập lộ trình tới Hải Phòng",
+            # "lập lộ trình" is now a trip plan; directions to a named place exercise the
+            # same energy calculation, and the synthetic map has no verified region centre.
+            "input_text": "chỉ đường tới Hải Phòng TEST",
             "position": {"lat": HANOI[0], "lng": HANOI[1], "simulated": True},
         }
     )

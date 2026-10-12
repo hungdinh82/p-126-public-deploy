@@ -974,6 +974,10 @@ class OfflineParser:
             target = target[origin.start(2) :].strip()
         target = re.sub(r"^(?:đi vào|di vao|đi|di|vào|vao|đến|den|tới|toi|về|ve)\s+", "", target, flags=re.I)
         target = re.sub(r"\s+(?:giúp tôi|giup toi|cho tôi|cho toi|nhé|nhe)$", "", target, flags=re.I).strip(" ,.!?")
+        # "quán cà phê gần nhất": nearness is a slot, never part of the name sent to the map.
+        near = re.search(r"\s+(?:gần đây|gan day|gần nhất|gan nhat|gần|gan)$", target, flags=re.I)
+        if near:
+            target = target[: near.start()].strip()
         if not target:
             return None
         args = {
@@ -981,6 +985,8 @@ class OfflineParser:
             "trip_kind": trip_kind,
             "destination_scope": "region" if region_for(target) else "place",
         }
+        if near:
+            args["nearest"] = True
         if origin_query:
             args["origin_query"] = origin_query
         return planning, args
@@ -1181,7 +1187,7 @@ class OfflineParser:
                 # names for the vendor query and later speech.
                 query = " ".join(raw.split()[-len((match[1] if match else value).split()) :])
                 query = re.sub(
-                    r"(?: giúp tôi| gần đây| gần nhất| gần| cho tôi| đi và sạc| lập lộ trình sạc)$",
+                    r"(?: giúp tôi| gần đây| gần nhất| gần| cho tôi| lập lộ trình đi và sạc| đi và sạc| lập lộ trình sạc)$",
                     "",
                     query,
                     flags=re.I,
@@ -1291,6 +1297,18 @@ class OfflineParser:
         reference = self.place_reference(text, session)
         if reference:
             return reference
+        steps = [a.capability for a in bounded.actions]
+        if (
+            bounded.act == "request"
+            and not bounded.unresolved
+            and "navigation.search" in steps
+            and any(a.capability == "navigation.plan" and a.arguments.use_search_results for a in bounded.actions)
+            and (result.act != "request" or [a.capability for a in result.drafts()] != steps)
+        ):
+            # "Tìm quán phở, đặt 24 độ rồi dẫn đường" is a complete new task whose order
+            # the words fix. Logs 942-948: models dropped the search, put directions
+            # first, or appended the steps to an old task.
+            return bounded
         travel = [a for a in result.drafts() if a.capability.startswith(("navigation.", "trip."))]
         for action in travel:
             if action.capability == "trip.start":
