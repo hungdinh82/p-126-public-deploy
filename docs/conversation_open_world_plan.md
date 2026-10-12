@@ -37,7 +37,7 @@ Ví dụ: “Ở đó có gì chơi?” khi đang tới Ninh Bình → resolve t
 
 ## Tổng hợp và giới hạn nguồn
 
-Adapter trả source ID, title, URL, excerpt, retrieved_at và published_at nếu nguồn có. Model chỉ trả text cùng source ID và quote hỗ trợ, không được trả action hoặc tự tạo citation URL. Backend kiểm tra ID tồn tại, quote xuất hiện trong excerpt và các số trong câu trả lời xuất hiện trong quote. Trạng thái `evidence_matched` thể hiện những kiểm tra này, không phải kiểm chứng ngữ nghĩa độc lập mọi khẳng định.
+Adapter trả source ID, title, URL, excerpt, retrieved_at và published_at nếu nguồn có. Server chia excerpt thành các đoạn tối đa 800 ký tự, ưu tiên ranh giới câu/đoạn, và cấp mã `e1`, `e2`… cho từng đoạn trong request. Model chỉ trả `text` cùng `evidence_ids`, không được trả action hoặc tự tạo citation URL. Schema giới hạn mã trong các đoạn đã cấp; backend kiểm tra lại mã, lấy nguyên văn đoạn gốc và gắn source URL tương ứng. Các số trong câu trả lời phải xuất hiện trong những đoạn được chọn. Trạng thái `evidence_matched` thể hiện những kiểm tra này, không phải kiểm chứng ngữ nghĩa độc lập mọi khẳng định.
 
 Không tìm được nguồn hoặc mọi generator lỗi/không cung cấp hỗ trợ hợp lệ thì trả lỗi có kiểu; giữ liên kết nguồn nếu có. Không lấy kiến thức model để thay thời tiết hoặc giá hiện tại. Thời tiết được dựng trực tiếp từ dữ liệu và đơn vị API, không dùng model sửa các con số.
 
@@ -102,9 +102,13 @@ Tổng hợp từng dùng `effective_provider=rules`, nên bỏ qua Google và c
 đang mất kết nối. Capability trò chuyện/thông tin nay dùng provider người dùng
 chọn, với bộ fallback và circuit breaker generation độc lập. Search được tổng
 hợp thành một câu nói khoảng 30–60 từ; link giữ lại để tham khảo trên màn hình.
-Kiểm tra source ID/quote/số liệu vẫn áp dụng, có một lượt repair trong cùng ngân
-sách thời gian. Chỉ chuẩn hóa khoảng trắng khi so khớp quote; không bỏ kiểm tra
-nội dung. Diagnostics phân biệt các lỗi quote, số liệu và schema.
+Lượt log 2026-10-12 14:27 đã có 5 nguồn Tavily nhưng model chép lại quote với chữ
+khác nguồn, nên cả lượt đầu và repair đều bị `answer_has_no_matching_support`.
+Giao thức chọn mã đoạn khắc phục phụ thuộc vào việc model chép đúng trích dẫn.
+Backend vẫn kiểm tra mã, đoạn gốc và số liệu; có một lượt repair trong cùng ngân
+sách thời gian. Adapter cũ trả source ID/quote vẫn được kiểm tra nguyên văn sau
+chuẩn hóa khoảng trắng. Diagnostics phân biệt mã không tồn tại, quote, số liệu
+và schema.
 
 Tuyến dài từng bị giới hạn 6 điểm khảo sát và 5 lượt ghé trạm. Thêm vào đó,
 ưu tiên trạm dừng nghỉ thay các slot cuối bằng trạm ở đầu/giữa tuyến, làm mất

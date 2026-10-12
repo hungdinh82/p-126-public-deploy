@@ -185,16 +185,24 @@ async def test_timeout_is_logged_with_stage_and_turn_identity(services, tmp_path
     from src.vivi.persistence.event_store import EventStore
 
     class Model:
+        started = False
+
         async def agenerate_json(self, **kwargs):
+            self.started = True
             await asyncio.Future()
 
-    graph, ledger, gateway = build(services, tmp_path, Model())
+    model = Model()
+    graph, ledger, gateway = build(services, tmp_path, model)
+    # Allow SQLite/checkpoint setup to finish; the turn deadline must expire
+    # while interpreting, before the provider's own fallback timeout.
+    graph.navigation.workflow.resolver.providers["google"].budget_seconds = 5
     events = EventStore(Settings(data_dir=tmp_path))
-    orchestrator = LangGraphOrchestrator({"google": graph}, gateway, events, ledger=ledger, timeout_seconds=.05)
+    orchestrator = LangGraphOrchestrator({"google": graph}, gateway, events, ledger=ledger, timeout_seconds=1)
     try:
         with pytest.raises(TimeoutError):
             await orchestrator.run(TurnRequest(session_id="driver", turn_id="timeout", transcript="đi Sầm Sơn"), "google")
         error = events.last_event
+        assert model.started
         assert error["event_type"] == "turn_error" and error["error_code"] == "turn_timeout"
         assert error["stage"] == "interpret" and error["turn_id"] == "timeout"
         assert ledger.turn_status("default:driver", "timeout")["status"] == "interrupted"

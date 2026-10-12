@@ -4,6 +4,8 @@ import math
 import re
 from collections import Counter
 
+from src.vivi.navigation.destinations import administrative_match
+
 
 def short_name(name):
     # VietMap may append the street to the business name. This only formats a
@@ -31,6 +33,12 @@ def short_address(address):
 
 
 def place_label(place, *, full_name=False):
+    if administrative_match(place, place["name"]):
+        name = place["name"]
+        parent = next((b for b in place.get("boundaries", []) if b.get("type") == 0), None)
+        if parent and parent.get("name", "").casefold() not in name.casefold():
+            return f"{name}, {parent.get('full_name') or parent['name']}"
+        return name
     name = place["name"] if full_name else short_name(place["name"])
     area = locality(place.get("address", ""))
     return f"{name}, {area}" if area and area.casefold() not in name.casefold() else name

@@ -12,7 +12,7 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from src.vivi.navigation.destinations import administrative_match, center_requested, region_for
+from src.vivi.navigation.destinations import administrative_layer, administrative_match, center_requested, region_for
 from src.vivi.navigation.effects import vehicle_effect
 from src.vivi.navigation.energy import ChargingStation, EnergyPlanner
 from src.vivi.navigation.presentation import (
@@ -381,6 +381,7 @@ class NavigationWorkflow:
                 if (
                     not representative
                     and clarification.get("region")
+                    and not administrative_layer(query)
                     and not any(region_for(part.strip()) for part in query.split(","))
                 ):
                     query += ", " + clarification["region"]
@@ -457,7 +458,8 @@ class NavigationWorkflow:
                 and any(administrative_match(p, arguments.get("query", "")) for p in nav.candidates)
             ):
                 nav.candidates = [p for p in nav.candidates if administrative_match(p, arguments["query"])]
-                default_region = {"name": arguments["query"]}
+                if not administrative_layer(arguments["query"]):
+                    default_region = {"name": arguments["query"]}
                 representative = True
             nav.revision += 1
             nav.clarification = None
@@ -509,7 +511,9 @@ class NavigationWorkflow:
             elif representative and len(nav.candidates) == 1:
                 selected = nav.candidates[0]
                 selected["representative"] = True
-                selected["spoken_label"] = "Điểm đại diện " + selected["name"]
+                selected["spoken_label"] = "Điểm đại diện " + place_label(selected)
+                if default_region and not default_region.get("representative_label"):
+                    default_region = {**default_region, "representative_label": "điểm đại diện " + place_label(selected)}
             else:
                 message = (
                     "Chọn điểm đến cụ thể: " if arguments.get("destination_scope") == "region" else ""
@@ -615,26 +619,28 @@ class NavigationWorkflow:
         # Without a verified category code use a bounded alias query plus a
         # local POI identity check, rather than fabricating a vendor code.
         kwargs = {"near": coordinates(origin)}
-        if representative:
-            kwargs["layers"] = "WARD" if region_for(arguments["query"].split(",")[0]) is None else "CITY"
+        query = arguments["query"]
+        layer = administrative_layer(query) if not category else None
+        admin_only = representative or layer is not None
+        if admin_only:
+            kwargs["layers"] = layer or "CITY"
         if category and categories.get(category):
             kwargs["category"] = categories[category]
-        places = await self.services.navigation.search(arguments["query"], **kwargs)
+        places = await self.services.navigation.search(query, **kwargs)
+        if admin_only:
+            places = [p for p in places if administrative_match(p.model_dump(), query)]
+            # The alias catalogue includes former cities/provinces. In v4 new
+            # boundaries these names may identify wards, rather than CITY results.
+            # Retry only when no verified result remains, never accept a business
+            # or a renamed province merely because its address contains the name.
+            if not places and representative and layer is None:
+                places = await self.services.navigation.search(query, **{**kwargs, "layers": "WARD"})
+                places = [p for p in places if administrative_match(p.model_dump(), query)]
         missing = [place for place in places[:10] if place.lat is None or place.lng is None]
         details = await read_many(self.services.navigation, [("place", (place.ref_id,), {}) for place in missing])
         details = dict(zip((place.ref_id for place in missing), details))
         candidates = []
         for place in places[:10]:
-            if representative and not administrative_match(place.model_dump(), arguments["query"].split(",")[0]):
-                continue
-            if representative and "," in arguments["query"]:
-                from src.vivi.text import normalize_text
-
-                region = region_for(arguments["query"].split(",")[-1].strip())
-                if region and not any(
-                    normalize_text(b.get("name", "")) == normalize_text(region["name"]) for b in place.boundaries
-                ):
-                    continue
             if category and not categories.get(category):
                 from src.vivi.dialogue.parser import poi_matches
 
@@ -652,7 +658,7 @@ class NavigationWorkflow:
             if place.lat is None or place.lng is None:
                 continue
             value = place.model_dump()
-            if not representative and not category:
+            if not admin_only and not category:
                 from src.vivi.dialogue.parser import place_query_matches
 
                 if not place_query_matches(arguments["query"], value):

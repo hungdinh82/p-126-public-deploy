@@ -314,7 +314,9 @@ Information Service dùng Tavily cho tìm kiếm web, Open-Meteo cho thời ti�
 cho thông tin lịch sử/văn hóa. Khi đang tới Ninh Bình, “Ở đó có gì chơi?” lấy điểm đến từ
 NavigationService để tìm thông tin; yêu cầu dẫn đường tới địa điểm được chọn vẫn đi qua
 luồng lập tuyến/xác nhận hiện có. Search được model tổng hợp thành một câu ngắn,
-có kiểm tra trích dẫn và một lượt sửa đáp án nếu cần; nguồn hiển thị dưới câu trả lời.
+có kiểm tra nguồn và một lượt sửa đáp án nếu cần; nguồn hiển thị dưới câu trả lời.
+Model chọn mã đoạn bằng chứng thay vì chép lại trích dẫn; server giữ nguyên đoạn
+nguồn, gắn link tương ứng và kiểm tra số liệu trong câu trả lời dựa trên các đoạn đã chọn.
 Model tổng hợp được chọn độc lập với kết quả fallback của planner.
 
 Thêm `TAVILY_API_KEY` vào `.env` để bật live web search; hai nguồn còn lại không cần key.

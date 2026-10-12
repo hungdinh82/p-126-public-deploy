@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from src.vivi.capabilities.registry import DEFAULT_CLIMATE_DELTA_CELSIUS, compatible_change
 from src.vivi.conversation.context import resolve_query
 from src.vivi.dialogue.contracts import ActionDraft, SemanticTurn, SessionState
-from src.vivi.navigation.destinations import region_for
+from src.vivi.navigation.destinations import administrative_layer, region_for
 from src.vivi.text import normalize_text
 
 
@@ -1407,6 +1407,16 @@ class OfflineParser:
             # A newly named city/centre is destination evidence, not consent
             # to select an unrelated POI handle left over from an old search.
             return self.request("trip.plan" if journey[0] else "navigation.plan", journey[1])
+        if (journey and administrative_layer(journey[1]["query"])) or any(
+            a.capability in {"navigation.refine", "trip.refine"} and administrative_layer(a.arguments.query)
+            for a in bounded.actions
+        ):
+            # Preserve the spoken ward/province qualifier when a model drops it.
+            # The bounded parser also keeps a pending refinement's ownership.
+            if bounded.actions and all(
+                a.capability.startswith(("navigation.", "trip.")) for a in bounded.actions
+            ):
+                return bounded
         reference = self.place_reference(text, session)
         if reference:
             return reference
