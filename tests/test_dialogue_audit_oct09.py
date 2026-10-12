@@ -8,6 +8,7 @@ import pytest
 
 from src.vivi.dialogue.contracts import DialogueTask, SessionState, TaskStep
 from src.vivi.dialogue.parser import OfflineParser
+from src.vivi.text import normalize_text
 from tests.test_dialogue_v2 import build
 from tests.test_long_term_memory import services as services
 from tests.test_navigation_workflow import Maps
@@ -17,8 +18,18 @@ class AuditMaps(Maps):
     async def search(self, text, **kwargs):
         from src.vivi.navigation.vietmap import Place
 
-        if text == "da nang":
-            return [Place(ref_id="dn-test", name="Đà Nẵng TEST", lat=16, lng=108)]
+        # Vendor queries keep Vietnamese spelling ("đà nẵng"); match on the normalized form.
+        if normalize_text(text) == "da nang":
+            # A city answers as an administrative result with its boundary, as VietMap does.
+            return [
+                Place(
+                    ref_id="dn-test",
+                    name="Đà Nẵng",
+                    lat=16,
+                    lng=108,
+                    boundaries=[{"name": "Đà Nẵng", "full_name": "Thành phố Đà Nẵng"}],
+                )
+            ]
         if "trạm sạc" in text:
             return [Place(ref_id="charger-test", name="Trạm sạc VinFast TEST", lat=21, lng=105.9)]
         return await super().search(text, **kwargs)
@@ -86,7 +97,13 @@ async def test_all_latest_logged_turns(services, tmp_path, tier):
         )
         row = item["row"]
         assert result["response_text"].strip(), row
-        assert result["diagnostics"]["effective_provider"] == tier, row
+        # Consent replies and list choices are bound to the open question by rules,
+        # never sent to a model (SemanticResolver.resolve).
+        bound = any(
+            a.get("source") in {"pending_confirmation", "candidate_reference"}
+            for a in result["diagnostics"].get("provider_attempts", [])
+        )
+        assert result["diagnostics"]["effective_provider"] == ("rules" if bound else tier), row
         if row in {855, 856, 881, 882, 883, 896, 897}:
             assert result["status"] == "clarify", (row, result["output"])
             assert not (result.get("execution") or {}).get("executed"), row
@@ -110,8 +127,11 @@ async def test_all_latest_logged_turns(services, tmp_path, tier):
         if row == 879:
             semantic = result["diagnostics"]["semantic"]
             assert semantic["actions"][0]["capability"] == "navigation.plan"
-            assert semantic["actions"][0]["arguments"]["query"] == "da nang"
-            assert result["navigation"]["status"] == "selecting"
+            assert normalize_text(semantic["actions"][0]["arguments"]["query"]) == "da nang"
+            # A verified city proposes its centre first and asks whether to pick a specific place.
+            assert result["navigation"]["selected"]["representative"]
+            assert "trung tâm Đà Nẵng" in result["response_text"] and result["status"] == "clarify"
+            assert not (await services.action_gateway.vehicle.get_state("driver")).driving
         if row in {875, 876}:
             assert "driver" not in result["action_proposal"]["arguments"]["zones"], row
         if row == 877:
