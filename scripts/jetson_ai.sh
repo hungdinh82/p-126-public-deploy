@@ -118,6 +118,15 @@ build_ort() {
 }
 setup() {
   [[ "${1:-}" == --profile && "${2:-}" == agx ]] || fail "Usage: bash scripts/jetson_ai.sh setup --profile agx"
+  shift 2
+  # Keep GPU TTS as the default on Jetson; native INT8 is an explicit CPU trial.
+  local tts_precision=fp32
+  if [[ $# -gt 0 ]]; then
+    [[ $# == 2 && "$1" == --tts-precision && ( "$2" == int8 || "$2" == fp32 ) ]] \
+      || fail "Usage: setup --profile agx [--tts-precision int8|fp32]"
+    tts_precision="$2"
+  fi
+  export JETSON_AI_TTS_PRECISION="$tts_precision"
   check_platform
   check_sdk
   check_space
@@ -149,7 +158,11 @@ setup() {
   uv pip install --python "$VIVI_VENV/bin/python" --no-deps --only-binary :all: --require-hashes \
     -r "$VIVI_REPO/requirements-jetson-zerotts.lock"
   "$VIVI_VENV/bin/python" scripts/check_jetson_runtime.py
-  "$VIVI_VENV/bin/python" scripts/prepare_speech_models.py --root "$VIVI_DATA/models/speech" --engine whisper_cpp
+  if [[ "$tts_precision" == int8 ]]; then
+    uv pip install --python "$VIVI_VENV/bin/python" --only-binary :all: onnx==1.17.0
+  fi
+  "$VIVI_VENV/bin/python" scripts/prepare_speech_models.py --root "$VIVI_DATA/models/speech" \
+    --engine whisper_cpp --tts-precision "$tts_precision"
   "$VIVI_VENV/bin/python" scripts/smoke_jetson_profile.py --data "$VIVI_DATA" \
     --native-build "$VIVI_NATIVE_BUILD" --model "$VIVI_MODEL" \
     --backend-port "$VIVI_BACKEND_PORT" --stt-port "$VIVI_STT_PORT"
@@ -166,7 +179,7 @@ setup() {
     || fail "Gateway import check failed"
   "$VIVI_VENV/bin/python" scripts/check_jetson_runtime.py --write-manifest "$VIVI_MANIFEST"
   touch "$VIVI_COMPLETE"
-  echo "Setup complete: SLM + STT + TTS CUDA."
+  echo "Setup complete: SLM + STT CUDA; ZeroTTS $tts_precision (INT8 CPU / FP32 CUDA)."
   echo "Service token: $VIVI_DATA/service.env (copy securely to Laptop)"
   if command -v tailscale >/dev/null 2>&1; then
     echo "Tailscale URL: http://$(tailscale ip -4 2>/dev/null | head -n 1):$VIVI_PORT"
@@ -252,7 +265,13 @@ run() {
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
 case "${1:-}" in
   setup) shift; setup "$@" ;;
-  run) shift; [[ $# == 0 ]] || fail "Usage: bash scripts/jetson_ai.sh run"; run ;;
+  run) shift
+    if [[ $# -gt 0 ]]; then
+      [[ $# == 2 && "$1" == --tts-precision && ( "$2" == int8 || "$2" == fp32 ) ]] \
+        || fail "Usage: bash scripts/jetson_ai.sh run [--tts-precision int8|fp32]"
+      export JETSON_AI_TTS_PRECISION="$2"
+    fi
+    run ;;
   doctor) check_platform; check_sdk; [[ -x "$VIVI_VENV/bin/python" ]] || fail "Run setup first: missing profile venv"
     "$VIVI_VENV/bin/python" "$VIVI_REPO/scripts/check_jetson_runtime.py" ;;
   *) fail "Usage: bash scripts/jetson_ai.sh {setup --profile agx|run|doctor}" ;;

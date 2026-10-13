@@ -1,4 +1,4 @@
-"""Load all three Xavier GPU engines together and exercise real inference."""
+"""Exercise Xavier inference: GPU SLM/STT and the selected FP32/INT8 TTS."""
 
 import argparse
 import io
@@ -93,8 +93,11 @@ def smoke(args):
         models.load("stt")
         models.load("tts")
         for name in ("stt", "tts"):
-            if models.info[name]["status"] != "ready" or not models.info[name]["using_gpu"]:
-                raise RuntimeError(f"{name} CUDA load failed: {models.info[name]}")
+            state = models.info[name]
+            int8_tts = name == "tts" and state.get("precision") == "int8-dynamic-mixed"
+            expected_device = "cpu" if int8_tts else "cuda"
+            if state["status"] != "ready" or state["device"] != expected_device:
+                raise RuntimeError(f"{name} {expected_device} load failed: {state}")
         started = time.monotonic()
         result = client.post(llm_url + "/v1/chat/completions", json={
             "messages": [{"role": "user", "content": "Trả lời ngắn: 2 cộng 3 bằng bao nhiêu?"}],

@@ -28,7 +28,7 @@ const $=id=>document.getElementById(id);
 const callId=()=>crypto.randomUUID?crypto.randomUUID():Array.from(crypto.getRandomValues(new Uint8Array(16)),v=>v.toString(16).padStart(2,'0')).join('');
 let token=localToken||sessionStorage.getItem('vivi-ai-test-token')||'', busy=false, recorder=null, micStream=null, audioUrl=null, traces=[];
 $('token').value=token;if(localToken||!authRequired)$('auth').hidden=true;
-const fields=[['model_id','Model'],['model_path','Model load từ'],['api_url','Model API'],['location','Chạy tại'],['device','Thiết bị thực tế'],['load_ms','Thời gian load'],['last_latency_ms','Lần xử lý gần nhất'],['first_chunk_ms','Phần đầu tiên'],['stream_mode','Kiểu streaming']];
+const fields=[['model_id','Model'],['model_path','Model load từ'],['precision','Độ chính xác số'],['api_url','Model API'],['location','Chạy tại'],['device','Thiết bị thực tế'],['load_ms','Thời gian load'],['last_latency_ms','Lần xử lý gần nhất'],['first_chunk_ms','Phần đầu tiên'],['stream_mode','Kiểu streaming']];
 for(const name of ['stt','llm','tts']){
  const c=document.createElement('div');c.className='card';c.id='card-'+name;
  const h=document.createElement('h2');h.append(name==='llm'?'SLM':name.toUpperCase());const badge=document.createElement('span');badge.id=name+'-status';badge.className='badge';badge.textContent='Đang kiểm tra';h.append(badge);c.append(h);

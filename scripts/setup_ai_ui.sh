@@ -2,6 +2,13 @@
 set -Eeuo pipefail
 TASK_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$TASK_ROOT"
+tts_precision=int8
+if [[ $# -gt 0 ]]; then
+  [[ $# == 2 && "$1" == --tts-precision && ( "$2" == int8 || "$2" == fp32 ) ]] || {
+    echo 'Usage: bash scripts/setup_ai_ui.sh [--tts-precision int8|fp32]' >&2; exit 2;
+  }
+  tts_precision="$2"
+fi
 export PATH="$HOME/.local/bin:$PATH"
 [[ "$(uname -m)" == x86_64 ]] || { echo 'Trên Xavier: bash scripts/jetson_ai.sh setup --profile agx' >&2; exit 1; }
 command -v uv >/dev/null || { echo 'Cần uv để setup môi trường local.' >&2; exit 1; }
@@ -16,7 +23,11 @@ fi
 uv pip install --python .venv/bin/python --no-deps \
   https://github.com/abetlen/llama-cpp-python/releases/download/v0.3.36-cu124/llama_cpp_python-0.3.36-py3-none-manylinux_2_35_x86_64.whl
 [[ -f models/vivi-slm/Qwen3-1.7B-Q4_K_M.gguf ]] || bash scripts/setup_local_slm.sh cpu
-.venv/bin/python scripts/prepare_speech_models.py --root models/ai-speech
+if [[ "$tts_precision" == int8 ]]; then
+  uv pip install --python .venv/bin/python onnx==1.17.0
+fi
+.venv/bin/python scripts/prepare_speech_models.py --root models/ai-speech --tts-precision "$tts_precision"
 mkdir -p models/ai-speech
 touch models/ai-speech/.setup-complete
 echo 'Setup xong. Chạy: bash scripts/ai_server.sh run'
+echo "ZeroTTS: $tts_precision (INT8 uses CPU; FP32 follows --device)."

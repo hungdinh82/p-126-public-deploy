@@ -12,6 +12,8 @@ from pathlib import Path
 
 import httpx
 
+from jetson_ai.tts_profile import resolve_tts_model
+
 
 class SpeechModels:
     def __init__(self):
@@ -88,7 +90,12 @@ class SpeechModels:
         from zerotts.voices import Voice
         if not self.tts_path or not Path(self.tts_path).is_dir():
             raise FileNotFoundError("TTS model missing; run setup")
-        if self.requested_device == "cuda":
+        path, precision = resolve_tts_model(Path(self.tts_path), os.environ.get("JETSON_AI_TTS_PRECISION"))
+        # Dynamic MatMulInteger quantization is a CPU experiment, not CUDA or
+        # TensorRT INT8. Keep STT/SLM on their independently requested device.
+        device = "cpu" if precision == "int8-dynamic-mixed" else self.requested_device
+        self.info["tts"].update(model_path=str(path), precision=precision)
+        if device == "cuda":
             if hasattr(ort, "preload_dlls"):
                 ort.preload_dlls(directory="")
             if "CUDAExecutionProvider" not in ort.get_available_providers():
@@ -97,13 +104,13 @@ class SpeechModels:
                                                    "cudnn_conv_algo_search": "HEURISTIC"}), "CPUExecutionProvider"]
         else:
             providers = ["CPUExecutionProvider"]
-        model = ZeroTTS.from_pretrained(self.tts_path, providers=providers, warmup=False,
+        model = ZeroTTS.from_pretrained(str(path), providers=providers, warmup=False,
                                        intra_op_num_threads=2)
         sessions = [model.prefix_step_sess, model.local_frame_decode_sess, model.text_encoder_sess,
                     model.codec._decode_full_sess, model.codec._decode_step_sess]
         actual = [session.get_providers() for session in sessions]
         gpu = all(p and p[0] == "CUDAExecutionProvider" for p in actual)
-        if self.requested_device == "cuda" and not gpu:
+        if device == "cuda" and not gpu:
             raise RuntimeError("TTS sessions fell back to CPU; CUDA libraries are incompatible")
         pack = Path(os.environ.get("JETSON_AI_VOICE_PACK", str(Path(__file__).resolve().parents[1] / "voices/VIVI.zip")))
         with zipfile.ZipFile(pack) as archive:

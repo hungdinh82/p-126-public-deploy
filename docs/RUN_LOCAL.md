@@ -4,6 +4,11 @@ Hướng dẫn chạy app bình thường trên Linux/Ubuntu hoặc Ubuntu trong
 AI server và backend chính chạy trong hai terminal tại cùng checkout project.
 Không cần Jetson hoặc Docker. AI server mặc định dùng GPU NVIDIA.
 
+Trong nhánh thử nghiệm `feat/zerotts-int8-setup`, setup PC mặc định tạo ZeroTTS
+INT8 và chạy riêng TTS trên CPU. Qwen/Whisper vẫn theo `--device` (mặc định CUDA).
+Setup AGX Xavier giữ FP32 GPU mặc định; chọn INT8 rõ bằng `--tts-precision int8`.
+Xem [thử nghiệm INT8](#thử-nghiệm-zerotts-int8) ở cuối trang trước khi chọn profile.
+
 ## 1. Cấu hình
 
 Trong `config.toml`:
@@ -126,7 +131,107 @@ Nhấn **Ctrl+C** ở từng terminal. AI server dừng các model process do n�
 backend dừng riêng. Lần tiếp theo chỉ cần chạy lại hai lệnh `run` và `run.py`,
 không cần setup lại nếu môi trường/model không thay đổi.
 
-## Kiểm tra đã thực hiện trên máy hiện tại
+## Thử nghiệm ZeroTTS INT8
+
+Theo [hướng dẫn browser của ZeroTTS](https://github.com/zeroweight-ai/ZeroTTS/blob/main/docs/BROWSER.md),
+INT8 ONNX chậm hơn FP32 trong WASM. Nhưng
+[benchmark native x86](https://github.com/zeroweight-ai/ZeroTTS/blob/main/docs/BENCHMARKS.md)
+ghi nhận cải thiện trên một máy Ryzen/DDR4; kết quả đó chưa chứng minh tốc độ trên Xavier.
+Nhánh này áp dụng cách chuyển đổi của
+[script upstream](https://github.com/zeroweight-ai/ZeroTTS/blob/main/tools/quantize_onnx_int8.py):
+ORT BASIC loại bỏ Identity, rồi dynamic-quantize MatMul trong ba graph transformer.
+Codec, embedding và các phép tính còn lại vẫn FP32; token/length INT32/INT64 giữ nguyên.
+Đây là profile hỗn hợp, không phải toàn bộ model/tensor đều INT8.
+Trọng số lưu INT8 với `reduce_range=True` (miền giá trị 7 bit) để tránh bão hòa
+tích lũy U8S8 trên CPU x86 AVX2 khi thử local; đây là khác biệt so với mặc định
+script upstream. Chất lượng giọng trên Xavier vẫn cần nghe/đo lại.
+
+PC:
+
+```bash
+bash scripts/ai_server.sh setup --tts-precision int8
+bash scripts/ai_server.sh run --tts-precision int8
+```
+
+Nếu đã tải đủ model, chuyển đổi offline mà không cài lại môi trường:
+
+```bash
+UV_CACHE_DIR=/tmp/vivi-uv-cache uv pip install --python .venv/bin/python onnx==1.17.0
+.venv/bin/python scripts/prepare_speech_models.py \
+  --root models/ai-speech --tts-precision int8 --local-only
+```
+
+AGX Xavier:
+
+```bash
+bash scripts/ai_server.sh setup --tts-precision int8
+bash scripts/ai_server.sh run --tts-precision int8
+```
+
+Trên Xavier, Qwen/Whisper vẫn chạy CUDA, riêng INT8 TTS dùng CPUExecutionProvider.
+Đây là lựa chọn thử để giảm bộ nhớ GPU, không phải TensorRT INT8.
+FP16 GPU là hướng thử tiếp theo nếu ưu tiên tốc độ GPU; nhánh này chưa thêm FP16.
+
+Setup giữ model FP32 ở `zerotts/`, tạo bản riêng ở `zerotts-int8/`, ghi phiên bản,
+checksum và số node INT8 trong `quantization.json`, rồi mới chọn profile qua
+`tts-profile.json`. Chuyển đổi lỗi không đổi profile/model INT8 cũ. Setup lại tái
+sử dụng artifact nếu nguồn, công cụ và checksum đầu ra khớp. Runtime không chuyển đổi
+hay tải model. Trang `/test` và `/v1/capabilities` báo precision cùng thiết bị TTS.
+
+So sánh bằng hai tiến trình riêng; đổi `--device cpu` thành `cuda` khi đo FP32 GPU:
+
+```bash
+.venv/bin/python scripts/benchmark_zerotts.py --precision fp32 --device cpu \
+  --output data/zerotts-comparison/fp32
+.venv/bin/python scripts/benchmark_zerotts.py --precision int8 --device cpu \
+  --output data/zerotts-comparison/int8
+```
+
+Trên Xavier dùng Python của profile và đường dẫn model trên mount dữ liệu:
+
+```bash
+source scripts/jetson_profile.sh
+"$VIVI_VENV/bin/python" scripts/benchmark_zerotts.py --precision fp32 --device cuda \
+  --root "$VIVI_DATA/models/speech" --output "$VIVI_DATA/logs/tts-fp32"
+"$VIVI_VENV/bin/python" scripts/benchmark_zerotts.py --precision int8 --device cpu \
+  --root "$VIVI_DATA/models/speech" --output "$VIVI_DATA/logs/tts-int8"
+```
+
+Script dùng giọng VIVI, cùng câu và seed, một warmup và ba lượt đo; lưu WAV và
+`report.json` với thời gian audio đầu tiên, tổng thời gian và RTF (nhỏ hơn 1 là
+nhanh hơn thời gian thực). Đọc vài câu thực tế và nghe đối chiếu trước khi chọn
+INT8; WAV hợp lệ chưa chứng minh giọng nói giữ nguyên chất lượng. Giới hạn thử
+là 300 frame, khoảng 24 giây; dùng câu ngắn để tránh bị cắt.
+
+Để chạy lại FP32 ngay, trên cả PC và Xavier:
+
+```bash
+bash scripts/ai_server.sh run --tts-precision fp32
+```
+
+Để lưu FP32 thành lựa chọn setup mặc định cho máy đó:
+
+```bash
+bash scripts/ai_server.sh setup --tts-precision fp32
+```
+
+## Kiểm tra INT8 trên máy phát triển
+
+Đã chuyển đủ ba graph: text encoder 72, prefix step 72 và local frame decode
+425 node MatMulInteger. Model tổng cộng giảm từ khoảng 904 MB xuống 354 MB,
+bao gồm codec FP32. Setup offline chạy lại xác nhận tái sử dụng checksum hợp lệ.
+24 test Python cho chuyển đổi, profile, setup và cấu hình đều pass; kiểm tra
+frontend streaming, lint Python và cú pháp shell cũng pass.
+
+Câu `Xin chào bạn, tôi là trợ lý ViVi.`, giọng VIVI, hai tiến trình CPU riêng,
+một warmup và ba lượt đo: FP32 RTF trung bình 0.94, audio đầu tiên 144 ms;
+INT8 RTF 0.41, audio đầu tiên 61 ms. WAV và report local nằm trong
+`data/zerotts-int8-smoke/{fp32,int8}/`. Audio hai profile có độ dài khác nhau;
+đây là smoke hiệu năng với một câu, chưa đánh giá WER/chất lượng giọng hay tốc độ
+trên AGX Xavier. Lượt INT8 yêu cầu `--device cuda` vẫn báo đúng TTS CPU, để kiểm
+tra việc tách thiết bị TTS khỏi SLM/STT.
+
+## Kiểm tra FP32 GPU trước đây
 
 Entry point `ai_server.sh run` đã được kiểm tra trên RTX 3050 Ti Laptop GPU:
 SLM/STT/TTS đều báo `ready` và sử dụng GPU; gọi chat API không token trả HTTP 200
