@@ -19,6 +19,8 @@ from pydantic import (
     model_validator,
 )
 
+from src.vivi.vehicle.zones import CABIN_ZONE_CHOICES
+
 Zone = Literal["driver", "front_passenger", "rear_left", "rear_right", "all"]
 
 
@@ -221,19 +223,19 @@ TOOLS = (
         "window.set_position",
         "Điều chỉnh độ mở cửa sổ tại vị trí được yêu cầu. Hạ kính xuống là mở (100%); nâng kính lên là đóng (0%). Khi có phần trăm dùng đúng mức đó. Không mở cửa xe.",
         Window,
-        "Bạn muốn mở hoặc đóng cửa sổ bên nào?",
+        f"Bạn muốn mở hoặc đóng cửa sổ nào: {CABIN_ZONE_CHOICES}?",
     ),
     ToolSpec(
         "door.set_open",
         "Mở hoặc đóng cánh cửa xe tại vị trí được yêu cầu. Không thay đổi khoá cửa.",
         DoorOpen,
-        "Bạn muốn mở hay đóng cửa ở vị trí nào?",
+        f"Bạn muốn mở hay đóng cửa nào: {CABIN_ZONE_CHOICES}?",
     ),
     ToolSpec(
         "door.set_lock",
         "Khoá hoặc mở khoá cửa tại vị trí được yêu cầu. Mở khoá không có nghĩa mở cánh cửa.",
         DoorLock,
-        "Bạn muốn điều chỉnh khoá cửa ở vị trí nào?",
+        f"Bạn muốn điều chỉnh khoá cửa nào: {CABIN_ZONE_CHOICES}?",
     ),
     ToolSpec(
         "hood.set_open",
@@ -257,7 +259,7 @@ TOOLS = (
         "seat.set_heat_level",
         "Chỉnh mức sưởi ghế tại vị trí được yêu cầu. Không điều chỉnh vị trí ghế.",
         SeatHeat,
-        "Bạn muốn điều chỉnh sưởi ghế ở vị trí nào?",
+        f"Bạn muốn điều chỉnh sưởi ghế nào: {CABIN_ZONE_CHOICES}?",
     ),
     ToolSpec("media.play", "Phát nhạc hoặc nội dung âm thanh được yêu cầu.", MediaPlay, "Bạn muốn nghe gì?"),
     ToolSpec("media.pause", "Dừng phát âm thanh.", Parameters, "Bạn muốn dừng nhạc phải không?"),
@@ -416,14 +418,14 @@ def validate_tool_arguments(name: str, arguments: dict) -> tuple[dict | None, st
             and not arguments.get("zones")
         ):
             questions["target"] = {
-                "door.set_open": "Bạn muốn mở cửa ở vị trí nào?"
+                "door.set_open": f"Bạn muốn mở cửa nào: {CABIN_ZONE_CHOICES}?"
                 if arguments.get("open") is True
-                else "Bạn muốn đóng cửa ở vị trí nào?"
+                else f"Bạn muốn đóng cửa nào: {CABIN_ZONE_CHOICES}?"
                 if arguments.get("open") is False
-                else "Bạn muốn thao tác với cửa ở vị trí nào?",
-                "window.set_position": "Bạn muốn điều chỉnh kính ở vị trí nào?",
-                "door.set_lock": "Bạn muốn khoá hay mở khoá cửa ở vị trí nào?",
-                "seat.set_heat_level": "Bạn muốn điều chỉnh sưởi ghế ở vị trí nào?",
+                else f"Bạn muốn thao tác với cửa nào: {CABIN_ZONE_CHOICES}?",
+                "window.set_position": f"Bạn muốn điều chỉnh cửa sổ nào: {CABIN_ZONE_CHOICES}?",
+                "door.set_lock": f"Bạn muốn khoá hay mở khoá cửa nào: {CABIN_ZONE_CHOICES}?",
+                "seat.set_heat_level": f"Bạn muốn điều chỉnh sưởi ghế nào: {CABIN_ZONE_CHOICES}?",
             }[name]
             missing.add("target")
         return None, next((questions[key] for key in questions if key in missing), spec.missing_question)

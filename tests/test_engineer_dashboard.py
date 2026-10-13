@@ -73,6 +73,33 @@ async def test_runtime_memory_scenario_uses_runtime_vehicle_and_audits(client):
 
 
 @pytest.mark.asyncio
+async def test_runtime_memory_scenario_reaches_driver_state_and_alerts(client):
+    await engineer_client(client)
+    driver_session = "engineer-scenario-driver"
+
+    applied = await client.post(
+        "/api/v1/engineer/vehicles/demo-car-1/scenario",
+        json={"scenario": "low_battery"},
+    )
+    assert applied.status_code == 200
+
+    driver = await client.get(f"/api/v1/vehicle/alerts?session_id={driver_session}")
+    assert driver.status_code == 200
+    payload = driver.json()
+    assert payload["vehicle_state"]["battery_percent"] == 15
+    assert any(alert["code"] == "LOW_BATTERY" for alert in payload["active_alerts"])
+
+    reset = await client.post(
+        "/api/v1/engineer/vehicles/demo-car-1/scenario",
+        json={"scenario": "reset"},
+    )
+    assert reset.status_code == 200
+    recovered = (await client.get(f"/api/v1/vehicle/alerts?session_id={driver_session}")).json()
+    assert recovered["vehicle_state"]["battery_percent"] == 82
+    assert not any(alert["code"] == "LOW_BATTERY" for alert in recovered["active_alerts"])
+
+
+@pytest.mark.asyncio
 async def test_mqtt_scenario_uses_simulator_control_adapter(client, monkeypatch):
     await engineer_client(client)
     calls = []

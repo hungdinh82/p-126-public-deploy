@@ -215,7 +215,7 @@ class EngineerService:
             data["state_version"] = previous.state_version + 1
             data["updated_at"] = datetime.now(UTC)
             state = VehicleState.model_validate(data)
-        self.runtime.vehicle.state_for(ENGINEER_SESSION, state)
+        state = self.runtime.vehicle.apply_shared_fixture(state)
         self.dashboard_alerts.evaluate(state)
         self._record(actor, "scenario.apply", vehicle_id, f"{scenario}; mode: memory runtime")
         return {"mode": "memory", "vehicle_id": vehicle_id, "scenario": scenario, "state": state}

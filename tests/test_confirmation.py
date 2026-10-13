@@ -93,7 +93,10 @@ class ConfirmationTests(unittest.IsolatedAsyncioTestCase):
     async def test_vague_door_request_clarifies_location_before_confirmation(self):
         vague = await self.turn("Mở cửa")
         self.assertEqual(vague.status, "clarify")
-        self.assertIn("vị trí", vague.message)
+        self.assertEqual(
+            vague.message,
+            "Bạn muốn mở cửa nào: bên tài, bên phụ, sau trái, sau phải hoặc tất cả?",
+        )
         self.assertIsNone(vague.confirmation)
 
         specified = await self.turn("Bên phụ")
