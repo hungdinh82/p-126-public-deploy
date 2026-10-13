@@ -92,7 +92,6 @@ async def test_non_object_model_json_gets_schema_repair(malformed):
     [
         {"text": "Vé Mỹ Khê giá 999.000 đồng.", "evidence_ids": ["e1"]},
         {"text": "Mình đã mở cửa xe cho bạn.", "evidence_ids": ["e1"]},
-        {"text": "Mỹ Khê có bãi biển đẹp.", "evidence_ids": []},
         {"text": "Mỹ Khê có bãi biển đẹp.", "evidence_ids": ["e404"]},
     ],
 )

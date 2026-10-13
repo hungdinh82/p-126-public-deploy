@@ -10,14 +10,15 @@ import json
 import re
 import sqlite3
 import time
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo
 
 import httpx
 
-from src.vivi.conversation.context import destination, resolve_query
+from src.vivi.conversation.context import destination, resolve_query, search_topic
+from src.vivi.information.time_context import search_time_context
 from src.vivi.text import normalize_text
 
 
@@ -110,11 +111,12 @@ class InformationService:
         if not await asyncio.to_thread(self.quota.reserve):
             raise InformationError("search_quota_exhausted", "Hạn mức tìm kiếm miễn phí tháng này đã hết.")
         try:
+            gold_domains = ["sjc.com.vn", "doji.vn", "pnj.com.vn", "btmc.vn"] if "gia vang" in normalize_text(query) else []
             payload = {"query": query[:600], "search_depth": "basic", "auto_parameters": False,
                        "max_results": self.settings.information_max_results, "include_answer": False,
                        "include_raw_content": False, "include_published_date": True}
-            if "gia vang" in normalize_text(query):
-                payload["include_domains"] = ["sjc.com.vn", "doji.vn", "pnj.com.vn", "btmc.vn"]
+            if gold_domains:
+                payload["include_domains"] = gold_domains
                 payload["include_domains_mode"] = "restrict"
             data = await self.request("POST", "https://api.tavily.com/search", json=payload,
                                       headers={"Authorization": "Bearer " + self.settings.tavily_api_key})
@@ -124,8 +126,16 @@ class InformationService:
             raise
         results = []
         retrieved = datetime.now(UTC).isoformat()
+        if not isinstance(data, dict) or not isinstance(data.get("results", []), list):
+            raise InformationError("search_response_invalid", "Dịch vụ tìm kiếm trả về dữ liệu chưa hợp lệ. Bạn thử lại nhé.")
         for item in data.get("results", [])[:self.settings.information_max_results]:
+            if not isinstance(item, dict):
+                continue
             url = public_url(item.get("url"))
+            if url and gold_domains:
+                host = urlsplit(url).hostname
+                if not any(host == domain or host.endswith("." + domain) for domain in gold_domains):
+                    continue
             content = plain(item.get("content"))[:4000]
             if url and content:
                 results.append({"source_id": source_identifier("web", url, content), "kind": "web",
@@ -255,14 +265,18 @@ class InformationService:
             return {"status": "blocked", "message": "Mình đang không truy cập internet nên chưa lấy được thông tin mới.", "error_code": "internet_disabled"}
         query = resolve_query(arguments["query"], session)
         # Avoid carrying memory or full conversation into provider requests.
+        time_context = search_time_context(query, self.settings.information_timezone)
+        information_context = {"capability": capability, "query": query, "topic_query": search_topic(query, session)}
         weather_scope = None
         if capability == "weather.get_forecast":
             weather_scope = {"position": {k: event.position[k] for k in ("lat", "lng") if k in event.position} if event.position else None,
                              "destination": destination(session), "previous_location": session.conversation_context.get("location"),
                              "previous_position": session.conversation_context.get("position")}
         key = hashlib.sha256(json.dumps([capability, query, arguments.get("location"), arguments.get("forecast_day"), weather_scope,
-                                         datetime.now(ZoneInfo(self.settings.information_timezone)).date().isoformat()], sort_keys=True).encode()).hexdigest()
+                                         time_context["current_date"]], sort_keys=True).encode()).hexdigest()
         cached = self.cache.get(key)
+        fetched = None
+        cache_hit = False
         if cached and capability == "weather.get_forecast":
             forecast = cached[1].get("data", {})
             local_day = datetime.now(ZoneInfo(forecast.get("timezone") or self.settings.information_timezone)).date()
@@ -279,7 +293,7 @@ class InformationService:
                     if capability == "weather.get_forecast":
                         fetched = await self.weather(arguments, event, session)
                     else:
-                        fetched = await (self.search(query) if capability == "web.search" else self.wikipedia(query))
+                        fetched = await (self.search(time_context["search_query"]) if capability == "web.search" else self.wikipedia(query))
                     if not isinstance(fetched, dict) or fetched.get("status") == "completed":
                         if len(self.cache) >= 128:
                             self.cache.pop(next(iter(self.cache)))
@@ -287,24 +301,39 @@ class InformationService:
                         self.cache[key] = (time.monotonic() + ttl, copy.deepcopy(fetched))
                 if capability == "weather.get_forecast":
                     return {**fetched, "cache_hit": cache_hit}
+                source_metadata = {"information_provider": "tavily" if capability == "web.search" else "wikipedia",
+                                   "cache_hit": cache_hit, "source_count": len(fetched), "information_context": information_context}
                 if not fetched:
-                    return {"status": "blocked", "message": "Mình chưa tìm được nguồn phù hợp để trả lời câu này.", "error_code": "no_evidence", "grounding_status": "insufficient_evidence"}
+                    return {**source_metadata, "status": "blocked", "message": "Mình chưa tìm được nguồn phù hợp để trả lời câu này.", "error_code": "no_evidence", "grounding_status": "insufficient_evidence"}
                 if "gia vang" in normalize_text(query):
-                    today = datetime.now(ZoneInfo(self.settings.information_timezone)).date()
+                    today = date.fromisoformat(time_context["current_date"])
                     dates = {today.isoformat(), today.strftime("%d/%m/%Y"), f"{today.day}/{today.month}/{today.year}"}
-                    current = [item for item in fetched if any(date in item["content"] for date in dates)]
+                    date_pattern = r"(?<!\d)(?:" + "|".join(re.escape(value) for value in dates) + r")(?!\d)"
+                    current = [item for item in fetched if re.search(date_pattern, item["content"])]
                     if not current:
-                        return {"status": "blocked", "message": "Mình tìm được nguồn giá vàng nhưng chưa xác minh được báo giá hôm nay. Bạn có thể xem nguồn trên màn hình.",
+                        return {**source_metadata, "status": "blocked", "message": "Mình tìm được nguồn giá vàng nhưng chưa xác minh được báo giá hôm nay. Bạn có thể xem nguồn trên màn hình.",
                                 "error_code": "current_quote_not_verified", "answer_kind": "web", "grounding_status": "insufficient_evidence",
+                                "answer_basis": "sources",
                                 "citations": [{k: v for k, v in item.items() if k != "content"} for item in fetched]}
                     fetched = current
-                result = await self.conversation.respond(query, provider=provider, evidence=fetched, history=history, memory=memory)
+                result = await self.conversation.respond(query, provider=provider, evidence=fetched, history=history, memory=memory,
+                                                         context=time_context)
                 return {**result, "answer_kind": "web" if capability == "web.search" else "knowledge",
                         "information_provider": "tavily" if capability == "web.search" else "wikipedia",
                         "cache_hit": cache_hit, "source_count": len(fetched),
-                        "information_context": {"capability": capability, "query": query}}
+                        "information_context": information_context}
+        except TimeoutError:
+            if isinstance(fetched, list) and fetched:
+                return {"status": "blocked", "message": "Mình đã tìm được nguồn nhưng chưa tổng hợp kịp. Bạn có thể xem nguồn trên màn hình hoặc hỏi lại nhé.",
+                        "error_code": "information_timeout", "answer_kind": "web" if capability == "web.search" else "knowledge",
+                        "answer_basis": "sources", "grounding_status": "insufficient_evidence",
+                        "citations": [{k: v for k, v in item.items() if k != "content"} for item in fetched],
+                        "information_provider": "tavily" if capability == "web.search" else "wikipedia",
+                        "source_count": len(fetched), "cache_hit": cache_hit, "information_context": information_context}
+            return {"status": "blocked", "message": "Nguồn internet chưa phản hồi kịp. Bạn thử lại nhé.",
+                    "error_code": "information_timeout", "grounding_status": "insufficient_evidence"}
         except InformationError as exc:
             return {"status": "blocked", "message": exc.message, "error_code": exc.code}
-        except (httpx.HTTPError, TimeoutError, ValueError, KeyError, TypeError, IndexError):
+        except (httpx.HTTPError, ValueError, KeyError, TypeError, IndexError):
             return {"status": "blocked", "message": "Mình chưa lấy được dữ liệu đáng tin cậy từ nguồn internet. Bạn thử lại sau nhé.",
                     "error_code": "information_unavailable", "grounding_status": "insufficient_evidence"}

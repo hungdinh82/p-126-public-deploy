@@ -1,6 +1,6 @@
 # Conversation và Information Service của ViVi
 
-Cập nhật 12/10/2026. Phạm vi đã thu gọn còn ba nguồn: Tavily, Open-Meteo và Wikipedia; dùng VietMap hiện có cho bản đồ và dẫn đường.
+Cập nhật 13/10/2026. Phạm vi đã thu gọn còn ba nguồn: Tavily, Open-Meteo và Wikipedia; dùng VietMap hiện có cho bản đồ và dẫn đường.
 
 ## Luồng runtime
 
@@ -41,7 +41,13 @@ Adapter trả source ID, title, URL, excerpt, retrieved_at và published_at nế
 
 Không tìm được nguồn hoặc mọi generator lỗi/không cung cấp hỗ trợ hợp lệ thì trả lỗi có kiểu; giữ liên kết nguồn nếu có. Không lấy kiến thức model để thay thời tiết hoặc giá hiện tại. Thời tiết được dựng trực tiếp từ dữ liệu và đơn vị API, không dùng model sửa các con số.
 
+Nếu model trả `evidence_ids=[]`, server coi đây là quyết định thiếu bằng chứng, bỏ text model và trả câu thông báo cố định với nguồn tham khảo; không repair để ép model tạo câu trả lời. Lỗi tổng hợp do deadline sau khi đã lấy được nguồn cũng giữ citation và cache để lượt thử lại không gọi Tavily thêm. Kiểm tra số liệu nhận diện riêng ngày báo chí như “ngày 18.10” và “18 tháng 10”; không tách các số tiền, số thập phân thành các thành phần của ngày.
+
+Search gắn “hôm nay/ngày mai/tháng này/cuối tuần này…” vào ngày cụ thể theo `information_timezone` trước khi gửi Tavily; generator nhận cùng ngày hiện tại, timezone và query đã giải quyết thời gian. Ngày lịch sử được nói rõ vẫn giữ nguyên. Không dùng ngày truy cập bài viết làm ngày diễn ra sự kiện. Các câu hỏi tiếp về buổi tối, trẻ em, ăn uống giữ query chủ đề của lượt search trước; đổi địa danh rõ ràng bắt đầu chủ đề mới. Chỉ đưa query chủ đề, không đưa toàn bộ hội thoại hoặc memory vào request tìm kiếm.
+
 Giá vàng dùng web search giới hạn nguồn SJC/DOJI/PNJ/BTMC. Chỉ chuyển sang tổng hợp khi excerpt có ngày hôm nay; prompt yêu cầu loại vàng, mua/bán, đơn vị và ngày báo giá. Chưa có adapter báo giá riêng hoặc đảm bảo dữ liệu giá luôn khả dụng; nguồn thiếu thì báo chưa xác minh và hiển thị liên kết.
+
+Backend kiểm tra lại host của nguồn giá vàng và ranh giới ngày trong excerpt, kể cả khi provider đã được yêu cầu giới hạn domain. Metadata provider/số nguồn/cache vẫn được trả khi chỉ tìm được bài giá cũ. Payload search sai kiểu trả lỗi có kiểu, không đẩy lỗi không được xử lý ra executor.
 
 ## Cấu hình
 
@@ -77,6 +83,8 @@ TurnResponse giữ route `conversation`; thêm `answer_kind`, `answer_basis` và
 `tests/test_open_world.py`: routing ngoài xe, Ninh Bình destination references, payload ba adapter, source support, cache/quota, offline policy, lỗi nguồn, cancellation, truyện dùng history, weather slot/restart/ngày tiếp theo và chuỗi xe + search lỗi.
 
 `tests/test_frontend_information.cjs`: nguồn dưới dạng text/link an toàn và xóa nguồn cũ. Regression hiện có kiểm tra dialogue, consent, navigation, provider, API và barge-in.
+
+Lượt review bổ sung: [kết quả ngày 13/10/2026](search_review_2026-10-13.md), với regression tại `tests/test_search_review.py` và smoke API thật bằng câu hỏi công khai.
 
 Credential Tavily và model thật cần live smoke riêng sau cấu hình. Fixture tests không được tính là kiểm chứng chất lượng tổng hợp của model thật.
 

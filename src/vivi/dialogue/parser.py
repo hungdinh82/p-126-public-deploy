@@ -10,7 +10,7 @@ import re
 from dataclasses import dataclass
 
 from src.vivi.capabilities.registry import DEFAULT_CLIMATE_DELTA_CELSIUS, compatible_change
-from src.vivi.conversation.context import resolve_query
+from src.vivi.conversation.context import resolve_query, search_followup_query
 from src.vivi.dialogue.contracts import ActionDraft, SemanticTurn, SessionState
 from src.vivi.navigation.destinations import administrative_layer, region_for
 from src.vivi.text import normalize_text
@@ -548,7 +548,11 @@ class OfflineParser:
             if location:
                 args["location"] = location
             return self.request("weather.get_forecast", args, act="question")
-        if re.search(r"\b(?:tim (?:tren )?mang|tra (?:tren )?mang|internet|google|tim kiem tren|tin moi|moi nhat|gia vang|du lich|tham quan|gi choi|choi gi|gi vui|cho nao dang di)\b", value):
+        if self.search_followup(value, session):
+            return self.request("web.search", {"query": search_followup_query(text, session)}, act="question")
+        if re.search(r"\b(?:am lich|hom nay.*bao nhieu am)\b", value):
+            return self.request("web.search", {"query": text}, act="question")
+        if re.search(r"\b(?:tim (?:tren )?mang|tra (?:tren )?mang|internet|google|tim kiem tren|tin moi|moi nhat|gia vang|du lich|tham quan|gi choi|choi gi|gi vui|su kien|cho nao dang di)\b", value):
             return self.request("web.search", {"query": resolve_query(text, session)}, act="question")
         if re.search(r"\b(?:wikipedia|lich su|van hoa|nguon goc)\b", value) and not re.search(r"\b(?:xe|vf\d+|vinfast|pin|sac)\b", value):
             query = re.sub(r"^(?:tìm hiểu|tra|tìm|cho (?:tôi|mình) biết)\s+", "", resolve_query(text, session), flags=re.I)
@@ -556,6 +560,20 @@ class OfflineParser:
         if re.search(r"\b(?:noi chuyen|tam su|hom nay.*met|toi met qua|minh met qua)\b", value):
             return self.request("conversation.respond", {"query": text, "mode": "chat"}, act="question")
         return None
+
+    @staticmethod
+    def search_followup(value, session):
+        previous = session.conversation_context
+        return bool(
+            previous.get("capability") == "web.search"
+            and previous.get("query")
+            and re.search(
+                r"^(?:(?:con|the con) (?:buoi toi|ban dem|an uong|cho an|di voi tre em|dia diem nao khac)\b"
+                r"|(?:o|tai) do (?:co (?:gi|cho|dia diem|quan|mon|su kien)|an|choi|buoi toi)\b"
+                r"|(?:co )?(?:cho|dia diem) nao (?:phu hop|danh cho) (?:tre em|gia dinh)\b)",
+                value,
+            )
+        )
 
     @staticmethod
     def weather_location(text, *, slot_reply=False):
@@ -1394,6 +1412,8 @@ class OfflineParser:
         # model text or mistaken for handbook/live vehicle observations.
         if (bounded.act in {"request", "question", "modify"} and bounded.actions
             and all(a.capability in {"conversation.respond", "web.search", "weather.get_forecast", "knowledge.lookup"} for a in bounded.actions)):
+            if self.search_followup(value, session) and bounded.actions[0].capability == "web.search":
+                return bounded
             if (bounded.act != "modify" and result.act == bounded.act
                 and [a.capability for a in result.actions] == [a.capability for a in bounded.actions]):
                 # The model can resolve richer locations and follow-ups. The

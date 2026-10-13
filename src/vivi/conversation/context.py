@@ -32,3 +32,19 @@ def resolve_query(query, session):
             if previous.get("location"):
                 query += " tại " + previous["location"]
     return query
+
+
+def search_followup_query(query, session):
+    """Carry only the preceding search topic, never the full conversation."""
+    previous = session.conversation_context
+    topic = previous.get("topic_query") or previous.get("query")
+    query = re.sub(r"^(?:ở|o|tại|tai) (?:đó|do)\s+", "", query, flags=re.I)
+    return f"{query.rstrip(' .!?')} (chủ đề: {topic[:400]})" if topic else query
+
+
+def search_topic(query, session):
+    previous = session.conversation_context
+    topic = previous.get("topic_query") or previous.get("query")
+    if previous.get("capability") == "web.search" and topic and query.endswith(f"(chủ đề: {topic[:400]})"):
+        return topic
+    return query
