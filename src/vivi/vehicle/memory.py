@@ -34,6 +34,7 @@ class VehicleSimulator:
 
     def __init__(self):
         self._states: dict[str, VehicleState] = {}
+        self._shared_fixture = VehicleState()
         self._executed: dict[str, tuple[ActionProposal, VehicleState, str]] = {}
         self._lock = threading.Lock()
 
@@ -46,7 +47,28 @@ class VehicleSimulator:
     def state_for(self, session_id: str, supplied: VehicleState | None = None) -> VehicleState:
         if supplied is not None:
             self._states[session_id] = supplied.model_copy(deep=True)
-        return self._states.setdefault(session_id, VehicleState()).model_copy(deep=True)
+        return self._states.setdefault(
+            session_id, self._shared_fixture.model_copy(deep=True)
+        ).model_copy(deep=True)
+
+    def apply_shared_fixture(self, supplied: VehicleState) -> VehicleState:
+        """Apply an operator scenario to every view of the same demo vehicle."""
+        with self._lock:
+            highest_version = max(
+                (state.state_version for state in self._states.values()),
+                default=self._shared_fixture.state_version,
+            )
+            state = supplied.model_copy(
+                deep=True,
+                update={
+                    "state_version": max(supplied.state_version, highest_version + 1),
+                    "updated_at": datetime.now(UTC),
+                },
+            )
+            self._shared_fixture = state.model_copy(deep=True)
+            for session_id in self._states:
+                self._states[session_id] = state.model_copy(deep=True)
+            return state.model_copy(deep=True)
 
     def set_driving(self, session_id: str, driving: bool, *, expected_state_version: int | None = None) -> VehicleState:
         """Set the local demo fixture without trusting browser state in a turn."""

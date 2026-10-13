@@ -11,6 +11,8 @@ ZONE_LABELS = {
     "all": "tất cả",
 }
 
+CABIN_ZONE_CHOICES = "bên tài, bên phụ, sau trái, sau phải hoặc tất cả"
+
 # Body panels opened as a whole, keyed by intent: (state field, spoken name).
 BODY_PANELS = {
     "hood.set_open": ("hood_open", "nắp capo"),

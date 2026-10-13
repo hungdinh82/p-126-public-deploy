@@ -134,7 +134,10 @@ class RulesTests(unittest.IsolatedAsyncioTestCase):
     async def test_door_action_requires_location_and_accepts_driver_side_followup(self):
         vague = self.classify("Mở cửa", VehicleState())
         self.assertEqual(vague.intent, "door.set_open")
-        self.assertIn("vị trí", vague.error)
+        self.assertEqual(
+            vague.error,
+            "Bạn muốn mở cửa nào: bên tài, bên phụ, sau trái, sau phải hoặc tất cả?",
+        )
         self.session, _ = reduce_turn(self.session, vague.frame)
         followup = self.classify("Bên tài")
         self.assertEqual(followup.act, "modify")
