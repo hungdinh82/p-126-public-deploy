@@ -94,6 +94,9 @@ class SpeechModels:
         # Dynamic MatMulInteger quantization is a CPU experiment, not CUDA or
         # TensorRT INT8. Keep STT/SLM on their independently requested device.
         device = "cpu" if precision == "int8-dynamic-mixed" else self.requested_device
+        trt = precision == "int8-qdq-mixed"
+        if trt and device != "cuda":
+            raise ValueError("int8-gpu requires --device cuda; no CPU replacement is permitted")
         self.info["tts"].update(model_path=str(path), precision=precision)
         if device == "cuda":
             if hasattr(ort, "preload_dlls"):
@@ -106,10 +109,14 @@ class SpeechModels:
             providers = ["CPUExecutionProvider"]
         model = ZeroTTS.from_pretrained(str(path), providers=providers, warmup=False,
                                        intra_op_num_threads=2)
+        trt_sessions = None
+        if trt:
+            from jetson_ai.tensorrt_tts import configure_sessions
+            trt_sessions, identity, cache = configure_sessions(model, path)
         sessions = [model.prefix_step_sess, model.local_frame_decode_sess, model.text_encoder_sess,
                     model.codec._decode_full_sess, model.codec._decode_step_sess]
         actual = [session.get_providers() for session in sessions]
-        gpu = all(p and p[0] == "CUDAExecutionProvider" for p in actual)
+        gpu = all(p and p[0] in ("CUDAExecutionProvider", "TensorrtExecutionProvider") for p in actual)
         if device == "cuda" and not gpu:
             raise RuntimeError("TTS sessions fell back to CPU; CUDA libraries are incompatible")
         pack = Path(os.environ.get("JETSON_AI_VOICE_PACK", str(Path(__file__).resolve().parents[1] / "voices/VIVI.zip")))
@@ -120,6 +127,13 @@ class SpeechModels:
         if emb.shape != (1, model.n_voice_queries, model.d_model):
             raise RuntimeError("VIVI voice does not match this TTS model")
         voice = Voice(name="VIVI", emb=emb, meta=meta)
+        if trt_sessions:
+            from jetson_ai.tensorrt_tts import verify_execution
+            verification = verify_execution(model, voice, trt_sessions, cache)
+            self.info["tts"].update(engine="tensorrt+onnxruntime", gpu_name=identity["gpu"],
+                                    provider_profile=verification["providers"], engine_cache=str(cache),
+                                    int8_compute_layers=verification["int8_compute_layers"],
+                                    internal_layer_precision_verified=True)
         self.models["tts"] = model, voice
         self.info["tts"].update(device="cuda" if gpu else "cpu", using_gpu=gpu,
                                 execution_providers=actual, voice="VIVI", sample_rate=int(model.sample_rate))

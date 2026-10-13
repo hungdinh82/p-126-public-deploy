@@ -18,7 +18,7 @@ from jetson_ai.speech import SpeechModels  # noqa: E402
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=Path("models/ai-speech"))
-    parser.add_argument("--precision", choices=("fp32", "int8"), required=True)
+    parser.add_argument("--precision", choices=("fp32", "int8", "int8-gpu"), required=True)
     parser.add_argument("--device", choices=("cpu", "cuda"), default="cpu")
     parser.add_argument("--text", default="Xin chào bạn, tôi là trợ lý ViVi.")
     parser.add_argument("--runs", type=int, default=3)

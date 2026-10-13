@@ -133,6 +133,71 @@ không cần setup lại nếu môi trường/model không thay đổi.
 
 ## Thử nghiệm ZeroTTS INT8
 
+### INT8 trên GPU AGX Xavier — TensorRT
+
+Chọn **`int8-gpu`** để dùng GPU. `int8` trong phần CPU bên dưới vẫn là dynamic
+quantization trên CPU; hai profile dùng artifact riêng và không thay thế nhau.
+
+```bash
+# Trên AGX Xavier, tại checkout đã có code nhánh này:
+bash scripts/jetson_system.sh install --tensorrt
+bash scripts/ai_server.sh setup --tts-precision int8-gpu
+bash scripts/ai_server.sh run --tts-precision int8-gpu
+```
+
+SDK dùng TensorRT 8.5.2 của JetPack 5, không cài TensorRT mới nhất từ PyPI hoặc
+nâng JetPack. Bước system chỉ cài các package SDK/parser/plugin cùng phiên bản
+runtime đã có. Setup build ORT 1.20.1 với `--use_tensorrt` trong thư mục build
+riêng và thêm metadata engine để kiểm tra precision. Build ORT lần đầu có thể
+mất nhiều giờ trên Xavier. Qwen/Whisper tiếp tục dùng CUDA như profile hiện có.
+
+TTS GPU INT8 dùng **static QDQ S8S8**: thu đầu vào thật của ba graph khi FP32 sinh
+sáu câu tiếng Việt bằng giọng VIVI, hiệu chuẩn MinMax đối xứng và quantize MatMul
+có trọng số hằng, per-channel. Codec, sampling và phần còn lại vẫn FP32. Model
+lưu ở `zerotts-int8-gpu/`; artifact này khác `MatMulInteger` của bản CPU.
+QDQ mang scale hiệu chuẩn ngay trong graph, nên không đưa calibration table
+ngoài vào TensorRT. Tham khảo [ORT TensorRT EP](https://onnxruntime.ai/docs/execution-providers/TensorRT-ExecutionProvider.html).
+
+Setup không chọn profile GPU trước khi smoke suy luận thật thành công. Runtime
+bắt buộc `--device cuda`, khởi tạo TensorRT EP và từ chối thay toàn bộ session
+bằng CUDA/CPU khi TensorRT lỗi. Mỗi graph phải có sự kiện thực thi TensorRT trong
+ORT profiling, đồng thời engine inspector phải tìm thấy lớp MatMul/GEMM/FC có
+format INT8. Nếu thiếu bằng chứng thì TTS báo `unavailable`, không báo INT8 GPU ready.
+Các node không được TensorRT hỗ trợ vẫn có thể chạy CUDA/CPU; báo cáo `provider_profile`
+cho thấy số sự kiện của từng provider. Đây là profile hỗn hợp, không phải mọi node
+đều INT8 hoặc đều trên GPU.
+
+Cache engine nằm trong `models/speech/trt-cache/`, tách theo UUID GPU, driver,
+checksum thư viện TensorRT, ORT, model và lựa chọn precision/workspace. Engine
+không được sao chép từ PC sang Xavier. Hình dạng mới có thể khiến TensorRT build
+lại engine; cần đo TTFA/RTF với các câu thực tế trên Xavier trước khi dùng thường xuyên.
+
+Đo trên Xavier sau setup:
+
+```bash
+source scripts/jetson_profile.sh
+export JETSON_AI_TRT_INSPECTOR="$VIVI_DATA/build/trt-inspect"
+"$VIVI_VENV/bin/python" scripts/benchmark_zerotts.py --precision int8-gpu --device cuda \
+  --root "$VIVI_DATA/models/speech" --output "$VIVI_DATA/logs/tts-int8-gpu"
+```
+
+Để tạo QDQ trên PC từ model đã tải, chỉ kiểm tra chuyển đổi, không xác nhận GPU:
+
+```bash
+.venv/bin/python scripts/prepare_speech_models.py --root models/ai-speech \
+  --tts-precision int8-gpu --local-only --defer-selection
+```
+
+Có thể thêm `--calibration-texts <file.txt>` (mỗi dòng một câu) cho dữ liệu thực tế.
+Corpus mặc định là smoke ban đầu, chưa phải bộ đánh giá chất lượng giọng đầy đủ.
+
+Đã kiểm tra local: tạo ba graph QDQ với 72/72/425 MatMul INT8, giữ integer I/O,
+chạy các feed thật và sinh WAV/streaming VIVI bằng QDQ trên CPU. Model tổng cộng
+khoảng 356 MB, gồm codec FP32. **Chưa xác nhận native build, engine INT8 hay tốc độ
+GPU trên AGX Xavier** vì môi trường phát triển chưa có kết nối tới thiết bị.
+
+### INT8 trên CPU — thử nghiệm trước đó
+
 Theo [hướng dẫn browser của ZeroTTS](https://github.com/zeroweight-ai/ZeroTTS/blob/main/docs/BROWSER.md),
 INT8 ONNX chậm hơn FP32 trong WASM. Nhưng
 [benchmark native x86](https://github.com/zeroweight-ai/ZeroTTS/blob/main/docs/BENCHMARKS.md)

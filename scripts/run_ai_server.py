@@ -23,8 +23,8 @@ def main() -> int:
     parser.add_argument("--port", type=int, default=8789)
     parser.add_argument("--device", choices=("cuda", "cpu"), default="cuda")
     parser.add_argument("--gpu-layers", type=int, default=12)
-    parser.add_argument("--tts-precision", choices=("auto", "fp32", "int8"), default="auto",
-                        help="auto uses setup selection; INT8 TTS runs on CPU")
+    parser.add_argument("--tts-precision", choices=("auto", "fp32", "int8", "int8-gpu"), default="auto",
+                        help="auto uses setup; int8 is CPU, int8-gpu requires TensorRT on CUDA")
     args = parser.parse_args()
     if not 1 <= args.port <= 65535 or args.gpu_layers < 0:
         parser.error("Invalid port or GPU layer count")

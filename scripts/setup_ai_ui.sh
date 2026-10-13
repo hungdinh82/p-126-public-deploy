@@ -4,11 +4,15 @@ TASK_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$TASK_ROOT"
 tts_precision=int8
 if [[ $# -gt 0 ]]; then
-  [[ $# == 2 && "$1" == --tts-precision && ( "$2" == int8 || "$2" == fp32 ) ]] || {
-    echo 'Usage: bash scripts/setup_ai_ui.sh [--tts-precision int8|fp32]' >&2; exit 2;
+  [[ $# == 2 && "$1" == --tts-precision && ( "$2" == int8 || "$2" == fp32 || "$2" == int8-gpu ) ]] || {
+    echo 'Usage: bash scripts/setup_ai_ui.sh [--tts-precision int8-gpu|int8|fp32]' >&2; exit 2;
   }
   tts_precision="$2"
 fi
+[[ "$tts_precision" != int8-gpu ]] || {
+  echo 'GPU INT8 setup targets Jetson AGX Xavier. Use prepare_speech_models.py on PC to build QDQ artifacts only.' >&2;
+  exit 2;
+}
 export PATH="$HOME/.local/bin:$PATH"
 [[ "$(uname -m)" == x86_64 ]] || { echo 'Trên Xavier: bash scripts/jetson_ai.sh setup --profile agx' >&2; exit 1; }
 command -v uv >/dev/null || { echo 'Cần uv để setup môi trường local.' >&2; exit 1; }
