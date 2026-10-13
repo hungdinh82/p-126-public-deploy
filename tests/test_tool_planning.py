@@ -47,6 +47,37 @@ def test_tool_contract_rejects_coercion_or_cross_tool_parameters(name, arguments
     assert result is None and error
 
 
+@pytest.mark.parametrize(
+    "name,arguments,question",
+    [
+        (
+            "door.set_open",
+            {"open": True},
+            "Bạn muốn mở cửa nào: bên tài, bên phụ, sau trái, sau phải hoặc tất cả?",
+        ),
+        (
+            "window.set_position",
+            {"position_percent": 100},
+            "Bạn muốn điều chỉnh cửa sổ nào: bên tài, bên phụ, sau trái, sau phải hoặc tất cả?",
+        ),
+        (
+            "door.set_lock",
+            {"locked": True},
+            "Bạn muốn khoá hay mở khoá cửa nào: bên tài, bên phụ, sau trái, sau phải hoặc tất cả?",
+        ),
+        (
+            "seat.set_heat_level",
+            {"level": 2},
+            "Bạn muốn điều chỉnh sưởi ghế nào: bên tài, bên phụ, sau trái, sau phải hoặc tất cả?",
+        ),
+    ],
+)
+def test_missing_cabin_target_prompts_with_supported_choices(name, arguments, question):
+    result, error = validate_tool_arguments(name, arguments)
+    assert result is None
+    assert error == question
+
+
 def test_decision_preserves_strict_boolean_boundary_before_tool_validation():
     with pytest.raises(ValidationError):
         ActionDraft(capability="door.set_lock", arguments={"locked":"false", "zone":"driver"})
