@@ -12,6 +12,8 @@ from pathlib import Path
 
 import httpx
 
+from jetson_ai.tts_profile import resolve_tts_model
+
 
 class SpeechModels:
     def __init__(self):
@@ -88,23 +90,32 @@ class SpeechModels:
         from zerotts.voices import Voice
         if not self.tts_path or not Path(self.tts_path).is_dir():
             raise FileNotFoundError("TTS model missing; run setup")
-        if self.requested_device == "cuda":
+        path, precision = resolve_tts_model(Path(self.tts_path), os.environ.get("JETSON_AI_TTS_PRECISION"))
+        # Dynamic MatMulInteger quantization is a CPU experiment, not CUDA or
+        # TensorRT INT8. Keep STT/SLM on their independently requested device.
+        device = "cpu" if precision == "int8-dynamic-mixed" else self.requested_device
+        trt = precision == "int8-qdq-mixed"
+        if trt and device != "cuda":
+            raise ValueError("int8-gpu requires --device cuda; no CPU replacement is permitted")
+        self.info["tts"].update(model_path=str(path), precision=precision)
+        if device == "cuda":
+            from jetson_ai.tensorrt_tts import CUDA_OPTIONS
             if hasattr(ort, "preload_dlls"):
                 ort.preload_dlls(directory="")
             if "CUDAExecutionProvider" not in ort.get_available_providers():
                 raise RuntimeError("ONNX Runtime lacks CUDAExecutionProvider")
-            providers = [("CUDAExecutionProvider", {"arena_extend_strategy": "kSameAsRequested",
-                                                   "cudnn_conv_algo_search": "HEURISTIC"}), "CPUExecutionProvider"]
+            providers = [("CUDAExecutionProvider", dict(CUDA_OPTIONS)), "CPUExecutionProvider"]
         else:
             providers = ["CPUExecutionProvider"]
-        model = ZeroTTS.from_pretrained(self.tts_path, providers=providers, warmup=False,
+        # Avoid allocating three CUDA bootstrap graphs before replacing them
+        # with TensorRT. Keep codec on CPU during the engine verification.
+        bootstrap_providers = ["CPUExecutionProvider"] if trt else providers
+        model = ZeroTTS.from_pretrained(str(path), providers=bootstrap_providers, warmup=False,
                                        intra_op_num_threads=2)
-        sessions = [model.prefix_step_sess, model.local_frame_decode_sess, model.text_encoder_sess,
-                    model.codec._decode_full_sess, model.codec._decode_step_sess]
-        actual = [session.get_providers() for session in sessions]
-        gpu = all(p and p[0] == "CUDAExecutionProvider" for p in actual)
-        if self.requested_device == "cuda" and not gpu:
-            raise RuntimeError("TTS sessions fell back to CPU; CUDA libraries are incompatible")
+        trt_sessions = None
+        if trt:
+            from jetson_ai.tensorrt_tts import configure_sessions
+            trt_sessions, identity, cache = configure_sessions(model, path)
         pack = Path(os.environ.get("JETSON_AI_VOICE_PACK", str(Path(__file__).resolve().parents[1] / "voices/VIVI.zip")))
         with zipfile.ZipFile(pack) as archive:
             meta = json.loads(archive.read("VIVI/meta.json"))
@@ -113,6 +124,22 @@ class SpeechModels:
         if emb.shape != (1, model.n_voice_queries, model.d_model):
             raise RuntimeError("VIVI voice does not match this TTS model")
         voice = Voice(name="VIVI", emb=emb, meta=meta)
+        if trt_sessions:
+            from jetson_ai.tensorrt_tts import verify_execution
+            verification = verify_execution(model, voice, trt_sessions, cache)
+            for session in (model.codec._decode_full_sess, model.codec._decode_step_sess):
+                session.set_providers(providers)
+                session.disable_fallback()
+            self.info["tts"].update(engine="tensorrt+onnxruntime", gpu_name=identity["gpu"],
+                                    provider_profile=verification["providers"], engine_cache=str(cache),
+                                    int8_compute_layers=verification["int8_compute_layers"],
+                                    internal_layer_precision_verified=True)
+        sessions = [model.prefix_step_sess, model.local_frame_decode_sess, model.text_encoder_sess,
+                    model.codec._decode_full_sess, model.codec._decode_step_sess]
+        actual = [session.get_providers() for session in sessions]
+        gpu = all(p and p[0] in ("CUDAExecutionProvider", "TensorrtExecutionProvider") for p in actual)
+        if device == "cuda" and not gpu:
+            raise RuntimeError("TTS sessions fell back to CPU; CUDA libraries are incompatible")
         self.models["tts"] = model, voice
         self.info["tts"].update(device="cuda" if gpu else "cpu", using_gpu=gpu,
                                 execution_providers=actual, voice="VIVI", sample_rate=int(model.sample_rate))
@@ -144,26 +171,31 @@ class SpeechModels:
         return " ".join(text for text in texts if text)
 
     def synthesize(self, text: str) -> bytes:
-        import numpy as np
-        model, voice = self.models["tts"]
-        audio = np.asarray(model.synthesize(text, voice=voice), dtype=np.float32).reshape(-1)
+        # A WAV response can still use the bounded streaming codec internally.
+        # Full-utterance decoding retains large intermediate convolution buffers.
+        model, _ = self.models["tts"]
         output = io.BytesIO()
         with wave.open(output, "wb") as wav:
             wav.setnchannels(1)
             wav.setsampwidth(2)
             wav.setframerate(int(model.sample_rate))
-            wav.writeframes((np.clip(audio, -1, 1) * 32767).astype("<i2").tobytes())
+            for pcm in self.synthesize_stream(text):
+                wav.writeframes(pcm)
         return output.getvalue()
 
     def synthesize_stream(self, text: str):
         """Yield real ZeroTTS decoder chunks as mono PCM16, without a WAV header."""
         import numpy as np
 
+        from jetson_ai.tensorrt_tts import CODEC_CHUNK_FRAMES
+
         model, voice = self.models["tts"]
-        chunks = model.synthesize_stream(text, voice=voice)
+        chunks = model.synthesize_stream(text, voice=voice, max_chunk_frames=CODEC_CHUNK_FRAMES)
         try:
             for chunk in chunks:
                 samples = np.asarray(chunk, dtype=np.float32).reshape(-1)
+                if not np.isfinite(samples).all():
+                    raise RuntimeError("TTS produced non-finite audio")
                 pcm = (np.clip(samples, -1, 1) * 32767).astype("<i2").tobytes()
                 if pcm:
                     yield pcm

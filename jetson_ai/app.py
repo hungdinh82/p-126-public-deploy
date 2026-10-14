@@ -18,6 +18,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 from jetson_ai.config import auth_required
+from jetson_ai.model_metrics import memory_snapshot
 from jetson_ai.speech import SpeechModels
 from jetson_ai.stream_routes import ModelStreams
 
@@ -173,7 +174,7 @@ def create_app(config: ServiceConfig, *, transport: httpx.AsyncBaseTransport | N
         offloads = re.findall(r"offloaded (\d+)/(\d+) layers to GPU", data)
         gpu = bool(llm_status in {"ready", "busy"} and offloads and int(offloads[-1][0]) > 0)
         devices = re.findall(r"Device \d+: ([^\n,]+)", data)
-        return {"contract_version": VERSION, "backend_id": config.backend_id,
+        result = {"contract_version": VERSION, "backend_id": config.backend_id,
                 "host": socket.gethostname(), "api_url": config.backend_url,
                 "capabilities": {
                     "llm": {"status": llm_status, "model_id": config.model_id,
@@ -187,9 +188,22 @@ def create_app(config: ServiceConfig, *, transport: httpx.AsyncBaseTransport | N
                             "last_latency_ms": last_llm_latency,
                             "first_chunk_ms": last_llm_first_chunk,
                             "limits": {"max_input_bytes": config.max_input_bytes, "max_tokens": config.max_tokens}},
-                    "stt": speech.info["stt"],
-                    "tts": speech.info["tts"],
+                    "stt": dict(speech.info["stt"]),
+                    "tts": dict(speech.info["tts"]),
                 }}
+        models = result["capabilities"]
+        architectures = re.findall(r"general\.architecture(?:\s+str)?\s*(?:=|:)\s*(\S+)", data)
+        models["llm"]["architecture"] = architectures[-1] if architectures else config.model_id
+        models["llm"]["engine"] = "llama.cpp"
+        quant = re.search(r"(?:^|[-_.])(Q\d+_[A-Z0-9_]+|F16|BF16|F32)(?=\.gguf$)",
+                          Path(config.llm_model_path).name, re.I)
+        models["llm"]["precision"] = quant.group(1).upper() + " (GGUF weights)" if quant else None
+        models["stt"]["architecture"] = "Whisper · encoder/decoder Transformer"
+        models["tts"]["architecture"] = "ZeroTTS · text encoder / prefix / local decoder + audio codec"
+        if speech.stt_engine == "whisper_cpp":
+            models["stt"]["pid"] = os.environ.get("JETSON_AI_STT_PID")
+        result["system_memory"] = memory_snapshot(models)
+        return result
 
     @app.get("/v1/models")
     async def models(request: Request):

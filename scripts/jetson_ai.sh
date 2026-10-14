@@ -11,6 +11,7 @@ VIVI_WHISPER_REF=v1.7.6
 VIVI_BACKEND_PORT="${JETSON_AI_BACKEND_PORT:-1235}"
 VIVI_PORT="${JETSON_AI_PORT:-8789}"
 VIVI_STT_PORT="${JETSON_AI_STT_PORT:-1236}"
+VIVI_CONTEXT_SIZE="${JETSON_AI_CONTEXT_SIZE:-12288}"
 
 fail() { echo "jetson_ai: $*" >&2; exit 1; }
 check_platform() { jetson_platform || fail "Platform preflight failed"; }
@@ -75,13 +76,31 @@ build_whisper() {
 build_ort() {
   local python_bin="$VIVI_VENV/bin/python" source="$VIVI_DATA/build/onnxruntime-$VIVI_ORT"
   local installed_fix="$VIVI_VENV/ort-platform-fix"
+  local ort_build=build trt=0
+  local trt_flags=()
+  if [[ "${JETSON_AI_TTS_PRECISION:-}" == int8-gpu ]]; then
+    trt=1
+    ort_build=build-trt85-inspection-v1
+    jetson_trt_check || fail "TensorRT SDK preflight failed"
+    local sdk="$VIVI_DATA/build/tensorrt-sdk"
+    mkdir -p "$sdk"
+    ln -sfn /usr/include/aarch64-linux-gnu "$sdk/include"
+    ln -sfn /usr/lib/aarch64-linux-gnu "$sdk/lib"
+    trt_flags=(--use_tensorrt --tensorrt_home "$sdk")
+  fi
   if [[ -f "$installed_fix" && "$(cat "$installed_fix")" == "$VIVI_ORT_FIX" ]] && \
-     "$python_bin" -c 'import onnxruntime as o; assert o.__version__ == "1.20.1"; assert "CUDAExecutionProvider" in o.get_available_providers()' 2>/dev/null; then return; fi
+     "$python_bin" -c 'import onnxruntime as o; assert o.__version__ == "1.20.1"; assert "CUDAExecutionProvider" in o.get_available_providers()' 2>/dev/null; then
+    if [[ "$trt" == 0 ]]; then return; fi
+    if [[ -f "$VIVI_VENV/ort-trt-inspection" && "$(cat "$VIVI_VENV/ort-trt-inspection")" == "$VIVI_TRT_FIX" ]] && \
+       "$python_bin" -c 'import onnxruntime as o; assert "TensorrtExecutionProvider" in o.get_available_providers()'; then return; fi
+  fi
   if [[ -n "${JETSON_AI_ORT_WHEEL:-}" ]]; then
     [[ -f "$JETSON_AI_ORT_WHEEL" && -n "${JETSON_AI_ORT_WHEEL_SHA256:-}" ]] \
       || fail "Custom wheel requires a local file and JETSON_AI_ORT_WHEEL_SHA256"
     [[ "${JETSON_AI_ORT_PLATFORM_FIX:-}" == "$VIVI_ORT_FIX" ]] \
       || fail "Custom ORT wheel must include $VIVI_ORT_FIX; set JETSON_AI_ORT_PLATFORM_FIX after verifying its build"
+    [[ "$trt" == 0 || "${JETSON_AI_ORT_TRT_INSPECTION:-}" == "$VIVI_TRT_FIX" ]] \
+      || fail "GPU INT8 custom wheel must enable TensorRT and $VIVI_TRT_FIX"
     echo "$JETSON_AI_ORT_WHEEL_SHA256  $JETSON_AI_ORT_WHEEL" | sha256sum -c --status \
       || fail "Custom ORT wheel checksum mismatch"
     uv pip install --python "$python_bin" --no-deps --reinstall --refresh "$JETSON_AI_ORT_WHEEL"
@@ -94,20 +113,30 @@ build_ort() {
     # Keep archive verification, using the verified current SHA1 only for Eigen.
     "$python_bin" "$VIVI_REPO/scripts/prepare_ort_metadata.py" "$source/cmake/deps.txt"
     "$python_bin" "$VIVI_REPO/scripts/prepare_ort_platform.py" "$source/onnxruntime/core/common/cpuid_info.cc"
-    local wheels=("$source"/build/Release/dist/onnxruntime_gpu-1.20.1-cp312-cp312-linux_aarch64.whl)
+    if [[ "$trt" == 1 ]]; then
+      "$python_bin" "$VIVI_REPO/scripts/prepare_ort_trt_inspection.py" \
+        "$source/onnxruntime/core/providers/tensorrt/tensorrt_execution_provider.cc"
+    fi
+    local wheels=("$source/$ort_build"/Release/dist/onnxruntime_gpu-1.20.1-cp312-cp312-linux_aarch64.whl)
     if [[ ! -f "${wheels[0]}" || ! -f "${wheels[0]}.sha256" || \
-          ! -f "${wheels[0]}.platform-fix" || "$(cat "${wheels[0]}.platform-fix")" != "$VIVI_ORT_FIX" ]]; then
+          ! -f "${wheels[0]}.platform-fix" || "$(cat "${wheels[0]}.platform-fix")" != "$VIVI_ORT_FIX" || \
+          ( "$trt" == 1 && ( ! -f "${wheels[0]}.trt-fix" || "$(cat "${wheels[0]}.trt-fix")" != "$VIVI_TRT_FIX" ) ) ]]; then
       rm -f "${wheels[0]}.platform-fix"
       (cd "$source"
        "$python_bin" tools/ci_build/build.py --config Release --build_wheel --parallel 2 \
          --skip_tests --nvcc_threads 1 --use_cuda --cuda_home "$VIVI_CUDA" --cudnn_home /usr \
-         --cmake_path "$VIVI_VENV/bin/cmake" --build_dir "$source/build" \
+         --cmake_path "$VIVI_VENV/bin/cmake" --build_dir "$source/$ort_build" "${trt_flags[@]}" \
          --compile_no_warning_as_error --cmake_extra_defines CMAKE_CUDA_ARCHITECTURES=72 \
          "CMAKE_CUDA_COMPILER=$VIVI_CUDA/bin/nvcc" "CMAKE_CUDA_HOST_COMPILER=$CXX" \
          "CMAKE_C_COMPILER=$CC" "CMAKE_CXX_COMPILER=$CXX" onnxruntime_BUILD_UNIT_TESTS=OFF)
+      # CMake stages provider libraries before rebuilding them. An incremental
+      # build can therefore package the previous TensorRT/CUDA binaries.
+      "$python_bin" "$VIVI_REPO/scripts/package_ort_wheel.py" \
+        "$source/$ort_build/Release" "$source/setup.py"
       [[ -f "${wheels[0]}" ]] || fail "Native cp312/aarch64 CUDA wheel was not produced"
       sha256sum "${wheels[0]}" > "${wheels[0]}.sha256"
       printf '%s\n' "$VIVI_ORT_FIX" > "${wheels[0]}.platform-fix"
+      if [[ "$trt" == 1 ]]; then printf '%s\n' "$VIVI_TRT_FIX" > "${wheels[0]}.trt-fix"; fi
     fi
     sha256sum -c "${wheels[0]}.sha256" || fail "Cached ORT wheel checksum mismatch"
     uv pip install --python "$python_bin" --no-deps --reinstall --refresh "${wheels[0]}"
@@ -115,11 +144,35 @@ build_ort() {
   "$python_bin" -c 'import onnxruntime as o; assert o.__version__ == "1.20.1"; assert "CUDAExecutionProvider" in o.get_available_providers()' \
     || fail "ORT 1.20.1 CUDA is required for this Xavier profile"
   printf '%s\n' "$VIVI_ORT_FIX" > "$installed_fix"
+  if [[ "$trt" == 1 ]]; then
+    "$python_bin" -c 'import onnxruntime as o; assert "TensorrtExecutionProvider" in o.get_available_providers()' \
+      || fail "ORT wheel lacks TensorRT provider"
+    "$python_bin" -c 'import pathlib, onnxruntime as o; p=pathlib.Path(o.__file__).parent/"capi/libonnxruntime_providers_tensorrt.so"; assert b"VIVI_TRT_INT8_LINEAR_ONLY" in p.read_bytes()' \
+      || fail "Installed TensorRT provider lacks the INT8 linear partition patch"
+    printf '%s\n' "$VIVI_TRT_FIX" > "$VIVI_VENV/ort-trt-inspection"
+  else
+    rm -f "$VIVI_VENV/ort-trt-inspection"
+  fi
+}
+build_trt_inspector() {
+  "$CXX" -std=c++17 -O2 -I/usr/include/aarch64-linux-gnu -I"$VIVI_CUDA/include" \
+    "$VIVI_REPO/scripts/trt_inspect.cpp" -lnvinfer -lnvinfer_plugin -o "$VIVI_DATA/build/trt-inspect"
+  export JETSON_AI_TRT_INSPECTOR="$VIVI_DATA/build/trt-inspect"
 }
 setup() {
   [[ "${1:-}" == --profile && "${2:-}" == agx ]] || fail "Usage: bash scripts/jetson_ai.sh setup --profile agx"
+  shift 2
+  # Keep GPU TTS as the default on Jetson; native INT8 is an explicit CPU trial.
+  local tts_precision=fp32
+  if [[ $# -gt 0 ]]; then
+    [[ $# == 2 && "$1" == --tts-precision && ( "$2" == int8 || "$2" == fp32 || "$2" == int8-gpu ) ]] \
+      || fail "Usage: setup --profile agx [--tts-precision int8-gpu|int8|fp32]"
+    tts_precision="$2"
+  fi
+  export JETSON_AI_TTS_PRECISION="$tts_precision"
   check_platform
   check_sdk
+  if [[ "$tts_precision" == int8-gpu ]]; then jetson_trt_check || fail "TensorRT SDK missing"; fi
   check_space
   mkdir -p "$VIVI_VENV" "$VIVI_DATA"/{models,build,cache,logs}
   rm -f "$VIVI_COMPLETE"
@@ -144,15 +197,26 @@ setup() {
   build_llama
   build_whisper
   build_ort
+  if [[ "$tts_precision" == int8-gpu ]]; then build_trt_inspector; fi
   # ZeroTTS declares the CPU distribution name; the verified GPU distribution
   # supplies that same Python API. Validate dependencies without installing CPU ORT.
   uv pip install --python "$VIVI_VENV/bin/python" --no-deps --only-binary :all: --require-hashes \
     -r "$VIVI_REPO/requirements-jetson-zerotts.lock"
   "$VIVI_VENV/bin/python" scripts/check_jetson_runtime.py
-  "$VIVI_VENV/bin/python" scripts/prepare_speech_models.py --root "$VIVI_DATA/models/speech" --engine whisper_cpp
+  if [[ "$tts_precision" != fp32 ]]; then
+    uv pip install --python "$VIVI_VENV/bin/python" --only-binary :all: onnx==1.17.0
+  fi
+  local selection_flags=()
+  if [[ "$tts_precision" == int8-gpu ]]; then selection_flags=(--defer-selection); fi
+  "$VIVI_VENV/bin/python" scripts/prepare_speech_models.py --root "$VIVI_DATA/models/speech" \
+    --engine whisper_cpp --tts-precision "$tts_precision" "${selection_flags[@]}"
   "$VIVI_VENV/bin/python" scripts/smoke_jetson_profile.py --data "$VIVI_DATA" \
     --native-build "$VIVI_NATIVE_BUILD" --model "$VIVI_MODEL" \
     --backend-port "$VIVI_BACKEND_PORT" --stt-port "$VIVI_STT_PORT"
+  if [[ "$tts_precision" == int8-gpu ]]; then
+    "$VIVI_VENV/bin/python" scripts/prepare_speech_models.py --root "$VIVI_DATA/models/speech" \
+      --tts-precision int8-gpu --select-only
+  fi
   if [[ ! -f "$VIVI_DATA/service.env" ]]; then
     umask 077
     command -v openssl >/dev/null || fail "openssl is required to create the service token"
@@ -166,7 +230,7 @@ setup() {
     || fail "Gateway import check failed"
   "$VIVI_VENV/bin/python" scripts/check_jetson_runtime.py --write-manifest "$VIVI_MANIFEST"
   touch "$VIVI_COMPLETE"
-  echo "Setup complete: SLM + STT + TTS CUDA."
+  echo "Setup complete: SLM + STT CUDA; ZeroTTS $tts_precision (int8-gpu TensorRT / int8 CPU / fp32 CUDA)."
   echo "Service token: $VIVI_DATA/service.env (copy securely to Laptop)"
   if command -v tailscale >/dev/null 2>&1; then
     echo "Tailscale URL: http://$(tailscale ip -4 2>/dev/null | head -n 1):$VIVI_PORT"
@@ -197,10 +261,11 @@ run() {
   fi
   bind="${bind:-127.0.0.1}"
   [[ "$(cat "$VIVI_DATA/build/llama-mode-cu118-gcc10")" == cuda ]] || fail "Run setup again: a CUDA build is required"
+  [[ "$VIVI_CONTEXT_SIZE" =~ ^[1-9][0-9]*$ ]] || fail "JETSON_AI_CONTEXT_SIZE must be a positive integer"
   local gpu_layers=99 started=$SECONDS
   "$VIVI_DATA/build/llama.cpp/$VIVI_NATIVE_BUILD/bin/llama-server" \
     --model "$VIVI_MODEL" --alias vivi-qwen3-1.7b --host 127.0.0.1 \
-    --port "$VIVI_BACKEND_PORT" --ctx-size 4096 --parallel 1 \
+    --port "$VIVI_BACKEND_PORT" --ctx-size "$VIVI_CONTEXT_SIZE" --parallel 1 \
     --n-gpu-layers "$gpu_layers" --reasoning off --log-verbosity 4 \
     > "$VIVI_DATA/logs/llama-server.log" 2>&1 &
   local llm_pid=$!
@@ -237,6 +302,7 @@ run() {
     JETSON_AI_TTS_MODEL="$VIVI_DATA/models/speech/zerotts" \
     JETSON_AI_LLM_MODEL_PATH="$VIVI_MODEL" JETSON_AI_LLM_LOG="$VIVI_DATA/logs/llama-server.log"
   export HF_HUB_OFFLINE=1 HF_HOME="$VIVI_DATA/cache/huggingface"
+  export JETSON_AI_TRT_INSPECTOR="$VIVI_DATA/build/trt-inspect"
   echo "Jetson AI API: http://$bind:$VIVI_PORT (STT/TTS tiếp tục nạp ở nền)."
   echo "Giao diện test: http://$bind:$VIVI_PORT/test"
   cd "$VIVI_REPO"
@@ -252,7 +318,13 @@ run() {
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
 case "${1:-}" in
   setup) shift; setup "$@" ;;
-  run) shift; [[ $# == 0 ]] || fail "Usage: bash scripts/jetson_ai.sh run"; run ;;
+  run) shift
+    if [[ $# -gt 0 ]]; then
+      [[ $# == 2 && "$1" == --tts-precision && ( "$2" == int8 || "$2" == fp32 || "$2" == int8-gpu ) ]] \
+        || fail "Usage: bash scripts/jetson_ai.sh run [--tts-precision int8-gpu|int8|fp32]"
+      export JETSON_AI_TTS_PRECISION="$2"
+    fi
+    run ;;
   doctor) check_platform; check_sdk; [[ -x "$VIVI_VENV/bin/python" ]] || fail "Run setup first: missing profile venv"
     "$VIVI_VENV/bin/python" "$VIVI_REPO/scripts/check_jetson_runtime.py" ;;
   *) fail "Usage: bash scripts/jetson_ai.sh {setup --profile agx|run|doctor}" ;;

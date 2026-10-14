@@ -177,6 +177,23 @@ address_style and response_style preferences from memory without inventing facts
 """
 
 
+def semantic_tools():
+    return [{"type": "function", "function": {
+        "name": "interpret_turn", "description": "Interpret the complete turn into semantic events.",
+        "parameters": strict_schema(semantic_schema()),
+    }}]
+
+
+async def warmup_local_client(client):
+    # Use exactly the real system/tools prefix; one output token primes KV cache
+    # without interpreting or executing the generated proposal.
+    payload = client._tool_payload(VOICE_PERSONA + SEMANTIC_INSTRUCTION,
+                                   '{"utterance":"Xin chào","tasks":{},"recent_turns":[],"explicit_user_memory":[],"capabilities":[]}',
+                                   semantic_tools())
+    payload.update(max_tokens=1, cache_prompt=True)
+    await client._acomplete(payload)
+
+
 @dataclass
 class ModelProvider:
     name: str
@@ -347,16 +364,7 @@ class SemanticResolver:
                     name, payload = await client.agenerate_tool(
                         system=VOICE_PERSONA + SEMANTIC_INSTRUCTION,
                         user=prompt,
-                        tools=[
-                            {
-                                "type": "function",
-                                "function": {
-                                    "name": "interpret_turn",
-                                    "description": "Interpret the complete turn into semantic events.",
-                                    "parameters": strict_schema(semantic_schema()),
-                                },
-                            }
-                        ],
+                        tools=semantic_tools(),
                     )
                     if name != "interpret_turn":
                         raise ValueError("Unexpected semantic function")

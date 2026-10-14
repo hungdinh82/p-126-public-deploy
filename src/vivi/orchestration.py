@@ -605,6 +605,7 @@ def create_langgraph_orchestrator(
         timeout_seconds=config.turn_timeout_seconds,
         profile_id=config.memory_profile_id,
     )
+    result.local_semantic_client = providers["local"].client if "local" in providers else None
     result.semantic_providers = {"rules", *providers}
     result.provider_fallbacks = fallback_chains
     return result

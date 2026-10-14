@@ -7,6 +7,8 @@
 <h1>ViVi · Test STT / SLM / TTS</h1>
 <p id="location">Đang kết nối AI server…</p>
 <div id="auth"><input id="token" type="password" autocomplete="off" placeholder="Token từ service.env"><button id="connect">Kết nối</button></div>
+<p id="system-memory">RAM máy: đang đo…</p>
+<small>Jetson dùng RAM chung cho CPU/GPU. Số dưới mỗi model là RSS của tiến trình, gồm model và bộ nhớ runtime; không phải VRAM riêng. Các model cùng PID dùng chung số đo, không cộng hai lần.</small>
 <div class="cards" id="models"></div>
 <button class="secondary" id="reload">Thử nạp lại STT/TTS chưa sẵn sàng</button>
 <section class="panel"><h2>Nhập text hoặc audio</h2>
@@ -28,7 +30,7 @@ const $=id=>document.getElementById(id);
 const callId=()=>crypto.randomUUID?crypto.randomUUID():Array.from(crypto.getRandomValues(new Uint8Array(16)),v=>v.toString(16).padStart(2,'0')).join('');
 let token=localToken||sessionStorage.getItem('vivi-ai-test-token')||'', busy=false, recorder=null, micStream=null, audioUrl=null, traces=[];
 $('token').value=token;if(localToken||!authRequired)$('auth').hidden=true;
-const fields=[['model_id','Model'],['model_path','Model load từ'],['api_url','Model API'],['location','Chạy tại'],['device','Thiết bị thực tế'],['load_ms','Thời gian load'],['last_latency_ms','Lần xử lý gần nhất'],['first_chunk_ms','Phần đầu tiên'],['stream_mode','Kiểu streaming']];
+const fields=[['model_id','Model'],['architecture','Kiến trúc'],['engine','Runtime'],['memory_usage','RAM tiến trình (RSS)'],['model_path','Model load từ'],['precision','Độ chính xác số'],['api_url','Model API'],['location','Chạy tại'],['device','Thiết bị thực tế'],['load_ms','Thời gian load'],['last_latency_ms','Lần xử lý gần nhất'],['first_chunk_ms','Phần đầu tiên'],['stream_mode','Kiểu streaming']];
 for(const name of ['stt','llm','tts']){
  const c=document.createElement('div');c.className='card';c.id='card-'+name;
  const h=document.createElement('h2');h.append(name==='llm'?'SLM':name.toUpperCase());const badge=document.createElement('span');badge.id=name+'-status';badge.className='badge';badge.textContent='Đang kiểm tra';h.append(badge);c.append(h);
@@ -36,6 +38,8 @@ for(const name of ['stt','llm','tts']){
  const e=document.createElement('div');e.id=name+'-error';e.className='error';c.append(e);$('models').append(c);
 }
 function seconds(ms){return ms==null?'—':(Number(ms)/1000).toFixed(2)+' s'}
+function gib(bytes){return bytes==null?'—':(bytes/(1024**3)).toFixed(2)+' GiB'}
+function modelMemory(m){const mem=m.memory;if(mem?.rss_bytes==null)return 'Chưa đo được';return gib(mem.rss_bytes)+(mem.shared_with?.length?' · dùng chung với '+mem.shared_with.map(n=>n==='llm'?'SLM':n.toUpperCase()).join(', '):'')}
 async function api(path,options={}){
  const start=performance.now();
  const response=await fetch(path,{...options,signal:path==='/v1/capabilities'?undefined:streamController?.signal,headers:{...(authRequired?{Authorization:'Bearer '+token}:{}),...options.headers}});
@@ -48,10 +52,11 @@ async function api(path,options={}){
 }
 async function poll(){
  try{const data=await(await api('/v1/capabilities')).json();$('location').textContent='API: '+location.origin+' · Host: '+data.host+' · Backend: '+data.backend_id;
+ const ram=data.system_memory||{};$('system-memory').textContent='RAM máy: '+gib(ram.total_bytes)+' tổng · '+gib(ram.available_bytes)+' khả dụng · swap đang dùng '+gib(ram.swap_used_bytes);
  for(const name of ['stt','llm','tts']){const m=data.capabilities[name];const b=$(name+'-status');b.textContent=m.status;b.className='badge '+m.status;
- const values={...m,location:(m.host||data.host)+(m.pid?' · PID '+m.pid:''),device:m.device+(m.using_gpu?' · GPU xác nhận':m.device==='cpu'?' · CPU':' · chưa xác nhận GPU')+(m.using_gpu&&m.gpu_layers?' · '+m.gpu_layers+' layer GPU':'')+(m.gpu_name?' · '+m.gpu_name:''),load_ms:seconds(m.load_ms),last_latency_ms:seconds(m.last_latency_ms),first_chunk_ms:seconds(m.first_chunk_ms),stream_mode:m.stream_mode||m.stream_protocol};
+ const values={...m,memory_usage:modelMemory(m),location:(m.host||data.host)+(m.pid?' · PID '+m.pid:''),device:m.device+(m.using_gpu?' · GPU xác nhận':m.device==='cpu'?' · CPU':' · chưa xác nhận GPU')+(m.using_gpu&&m.gpu_layers?' · '+m.gpu_layers+' layer GPU':'')+(m.gpu_name?' · '+m.gpu_name:''),load_ms:seconds(m.load_ms),last_latency_ms:seconds(m.last_latency_ms),first_chunk_ms:seconds(m.first_chunk_ms),stream_mode:m.stream_mode||m.stream_protocol};
  for(const[key]of fields)$(name+'-'+key).textContent=values[key]??'—';$(name+'-error').textContent=m.error||''}
- }catch(e){$('location').textContent='Chưa kết nối: '+e.message;for(const name of ['stt','llm','tts']){const b=$(name+'-status');b.textContent='offline';b.className='badge unavailable';$(name+'-device').textContent='Không xác định (mất kết nối)'}}
+ }catch(e){$('system-memory').textContent='RAM máy: mất kết nối';$('location').textContent='Chưa kết nối: '+e.message;for(const name of ['stt','llm','tts']){const b=$(name+'-status');b.textContent='offline';b.className='badge unavailable';$(name+'-memory_usage').textContent='Chưa đo được (mất kết nối)';$(name+'-device').textContent='Không xác định (mất kết nối)'}}
 }
 function stage(name,ms){$('time-'+name).textContent=seconds(ms)}
 function showError(e){$('error').textContent=e.message||String(e)}
