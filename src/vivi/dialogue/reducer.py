@@ -112,22 +112,28 @@ def reduce_turn(
                 return state, "Yêu cầu đã thay đổi. Bạn chọn lại nhé."
             if current.draft.capability.split(".")[0] == incoming.capability.split(".")[0]:
                 prefix = incoming.capability.split(".")[0] + "."
+                whole_task = value.task_ref == "active"
                 for item in state.active.steps:
-                    if item.draft.capability.startswith(prefix) and item.status not in {"completed", "unknown", "running"}:
+                    if (whole_task or item.draft.capability.startswith(prefix)) and item.status not in {"completed", "unknown", "running"}:
                         item.status, item.confirmation = "cancelled", None
                 state.active.revision += 1
-                if prefix == "navigation.":
-                    nav = state.navigation
-                    nav.revision += 1
-                    nav.pending, nav.offer, nav.clarification, nav.candidates = None, None, None, []
-                    if nav.status in {"preview", "selecting"}:
-                        nav.status, nav.route, nav.selected, nav.energy = "idle", None, None, None
-                    state.navigation = nav
-                elif state.trip_plan:
-                    state.trip_plan.revision += 1
-                    state.trip_plan.calculation_status = "cancelled"
-                    state.trip_plan.offer, state.trip_plan.clarification = None, None
-                return state, None if state.active.current_index() is not None else "Đã huỷ yêu cầu lập tuyến."
+                if not whole_task:
+                    # A component cancel (e.g. the trip UI) keeps independently
+                    # requested steps. A bare voice cancel targets the whole task.
+                    if prefix == "navigation.":
+                        nav = state.navigation
+                        nav.revision += 1
+                        nav.pending, nav.offer, nav.clarification, nav.candidates = None, None, None, []
+                        if nav.status in {"preview", "selecting"}:
+                            nav.status, nav.route, nav.selected, nav.energy = "idle", None, None, None
+                        state.navigation = nav
+                    elif state.trip_plan:
+                        state.trip_plan.revision += 1
+                        state.trip_plan.calculation_status = "cancelled"
+                        state.trip_plan.offer, state.trip_plan.clarification = None, None
+                    return state, None if state.active.current_index() is not None else "Đã huỷ yêu cầu lập tuyến."
+                # Schedule the whole-task cancellation through the domain writer
+                # to revoke the saved route proposal without running later steps.
         if (
             incoming.capability in {"trip.select", "trip.refine", "trip.start"}
             and current.status == "waiting_slot"

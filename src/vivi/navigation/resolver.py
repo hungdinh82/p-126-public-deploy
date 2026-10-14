@@ -28,7 +28,7 @@ def satisfies_area(place, area):
     region = region_for(area.text)
     aliases = [region["name"], *region.get("aliases", [])] if region else [region_name(area.text)]
     address_areas = [region_for(p.strip()) for p in place.get("address", "").split(",")]
-    boundary_areas = [region_for(b.get("full_name") or b.get("name", "")) for b in place.get("boundaries", [])]
+    boundary_areas = [region_for(b.get(key, "")) for b in place.get("boundaries", []) for key in ("full_name", "name")]
     known_areas = [r for r in [*address_areas, *boundary_areas] if r]
     if region and known_areas and region not in known_areas:
         return False
@@ -65,6 +65,8 @@ class PlaceResolver:
         query = destination.query()
         if destination.area and destination.area.constraint == "preferred":
             original = landmark_query(destination.model_copy(update={"area": None}).query())
+            if destination.area.source == "context":
+                return [(landmark_query(query), "context"), (original, "original")][:2]
             return [(original, "original"), (query, "hypothesis")][:2]
         canonical = landmark_query(query)
         result = [(canonical, "verified_alias" if canonical != query else "original")]
@@ -175,7 +177,7 @@ class PlaceResolver:
             if not admin_only and not category:
                 from src.vivi.dialogue.parser import place_query_matches
 
-                match_query = arguments.get("_provider_query", query) if arguments.get("_basis") == "hypothesis" else query
+                match_query = arguments.get("_provider_query", query) if arguments.get("_basis") in {"hypothesis", "context"} else query
                 if not place_query_matches(match_query, value):
                     continue
                 if landmark and normalize_text(short_name(value["name"])) not in {

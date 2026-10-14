@@ -311,6 +311,10 @@ class SemanticResolver:
                 and not (bounded.negated or bounded.conditional or bounded.scheduled or bounded.unresolved)):
                 return bounded, "rules", [{"provider": "rules", "outcome": "served", "latency_ms": 0,
                     "source": "information_policy", "reason": decision.reason}]
+        cancellation = self.parser.cancellation_reference(text, session)
+        if cancellation:
+            return cancellation, "rules", [{"provider": "rules", "outcome": "served", "latency_ms": 0,
+                                             "reference": "task_cancellation"}]
         consent = self.parser.confirmation_reference(text, session)
         if consent:
             return consent, "rules", [{"provider": "rules", "outcome": "served", "latency_ms": 0,

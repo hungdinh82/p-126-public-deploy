@@ -214,7 +214,7 @@ class NavigationWorkflow:
             if arguments["route_revision"] != nav.revision:
                 return {"status": "blocked", "message": "Yêu cầu đã thay đổi.", "error_code": "stale_route"}
             nav.revision += 1
-            nav.clarification, nav.pending, nav.candidates = None, None, []
+            nav.clarification, nav.pending, nav.candidates, nav.offer = None, None, [], None
             if not has_active_journey(nav):
                 nav.status, nav.selected, nav.route, nav.energy = "idle", None, None, None
                 nav.summary, nav.alternatives = None, []
@@ -382,6 +382,7 @@ class NavigationWorkflow:
                 # Search within the region only when the reply didn't name one.
                 if (
                     not representative
+                    and not arguments.get("destination")
                     and clarification.get("region")
                     and not administrative_layer(query)
                     and not any(region_for(part.strip()) for part in query.split(","))

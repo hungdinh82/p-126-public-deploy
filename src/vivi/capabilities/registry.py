@@ -131,6 +131,21 @@ def merge_arguments(old, incoming):
         else transferable_arguments(old, incoming)
     )
     updates = incoming.arguments.model_dump(exclude_none=True)
+    if incoming.capability.startswith(("navigation.", "trip.")):
+        if "query" in updates and "destination" not in updates:
+            # An absolute query replacement cannot retain a structured name
+            # from an earlier slot answer. The executor treats it as authoritative.
+            merged.pop("destination", None)
+        if "destination" in updates:
+            from src.vivi.navigation.contracts import DestinationSpec
+
+            destination = DestinationSpec.model_validate(updates["destination"])
+            if destination.selection == "reference":
+                merged.pop("query", None)
+            else:
+                updates["query"] = destination.query()
+                if "destination_scope" in REGISTRY[incoming.capability].spec.parameters.model_fields:
+                    updates["destination_scope"] = "region" if destination.selection == "region" else "place"
     for group in REGISTRY[incoming.capability].exclusive_arguments:
         if len(group.intersection(updates)) == 1:
             for key in group - updates.keys():

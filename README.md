@@ -8,6 +8,10 @@ Thời tiết mặc định Hà Nội và cách chọn model knowledge/Wikipedia
 
 Chủ đề conversation, giới hạn tư vấn và các điểm kiểm soát an toàn: [Topic guardrails](docs/topic_guardrails.md).
 
+Query tham chiếu, timeout tổng hợp và kiểm chứng đơn vị số liệu: [Search reliability 14/10](docs/search_reliability_2026-10-14.md).
+
+Sửa destination, câu dẫn đường kèm giới thiệu và hủy chuỗi thao tác: [Dialogue review — log 1353–1379](docs/dialogue_review_2026-10-14_latest.md).
+
 > Runtime chuẩn sau khi hợp nhất là `src.vivi.api.app:app`; không còn backend `/assist`
 > hay entrypoint thứ hai. Xem [contract runtime](docs/contracts.md),
 > [setup PC](docs/setup_pc.md), [setup Jetson Nano 4 GB](docs/setup_jetson_nano.md) và

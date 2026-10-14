@@ -935,6 +935,9 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
             "source_policy": last.get("source_policy"),
             "error_code": last.get("error_code"),
             "topic_guardrail": last.get("topic_guardrail"),
+            "evidence_stats": last.get("evidence_stats"),
+            "retrieval_query": (last.get("information_context") or {}).get("search_query") or (last.get("information_context") or {}).get("query"),
+            "answer_question": last.get("answer_question"),
         }
         output = AssistantOutput(
             runtime_epoch=runtime_epoch,

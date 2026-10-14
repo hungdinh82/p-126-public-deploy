@@ -19,11 +19,47 @@ def conversation_view(session):
     return {"destination": destination(session), "recent_topic": session.conversation_context}
 
 
-def resolve_query(query, session):
-    reference = destination(session).get("name") or session.conversation_context.get("location")
+PLACE_REFERENCE = r"\b(?:(?:ở|tại) (?:đó|đấy|ấy)|(?:nơi|chỗ|thành phố|tỉnh) (?:đó|đấy|ấy))\b"
+
+
+def topic_subject(query):
+    """Extract a bounded subject only from an explicit, simple question frame.
+
+    No geocoder or guessed city: unfamiliar names work too. Unclear subjects
+    remain unresolved instead of borrowing an unrelated navigation destination.
+    """
+    value = query.strip(" .!?")
+    value = re.sub(r"^(?:ở|tại)\s+", "", value, flags=re.I)
+    value = re.sub(r"^(?:giới thiệu|tìm hiểu|thông tin|lịch sử|văn hóa|nguồn gốc|dân số|diện tích)\s+(?:(?:qua|sơ lược)\s+)?(?:(?:cho (?:tôi|mình))\s+)?(?:(?:về|của|ở|tại)\s+)?", "", value, flags=re.I)
+    match = re.match(r"^(.+?)\s+(?:có|rộng|là|được|dân số|diện tích)\b", value, flags=re.I)
+    if match:
+        value = match[1]
+    elif value == query.strip(" .!?"):
+        return None
+    if not value or len(value) > 100 or re.search(r"[;?()]|\b(?:và|hay|hoặc)\b", value, re.I):
+        return None
+    return value
+
+
+def has_place_reference(query):
+    return bool(re.search(PLACE_REFERENCE, query, re.I))
+
+
+def resolve_query(query, session, *, topic_reference=False):
+    previous = session.conversation_context
+    if topic_reference and previous.get("capability") in {"web.search", "knowledge.lookup"}:
+        reference = previous.get("subject") or topic_subject(previous.get("topic_query") or previous.get("query") or "")
+    elif topic_reference and previous.get("capability") == "weather.get_forecast":
+        reference = previous.get("location") or destination(session).get("name")
+    else:
+        reference = destination(session).get("name") or previous.get("location")
     if reference:
-        query = re.sub(r"\b(ở|tại) đó\b", lambda m: m[1] + " " + reference, query, flags=re.I)
-        query = re.sub(r"\b(?:nơi sắp đến|chỗ sắp tới|nơi sắp tới)\b", lambda m: reference, query, flags=re.I)
+        query = re.sub(r"\b(ở|tại) (?:đó|đấy|ấy)\b", lambda m: m[1] + " " + reference, query, flags=re.I)
+        query = re.sub(r"\b(?:nơi|chỗ|thành phố|tỉnh) (?:đó|đấy|ấy)\b", lambda m: reference, query, flags=re.I)
+    if re.search(r"\b(?:nơi sắp đến|chỗ sắp tới|nơi sắp tới)\b", query, re.I):
+        upcoming = destination(session).get("name")
+        if upcoming:
+            query = re.sub(r"\b(?:nơi sắp đến|chỗ sắp tới|nơi sắp tới)\b", lambda m: upcoming, query, flags=re.I)
     value = normalize_text(query)
     if re.fullmatch(r"(?:con |the )?(?:ngay mai|ngay kia)(?: thi sao)?[?.! ]*", value):
         previous = session.conversation_context

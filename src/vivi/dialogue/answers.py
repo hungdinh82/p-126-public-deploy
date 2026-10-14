@@ -111,23 +111,29 @@ class AnswerResolver:
                     arguments.update(plan_id=question.target_id, route_revision=question.revision)
                 return self.effect(ActionDraft(capability=f"{question.owner}.refine", arguments=arguments), question)
         if question.slot == "name" and question.slot_effect:
+            if not literal and value in {"chi", "anh", "em", "toi", "minh", "den", "toi do", "chi duong"}:
+                return SemanticTurn(act="clarify", text=question.text)
             # Slot values are data; fully specified new intents retain routing.
-            bounded = OfflineParser().interpret(text, SessionState())
+            correction = OfflineParser.destination_correction(text) if not literal else None
+            slot_text = correction or text
+            bounded = OfflineParser().interpret(slot_text, SessionState())
             unrelated = any(not a.capability.startswith(("navigation.", "trip.")) for a in bounded.actions)
-            intent_cue = re.match(r"^(?:mo|dong|dat|bat|tat|phat|tim|ghi nho|thoi tiet|gia vang)\b", value)
+            intent_cue = re.match(r"^(?:mo|dong|dat|bat|tat|phat|tim|ghi nho|thoi tiet|gia vang)\b", Lexer().normalize(slot_text))
             if (literal or not OfflineParser.journey_arguments(text) and not (unrelated and (bounded.act == "question" or intent_cue))
                 and not (bounded.conditional or bounded.scheduled or bounded.negated)
                 and not re.match(r"^(?:khong|huy|thoi|dung)\b", value)
                 and len(text) <= 200 and not re.search(r"\b(?:la gi|o dau|tai sao|neu|ngay mai)\b", value)):
-                name = OfflineParser.place_query(text)
+                name = OfflineParser.place_query(slot_text)
                 region = region_for(name)
                 area = question.destination.area if question.destination else None
-                if not area and question.destination and question.destination.selection == "region":
-                    area = AreaConstraint(text=question.destination.name, source="context")
+                if not area and question.destination:
+                    previous_region = region_for(question.destination.name)
+                    if question.destination.selection == "region" or previous_region:
+                        area = AreaConstraint(text=previous_region["name"] if previous_region else question.destination.name, source="context")
                 destination = DestinationSpec.from_arguments({"query": name})
                 if destination.area:
                     destination = destination.with_area(destination.area.text, question_id=question.id)
-                elif not (region or administrative_layer(name)):
+                elif not correction and not (region or administrative_layer(name)):
                     destination.area = area
                 destination.raw_text = text
                 destination.selection = "region" if region else "named_place"

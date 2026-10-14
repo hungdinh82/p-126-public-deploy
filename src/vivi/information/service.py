@@ -17,9 +17,9 @@ from zoneinfo import ZoneInfo
 
 import httpx
 
-from src.vivi.conversation.context import destination, resolve_query, search_topic
+from src.vivi.conversation.context import destination, has_place_reference, resolve_query, search_topic, topic_subject
 from src.vivi.conversation.guardrails import assess_topic
-from src.vivi.information.policy import encyclopedia_topic, information_decision
+from src.vivi.information.policy import encyclopedia_topic, information_decision, retrieval_query
 from src.vivi.information.time_context import search_time_context
 from src.vivi.information.weather_locations import geocoding_query, weather_labels, weather_places
 from src.vivi.text import normalize_text
@@ -283,14 +283,16 @@ class InformationService:
                 return topic.result()
         if not self.online:
             return {"status": "blocked", "message": "Mình đang không truy cập internet nên chưa lấy được thông tin mới.", "error_code": "internet_disabled"}
-        query = resolve_query(arguments["query"], session)
-        question = resolve_query(event.text, session) if event.kind == "utterance" and event.text else query
+        query = resolve_query(arguments["query"], session, topic_reference=capability != "weather.get_forecast")
+        question = resolve_query(event.text, session, topic_reference=capability != "weather.get_forecast") if event.kind == "utterance" and event.text else query
         if session.active and len(session.active.steps) > 1:
             # The task's query describes this information step. Do not send
             # unrelated vehicle commands or personal notes in the whole turn.
             question = query
         if "chủ đề:" in query:
             question = query
+        if capability != "weather.get_forecast" and has_place_reference(query) and "chủ đề:" not in query:
+            return {"status": "blocked", "message": "Mình chưa xác định được địa điểm bạn đang nhắc tới. Bạn hỏi lại kèm tên địa điểm nhé.", "error_code": "information_reference_missing"}
         for text in (query, question):
             topic = assess_topic(text)
             if topic.terminal:
@@ -302,7 +304,11 @@ class InformationService:
             query = question if "chủ đề:" not in query else query
         # Avoid carrying memory or full conversation into provider requests.
         time_context = search_time_context(query, self.settings.information_timezone)
-        information_context = {"capability": capability, "query": query, "topic_query": search_topic(query, session)}
+        if capability == "web.search":
+            time_context["search_query"] = retrieval_query(time_context["search_query"])
+        original_topic = search_topic(query, session)
+        information_context = {"capability": capability, "query": query, "topic_query": original_topic,
+                               "subject": topic_subject(original_topic), "search_query": time_context["search_query"]}
         weather_scope = None
         if capability == "weather.get_forecast":
             weather_scope = {"position": {k: event.position[k] for k in ("lat", "lng") if k in event.position} if event.position else None,
@@ -362,7 +368,7 @@ class InformationService:
                 context = {**time_context, "retrieval_query": query, "requested_capability": capability,
                            "source_policy": decision.reason if decision else "model_selected"}
                 result = await self.conversation.respond(question, provider=provider, evidence=fetched, history=history, memory=memory,
-                    context=context, budget_seconds=max(.05, min(5, (deadline-time.monotonic()) * .55))) if fetched else {
+                    context=context, budget_seconds=max(.05, deadline-time.monotonic()-.05)) if fetched else {
                         "status": "blocked", "error_code": "no_evidence", "generation_attempts": []}
                 # One bounded retrieval escalation. Never replace unsupported
                 # web facts with model recollection, and never loop indefinitely.
