@@ -6,7 +6,9 @@ VIVI_PROFILE=agx-cu118-ort1201-py312
 VIVI_PYTHON=3.12.15
 VIVI_ORT=1.20.1
 VIVI_ORT_FIX=ort-arm-cpuid-bounds-v1
+VIVI_TRT_FIX=trt85-int8-aligned-context-v7
 VIVI_CUDA=/usr/local/cuda-11.8
+VIVI_JETPACK_CUDA=/usr/local/cuda-11.4
 VIVI_VENV="$VIVI_DATA/envs/$VIVI_PROFILE/venv"
 VIVI_NATIVE_BUILD=build-cu118-gcc10
 VIVI_COMPLETE="$VIVI_DATA/$VIVI_PROFILE.complete"
@@ -62,5 +64,21 @@ jetson_activate_sdk() {
   export CUDA_HOME="$VIVI_CUDA" CUDACXX="$VIVI_CUDA/bin/nvcc" \
     CC=/usr/bin/gcc-10 CXX=/usr/bin/g++-10 CUDAHOSTCXX=/usr/bin/g++-10
   export PATH="$VIVI_CUDA/bin:$HOME/.local/bin:$PATH"
-  export LD_LIBRARY_PATH="$VIVI_CUDA/compat:$VIVI_CUDA/lib64:/usr/lib/aarch64-linux-gnu:${LD_LIBRARY_PATH:-}"
+  # JetPack TensorRT 8.5 also needs cuDLA from the original CUDA 11.4 SDK.
+  # Keep CUDA 11.8 ahead of it and do not rely on an interactive .bashrc.
+  export LD_LIBRARY_PATH="$VIVI_CUDA/compat:$VIVI_CUDA/lib64:/usr/lib/aarch64-linux-gnu:$VIVI_JETPACK_CUDA/lib64:${LD_LIBRARY_PATH:-}"
+}
+
+jetson_trt_check() {
+  local package version
+  for package in libnvinfer8 libnvinfer-dev libnvinfer-plugin8 libnvinfer-plugin-dev libnvonnxparsers8 libnvonnxparsers-dev; do
+    version="$(dpkg-query -W -f='${Version}' "$package" 2>/dev/null)" || {
+      echo "Missing $package; run bash scripts/jetson_system.sh install --tensorrt" >&2; return 1;
+    }
+    [[ "$version" =~ ^8\.5\.2([.-]|$) ]] || { echo "Expected JetPack TensorRT 8.5.2, got $package=$version" >&2; return 1; }
+  done
+  [[ -r /usr/include/aarch64-linux-gnu/NvInfer.h && -r /usr/include/aarch64-linux-gnu/NvInferPlugin.h ]] \
+    || { echo 'TensorRT SDK headers missing' >&2; return 1; }
+  [[ -r "$VIVI_JETPACK_CUDA/lib64/libcudla.so.1" ]] \
+    || { echo 'JetPack TensorRT requires the CUDA 11.4 cuDLA library' >&2; return 1; }
 }

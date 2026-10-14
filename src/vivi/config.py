@@ -102,7 +102,7 @@ class Settings(BaseSettings):
         default="http://127.0.0.1:8788", validation_alias="VIVI_VEHICLE_SIMULATOR_URL"
     )
 
-    stt_provider: Literal["off", "phowhisper", "whisper_cpp", "soniox"] = "soniox"
+    stt_provider: Literal["off", "phowhisper", "whisper_cpp", "soniox", "jetson"] = "soniox"
     # Local STT used when the primary (cloud) provider is missing or fails.
     stt_fallback_provider: Literal["off", "phowhisper", "whisper_cpp"] = "phowhisper"
     # Warm the fallback in a background task so startup is not blocked.

@@ -169,6 +169,10 @@ class FallbackSTTAdapter:
 
 
 def _create_single(provider: str, config: Settings):
+    if provider == "jetson":
+        from src.vivi.speech.jetson import JetsonSTTAdapter
+
+        return JetsonSTTAdapter(config)
     if provider == "off":
         return DisabledSTTAdapter()
     if provider == "phowhisper":
