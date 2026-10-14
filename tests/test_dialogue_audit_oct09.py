@@ -128,9 +128,9 @@ async def test_all_latest_logged_turns(services, tmp_path, tier):
             semantic = result["diagnostics"]["semantic"]
             assert semantic["actions"][0]["capability"] == "navigation.plan"
             assert normalize_text(semantic["actions"][0]["arguments"]["query"]) == "da nang"
-            # A verified city proposes its centre first and asks whether to pick a specific place.
+            # A verified city proposes its representative point and asks whether to pick a specific place.
             assert result["navigation"]["selected"]["representative"]
-            assert "trung tâm Đà Nẵng" in result["response_text"] and result["status"] == "clarify"
+            assert "điểm đại diện Đà Nẵng" in result["response_text"] and result["status"] == "clarify"
             assert not (await services.action_gateway.vehicle.get_state("driver")).driving
         if row in {875, 876}:
             assert "driver" not in result["action_proposal"]["arguments"]["zones"], row

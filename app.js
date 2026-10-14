@@ -596,6 +596,7 @@ async function acceptNavigationResponse(payload,authoritative=false) {
     return false;
   }
   payload=accepted;
+  if(Object.hasOwn(payload, "pending_question"))state.pendingQuestion=payload.pending_question;
   const restarted=state.runtimeEpoch && state.runtimeEpoch!==snapshotOrder.epoch;
   state.runtimeEpoch=snapshotOrder.epoch;
   if(restarted){state.vehicleVersion=null;currentNavigationRevision=0;resetJourneyRuntime();}
@@ -679,7 +680,7 @@ function interruptActiveTurn() {
   lockControls(false);
 }
 
-async function runBackendCommand(command, turnId = makeId(), { autoConfirm = false, action = null } = {}) {
+async function runBackendCommand(command, turnId = makeId(), { autoConfirm = false, action = null, questionReply = null } = {}) {
   if (!command.trim()) return;
   if (state.busy) interruptActiveTurn();
   if (handleSpeakerCommand(command)) return;
@@ -697,7 +698,7 @@ async function runBackendCommand(command, turnId = makeId(), { autoConfirm = fal
     const response = await fetch(`${API_BASE}/api/v1/turn/stream`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       signal: ownedTurn.controller.signal,
-      body: JSON.stringify({ transcript: command, session_id: sessionId, turn_id: turnId, llm_provider: state.llmProvider, ...(action ? { action } : {}), position: getJourneyPosition() })
+      body: JSON.stringify({ transcript: command, session_id: sessionId, turn_id: turnId, llm_provider: state.llmProvider, ...(action ? { action } : {}), ...(questionReply ? { question_reply: questionReply } : {}), position: getJourneyPosition() })
     });
     if (!response.ok) {
       const payload = await response.json();
@@ -1290,7 +1291,18 @@ initJourney({
   route: route => { plannedRoute = route; scene?.setRoute(route); },
   travel: distance => scene?.setRouteDistance(distance),
   network: roads => scene?.setNetwork(roads),
-  command: (text, action) => runBackendCommand(text, makeId(), { action }),
+  command: (text, action) => {
+    const question=state.pendingQuestion,args=action?.arguments || {};
+    const option=args.choice_handle || args.place_handle
+      || (action?.capability?.endsWith('.start') && question?.accepts_yes ? 'yes' : null)
+      || (action?.capability?.endsWith('.decline') && question?.accepts_no ? 'no' : null);
+    const bound=question && question.owner===action?.capability?.split('.')[0]
+      && (!args.plan_id || args.plan_id===question.target_id)
+      && (!args.route_revision || args.route_revision===question.revision)
+      && (question.choices?.some(entry=>entry.handle===option) || option==='yes' && question.accepts_yes || option==='no' && question.accepts_no);
+    return runBackendCommand(text, makeId(), { action,
+      questionReply:bound?{question_id:question.id,option_id:option}:null });
+  },
   confirm: grant => confirmNavigation(grant),
   position: position => sendNavigationEvent({ kind:'position', id:makeId(), revision:currentNavigationRevision, position }),
   event: event => sendNavigationEvent(event),

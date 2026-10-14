@@ -11,6 +11,8 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictFloat, StrictInt, model_validator
 
+from src.vivi.navigation.contracts import DestinationSpec
+
 
 class Arguments(BaseModel):
     """Nullable capability slots; schemas in the registry validate execution."""
@@ -18,6 +20,7 @@ class Arguments(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     query: str | None = None
+    destination: DestinationSpec | None = None
     mode: Literal["chat", "general", "creative"] | None = None
     location: str | None = Field(default=None, max_length=200)
     forecast_day: Literal["today", "tomorrow", "day_after_tomorrow"] | None = None
@@ -67,6 +70,8 @@ class ActionDraft(BaseModel):
 
         spec = TOOL_REGISTRY.get(self.capability)
         if spec is not None:
+            if self.arguments.destination and self.arguments.destination.selection != "reference" and not self.arguments.query:
+                self.arguments.query = self.arguments.destination.query() or None
             allowed = set(spec.parameters.model_fields)
             if self.capability == "climate.set_temperature":
                 allowed.add("temperature_delta_celsius")
@@ -136,6 +141,55 @@ class SemanticTurn(BaseModel):
         return self
 
 
+class QuestionOption(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: str
+    label: str
+    role: str = "choice"
+    effect: ActionDraft
+
+
+class QuestionProposal(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    purpose: Literal["collect_slot", "select_entity", "confirm_proposal", "approve_execution"]
+    version: Literal[1] = 1
+    owner: str
+    target_id: str
+    revision: int
+    kind: str
+    text: str
+    slot: str | None = None
+    slot_effect: ActionDraft | None = None
+    destination: DestinationSpec | None = None
+    options: list[QuestionOption] = Field(default_factory=list)
+    yes_effect: ActionDraft | None = None
+    no_effect: ActionDraft | None = None
+    yes_act: Literal["confirm", "deny"] | None = None
+    no_act: Literal["confirm", "deny"] | None = None
+
+
+class PendingQuestion(QuestionProposal):
+    id: str
+    task_id: str | None = None
+    step_id: str | None = None
+    expires_at: datetime
+    binding: str
+    source_binding: str = ""
+
+
+class QuestionReply(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    question_id: str = Field(min_length=1, max_length=100)
+    option_id: str | None = Field(default=None, min_length=1, max_length=100)
+    value: str | None = Field(default=None, min_length=1, max_length=200)
+
+    @model_validator(mode="after")
+    def option_or_value(self):
+        if (self.option_id is None) == (self.value is None):
+            raise ValueError("Provide one option_id or slot value")
+        return self
+
+
 class TurnEvent(BaseModel):
     model_config = ConfigDict(extra="forbid")
     session_id: str
@@ -146,6 +200,7 @@ class TurnEvent(BaseModel):
     confirmation_id: str | None = None
     confirmation_decision: Literal["approve", "deny"] | None = None
     action: ActionDraft | None = None
+    question_reply: QuestionReply | None = None
     navigation_event: dict | None = None
     position: dict | None = None
     vehicle_model: str = "VF8"
@@ -202,6 +257,7 @@ class RouteSnapshot(BaseModel):
     """An immutable-by-convention calculated route, shared by plans and journeys."""
 
     request_id: str = ""
+    destination: DestinationSpec | None = None
     route_id: str | None = None
     revision: int = 0
     event_sequence: int = 0
@@ -241,6 +297,7 @@ class ActiveJourney(RouteSnapshot):
 
 class NavigationState(BaseModel):
     request_id: str = ""
+    destination: DestinationSpec | None = None
     route_id: str | None = None
     revision: int = 0
     event_sequence: int = 0
@@ -304,6 +361,7 @@ class NavigationWorkspace(BaseModel):
                 "origin": nav.origin,
                 "candidates": nav.candidates,
                 "clarification": nav.clarification,
+                "destination": (nav.clarification or {}).get("destination"),
             }
         draft = None
         if draft_data and (
@@ -374,6 +432,7 @@ class TripPlanState(PlanDraft):
 
 
 class SessionState(BaseModel):
+    dialogue_question: PendingQuestion | None = None
     control_revision: int = 0
     snapshot_sequence: int = 0
     control_receipts: list[dict] = Field(default_factory=list)
@@ -407,40 +466,10 @@ class SessionState(BaseModel):
         self.navigation_workspace = NavigationWorkspace.from_snapshot(snapshot, self.navigation_workspace)
 
     def pending_question(self):
-        index = self.active.current_index() if self.active else None
-        step = self.active.steps[index] if index is not None else None
-        owner_name = step.draft.capability.split(".")[0] if step else self.navigation_focus
-        if owner_name not in {"navigation", "trip"}:
-            return None
-        owner = self.trip_plan if owner_name == "trip" else self.navigation
-        if owner is None:
-            return None
-        raw = owner.model_dump(mode="json")
-        raw = (raw.get("pending") or {}).get("navigation") or raw
-        question = raw.get("clarification") or {}
-        kind = (
-            "change_destination"
-            if question.get("phase") == "change_destination"
-            else "provide_destination"
-            if question
-            else "accept_place"
-            if len(raw.get("candidates", [])) == 1 and raw.get("status") == "selecting"
-            else "choose_place"
-            if raw.get("status") == "selecting"
-            else "start_plan"
-            if raw.get("offer")
-            else None
-        )
-        if not kind:
-            return None
-        return {
-            "kind": kind,
-            "owner": owner_name,
-            "target_id": raw.get("id") or raw.get("request_id"),
-            "revision": owner.revision,
-            "question": question.get("question") or (raw.get("offer") or {}).get("question"),
-            "choices": question.get("choices", raw.get("candidates", [])),
-        }
+        from src.vivi.dialogue.questions import current_question, legacy_view
+
+        question = current_question(self)
+        return legacy_view(question) if question else None
 
     def context(self):
         return {

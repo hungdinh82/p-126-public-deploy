@@ -146,9 +146,9 @@ async def test_default_center_yes_no_and_plan_not_driving(services, tmp_path, ti
             }
         )
         assert first["trip_plan"]["route"] is not None
-        assert first["trip_plan"]["clarification"]["phase"] == "change_destination"
+        assert first["trip_plan"]["clarification"]["phase"] == "confirm_destination"
         assert first["navigation"]["status"] == "idle" and not gateway.vehicle.state_for("driver").driving
-        accepted = await invoke(graph, "không", "keep")
+        accepted = await invoke(graph, "OK", "keep")
         assert accepted["trip_plan"]["calculation_status"] == "ready", accepted
         assert accepted["steps"][0]["status"] == "completed"
         assert accepted["trip_plan"]["offer"]["status"] == "pending"
@@ -177,7 +177,7 @@ async def test_center_change_specific_single_question(services, tmp_path):
                 "position": {"lat": ORIGIN[0], "lng": ORIGIN[1]},
             }
         )
-        other = await invoke(graph, "có", "other")
+        other = await invoke(graph, "đổi địa điểm", "other")
         assert other["trip_plan"]["clarification"]["phase"] == "specific"
         named = await invoke(graph, "Tràng An", "name")
         assert maps.queries[-1][0] == "Tràng An, Ninh Bình"
@@ -323,7 +323,7 @@ async def test_energy_change_updates_offer_without_start_and_restart_deduplicate
                 "position": {"lat": ORIGIN[0], "lng": ORIGIN[1]},
             }
         )
-        kept = await invoke(graph, "không", "keep")
+        kept = await invoke(graph, "OK", "keep")
         gateway.vehicle.set_energy("driver", 70, 200)
         updated = await invoke(graph, "đồng ý", "start-changed")
         assert updated["trip_plan"]["revision"] > kept["trip_plan"]["revision"]
@@ -420,7 +420,7 @@ async def test_trip_plan_does_not_overwrite_running_navigation(services, tmp_pat
         assert planning["navigation"] == started["navigation"]
         assert planning["trip_plan"]["trip_kind"] == "round_trip"
         assert gateway.vehicle.state_for("driver").driving
-        kept = await invoke(graph, "không", "center")
+        kept = await invoke(graph, "Giữ địa điểm", "center")
         assert kept["navigation"] == started["navigation"]
         assert kept["trip_plan"]["calculation_status"] == "ready"
     finally:
@@ -525,7 +525,7 @@ async def test_log_986_to_989_center_other_single_match_and_preview(services, tm
                 "position": {"lat": ORIGIN[0], "lng": ORIGIN[1]},
             }
         )
-        assert first["navigation"]["clarification"]["phase"] == "change_destination"
+        assert first["navigation"]["clarification"]["phase"] == "confirm_destination"
         handle = first["navigation"]["clarification"]["choices"][1]["handle"]
         other = await graph.ainvoke(
             {
@@ -575,6 +575,6 @@ async def test_unrelated_map_result_asks_for_more_evidence_instead_of_success(se
         assert first["steps"][0]["status"] == "waiting_slot"
         assert first["trip_plan"]["candidates"] == [] and first["trip_plan"]["selected"] is None
         assert first["trip_plan"]["clarification"]["phase"] == "specific"
-        assert "địa chỉ hoặc khu vực" in first["response_text"] and not gateway.vehicle.state_for("driver").driving
+        assert "địa chỉ khác" in first["response_text"] and not gateway.vehicle.state_for("driver").driving
     finally:
         graph.close()

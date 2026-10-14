@@ -14,6 +14,34 @@ def regions():
     return json.loads(path.read_text(encoding="utf-8"))["regions"]
 
 
+@lru_cache(maxsize=1)
+def landmarks():
+    path = Path(__file__).resolve().parents[3] / "data/navigation/landmarks.json"
+    return json.loads(path.read_text(encoding="utf-8"))["landmarks"]
+
+
+def landmark_for(query):
+    parts = [part.strip() for part in (query or "").split(",")]
+    for item in landmarks():
+        if normalize_text(parts[0]) not in {normalize_text(name) for name in [item["name"], *item["aliases"]]}:
+            continue
+        if len(parts) == 1 or len(parts) == 2 and region_for(parts[1]) == region_for(item["region"]):
+            return item
+    return None
+
+
+def landmark_query(query):
+    item = landmark_for(query)
+    return f"{item['name']}, {item['region']}" if item else query
+
+
+def qualify_place_query(query, area):
+    parts = [part.strip() for part in query.split(",") if part.strip()]
+    if parts and region_for(parts[-1]):
+        parts.pop()
+    return ", ".join([*parts, area])
+
+
 def center_requested(query):
     return bool(re.match(r"^trung tam\s+", normalize_text(query or "").strip()))
 

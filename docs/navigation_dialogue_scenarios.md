@@ -1,7 +1,10 @@
 # Địa điểm, kế hoạch sạc và khởi hành
 
-Semantic prompt `semantic-unified-14`; một LangGraph, cùng reducer/scheduler cho
-cloud, local, parser và nút UI. Model phân rã yêu cầu; guard không thay query bằng
+Semantic prompt `semantic-unified-19`; một LangGraph, cùng reducer/scheduler cho
+cloud, local, parser và nút UI. Câu trả lời địa điểm có nghĩa rõ và lệnh tới
+tỉnh/thành, tên thường gọi đã nhận diện hoặc câu chỉ đường có đích cụ thể dùng
+parser trực tiếp để tránh chờ model. Model phân rã
+các yêu cầu còn lại; guard không thay query bằng
 regex. Guard/reducer kiểm tra handle, revision và quyền xác nhận. Parser fallback
 vẫn có grammar tiếng Việt và xuất cùng contract.
 
@@ -9,13 +12,17 @@ vẫn có grammar tiếng Việt và xuất cùng contract.
 
 | Tình huống | Hành vi |
 |---|---|
-| Đi Ninh Bình | VietMap xác minh phường Hoa Lư, tính nháp; hỏi có đổi địa điểm không |
-| Không / cứ lấy trung tâm | Giữ điểm mặc định, chuyển sang bước tiếp theo; chưa chạy |
-| Có, khi đang hỏi đổi điểm | Hỏi tên địa điểm, không hiểu là xác nhận chạy |
+| Đi Ninh Bình | VietMap xác minh phường Hoa Lư, tính nháp; hỏi xác nhận điểm đề xuất |
+| OK / xác nhận / giữ địa điểm / có | Giữ điểm mặc định, chuyển sang bước tiếp theo; chưa chạy |
+| Không / đổi địa điểm, khi đang hỏi điểm đề xuất | Hỏi tên địa điểm; chưa khởi hành |
 | Tràng An | Tìm trong Ninh Bình; một kết quả hỏi “Đúng chỗ này chứ?” |
 | Không, về Thanh Hoá | Đổi vùng, giữ loại chuyến đi; vô hiệu handle/revision trước |
 | Nghi Sơn, Thanh Hoá | Tìm lớp hành chính và kiểm tra boundaries; không lấy đảo/khách sạn |
 | Nhiều kết quả | Tối đa ba thẻ; chọn theo tên/số/handle hoặc bấm |
+| Hồ Gươm / Hồ Tây / lăng Bác | Chuẩn hoá tên và khu vực từ `landmarks.json`; VietMap xác minh tọa độ, không nhận công ty/khách sạn chỉ trùng tên |
+| Địa điểm chính và đường/tòa nhà phụ | Ưu tiên khớp tên chính; chỉ đề xuất trực tiếp khi bằng chứng tên, địa chỉ và khoảng cách đủ rõ |
+| Không tìm được Đền Trần, rồi nói Nam Định | Giữ tên Đền Trần, tìm `Đền Trần, Nam Định`; không lấy điểm đại diện tỉnh |
+| Hai trường/cơ sở/cổng cùng tên | Vẫn hỏi chọn đúng địa điểm; khớp tên không tự cấp quyền lái |
 | Trung tâm không xác minh được | Hỏi địa điểm cụ thể; không dùng tâm tỉnh mới thay địa danh cũ |
 | Huỷ tìm địa điểm / Huỷ yêu cầu | Huỷ các bước chờ; giữ hiệu ứng đã chạy và chuyến đang chạy |
 | Lập kế hoạch rồi bật nhạc | Hoàn tất tính toán, tiếp tục bước nhạc; vẫn chưa khởi hành |
@@ -25,7 +32,11 @@ vẫn có grammar tiếng Việt và xuất cùng contract.
 | Mở bản đồ | Chỉ xem; không gửi lệnh chạy hoặc thay tuyến đang chạy |
 
 Mỗi lượt chỉ một câu hỏi. Câu trả lời ngắn lấy nghĩa theo
-`clarification.phase`: `change_destination`, `specific`, hoặc danh sách ứng viên.
+`clarification.phase`: `confirm_destination`, `specific`, `place_area`, hoặc danh sách ứng viên.
+`place_area` giữ query POI đang tìm; câu trả lời khu vực bổ sung vào query đó.
+Xác nhận điểm đề xuất bằng “OK”, “xác nhận”, “giữ địa điểm”; đổi điểm bằng
+“đổi địa điểm” hoặc nói tên mới. “Không” từ chối điểm đang đề xuất.
+Checkpoint cũ với `change_destination` vẫn giữ nghĩa “có” muốn đổi, “không” giữ điểm.
 Tên/biệt danh trong `data/navigation/regions.json` chỉ là từ vựng/điểm cần xác minh;
 VietMap cung cấp tọa độ và bằng chứng hành chính. Các query giữ dấu tiếng Việt.
 

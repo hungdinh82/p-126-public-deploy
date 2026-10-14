@@ -823,7 +823,7 @@ function renderDestinationChoices(next) {
     const oldScroll=panel.scrollTop;panel.innerHTML='';
     panelHeading(panel,'Địa điểm',key);
     const heading=document.createElement('p');heading.className='destination-choice-heading';heading.textContent=clarification?.question || (entries.length===1?'Đúng chỗ này chứ?':'Bạn muốn đến địa điểm nào?');panel.append(heading);
-    if (clarification?.phase==='change_destination' && next.selected) {
+    if (['change_destination','confirm_destination'].includes(clarification?.phase) && next.selected) {
       const point=document.createElement('p');point.className='default-destination';point.textContent=`Điểm đến mặc định: ${next.selected.spoken_label || next.selected.name}`;panel.append(point);
       if(next.summary){const summary=document.createElement('small');summary.textContent=`${formatDistance(next.summary.distance_m)} · ${formatDuration(next.summary.total_seconds)}`;panel.append(summary);}
     }

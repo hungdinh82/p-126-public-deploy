@@ -81,11 +81,12 @@ class AssistantGraph:
             else "confirmation"
             if state.get("confirmation_id")
             else "action"
-            if state.get("action")
+            if state.get("action") or state.get("question_reply")
             else "utterance",
             confirmation_id=state.get("confirmation_id"),
             confirmation_decision=state.get("confirmation_decision"),
             action=state.get("action"),
+            question_reply=state.get("question_reply"),
             navigation_event=state.get("navigation_event"),
             position=state.get("position"),
             vehicle_model=state.get("vehicle_model", "VF8"),
@@ -256,19 +257,27 @@ class AssistantGraph:
             await self.compiled.aupdate_state(config, result, as_node="await_input")
         return await self.aproject(result)
 
-    async def astream(self, state, stream_mode):
+    async def astream_dialogue(self, state):
+        """Project domain state only for updates consumed by the chat stream."""
+        async with aclosing(self.astream(
+            state, stream_mode=["updates", "values"], navigation_updates_only=True
+        )) as stream:
+            async for item in stream:
+                yield item
+
+    async def astream(self, state, stream_mode, *, navigation_updates_only=False):
         if self._closing:
             raise RuntimeError("Assistant runtime is closing")
         task = asyncio.current_task()
         self._tasks.add(task)
         try:
-            async with aclosing(self._astream(state, stream_mode)) as stream:
+            async with aclosing(self._astream(state, stream_mode, navigation_updates_only=navigation_updates_only)) as stream:
                 async for item in stream:
                     yield item
         finally:
             self._tasks.discard(task)
 
-    async def _astream(self, state, stream_mode):
+    async def _astream(self, state, stream_mode, *, navigation_updates_only=False):
         event = self.event(state)
         config = self.config(event)
         lock = self.thread_lock(config)
@@ -283,10 +292,18 @@ class AssistantGraph:
                     async for item in stream:
                         multiple = isinstance(stream_mode, (list, tuple))
                         mode, chunk = item if multiple else (stream_mode, item)
-                        if mode == "values" and chunk.get("output"):
+                        if mode == "values" and (chunk.get("output") or {}).get("turn_id") == event["turn_id"]:
                             chunk = await self.aproject(chunk)
                         elif mode == "updates":
                             for name, update in chunk.items():
+                                if navigation_updates_only and (
+                                    name not in {"capability", "validate"}
+                                    or not any(
+                                        r.get("navigation_update") or r.get("trip_plan_update")
+                                        for r in ((update or {}).get("turn") or {}).get("results", [])
+                                    )
+                                ):
+                                    continue
                                 if isinstance(update, dict) and update.get("session"):
                                     hydrated = await self.navigation.hydrate(
                                         SessionState.model_validate(update["session"]), event["session_id"]
@@ -310,24 +327,26 @@ class AssistantGraph:
         session = await self.navigation.hydrate(
             SessionState.model_validate(state.get("session") or {}), event.get("session_id", "cli")
         )
-        return self.project({**state, "session": session.model_dump(mode="json")})
+        return self.project({**state, "session": session})
 
     @staticmethod
     def project(state):
         event = state.get("event", {})
         session = SessionState.model_validate(state.get("session") or {})
+        payload = session.model_dump(mode="json")
         output, turn = dict(state.get("output", {})), state.get("turn", {})
         output.update(
+            pending_question=session.pending_question(),
             navigation=session.navigation.model_dump(mode="json"),
             control_revision=session.control_revision,
-            navigation_workspace=session.navigation_workspace.model_dump(mode="json"),
-            trip_plan=session.trip_plan.model_dump(mode="json") if session.trip_plan else None,
+            navigation_workspace=payload["navigation_workspace"],
+            trip_plan=payload["trip_plan"],
             control_receipts=session.control_receipts,
             snapshot_sequence=session.snapshot_sequence,
         )
         return {
             **state,
-            "session": session.model_dump(mode="json"),
+            "session": payload,
             **output,
             "output": output,
             "answer": output.get("response_text"),
@@ -480,7 +499,12 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
         event = TurnEvent.model_validate(state["event"])
         session = SessionState.model_validate(state["session"])
         turn = dict(state["turn"])
-        if event.kind == "navigation":
+        if event.question_reply:
+            from src.vivi.dialogue.answers import AnswerResolver
+
+            semantic = AnswerResolver().resolve(event.text, session, reply=event.question_reply)
+            served, attempts = "event", []
+        elif event.kind == "navigation":
             result, session = await domain.event(event, session)
             turn["navigation_result"] = result
             turn["timings"].update(result.get("timings", {}))
@@ -759,6 +783,13 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
         elif spec.executor == "navigation":
             session.conversation_context.pop("focus", None)
         session = await domain.hydrate(session, event.session_id)
+        from src.vivi.dialogue.questions import propose_question
+        from src.vivi.dialogue.reducer import synchronize_question
+
+        proposal = propose_question(session)
+        if proposal:
+            result = {**result, "question_proposal": proposal.model_dump(mode="json")}
+        session = synchronize_question(session, proposal)
         turn["results"] = [
             *turn["results"],
             {"step_id": step.id, "index": index, "capability": step.draft.capability, **result},
@@ -767,11 +798,13 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
         return {"session": session.model_dump(mode="json"), "turn": turn}
 
     async def response(state):
+        from src.vivi.dialogue.reducer import synchronize_question
         control = current_control.get()
         if control:
             control.stage = "response"
         event = TurnEvent.model_validate(state["event"])
         session = await domain.hydrate(SessionState.model_validate(state["session"]), event.session_id)
+        session = synchronize_question(session)
         if not state["turn"].get("domain_control"):
             session = await domain.allocate_snapshot(session, event.session_id)
         turn = state["turn"]
@@ -918,14 +951,13 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
             control_receipts=session.control_receipts,
             receipt=turn.get("navigation_result", {}).get("receipt"),
             steps=steps,
-            navigation_workspace=session.navigation_workspace.model_dump(mode="json"),
-            navigation=session.navigation.model_dump(mode="json"),
-            trip_plan=session.trip_plan.model_dump(mode="json") if session.trip_plan else None,
             ui_events=[item for result in results for item in result.get("ui_events", [])],
         )
-        projected = output.model_dump(mode="json")
-        for name in ("navigation", "navigation_workspace", "trip_plan", "control_receipts"):
-            projected.pop(name, None)
+        # Public projection hydrates domain fields after the checkpoint. Avoid
+        # serializing full geometry here only to throw it away immediately.
+        projected = output.model_dump(
+            mode="json", exclude={"navigation", "navigation_workspace", "trip_plan", "control_receipts"}
+        )
         return {"output": projected, "session": checkpoint_session(session)}
 
     async def control(event_data, previous, queued, superseded=False, coalesced=None):

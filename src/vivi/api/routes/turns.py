@@ -46,7 +46,7 @@ def _reject_inline_confirmation(request: TurnRequest) -> None:
 @router.post("/turn", response_model=TurnResponse)
 async def turn(request: TurnRequest):
     _reject_inline_confirmation(request)
-    provider = "rules" if request.navigation_event else await _provider(request.llm_provider)
+    provider = "rules" if request.navigation_event or request.question_reply else await _provider(request.llm_provider)
     started = time.perf_counter()
     received_at = time.time()
     try:
@@ -69,7 +69,7 @@ async def turn(request: TurnRequest):
 @router.post("/turn/stream")
 async def turn_stream(request: TurnRequest):
     _reject_inline_confirmation(request)
-    provider = "rules" if request.navigation_event else await _provider(request.llm_provider)
+    provider = "rules" if request.navigation_event or request.question_reply else await _provider(request.llm_provider)
 
     async def events():
         started = time.perf_counter()

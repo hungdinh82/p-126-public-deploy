@@ -3,10 +3,13 @@
 import asyncio
 import sqlite3
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from langgraph.checkpoint.sqlite import SqliteSaver
+
+from src.vivi.turn_control import record_io
 
 
 class ThreadedSqliteSaver(SqliteSaver):
@@ -39,7 +42,11 @@ class ThreadedSqliteSaver(SqliteSaver):
             if self._closing:
                 raise RuntimeError("Checkpoint store is closing")
             future = self._executor.submit(function, *args)
-        return await asyncio.shield(asyncio.wrap_future(future))
+        started = time.perf_counter()
+        try:
+            return await asyncio.shield(asyncio.wrap_future(future))
+        finally:
+            record_io("checkpoint", started)
 
     async def aget_tuple(self, config):
         return await self._run(self.get_tuple, config)

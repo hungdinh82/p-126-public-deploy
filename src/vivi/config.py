@@ -54,6 +54,7 @@ class Settings(BaseSettings):
     turn_timeout_seconds: float = Field(default=45, ge=1, le=180)
     cloud_budget_seconds: float = Field(default=10, ge=0.1, le=60)
     local_budget_seconds: float = Field(default=12, ge=0.1, le=60)
+    semantic_budget_seconds: float = Field(default=2.5, ge=0.1, le=60)
     provider_breaker_seconds: float = Field(default=30, ge=0, le=300)
     planner_max_tokens: int = Field(default=2048, ge=512, le=8192)
     conversation_enabled: bool = True

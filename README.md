@@ -2,6 +2,8 @@
 
 Contract LangGraph/navigation, migration và kết quả kiểm chứng hiện tại: [Navigation runtime unified-6](docs/navigation_runtime.md).
 
+Hỏi–đáp UI/voice, slot địa điểm và phân giải POI dùng chung: [Conversation generalization](docs/conversation_generalization_runtime.md).
+
 > Runtime chuẩn sau khi hợp nhất là `src.vivi.api.app:app`; không còn backend `/assist`
 > hay entrypoint thứ hai. Xem [contract runtime](docs/contracts.md),
 > [setup PC](docs/setup_pc.md), [setup Jetson Nano 4 GB](docs/setup_jetson_nano.md) và

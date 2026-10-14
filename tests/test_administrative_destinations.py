@@ -166,7 +166,7 @@ async def test_nam_dinh_region_then_explicit_ward_produces_consent_preview(servi
             }
         )
         assert first["navigation"]["selected"]["name"] == "Phường Nam Định"
-        assert first["navigation"]["clarification"]["phase"] == "change_destination"
+        assert first["navigation"]["clarification"]["phase"] == "confirm_destination"
         result = await invoke(graph, "Chỉ đường về phường Nam Định.", "ward")
         assert maps.queries[-1][0] == "phường Nam Định"  # no obsolete parent appended
         assert maps.queries[-1][1]["layers"] == "WARD"

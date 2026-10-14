@@ -135,7 +135,7 @@ async def test_logged_voice_selection_keeps_task_then_previews_without_driving(s
 
 
 @pytest.mark.asyncio
-async def test_search_routes_run_concurrently_and_selected_route_is_reused(services, tmp_path):
+async def test_ambiguous_plan_routes_only_user_selected_candidate_and_return(services, tmp_path):
     from src.vivi.navigation.vietmap import Place, Route
 
     class Maps(TripMaps):
@@ -170,9 +170,11 @@ async def test_search_routes_run_concurrently_and_selected_route_is_reused(servi
     try:
         result = await graph.ainvoke({"session_id": "driver", "turn_id": "return", "input_text": "đi Sầm Sơn và quay lại",
                                      "position": {"lat": ORIGIN[0], "lng": ORIGIN[1]}})
+        assert result["trip_plan"]["calculation_status"] == "draft" and maps.routes == []
+        result = await graph.ainvoke({"session_id": "driver", "turn_id": "select", "input_text": "chọn số 1"})
         assert result["trip_plan"]["calculation_status"] == "ready"
-        assert maps.peak == 3
-        assert len(maps.routes) == 4  # Three candidates plus return; outbound is not fetched twice.
+        assert maps.peak == 1
+        assert len(maps.routes) == 2  # Only the chosen outbound and return legs.
     finally:
         await graph.aclose()
 
@@ -267,7 +269,7 @@ async def test_parking_preempts_candidate_batch_and_fences_all_results(services,
     graph, _, gateway = build(replace(services, navigation=Maps(), energy_planner=EnergyPlanner(profile())), tmp_path)
     pending = asyncio.create_task(graph.ainvoke({
         "session_id": "driver", "turn_id": "search", "input_text": "tính tuyến", "position": {"lat": 21, "lng": 105.8},
-        "action": {"capability": "trip.plan", "arguments": {"query": "Sầm Sơn", "trip_kind": "one_way"}},
+        "action": {"capability": "navigation.search", "arguments": {"query": "Sầm Sơn"}},
     }))
     try:
         await asyncio.wait_for(started.wait(), 2)

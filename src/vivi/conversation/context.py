@@ -9,10 +9,10 @@ def destination(session):
     workspace = session.navigation_workspace
     # A running journey takes precedence over an unaccepted replacement draft.
     owner = workspace.journey or workspace.draft
-    selected = (owner.model_dump(mode="json").get("selected") or {}) if owner else {}
+    selected = (owner.selected or {}) if owner else {}
     if not selected and session.trip_plan:
         selected = session.trip_plan.selected or {}
-    return {key: selected[key] for key in ("name", "address", "lat", "lng") if key in selected}
+    return {key: selected[key] for key in ("name", "address", "lat", "lng", "handle") if key in selected}
 
 
 def conversation_view(session):

@@ -11,13 +11,18 @@ from dataclasses import dataclass
 
 from src.vivi.capabilities.registry import DEFAULT_CLIMATE_DELTA_CELSIUS, compatible_change
 from src.vivi.conversation.context import resolve_query, search_followup_query
-from src.vivi.dialogue.contracts import ActionDraft, SemanticTurn, SessionState
-from src.vivi.navigation.destinations import administrative_layer, region_for
+from src.vivi.dialogue.contracts import ActionDraft, NavigationState, SemanticTurn, SessionState
+from src.vivi.navigation.contracts import DestinationSpec
+from src.vivi.navigation.destinations import (
+    administrative_layer,
+    region_for,
+)
 from src.vivi.text import normalize_text
 
 
 def place_query_matches(query, place):
     """POI evidence check; a nearby unrelated result is not a successful match."""
+    parts = [part.strip() for part in query.split(",") if part.strip()]
     query = re.sub(r"\b(?:thanh pho|tp|tinh|phuong|xa)\s+", "", normalize_text(query))
     wanted = set(re.findall(r"[a-z0-9]+", query))
     name = set(re.findall(r"[a-z0-9]+", normalize_text(place.get("name", ""))))
@@ -31,6 +36,13 @@ def place_query_matches(query, place):
         )
     )
     available = set(re.findall(r"[a-z0-9]+", evidence))
+    for parent in parts[1:]:
+        region = region_for(parent)
+        if region and not any(
+            re.search(rf"\b{re.escape(normalize_text(name))}\b", evidence)
+            for name in [region["name"], *region.get("aliases", [])]
+        ):
+            return False
     return bool(wanted and wanted.intersection(name) and len(wanted & available) / len(wanted) >= 0.75)
 
 
@@ -164,7 +176,16 @@ class OfflineParser:
                 if delta is not None and delta * direction > 0:
                     return SemanticTurn(act="request", actions=[command])
                 return self.ask("Bạn nói rõ nhiệt độ muốn đặt nhé.")
+        from src.vivi.dialogue.answers import AnswerResolver
+
+        answer = AnswerResolver().resolve(text, session)
+        if answer:
+            return answer
         value = self.lexer.normalize(text)
+        from src.vivi.dialogue.questions import current_question
+
+        if affirmed(value) and current_question(session) is None:
+            return self.ask("Bạn muốn xác nhận thao tác nào? Bạn nói rõ yêu cầu nhé.")
         # The lexer already drops the name "vivi", so a bare "ViVi ơi" arrives as "oi".
         if re.fullmatch(r"(?:(?:hey|hay|he|e|nay|ne|alo),? ?)?(?:v[iy] ?v[iy](?: ?(?:oi|a|nhe|nha))?|oi)", value):
             # Only the wake phrase reached STT: answer the call instead of "not understood".
@@ -446,7 +467,7 @@ class OfflineParser:
             return self.ask("Mình chưa hiểu đủ thao tác này. Bạn nói rõ yêu cầu nhé.")
         # Knowledge questions take precedence over imperatives inside a question.
         if re.search(
-            r"\b(?:cach|huong dan|lam sao|tai sao|vi sao|la gi|o dau|bao lau|thong so|tinh nang|co nhung gi|co.*khong|the nao|nhu nao)\b",
+            r"\b(?:cach|huong dan|lam sao|tai sao|vi sao|la gi|o dau|bao lau|bao nhieu|thong tin ve|thong so|tinh nang|co nhung gi|co.*khong|the nao|nhu nao)\b|^thay\b|^nhiet do (?:cua xe|door)\b",
             value,
         ):
             if re.search(
@@ -456,8 +477,12 @@ class OfflineParser:
                     act="unsupported", text="Mình không hướng dẫn can thiệp hệ thống an toàn hoặc điện cao áp."
                 )
             # Explicit measurement cues distinguish observations from handbook facts.
+            from src.vivi.rag.knowledge import find_topic
+
             referenced = self.question_reference(text, history or [])
-            vehicle_topic = re.search(r"\b(?:xe|vf\d+|vinfast|pin|sac|lop|phanh|cua|kinh|dieu hoa|cabin|cruise|lka|adas|tui khi|capo|cop|vo lang|dong co|den|ghe|cam bien|dau|nuoc lam mat|ho tro lai)\b", self.lexer.normalize(referenced))
+            # Use the handbook vocabulary before the command lexer replaces
+            # Vietnamese names such as "cửa sổ" with control tokens.
+            vehicle_topic = find_topic(referenced) or re.search(r"\b(?:xe|vf\d+|vinfast|pin|sac|lop|phanh|cua|kinh|dieu hoa|cabin|cruise|lka|adas|tui khi|capo|cop|vo lang|dong co|den|ghe|cam bien|dau|nuoc lam mat|ho tro lai)\b", normalize_text(referenced))
             if not vehicle_topic:
                 return self.request("conversation.respond", {"query": text, "mode": "general"}, act="question")
             if re.search(r"hien tai|bay gio|con bao nhieu|con di duoc", value) and not re.search(
@@ -474,6 +499,13 @@ class OfflineParser:
             return self.request("vehicle.get_status")
         if re.search(r"gia ban|khuyen mai", value):
             return self.request("web.search", {"query": text}, act="question")
+        if text.rstrip().endswith("?") and self.command(value) is None:
+            from src.vivi.rag.knowledge import find_topic
+
+            # Nominal knowledge questions still support edition/spec lookups.
+            # Movement verbs make an unrecognized phrase ambiguous, not RAG.
+            if find_topic(text) and not re.search(r"\b(?:đến|tới|ghé|đưa|chở|đi|về)\b", text, re.I):
+                return self.request("manual.search", {"query": text}, act="question")
         clauses = self.lexer.clauses(text)
         if len(clauses) > 5:
             return self.ask("Bạn chia yêu cầu thành tối đa năm thao tác mỗi lần nhé.")
@@ -483,12 +515,6 @@ class OfflineParser:
             if parsed is None:
                 if len(clauses) > 1 or re.search(r"\b(?:mo|dong|dat|khoa|tang|giam|bat|tat|phat|ha)\b", clause.text):
                     return self.ask("Mình chưa hiểu đủ toàn bộ thao tác. Bạn nói rõ các bước muốn thực hiện nhé.")
-                from src.vivi.rag.knowledge import find_topic
-
-                if find_topic(text):
-                    return self.request(
-                        "manual.search", {"query": self.question_reference(text, history or [])}, act="question"
-                    )
                 return self.ask("Mình chưa hiểu yêu cầu. Bạn nói rõ thao tác hoặc điều muốn hỏi về xe nhé.")
             if parsed.referenced_target:
                 if current is None:
@@ -1062,7 +1088,7 @@ class OfflineParser:
         """Parse journey grammar into slots; vendor queries contain only names."""
         normalized = normalize_text(raw).strip()
         prefix = re.match(
-            r"^(?:(?:(?:lap|len) (?:ke hoach|lo trinh)|ke hoach|lo trinh|duong di)(?: di)?(?: va(?: lo trinh)? sac| sac)?(?: va di)?|(?:chi duong|dan duong|dan (?:toi|minh)|dua (?:toi|minh)|di|ve))(?: den| toi)?\s+(.+)$",
+            r"^(?:(?:chi duong|dan duong) va (?:lap|len) lo trinh(?: di)?(?: va)? sac|(?:(?:lap|len) (?:ke hoach|lo trinh)|ke hoach|lo trinh|duong di)(?: di)?(?: va(?: lo trinh)? sac| sac)?(?: va di)?|(?:toi|minh) (?:muon|can) (?:den|toi|di(?: den| toi)?|ve)|(?:chi duong|dan duong|dan (?:toi|minh)|(?:dua|cho) (?:toi|minh)|di|ve))(?: den| toi)?\s+(.+)$",
             normalized,
         )
         if not prefix:
@@ -1087,7 +1113,7 @@ class OfflineParser:
                 origin_query = source
             target = target[origin.start(2) :].strip()
         target = re.sub(r"^(?:đi vào|di vao|đi|di|vào|vao|đến|den|tới|toi|về|ve)\s+", "", target, flags=re.I)
-        target = re.sub(r"\s+(?:giúp tôi|giup toi|cho tôi|cho toi|nhé|nhe)$", "", target, flags=re.I).strip(" ,.!?")
+        target = OfflineParser.place_query(target)
         # "quán cà phê gần nhất": nearness is a slot, never part of the name sent to the map.
         near = re.search(r"\s+(?:gần đây|gan day|gần nhất|gan nhat|gần|gan)$", target, flags=re.I)
         if near:
@@ -1117,7 +1143,7 @@ class OfflineParser:
         identity = {"plan_id": plan.id, "route_revision": plan.revision}
         if (
             plan.clarification
-            and plan.clarification.get("phase") == "change_destination"
+            and plan.clarification.get("phase") in {"change_destination", "confirm_destination"}
             and re.fullmatch(r"bat dau(?: luon)?(?: hanh trinh)?", value)
         ):
             return self.request("trip.start", identity)
@@ -1137,9 +1163,12 @@ class OfflineParser:
             if value in {"khong", "khong di", "chua", "chua di", "de sau"}:
                 return self.request("trip.decline", identity)
         if plan.clarification or plan.candidates and plan.status == "selecting":
-            scratch = session.model_copy(deep=True)
-            scratch.navigation = plan
-            scratch.trip_plan = None
+            # This read-only adapter needs the plan and task ownership, not
+            # copies of every unrelated journey and geometry in the session.
+            scratch = SessionState(
+                navigation=plan.model_dump(mode="json", include=set(NavigationState.model_fields)),
+                active=session.active.model_copy(deep=True) if session.active else None,
+            )
             if scratch.active:
                 for step in scratch.active.steps:
                     if step.draft.capability.startswith("trip."):
@@ -1161,76 +1190,23 @@ class OfflineParser:
         nav = session.navigation
         clarification = nav.clarification
         if clarification and clarification.get("revision") == nav.revision:
-            choices = clarification.get("choices", [])
-            answer = re.sub(r"^(?:den |chon |di den )", "", value)
-            if answer in {
-                "trung tam",
-                "diem dai dien",
-                "trung tam di",
-                "cu lay trung tam",
-                "lay trung tam",
-                "giu trung tam",
-                "giu diem mac dinh",
-            } or any(answer == normalize_text(c["label"]) for c in choices if c["kind"] == "representative"):
-                center = next((c for c in choices if c["kind"] == "representative"), None)
-                if center:
-                    return self.request("navigation.refine", {"choice_handle": center["handle"]})
-            if re.fullmatch(r"(?:mot )?(?:cho|noi|dia diem)(?: cu the)? khac|khong phai trung tam", value):
-                other = next((c for c in choices if c["kind"] == "specific"), None)
-                if other:
-                    return self.request("navigation.refine", {"choice_handle": other["handle"]})
-            if clarification.get("phase") == "change_destination":
-                kind = (
-                    "representative"
-                    if value in {"khong", "khong doi", "khong can", "cu lay trung tam"}
-                    else "specific"
-                    if value in {"co", "u", "duoc", "ok", "dong y"}
-                    else None
-                )
-                choice = next((c for c in choices if c["kind"] == kind), None)
-                if choice:
-                    return self.request("navigation.refine", {"choice_handle": choice["handle"]})
-            if re.fullmatch(r"(?:u|co|duoc|ok|dong y|xac nhan)", value):
-                return self.ask(clarification["question"])
+            from src.vivi.dialogue.answers import AnswerResolver
+
+            answer = AnswerResolver().resolve(raw, session)
+            if answer:
+                return answer
         if self.awaiting_place(session) and not clarification:
-            if value in {
-                "khong",
-                "khong dung",
-                "khong phai",
-                "khong phai cho nay",
-                "khong dung cho nay",
-                "cho khac",
-                "khong cho nao",
-            }:
-                return self.request("navigation.refine", {"reject_candidates": True})
             correction = re.match(r"^(?:không[, ]+|đổi (?:sang|thành) |ý là |tìm lại )(.+)$", raw.strip(), re.I)
             if correction:
                 target = correction[1].strip()
                 journey = self.journey_arguments(target)
                 return self.request("navigation.refine", {"query": journey[1]["query"] if journey else target})
-        if self.awaiting_place(session) and re.fullmatch(
-            r"(?:xac nhan|dong y|ok|co|u|duoc|dung)(?: bat dau(?: di)?(?: luon)?)?", value
-        ):
-            if len(nav.candidates) == 1:
-                return self.request("navigation.select", {"place_handle": nav.candidates[0]["handle"]})
-            return self.ask("Bạn muốn chọn địa điểm thứ mấy trong danh sách?")
         if re.fullmatch(r"huy (?:tim|chon) dia diem", value):
             return self.request("navigation.cancel", {"route_revision": nav.revision})
         if re.fullmatch(r"(?:ket thuc hanh trinh|khong di nua)", value):
             return self.request("navigation.end")
         if re.fullmatch(r"(?:dung|huy|tat)(?: hanh trinh| dan duong| mo phong)", value):
             return self.request("navigation.stop")
-        candidate = (nav.pending or {}).get("navigation") or nav.model_dump(mode="json")
-        current_index = session.active.current_index() if session.active else None
-        if (
-            session.navigation_focus == "navigation"
-            and current_index is None
-            and (candidate.get("offer") or {}).get("status") == "pending"
-        ):
-            if re.fullmatch(r"(?:dong y|xac nhan|ok|co|u|duoc|dung|vang)(?: roi)?", value):
-                return SemanticTurn(act="confirm", task_ref="active")
-            if value in {"khong", "khong di", "chua", "chua di", "de sau"}:
-                return SemanticTurn(act="deny", task_ref="active")
         if (nav.status in {"preview", "paused"} or nav.pending and nav.pending.get("navigation")) and re.fullmatch(
             r"(?:bat dau|chay|di|xac nhan|dong y|ok|co|u|duoc)(?: di| dan duong| hanh trinh| mo phong)?", value
         ):
@@ -1240,22 +1216,6 @@ class OfflineParser:
                 return SemanticTurn(act="confirm", task_ref="active")
             return self.request("navigation.start", {"route_revision": nav.revision})
         selection = self.place_ordinal(value)
-        if selection and clarification and clarification.get("choices"):
-            index = {"dau tien": 0, "mot": 0, "hai": 1, "ba": 2, "1": 0, "2": 1, "3": 2}.get(
-                selection[1], int(selection[1]) - 1 if selection[1].isdigit() else 99
-            )
-            if 0 <= index < len(clarification["choices"]):
-                return self.request("navigation.refine", {"choice_handle": clarification["choices"][index]["handle"]})
-        if self.awaiting_place(session) and not clarification:
-            matches = [
-                p
-                for p in nav.candidates
-                if value in {normalize_text(p["name"]), normalize_text(p.get("spoken_label", ""))}
-            ]
-            if len(matches) == 1:
-                return self.request("navigation.select", {"place_handle": matches[0]["handle"]})
-            if len(matches) > 1:
-                return self.ask("Có nhiều địa điểm trùng tên. Bạn chọn số thứ tự hoặc nói thêm địa chỉ nhé.")
         station_energy = (nav.pending.get("navigation", {}).get("energy") or {}) if nav.pending else (nav.energy or {})
         candidates = station_energy.get("station_candidates", []) if selection and re.search(r"\btram\b", value) else []
         candidates = candidates or nav.candidates
@@ -1318,13 +1278,60 @@ class OfflineParser:
                 },
             )
         if clarification:
-            cleaned = re.sub(r"^(?:không[, ]+|khong[, ]+|ý là |y la |đến |den )", "", raw.strip(), flags=re.I)
+            cleaned = re.sub(r"^(?:không[, ]+|khong[, ]+|ý là |y la |đến |den |đổi (?:sang|thành) |doi (?:sang|thanh) )", "", raw.strip(), flags=re.I)
             if journey := self.journey_arguments(cleaned):
                 cleaned = journey[1]["query"]
+            cleaned = self.place_query(cleaned)
             if region_for(cleaned):
                 return self.request("navigation.refine", {"query": cleaned})
             if value not in {"khong", "huy", "thoi", "dung"} and not self.command(value):
                 return self.request("navigation.refine", {"query": cleaned})
+        return None
+
+    @staticmethod
+    def place_query(text):
+        """Remove spoken courtesy tails before sending a destination to maps."""
+        value = text.strip(" ,.!?")
+        return re.sub(
+            r"(?:\s+(?:giúp tôi|giup toi|cho tôi|cho toi|nhé|nhe|đi|di|luôn|luon|thôi|thoi))+$",
+            "", value, flags=re.I,
+        ).strip()
+
+    @staticmethod
+    def destination_area(text, owner):
+        """Legacy reader delegates slot semantics to the shared answer boundary."""
+        from src.vivi.dialogue.answers import AnswerResolver
+
+        session = SessionState(navigation=owner.model_dump(mode="json", include=set(NavigationState.model_fields)))
+        answer = AnswerResolver().resolve(text, session)
+        return answer.actions[0].arguments.query if answer and answer.actions else None
+
+    @staticmethod
+    def destination_choice(value, owner):
+        """Compatibility entry point; question polarity lives in AnswerResolver."""
+        from src.vivi.dialogue.answers import AnswerResolver
+        from src.vivi.dialogue.questions import current_question
+
+        session = SessionState(navigation=owner.model_dump(mode="json", include=set(NavigationState.model_fields)))
+        question = current_question(session)
+        return AnswerResolver.choice_role(value, question) if question else None
+
+    def explicit_navigation_reference(self, text, session):
+        """Complete region/landmark and explicit directions have bounded semantics."""
+        journey = self.journey_arguments(text)
+        if not journey or len(self.lexer.clauses(text)) != 1 or re.search(
+            r"\b(?:neu|lat nua|ti nua|ngay mai|ngay kia|sau \d+ phut)\b", normalize_text(text),
+        ):
+            return None
+        destination = DestinationSpec.from_arguments(journey[1])
+        strong = re.match(r"^(?:chi duong|dan duong|(?:dua|cho) (?:toi|minh)|(?:toi|minh) (?:muon|can) (?:den|toi|di|ve))\b", normalize_text(text))
+        if not destination.complete() or not (strong or destination.selection == "region"):
+            return None
+        parsed = self.interpret(text, session)
+        if parsed.act == "request" and len(parsed.actions) == 1 and parsed.actions[0].capability in {
+            "navigation.plan", "trip.plan", "navigation.refine", "trip.refine",
+        } and not (parsed.unresolved or parsed.negated or parsed.scheduled or parsed.conditional):
+            return parsed
         return None
 
     @staticmethod
@@ -1344,6 +1351,20 @@ class OfflineParser:
             return None
         trip = prefix == "trip" and session.trip_plan is not None
         owner = session.trip_plan if trip else session.navigation
+        if query := self.destination_area(text, owner):
+            arguments = {"query": query}
+            if trip:
+                arguments.update(plan_id=owner.id, route_revision=owner.revision)
+            return self.request(f"{prefix}.refine", arguments)
+        kind = self.destination_choice(value, owner)
+        choice = next((c for c in (owner.clarification or {}).get("choices", []) if c["kind"] == kind), None)
+        if choice:
+            arguments = {"choice_handle": choice["handle"]}
+            if trip:
+                arguments.update(plan_id=owner.id, route_revision=owner.revision)
+            return self.request(f"{prefix}.refine", arguments)
+        if kind:
+            return self.ask("Lựa chọn địa điểm đã thay đổi. Bạn chọn lại điểm đến nhé.")
         question = owner.clarification or {}
         pending = (owner.pending or {}).get("navigation") or {}
         energy = pending.get("energy") or owner.energy or {}
@@ -1403,6 +1424,27 @@ class OfflineParser:
 
     def guard(self, text, semantic, session, memory=None, history=None):
         """Language evidence checks stay at the language boundary for all tiers."""
+        from src.vivi.dialogue.answers import AnswerResolver
+        from src.vivi.dialogue.questions import current_question
+
+        # A model's stale target cannot be rebound to a fresh question merely
+        # because the utterance also looks like an acknowledgment.
+        for draft in semantic.drafts():
+            prefix = draft.capability.split(".")[0]
+            if prefix not in {"navigation", "trip"}:
+                continue
+            revision = session.trip_plan.revision if prefix == "trip" and session.trip_plan else session.navigation_workspace.revision
+            if draft.arguments.route_revision is not None and draft.arguments.route_revision != revision:
+                return self.ask("Yêu cầu đã thay đổi. Bạn chọn lại địa điểm hoặc kế hoạch hiện tại nhé.")
+            if prefix == "trip" and draft.arguments.plan_id and (
+                session.trip_plan is None or draft.arguments.plan_id != session.trip_plan.id
+            ):
+                return self.ask("Kế hoạch này không còn thuộc câu hỏi hiện tại. Bạn chọn lại nhé.")
+        answer = AnswerResolver().resolve(text, session)
+        if answer:
+            return answer
+        if affirmed(self.lexer.normalize(text)) and current_question(session) is None:
+            return self.ask("Mình chưa có thao tác đang chờ xác nhận.")
         value = self.lexer.normalize(text)
         result = semantic.model_copy(deep=True)
         bounded = self.interpret(text, session, memory, history)

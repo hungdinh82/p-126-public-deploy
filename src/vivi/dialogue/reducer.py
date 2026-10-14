@@ -30,6 +30,21 @@ def expire(session: SessionState):
     return state
 
 
+def synchronize_question(session, proposal=None):
+    """The reducer owns the persisted foreground question, including legacy import."""
+    from src.vivi.dialogue.questions import current_question
+
+    session.dialogue_question = current_question(session, proposal)
+    if (session.dialogue_question and session.dialogue_question.expires_at <= datetime.now(UTC)
+        and session.dialogue_question.kind != "confirm_action"):
+        from uuid import uuid4
+
+        session.dialogue_question = session.dialogue_question.model_copy(update={
+            "id": "question:" + str(uuid4()), "expires_at": datetime.now(UTC) + timedelta(minutes=3),
+        })
+    return session
+
+
 def reject_modification(state, task, message):
     """An ambiguous correction changes no slots and revokes prior consent."""
     grants = [s for s in task.steps if s.status in {"waiting_confirmation", "approved"}]
@@ -44,49 +59,12 @@ def reduce_turn(
     session: SessionState, value: SemanticTurn, *, revoke_consent_on_clarify=True
 ) -> tuple[SessionState, str | None]:
     state = expire(session)
-    # A yes/no answers the current typed place question before execution consent.
-    index = state.active.current_index() if state.active else None
-    current = state.active.steps[index] if index is not None else None
-    if (
-        value.act in {"confirm", "deny"}
-        and current
-        and current.status == "waiting_slot"
-        and current.draft.capability.startswith(("navigation.", "trip."))
-    ):
-        prefix = current.draft.capability.split(".")[0]
-        owner = state.trip_plan if prefix == "trip" else state.navigation
-        args = {"plan_id": owner.id, "route_revision": owner.revision} if prefix == "trip" else {}
-        question = owner.clarification or {}
-        action = None
-        if question.get("phase") == "change_destination":
-            kind = "specific" if value.act == "confirm" else "representative"
-            choice = next((c for c in question.get("choices", []) if c["kind"] == kind), None)
-            if choice:
-                action = ActionDraft(
-                    capability=f"{prefix}.refine", arguments={**args, "choice_handle": choice["handle"]}
-                )
-        elif not question and owner.candidates:
-            if value.act == "deny":
-                action = ActionDraft(capability=f"{prefix}.refine", arguments={**args, "reject_candidates": True})
-            elif len(owner.candidates) == 1:
-                action = ActionDraft(
-                    capability=f"{prefix}.select", arguments={**args, "place_handle": owner.candidates[0]["handle"]}
-                )
-        if action:
-            value = SemanticTurn(act="request", actions=[action])
-    if value.act in {"confirm", "deny"} and current is None and state.navigation_focus == "navigation":
-        nav = state.navigation
-        candidate = (nav.pending or {}).get("navigation") or nav.model_dump(mode="json")
-        if (candidate.get("offer") or {}).get("status") == "pending" and not candidate.get("clarification"):
-            value = SemanticTurn(
-                act="request",
-                actions=[
-                    ActionDraft(
-                        capability="navigation.start" if value.act == "confirm" else "navigation.decline",
-                        arguments={"route_revision": nav.revision},
-                    )
-                ],
-            )
+    if value.act in {"confirm", "deny"}:
+        from src.vivi.dialogue.answers import AnswerResolver
+
+        answer = AnswerResolver().resolve("", state, act=value.act)
+        if answer and answer.actions:
+            value = answer
     # All tiers, including typed UI, validate references before changing a task.
     for draft in value.drafts():
         if not draft.capability.startswith(("trip.", "navigation.")):
@@ -117,25 +95,6 @@ def reduce_turn(
             places = [*owner.candidates, *(energy or {}).get("station_candidates", [])] if owner else []
             if not any(place.get("handle") == args.place_handle for place in places):
                 return state, "Địa điểm đã thay đổi. Bạn chọn lại nhé."
-    plan = state.trip_plan
-    if (
-        plan
-        and state.navigation_focus == "trip"
-        and plan.offer
-        and plan.offer.get("status") == "pending"
-        and not plan.clarification
-        and value.act in {"confirm", "deny"}
-        and (not state.active or state.active.current_index() is None)
-    ):
-        value = SemanticTurn(
-            act="request",
-            actions=[
-                ActionDraft(
-                    capability="trip.start" if value.act == "confirm" else "trip.decline",
-                    arguments={"plan_id": plan.id, "route_revision": plan.revision},
-                )
-            ],
-        )
     # A selection is a slot answer to the existing route step, including UI
     # events. Keep the task and its remaining steps instead of replacing them.
     current_index = state.active.current_index() if state.active else None

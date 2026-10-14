@@ -7,6 +7,7 @@ import logging
 import math
 
 from src.vivi.dialogue.contracts import ActionDraft, NavigationState, TripPlanState
+from src.vivi.navigation.contracts import DestinationSpec
 from src.vivi.navigation.presentation import route_summary
 from src.vivi.navigation.vietmap import VietMapError
 from src.vivi.navigation.workflow import NavigationWorkflow, coordinates, current_origin
@@ -31,7 +32,8 @@ class TripWorkflow(NavigationWorkflow):
         if update:
             for field in type(plan).model_fields:
                 if field in update:
-                    setattr(plan, field, update[field])
+                    value = DestinationSpec.model_validate(update[field]) if field == "destination" and update[field] else update[field]
+                    setattr(plan, field, value)
         complete = bool((plan.energy or {}).get("selected_plan")) and not plan.clarification
         plan.calculation_status = (
             "ready" if complete else "draft" if plan.clarification or not plan.selected else "incomplete"
@@ -85,7 +87,7 @@ class TripWorkflow(NavigationWorkflow):
         if name == "trip.start":
             if (
                 plan.clarification
-                and plan.clarification.get("phase") == "change_destination"
+                and plan.clarification.get("phase") in {"change_destination", "confirm_destination"}
                 and plan.selected
                 and (plan.energy or {}).get("selected_plan")
             ):
@@ -104,6 +106,12 @@ class TripWorkflow(NavigationWorkflow):
             resuming = step.result and step.result.get("status") == "waiting_slot"
             if not resuming:
                 plan = TripPlanState(origin=event.position or await current_origin(session.navigation))
+                if (arguments.get("destination") or {}).get("reference"):
+                    old = session.trip_plan
+                    navigation = session.navigation
+                    plan.candidates = [*(old.candidates if old else []), *navigation.candidates,
+                                       *([old.selected] if old and old.selected else []),
+                                       *([navigation.selected] if navigation.selected else [])]
         if not plan.origin and session.navigation.origin:
             plan.origin = session.navigation.origin
         scratch = session.model_copy(deep=True)

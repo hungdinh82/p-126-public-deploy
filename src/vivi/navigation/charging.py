@@ -31,8 +31,8 @@ def geometry(route):
     return points, cumulative
 
 
-def sample_points(route, maximum=64):
-    points, cumulative = geometry(route)
+def sample_points(route, maximum=64, *, prepared=None):
+    points, cumulative = prepared if prepared is not None else geometry(route)
     count = min(maximum, max(2, math.ceil(route["distance_m"] / 35000) + 1))
     samples, segment = [], 0
     for index in range(count):
@@ -45,9 +45,9 @@ def sample_points(route, maximum=64):
     return samples
 
 
-def route_context(point, route):
+def route_context(point, route, *, prepared=None):
     """Project onto geometry for shortlisting, never for drive distance or SOC."""
-    points, cumulative = geometry(route)
+    points, cumulative = prepared if prepared is not None else geometry(route)
     scale = math.cos(math.radians(point[0]))
     closest = (float("inf"), 0, 0.0)
     for index, (a, b) in enumerate(zip(points, points[1:])):
@@ -55,11 +55,14 @@ def route_context(point, route):
         bx, by = (b[1] - point[1]) * scale, b[0] - point[0]
         dx, dy = bx - ax, by - ay
         ratio = min(1, max(0, -(ax * dx + ay * dy) / max(1e-18, dx * dx + dy * dy)))
-        projected = (a[0] + (b[0] - a[0]) * ratio, a[1] + (b[1] - a[1]) * ratio)
-        gap = distance(point, projected)
+        # The projection already uses a local planar metric. Compare squared
+        # offsets here and calculate the geodesic gap only for the best segment.
+        gap = (ax + dx * ratio) ** 2 + (ay + dy * ratio) ** 2
         if gap < closest[0]:
             closest = (gap, index, ratio)
     gap, index, ratio = closest
+    a, b = points[index], points[index + 1]
+    gap = distance(point, (a[0] + (b[0] - a[0]) * ratio, a[1] + (b[1] - a[1]) * ratio))
     progress = (
         (cumulative[index] + ratio * (cumulative[index + 1] - cumulative[index]))
         / max(1, cumulative[-1])
@@ -75,6 +78,19 @@ class StationDiscovery:
     incomplete: bool = False
     errors: list[str] = field(default_factory=list)
     observed_at: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
+
+
+def reproject_stations(stations, route, radius_m):
+    """Reuse map identities, with fresh corridor progress for a changed origin."""
+    prepared = geometry(route)
+    kept = []
+    for station in stations:
+        if station.simulated or not station.map_ref_id:
+            continue
+        gap, progress, road = route_context((station.lat, station.lng), route, prepared=prepared)
+        if gap <= radius_m:
+            kept.append(station.model_copy(update={"route_progress_m": round(progress), "road_context": road}))
+    return kept
 
 
 class VietMapChargingDiscovery:
@@ -98,9 +114,11 @@ class VietMapChargingDiscovery:
         ]
         return matches[0] if len(matches) == 1 else None
 
-    async def discover(self, route):
+    async def discover(self, route, *, budget_seconds=None):
         result, groups, rest_groups, rest_places = StationDiscovery(), {}, {}, []
-        samples = sample_points(route)
+        prepared = await asyncio.to_thread(geometry, route)
+        samples = sample_points(route, prepared=prepared)
+        budget = min(self.budget_seconds, budget_seconds) if budget_seconds is not None else self.budget_seconds
         if route["distance_m"] > (len(samples) - 1) * 35000:
             result.incomplete = True
             result.errors.append("route_sampling_limit")
@@ -136,7 +154,9 @@ class VietMapChargingDiscovery:
                 info = charging_poi_info(place.name)
                 if not info or place.lat is None or place.lng is None:
                     return
-                gap, progress, road = route_context((place.lat, place.lng), route)
+                gap, progress, road = await asyncio.to_thread(
+                    route_context, (place.lat, place.lng), route, prepared=prepared
+                )
                 if gap > self.radius_m:
                     return
                 equipment = self.equipment_for(place)
@@ -189,7 +209,8 @@ class VietMapChargingDiscovery:
                 if (
                     place.lat is not None
                     and place.lng is not None
-                    and route_context((place.lat, place.lng), route)[0] <= self.radius_m
+                    and (await asyncio.to_thread(route_context, (place.lat, place.lng), route, prepared=prepared))[0]
+                    <= self.radius_m
                 ):
                     rest_places.append(place)
             except Exception:
@@ -197,10 +218,17 @@ class VietMapChargingDiscovery:
                 result.errors.append("rest_area_detail_failed")
 
         try:
-            async with asyncio.timeout(self.budget_seconds):
-                await asyncio.gather(
-                    *(search(point, query) for point in samples for query in ("trạm sạc", "trạm dừng nghỉ"))
-                )
+            async with asyncio.timeout(budget):
+                # A slow search must leave time to hydrate successful results.
+                # Cancellation drains pending reads before using partial groups.
+                try:
+                    async with asyncio.timeout(budget * 0.6):
+                        await asyncio.gather(
+                            *(search(point, query) for point in samples for query in ("trạm sạc", "trạm dừng nghỉ"))
+                        )
+                except TimeoutError:
+                    result.incomplete = True
+                    result.errors.append("station_search_timeout")
                 found = {}
                 # Round robin across route samples: dense origin results must
                 # not consume the whole detail budget before later segments.

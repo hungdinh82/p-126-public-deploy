@@ -19,6 +19,8 @@ from pydantic import (
     model_validator,
 )
 
+from src.vivi.navigation.contracts import DestinationSpec
+
 Zone = Literal["driver", "front_passenger", "rear_left", "rear_right", "all"]
 
 
@@ -110,6 +112,7 @@ class MemoryRemember(MemoryForget):
 
 
 class NavigationSearch(Parameters):
+    destination: DestinationSpec | None = None
     query: str = Field(min_length=2, max_length=200)
     category: Literal["pharmacy", "charging"] | None = None
     nearest: bool = False
@@ -121,13 +124,14 @@ class NavigationSelect(Parameters):
 
 
 class NavigationRefine(Parameters):
+    destination: DestinationSpec | None = None
     reject_candidates: bool | None = None
     choice_handle: str | None = Field(default=None, min_length=1, max_length=80)
     query: str | None = Field(default=None, min_length=2, max_length=200)
 
     @model_validator(mode="after")
     def choice_or_query(self):
-        if sum((bool(self.choice_handle), bool(self.query), self.reject_candidates is True)) != 1:
+        if sum((bool(self.choice_handle), bool(self.query or self.destination), self.reject_candidates is True)) != 1:
             raise ValueError("Provide exactly one choice, query, or reject_candidates=true")
         return self
 
@@ -139,8 +143,8 @@ class NavigationPlan(NavigationSearch):
     use_search_results: bool = False
 
     @model_validator(mode="after")
-    def destination(self):
-        if not self.query and not self.use_search_results:
+    def valid_destination(self):
+        if not self.query and not (self.destination and (self.destination.query() or self.destination.reference)) and not self.use_search_results:
             raise ValueError("A destination query or preceding search is required")
         return self
 

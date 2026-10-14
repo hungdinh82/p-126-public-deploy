@@ -11,11 +11,11 @@ from pydantic import ValidationError
 
 from src.vivi.agents.prompts import VOICE_PERSONA
 from src.vivi.conversation.context import conversation_view
-from src.vivi.dialogue.contracts import SemanticTurn, SessionState, semantic_schema
+from src.vivi.dialogue.contracts import NavigationState, SemanticTurn, SessionState, semantic_schema
 from src.vivi.dialogue.parser import OfflineParser
 from src.vivi.structured_llm import strict_schema
 
-PROMPT_VERSION = "semantic-unified-17"
+PROMPT_VERSION = "semantic-unified-20"
 SEMANTIC_INSTRUCTION = """
 You interpret the complete CURRENT Vietnamese utterance into SemanticTurn JSON.
 Propose meaning; server code owns task IDs, scheduling, slot collection, consent,
@@ -47,6 +47,14 @@ CONTRACT
   search after starting an old route unless the user specifically asks for that.
 
 GROUNDING AND REFERENCES
+For navigation/trip requests, destination may carry raw_text (an exact span of
+the utterance), name, entity_type, area{text,source,constraint}, selection,
+qualifiers, reference and nearest. Legacy query is still accepted.
+An area reply updates the current destination's area, retaining its name.
+Unverified alternate names belong in search_hypotheses, not in verified aliases.
+Never claim an area came from the user unless they supplied it. Inferred areas
+are preferred hypotheses. The server binds short replies to the pending_question
+ID and its declared effect; changing slots never grants execution consent.
 unresolved contains an uninterpreted fragment of the utterance, never a missing
 slot name such as zone or value_celsius. A known capability with missing slots
 uses request and null slots, so it remains a task for the next turn.
@@ -110,10 +118,15 @@ Set trip_kind=round_trip for 'và quay lại', 'khứ hồi', 'cả đi lẫn v�
 return leg. Ordinary new requests use one_way. Never invent charging numbers.
 Server verifies a center for broad geographic names and computes a draft first.
 The typed clarification.phase identifies the pending question:
-- change_destination asks whether to CHANGE the default: 'không'/'cứ lấy trung tâm'
-  selects representative choice, 'có' selects specific choice and asks its name.
+- confirm_destination asks to ACCEPT the proposed default: yes/OK/'giữ địa điểm'
+  selects representative; no/'đổi địa điểm' selects specific and asks its name.
+- change_destination is a legacy negative question: literal 'có' selects specific,
+  'không' keeps representative; acknowledgment OK/'xác nhận' keeps representative.
 - specific asks for a place name: refine query, preserve region unless another is
   named. 'Không, về Thanh Hoá' changes region, NOT cancellation.
+- place_area asks where the named POI is: keep clarification.query and append
+  the supplied area (e.g. 'Đền Trần' + 'Nam Định' -> 'Đền Trần, Nam Định').
+  A bare area reply is NOT a request for that province's representative point.
 - selecting candidates: single match yes selects its handle; multiple matches use
   ordinal/name/handle. Place acceptance is NOT permission to start driving.
   A candidates[].handle belongs in place_handle with navigation.select/trip.select.
@@ -162,8 +175,9 @@ AC/DC was supplied; let the server collect it. Live status -> vehicle.get_status
 
 NAVIGATION QUESTION OWNERSHIP
 pending_navigation_question identifies what a short yes/no answers. accept_place
-selects that candidate; change_destination yes asks for another destination and no
-keeps the verified center. Neither grants start consent. start_plan accepts only
+selects that candidate; confirm_destination accepts or replaces the proposed
+point. Legacy change_destination follows its negative-question wording. Neither
+grants start consent. start_plan accepts only
 the current offer. Plans have no driving progress; the active journey continues
 until its replacement is accepted. navigation.stop pauses; navigation.end ends.
 Do not revive a completed planning step to start: use navigation.start with the
@@ -208,6 +222,12 @@ class ModelProvider:
 
 def semantic_navigation_context(navigation):
     """Keep task/POI references and forecasts, leave map geometry in checkpoint."""
+    if hasattr(navigation, "model_dump"):
+        geometry = {"coordinates", "steps", "bbox"}
+        navigation = navigation.model_dump(mode="json", exclude={
+            "applied_events": True, "route": geometry, "waypoint_routes": {"__all__": geometry},
+            "energy": {"selected_plan": {"legs"}}, "alternatives": {"__all__": {"legs"}},
+        })
     view = {key: value for key, value in navigation.items() if key != "applied_events"}
     if view.get("route"):
         view["route"] = {
@@ -232,12 +252,29 @@ def semantic_navigation_context(navigation):
     return view
 
 
+def semantic_workspace_context(workspace):
+    """Project the domain owners before serialization, not a full map snapshot."""
+    base = workspace.journey or workspace.draft
+    compact = semantic_navigation_context(base) if base else {"origin": workspace.origin}
+    view = NavigationState.model_validate(compact).model_dump(mode="json", exclude={"applied_events"})
+    view.update(revision=workspace.revision, event_sequence=workspace.event_sequence)
+    if workspace.journey and workspace.draft:
+        draft = semantic_navigation_context(workspace.draft)
+        view.update(request_id=workspace.draft.request_id, candidates=draft["candidates"], clarification=draft["clarification"],
+                    pending={"status": workspace.pending_status or ("selecting" if workspace.draft.clarification or not workspace.draft.route else "preview"),
+                             "message": workspace.pending_message, "navigation": draft})
+    elif workspace.pending_status:
+        view["pending"] = {"status": workspace.pending_status, "message": workspace.pending_message}
+    return view
+
+
 class SemanticResolver:
-    def __init__(self, providers=None, *, parser=None, breaker_seconds=30, fallback_chains=None):
+    def __init__(self, providers=None, *, parser=None, breaker_seconds=30, fallback_chains=None, budget_seconds=2.5):
         self.providers = providers or {}
         self.parser = parser or OfflineParser()
         self.breaker_seconds = breaker_seconds
         self.fallback_chains = fallback_chains or {}
+        self.budget_seconds = budget_seconds
 
     def chain(self, requested):
         if requested == "rules":
@@ -248,6 +285,15 @@ class SemanticResolver:
 
     async def resolve(self, text, session, *, requested="rules", history=None, memory=None, catalog=None):
         attempts = []
+        from src.vivi.dialogue.answers import AnswerResolver
+        from src.vivi.dialogue.questions import current_question
+
+        answer = AnswerResolver().resolve(text, session)
+        if answer:
+            question = current_question(session)
+            return answer, "rules", [{"provider": "rules", "outcome": "served", "latency_ms": 0,
+                                       "source": "pending_confirmation" if question.purpose == "approve_execution" else "candidate_reference",
+                                       "question_id": question.id}]
         consent = self.parser.confirmation_reference(text, session)
         if consent:
             return consent, "rules", [{"provider": "rules", "outcome": "served", "latency_ms": 0,
@@ -257,6 +303,12 @@ class SemanticResolver:
             return reference, "rules", [{
                 "provider": "rules", "outcome": "served", "latency_ms": 0,
                 "source": "candidate_reference",
+            }]
+        explicit = self.parser.explicit_navigation_reference(text, session)
+        if explicit:
+            return explicit, "rules", [{
+                "provider": "rules", "outcome": "served", "latency_ms": 0,
+                "source": "explicit_navigation",
             }]
         prompt = json.dumps(
             {
@@ -269,7 +321,9 @@ class SemanticResolver:
             },
             ensure_ascii=False,
         )
-        for name in self.chain(requested):
+        deadline = time.monotonic() + self.budget_seconds
+        chain = self.chain(requested)
+        for index, name in enumerate(chain):
             provider = self.providers.get(name)
             if provider is None:
                 attempts.append({"provider": name, "outcome": "not_configured", "latency_ms": 0})
@@ -278,9 +332,15 @@ class SemanticResolver:
                 attempts.append({"provider": name, "outcome": "circuit_open", "latency_ms": 0})
                 continue
             started = time.perf_counter()
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                attempts.append({"provider": name, "outcome": "turn_budget_exhausted", "latency_ms": 0})
+                continue
             try:
-                async with asyncio.timeout(provider.budget_seconds):
+                reserve = min(.5, remaining / 2) if index < len(chain) - 1 else 0
+                async with asyncio.timeout(min(provider.budget_seconds, remaining - reserve)):
                     value = await self.interpret(provider, prompt)
+                    value = self.destination_slots(value, text, session)
             except (Exception,) as exc:
                 provider.unavailable_until = time.monotonic() + self.breaker_seconds
                 attempts.append(
@@ -319,6 +379,58 @@ class SemanticResolver:
         return value, "rules", attempts
 
     @staticmethod
+    def destination_slots(value, text, session):
+        """Establish provenance for model-supplied slots without a second parse."""
+        from src.vivi.dialogue.questions import current_question
+        from src.vivi.text import normalize_text
+
+        utterance = normalize_text(text)
+        question = current_question(session)
+        for action in value.drafts():
+            destination = action.arguments.destination
+            if destination is None:
+                continue
+            if destination.raw_text and normalize_text(destination.raw_text) not in utterance:
+                raise ValueError("destination raw_text is not an utterance span")
+            inherited_qualifiers = (question.destination.qualifiers if question and question.destination
+                                    and question.slot == "area" and question.owner == action.capability.split(".")[0]
+                                    and action.capability.endswith(".refine") else [])
+            if any(normalize_text(q) not in utterance and q not in inherited_qualifiers for q in destination.qualifiers):
+                raise ValueError("destination qualifier has no utterance evidence")
+            inherited = False
+            if destination.selection == "reference":
+                owner = session.trip_plan if action.capability.startswith("trip.") else session.navigation
+                places = [*getattr(owner, "candidates", []), *([owner.selected] if owner and owner.selected else [])]
+                if action.capability in {"trip.plan", "navigation.plan"}:
+                    for other in [session.navigation_workspace.journey, session.trip_plan]:
+                        if other and other.selected:
+                            places.append(other.selected)
+                place = next((p for p in places if p.get("handle") == destination.reference), None)
+                if not place:
+                    raise ValueError("Destination reference is not in the current session")
+                destination = destination.model_copy(update={"name": place["name"]})
+                inherited = True
+            if (not destination.name and question and question.slot == "area" and question.destination
+                and question.owner == action.capability.split(".")[0]):
+                destination = destination.model_copy(update={"name": question.destination.name})
+                inherited = True
+            if destination.name and not inherited and normalize_text(destination.name) not in utterance:
+                if not destination.raw_text:
+                    raise ValueError("destination name has no utterance evidence")
+                hypotheses = [destination.name, *destination.search_hypotheses][:2]
+                destination = destination.model_copy(update={"name": destination.raw_text, "search_hypotheses": hypotheses})
+            if destination.area and normalize_text(destination.area.text) not in utterance:
+                old_area = question.destination.area if question and question.destination else None
+                justified = old_area and old_area.text == destination.area.text
+                area = destination.area.model_copy(update={
+                    "source": "context" if justified else "hypothesis", "constraint": "required" if justified else "preferred",
+                })
+                destination = destination.model_copy(update={"area": area})
+            action.arguments.destination = destination
+            action.arguments.query = None if destination.selection == "reference" else destination.query() or None
+        return value
+
+    @staticmethod
     def context(session: SessionState):
         def task(value, handle):
             if value is None:
@@ -353,8 +465,8 @@ class SemanticResolver:
             "pending_navigation_question": session.pending_question(),
             "active": task(session.active, "active"),
             "clarification": session.clarification.model_dump(mode="json") if session.clarification else None,
-            "navigation": semantic_navigation_context(session.navigation.model_dump(mode="json")),
-            "trip_plan": semantic_navigation_context(session.trip_plan.model_dump(mode="json"))
+            "navigation": semantic_workspace_context(session.navigation_workspace),
+            "trip_plan": semantic_navigation_context(session.trip_plan)
             if session.trip_plan
             else None,
             "suspended": [task(value, f"suspended:{i}") for i, value in enumerate(session.suspended)],

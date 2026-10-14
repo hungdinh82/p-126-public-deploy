@@ -56,6 +56,7 @@ class ConfirmationOutput(BaseModel):
 
 
 class AssistantOutput(BaseModel):
+    pending_question: dict[str, Any] | None = None
     control_revision: int = 0
     receipt: dict[str, Any] | None = None
     control_receipts: list[dict[str, Any]] = Field(default_factory=list)

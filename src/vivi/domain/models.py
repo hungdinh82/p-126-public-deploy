@@ -5,7 +5,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
-from src.vivi.dialogue.contracts import ActionDraft
+from src.vivi.dialogue.contracts import ActionDraft, QuestionReply
 from src.vivi.navigation.workflow import NavigationEvent, Position
 
 Intent = Literal[
@@ -246,6 +246,7 @@ class ConfirmationPreview(BaseModel):
 
 
 class TurnRequest(BaseModel):
+    question_reply: QuestionReply | None = None
     action: ActionDraft | None = None
     navigation_event: dict[str, Any] | None = None
     position: dict[str, Any] | None = None
@@ -280,6 +281,7 @@ class TurnRequest(BaseModel):
 
 
 class TurnResponse(BaseModel):
+    pending_question: dict[str, Any] | None = None
     answer_kind: str | None = None
     answer_basis: str | None = None
     control_revision: int = 0
