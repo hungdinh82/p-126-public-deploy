@@ -6,12 +6,12 @@ import argparse
 import io
 import json
 import os
-from pathlib import Path
 import statistics
 import sys
 import time
 import uuid
 import wave
+from pathlib import Path
 
 import httpx
 
