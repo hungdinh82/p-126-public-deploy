@@ -13,8 +13,12 @@ from src.vivi.text import normalize_text
 
 class AnswerResolver:
     @staticmethod
-    def effect(action):
-        return SemanticTurn(act="request", actions=[action.model_copy(deep=True)]) if action else None
+    def effect(action, question=None):
+        if not action:
+            return None
+        modifying = question and question.slot_effect and question.target_id == question.step_id
+        return SemanticTurn(act="modify" if modifying else "request", task_ref="active" if modifying else None,
+                            actions=[action.model_copy(deep=True)])
 
     def resolve(self, text, session, *, reply=None, act=None, literal=False):
         question = current_question(session)
@@ -38,7 +42,7 @@ class AnswerResolver:
                 return SemanticTurn(act="clarify", text="Lựa chọn không hợp lệ cho câu hỏi này.")
             if question.expires_at <= datetime.now(UTC):
                 return SemanticTurn(act="clarify", text="Câu hỏi đã hết hạn. Bạn yêu cầu lại nhé.")
-            return self.effect(option.effect)
+            return self.effect(option.effect, question)
         value = Lexer().normalize(text)
         if literal and question.purpose == "collect_slot" and question.slot_effect and question.slot not in {"name", "area"}:
             from pydantic import TypeAdapter, ValidationError
@@ -73,10 +77,10 @@ class AnswerResolver:
             # negative wording. Literal yes/no and typed acts retain its polarity.
             if question.kind == "change_destination" and act is None and value not in {"co", "khong", "khong can"}:
                 option = next((o for o in question.options if o.role == "representative"), None)
-                return self.effect(option.effect) if option else None
+                return self.effect(option.effect, question) if option else None
             effect = question.yes_effect if yes else question.no_effect
             if effect:
-                return self.effect(effect)
+                return self.effect(effect, question)
             answer_act = question.yes_act if yes else question.no_act
             if answer_act:
                 return SemanticTurn(act=answer_act, task_ref="active")
@@ -97,7 +101,7 @@ class AnswerResolver:
             kind = self.choice_role(text, question)
             if kind:
                 option = next((o for o in question.options if o.role == kind), None)
-                return self.effect(option.effect) if option else None
+                return self.effect(option.effect, question) if option else None
         if question.slot == "area" and question.destination:
             area = re.sub(r"^(?:ở|o|tại|tai)\s+", "", OfflineParser.place_query(text), flags=re.I)
             if literal or region_for(area) or administrative_layer(area):
@@ -105,13 +109,13 @@ class AnswerResolver:
                 arguments = {"query": destination.query(), "destination": destination}
                 if question.owner == "trip":
                     arguments.update(plan_id=question.target_id, route_revision=question.revision)
-                return self.effect(ActionDraft(capability=f"{question.owner}.refine", arguments=arguments))
+                return self.effect(ActionDraft(capability=f"{question.owner}.refine", arguments=arguments), question)
         if question.slot == "name" and question.slot_effect:
             # Slot values are data; fully specified new intents retain routing.
             bounded = OfflineParser().interpret(text, SessionState())
             unrelated = any(not a.capability.startswith(("navigation.", "trip.")) for a in bounded.actions)
             intent_cue = re.match(r"^(?:mo|dong|dat|bat|tat|phat|tim|ghi nho|thoi tiet|gia vang)\b", value)
-            if (literal or not OfflineParser.journey_arguments(text) and not (unrelated and intent_cue)
+            if (literal or not OfflineParser.journey_arguments(text) and not (unrelated and (bounded.act == "question" or intent_cue))
                 and not (bounded.conditional or bounded.scheduled or bounded.negated)
                 and not re.match(r"^(?:khong|huy|thoi|dung)\b", value)
                 and len(text) <= 200 and not re.search(r"\b(?:la gi|o dau|tai sao|neu|ngay mai)\b", value)):
@@ -130,16 +134,16 @@ class AnswerResolver:
                 effect = question.slot_effect.model_copy(deep=True)
                 effect.arguments.destination, effect.arguments.query = destination, destination.query()
                 return (SemanticTurn(act="modify", task_ref="active", actions=[effect]) if question.slot_effect.capability.endswith("plan")
-                        else self.effect(effect))
+                        else self.effect(effect, question))
         ordinal = OfflineParser.place_ordinal(value)
         if ordinal and question.options:
             token = ordinal[1]
-            index = {"dau tien": 0, "mot": 0, "hai": 1, "ba": 2, "bon": 3, "tu": 3, "nam": 4}.get(token, int(token) - 1 if token.isdigit() else -1)
-            return self.effect(question.options[index].effect) if 0 <= index < len(question.options) else SemanticTurn(
+            index = {"dau tien": 0, "mot": 0, "nhat": 0, "hai": 1, "ba": 2, "bon": 3, "tu": 3, "nam": 4}.get(token, int(token) - 1 if token.isdigit() else -1)
+            return self.effect(question.options[index].effect, question) if 0 <= index < len(question.options) else SemanticTurn(
                 act="clarify", text="Số đó không có trong danh sách hiện tại.")
         matches = [o for o in question.options if value == normalize_text(o.label) or value == normalize_text(o.label.split(",")[0])]
         if len(matches) == 1:
-            return self.effect(matches[0].effect)
+            return self.effect(matches[0].effect, question)
         if len(matches) > 1:
             return SemanticTurn(act="clarify", text="Có nhiều địa điểm trùng tên. Bạn chọn số thứ tự hoặc thêm địa chỉ nhé.")
         return None

@@ -11,11 +11,12 @@ from pydantic import ValidationError
 
 from src.vivi.agents.prompts import VOICE_PERSONA
 from src.vivi.conversation.context import conversation_view
+from src.vivi.conversation.guardrails import TOPIC_INSTRUCTION
 from src.vivi.dialogue.contracts import NavigationState, SemanticTurn, SessionState, semantic_schema
 from src.vivi.dialogue.parser import OfflineParser
 from src.vivi.structured_llm import strict_schema
 
-PROMPT_VERSION = "semantic-unified-20"
+PROMPT_VERSION = "semantic-unified-22"
 SEMANTIC_INSTRUCTION = """
 You interpret the complete CURRENT Vietnamese utterance into SemanticTurn JSON.
 Propose meaning; server code owns task IDs, scheduling, slot collection, consent,
@@ -197,6 +198,12 @@ semantic text. Greetings/thanks may remain reply. Vehicle-specific facts and
 how-to stay manual.search; weather and general questions never read vehicle status.
 Tourism recommendations, live/changing information, gold prices and explicit
 internet searches use web.search. Background history/culture uses knowledge.lookup.
+Current office holders (rector, CEO, president, political leaders), administrative
+counts/boundaries, population and other changing facts ALWAYS require web.search,
+even without 'today'. Never trust model recollection for these. Stable explanations
+may use model knowledge; uncertainty or a user request for sources uses lookup/search.
+Keep WHO/WHAT/HOW MANY, the entity, qualifications and requested date in query;
+never turn 'who currently holds this office?' into only the office name.
 Weather uses weather.get_forecast with query, location (null if not specified),
 forecast_day=today/tomorrow/day_after_tomorrow. 'Tomorrow' here is not a scheduled
 vehicle effect. Missing weather location uses request/question, not unsupported.
@@ -294,6 +301,16 @@ class SemanticResolver:
             return answer, "rules", [{"provider": "rules", "outcome": "served", "latency_ms": 0,
                                        "source": "pending_confirmation" if question.purpose == "approve_execution" else "candidate_reference",
                                        "question_id": question.id}]
+        from src.vivi.information.policy import information_decision
+
+        decision = information_decision(text)
+        if decision:
+            bounded = self.parser.interpret(text, session, memory, history)
+            if (bounded.act in {"question", "request"} and len(bounded.actions) == 1
+                and bounded.actions[0].capability == decision.capability
+                and not (bounded.negated or bounded.conditional or bounded.scheduled or bounded.unresolved)):
+                return bounded, "rules", [{"provider": "rules", "outcome": "served", "latency_ms": 0,
+                    "source": "information_policy", "reason": decision.reason}]
         consent = self.parser.confirmation_reference(text, session)
         if consent:
             return consent, "rules", [{"provider": "rules", "outcome": "served", "latency_ms": 0,
@@ -474,7 +491,7 @@ class SemanticResolver:
 
     @staticmethod
     async def interpret(provider, prompt):
-        instruction = VOICE_PERSONA + SEMANTIC_INSTRUCTION + "\nReturn compact JSON: omit null argument slots and unused optional fields; include only the operations and slots needed for this turn."
+        instruction = VOICE_PERSONA + SEMANTIC_INSTRUCTION + TOPIC_INSTRUCTION + "\nFor a disallowed intent return unsupported with a brief safe alternative, no drafts. For emergencies return reply with immediate safe support, no drafts. Return compact JSON: omit null argument slots and unused optional fields; include only the operations and slots needed for this turn."
         for attempt in range(2):
             try:
                 client = provider.client

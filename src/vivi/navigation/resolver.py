@@ -230,4 +230,3 @@ class PlaceResolver:
         for place in reachable:
             place.pop("_rank_distance")
         return reachable[:3]
-

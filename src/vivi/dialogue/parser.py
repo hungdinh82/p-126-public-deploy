@@ -378,6 +378,12 @@ class OfflineParser:
             )
         if re.fullmatch(r"toi (?:thay |bi )?(?:hoi )?(?:om|cam sot|sot)", value):
             return SemanticTurn(act="reply", text="Mình nghe bạn. Bạn muốn mình tìm nơi hỗ trợ gần đây không?")
+        from src.vivi.conversation.guardrails import assess_topic
+
+        if assess_topic(text).handling == "caution" and re.search(
+            r"\b(?:toi|minh|em) (?:dang )?(?:dau|met|bi benh|mac benh)\b", value
+        ):
+            return self.request("conversation.respond", {"query": text, "mode": "general"}, act="question")
         if re.search(r"quat gio", value) and re.match(r"^(?:tang|giam|bat|tat)", value):
             return SemanticTurn(act="unsupported", text="Mình chưa hỗ trợ điều chỉnh tốc độ quạt gió nhé.")
         if re.search(r"\b(?:nong|lanh)\b", value) and re.search(r"toi da|cao nhat|max|toi thieu", value):
@@ -531,26 +537,19 @@ class OfflineParser:
     def open_world(self, text, value, session):
         """Bounded open-world grammar, before navigation and scheduled effects."""
         # Preserve commands, memory writes and consent ownership.
-        if self.command(value) or re.match(r"^(?:ghi nho|nho rang|quen|mo|dong|dat|chinh|bat|tat|phat|khoa|dan|dua|di den|di toi|bat dau)\b", value):
+        if self.command(value) or re.match(r"^(?:ghi nho|nho rang|quen|mo|dong|dat|chinh|bat|tat|phat|khoa|dan(?! so\b)|dua|di den|di toi|bat dau)\b", value):
             return None
         if re.search(r"\b(?:neu|lat nua|sau do|thi)\b.*\b(?:mo|dong|dat|bat|tat|phat|khoa|ha|chinh)\b", value):
             return None
         current = session.active.steps[session.active.current_index()] if session.active and session.active.current_index() is not None else None
+        from src.vivi.information.policy import information_decision
+
+        decision = information_decision(text)
+        if decision and decision.capability != "weather.get_forecast" and len(self.lexer.clauses(text)) == 1:
+            return self.request(decision.capability, {"query": resolve_query(text, session)}, act="question")
         if (session.conversation_context.get("focus") == "information" and affirmed(value)
             and (current is None or current.draft.capability in {"conversation.respond", "web.search", "weather.get_forecast", "knowledge.lookup"})):
             return SemanticTurn(act="clarify", text="Bạn nói rõ yêu cầu muốn tiếp tục nhé; mình chưa xác nhận thao tác nào.", unresolved=[text])
-        if current and current.draft.capability == "weather.get_forecast" and current.status == "waiting_slot":
-            choices = session.conversation_context.get("location_candidates", [])
-            ordinal = re.fullmatch(r"(?:(?:dia diem|cho|noi) )?(?:thu )?(1|2|3|mot|hai|ba|dau tien)", value)
-            if choices and ordinal:
-                index = {"1": 0, "mot": 0, "dau tien": 0, "2": 1, "hai": 1, "3": 2, "ba": 2}[ordinal[1]]
-                if index >= len(choices):
-                    return self.ask("Bạn chọn một địa điểm trong danh sách vừa nêu nhé.")
-                args = current.draft.arguments.model_dump(exclude_none=True)
-                args["location"] = choices[index]["label"]
-                return SemanticTurn(act="modify", task_ref="active", actions=[ActionDraft(capability="weather.get_forecast", arguments=args)])
-            if choices and affirmed(value):
-                return self.ask("Bạn chọn địa điểm thứ mấy trong danh sách nhé?")
         if (current and current.draft.capability == "weather.get_forecast" and current.status == "waiting_slot"
             and re.fullmatch(r"[\w\s,.-]{2,100}", text, re.UNICODE)
             and len(text.split()) <= 7 and not re.search(r"\b(?:khong|co|huy|thoi|cam on|chao|ke|tai sao|vi sao|la gi|ngay mai|ngay kia|lich su|van hoa|du lich|noi chuyen|tam su|met|lo trinh|ke hoach|thoi tiet|du bao)\b", value)):
@@ -562,10 +561,28 @@ class OfflineParser:
         # Let the existing ordered-clause parser preserve mixed command chains.
         if len(self.lexer.clauses(text)) > 1:
             return None
+        from src.vivi.conversation.guardrails import assess_topic
+
+        topic = assess_topic(text)
+        inquiry = text.rstrip().endswith("?") or re.search(
+            r"\b(?:la gi|tai sao|vi sao|the nao|nhu nao|tac dung|rui ro|bao nhieu|co.*khong)\b", value
+        )
+        if topic.handling == "caution" and not topic.terminal and inquiry:
+            # Health words such as "đau" must not become the oil/vehicle topic.
+            # Explicit current facts have already selected their lookup above.
+            return self.request("conversation.respond", {"query": text, "mode": "general"}, act="question")
         if re.search(r"\b(?:ke (?:cho .+ )?(?:chuyen|truyen)|ke tiep|truyen ngan|chuyen vui)\b", value):
             return self.request("conversation.respond", {"query": text, "mode": "creative"}, act="question")
         previous = session.conversation_context
         date_followup = re.fullmatch(r"(?:con |the )?(?:ngay mai|ngay kia)(?: thi sao)?[?.! ]*", value)
+        location_followup = (previous.get("capability") == "weather.get_forecast"
+            and (region_for(text.strip(" .!?")) or re.match(r"^(?:(?:minh|toi)(?: dang)? )?(?:o|tai)\s+", value))
+            and not self.command(value))
+        if location_followup:
+            location = self.weather_location(text, slot_reply=True)
+            if location:
+                return self.request("weather.get_forecast", {"query": "Thời tiết tại " + location, "location": location,
+                    "forecast_day": previous.get("forecast_day", "today")}, act="question")
         if re.search(r"\b(?:thoi tiet|du bao|troi.*(?:mua|nang)|co mua|mua khong)\b", value) or (date_followup and previous.get("capability") == "weather.get_forecast"):
             query = resolve_query(text, session)
             location = self.weather_location(query)
@@ -1220,7 +1237,7 @@ class OfflineParser:
         candidates = station_energy.get("station_candidates", []) if selection and re.search(r"\btram\b", value) else []
         candidates = candidates or nav.candidates
         if selection and candidates:
-            index = {"dau tien": 0, "mot": 0, "hai": 1, "ba": 2, "1": 0, "2": 1, "3": 2}.get(
+            index = {"dau tien": 0, "mot": 0, "nhat": 0, "hai": 1, "ba": 2, "1": 0, "2": 1, "3": 2}.get(
                 selection[1], int(selection[1]) - 1 if selection[1].isdigit() else 99
             )
             if 0 <= index < len(candidates):
@@ -1339,7 +1356,7 @@ class OfflineParser:
         return re.fullmatch(
             r"(?:(?:chon|den|di den|dan den) )?"
             r"(?:(?:cai|cho|tram(?: sac)?|dia diem|ket qua|so) )?"
-            r"(?:thu )?(dau tien|mot|hai|ba|bon|tu|nam|[0-9]+)", value,
+            r"(?:thu )?(dau tien|mot|nhat|hai|ba|bon|tu|nam|[0-9]+)", value,
         )
 
     def place_reference(self, text, session):
@@ -1460,6 +1477,12 @@ class OfflineParser:
                 and [a.capability for a in result.actions] == [a.capability for a in bounded.actions]):
                 # The model can resolve richer locations and follow-ups. The
                 # bounded grammar repairs routing; it must not erase valid slots.
+                return result
+            if (bounded.actions[0].capability == "conversation.respond"
+                and bounded.actions[0].arguments.mode == "general" and result.act in {"question", "request"}
+                and result.actions and all(a.capability in {"conversation.respond", "knowledge.lookup", "web.search"} for a in result.actions)):
+                # A stable knowledge shortcut must not erase an explicit,
+                # valid model proposal to verify it against external sources.
                 return result
             return bounded
         if bounded.negated or bounded.conditional or bounded.scheduled or bounded.conflicting:

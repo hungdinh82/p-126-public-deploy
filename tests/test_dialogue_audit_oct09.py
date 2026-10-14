@@ -100,7 +100,7 @@ async def test_all_latest_logged_turns(services, tmp_path, tier):
         # Consent replies and list choices are bound to the open question by rules,
         # never sent to a model (SemanticResolver.resolve).
         bound = any(
-            a.get("source") in {"pending_confirmation", "candidate_reference"}
+            a.get("source") in {"pending_confirmation", "candidate_reference", "information_policy"}
             for a in result["diagnostics"].get("provider_attempts", [])
         )
         assert result["diagnostics"]["effective_provider"] == ("rules" if bound else tier), row

@@ -18,7 +18,10 @@ from zoneinfo import ZoneInfo
 import httpx
 
 from src.vivi.conversation.context import destination, resolve_query, search_topic
+from src.vivi.conversation.guardrails import assess_topic
+from src.vivi.information.policy import encyclopedia_topic, information_decision
 from src.vivi.information.time_context import search_time_context
+from src.vivi.information.weather_locations import geocoding_query, weather_labels, weather_places
 from src.vivi.text import normalize_text
 
 
@@ -55,6 +58,19 @@ def plain(value):
 def source_identifier(kind, *values):
     digest = hashlib.sha256("\0".join(str(value) for value in values).encode()).hexdigest()[:16]
     return kind + "_" + digest
+
+
+def focused_content(content, query, *, limit=6000):
+    """Bound long pages but retain passages near the requested entity/fact."""
+    content = plain(content)
+    if len(content) <= limit:
+        return content
+    stop = {"ai", "la", "gi", "co", "cua", "cho", "toi", "bao", "nhieu", "o", "tai", "dang", "nay", "thong", "tin", "ve"}
+    terms = set(re.findall(r"\w+", normalize_text(query))) - stop
+    windows = [content[i:i + 800] for i in range(0, min(len(content), 200000), 800)]
+    scores = [len(terms & set(re.findall(r"\w+", normalize_text(w)))) for w in windows]
+    chosen = {0, *sorted(range(len(windows)), key=lambda i: scores[i], reverse=True)[:6]}
+    return "\n\n".join(windows[i] for i in sorted(chosen))[:limit]
 
 
 class TavilyQuota:
@@ -103,7 +119,7 @@ class InformationService:
                         raise InformationError("response_too_large", "Nguồn trả về quá nhiều dữ liệu; bạn thử câu hỏi cụ thể hơn nhé.")
                 return json.loads(body)
 
-    async def search(self, query):
+    async def search(self, query, *, richer=False):
         if not self.settings.tavily_api_key:
             raise InformationError("search_not_configured", "Mình chưa kết nối dịch vụ tìm kiếm internet.")
         if time.monotonic() < self.search_unavailable_until:
@@ -114,7 +130,8 @@ class InformationService:
             gold_domains = ["sjc.com.vn", "doji.vn", "pnj.com.vn", "btmc.vn"] if "gia vang" in normalize_text(query) else []
             payload = {"query": query[:600], "search_depth": "basic", "auto_parameters": False,
                        "max_results": self.settings.information_max_results, "include_answer": False,
-                       "include_raw_content": False, "include_published_date": True}
+                       "include_raw_content": "text" if richer else False, "include_published_date": True,
+                       "chunks_per_source": 3}
             if gold_domains:
                 payload["include_domains"] = gold_domains
                 payload["include_domains_mode"] = "restrict"
@@ -137,6 +154,8 @@ class InformationService:
                 if not any(host == domain or host.endswith("." + domain) for domain in gold_domains):
                     continue
             content = plain(item.get("content"))[:4000]
+            if richer and item.get("raw_content"):
+                content = (content[:1500] + "\n\n" + focused_content(item["raw_content"], query, limit=4500)).strip()
             if url and content:
                 results.append({"source_id": source_identifier("web", url, content), "kind": "web",
                                 "title": plain(item.get("title"))[:200], "source_url": url,
@@ -144,16 +163,17 @@ class InformationService:
         return results
 
     async def wikipedia(self, query):
+        topic = encyclopedia_topic(query)
         for language in ("vi", "en"):
             data = await self.request("GET", f"https://{language}.wikipedia.org/w/api.php", params={
-                "action": "query", "format": "json", "generator": "search", "gsrsearch": query[:300],
-                "gsrlimit": 3, "prop": "extracts|info", "exintro": 1, "explaintext": 1,
+                "action": "query", "format": "json", "generator": "search", "gsrsearch": topic[:300],
+                "gsrlimit": 3, "prop": "extracts|info", "exchars": 6000, "explaintext": 1,
                 "exlimit": "max", "inprop": "url", "formatversion": 2,
             })
             results = []
             for item in sorted(data.get("query", {}).get("pages", []), key=lambda item: item.get("index", 0)):
                 url = public_url(item.get("fullurl"))
-                content = plain(item.get("extract"))[:4000]
+                content = focused_content(item.get("extract"), query)
                 if url and content:
                     results.append({"source_id": source_identifier("wiki", url, content), "kind": "wikipedia",
                                     "title": item.get("title", "")[:200], "source_url": url,
@@ -182,8 +202,13 @@ class InformationService:
         if not location and re.search(r"o do|tai do|noi sap den|cho sap toi", normalize_text(arguments["query"])):
             target = destination(session)
             location = target.get("name")
-        if not location and re.search(r"o day|hien tai|bay gio", value):
+        explicit_here = bool(re.search(r"\b(?:o day|tai day|vi tri hien tai|cho toi dang o)\b", value))
+        explicit_there = bool(re.search(r"\b(?:o do|tai do|noi sap den|cho sap toi)\b", normalize_text(arguments["query"])))
+        if not location and explicit_here:
             target = event.position
+        if not target and (explicit_here or explicit_there) and not location:
+            return {"status": "waiting_slot", "message": "Bạn cho mình địa điểm hoặc vị trí để xem thời tiết nhé.",
+                    "information_context": {"capability": "weather.get_forecast", "forecast_day": day}, "error_code": "location_required"}
         if not location and not target:
             # A short date follow-up inherits location, never arbitrary old GPS.
             context = session.conversation_context
@@ -191,39 +216,27 @@ class InformationService:
                 location = context.get("location")
                 target = context.get("position") if not location else None
         if not location and not target:
-            target = event.position
-        if not location and not target:
-            return {"status": "waiting_slot", "message": "Bạn muốn xem thời tiết ở đâu?",
-                    "information_context": {"capability": "weather.get_forecast", "forecast_day": day}, "error_code": "location_required"}
+            location = self.settings.weather_default_location
         if target and "lat" in target and "lng" in target:
             lat, lng = target["lat"], target["lng"]
             label = location or target.get("label") or target.get("name") or "vị trí hiện tại"
             timezone = target.get("timezone") or self.settings.information_timezone
         else:
-            geocode_query = re.sub(r"^(?:tỉnh|thành phố|tp\.?|huyện)\s+", "", location, flags=re.I)
+            geocode_query = geocoding_query(location)
             geo = await self.request("GET", "https://geocoding-api.open-meteo.com/v1/search",
                                      params={"name": geocode_query, "count": 5, "language": "vi", "format": "json"})
-            places = geo.get("results", [])
-            local = [p for p in places if p.get("country_code") == "VN"]
-            places = local or places
+            places = weather_places(geo.get("results", []), location)
             if not places:
                 return {"status": "waiting_slot", "message": "Mình chưa xác định được địa điểm đó. Bạn cho biết thành phố hoặc tỉnh nhé.",
                         "information_context": {"capability": "weather.get_forecast", "forecast_day": day}}
             if len(places) > 1:
-                exact = [p for p in places if normalize_text(p.get("name", "")) == normalize_text(location)]
-                # A capital/administrative city owns an unqualified city name;
-                # homonymous villages should not force another voice turn.
-                cities = [p for p in exact if p.get("feature_code") in {"PPLC", "PPLA"}]
-                if len(exact) == 1 or len(cities) == 1:
-                    places = cities or exact
-                else:
-                    labels = [", ".join(dict.fromkeys(str(p[k]) for k in ("name", "admin1", "country") if p.get(k))) for p in places[:3]]
-                    candidates = [{"label": label, "name": p["name"], "lat": p["latitude"], "lng": p["longitude"],
-                                   "timezone": p.get("timezone") or self.settings.information_timezone}
-                                  for label, p in zip(labels, places[:3], strict=True)]
-                    return {"status": "waiting_slot", "message": "Có nhiều địa điểm cùng tên: " + "; ".join(labels) + ". Bạn muốn nơi nào?",
-                            "information_context": {"capability": "weather.get_forecast", "forecast_day": day,
-                                                    "location_candidates": candidates}}
+                labels = weather_labels(places[:3])
+                candidates = [{"label": label, "name": p["name"], "lat": p["latitude"], "lng": p["longitude"],
+                               "timezone": p.get("timezone") or self.settings.information_timezone}
+                              for label, p in zip(labels, places[:3], strict=True)]
+                return {"status": "waiting_slot", "message": "Bạn muốn xem thời tiết ở đâu: " + "; ".join(f"{i}: {label}" for i, label in enumerate(labels, 1)) + "?",
+                        "information_context": {"capability": "weather.get_forecast", "forecast_day": day,
+                                                "location_candidates": candidates}}
             place = places[0]
             lat, lng = place["latitude"], place["longitude"]
             label = place["name"]
@@ -246,9 +259,10 @@ class InformationService:
         if low is None or high is None:
             raise InformationError("forecast_missing", "Nguồn chưa có số liệu nhiệt độ cho ngày bạn hỏi.")
         label_day = {"today": "hôm nay", "tomorrow": "ngày mai", "day_after_tomorrow": "ngày kia"}[day]
-        message = f"Dự báo tại {label} {label_day} ({requested_date}): nhiệt độ từ {low:g} đến {high:g} độ C."
+        message = f"Ở {label} {label_day}, nhiệt độ dự kiến từ {low:g} đến {high:g} độ C"
         if rain is not None and units.get("precipitation_probability_max") == "%":
-            message += f" Khả năng có mưa cao nhất trong ngày là {rain:g}%."
+            message += f", khả năng có mưa cao nhất trong ngày là {rain:g}%"
+        message += "."
         retrieved = datetime.now(UTC).isoformat()
         citation = {"source_id": source_identifier("weather", lat, lng, requested_date), "kind": "weather", "title": "Open-Meteo · " + label,
                     "source_url": "https://open-meteo.com/en/docs", "retrieved_at": retrieved,
@@ -261,9 +275,31 @@ class InformationService:
                          "temperature_min_c": low, "temperature_max_c": high, "rain_probability_max": rain}}
 
     async def execute(self, capability, arguments, event, session, *, provider, history=None, memory=None):
+        # Check both original input and structured arguments before any adapter,
+        # including cache/quota writes. API callers cannot bypass voice policy.
+        for text in (event.text, arguments.get("query", ""), arguments.get("location", "")):
+            topic = assess_topic(text or "")
+            if topic.terminal:
+                return topic.result()
         if not self.online:
             return {"status": "blocked", "message": "Mình đang không truy cập internet nên chưa lấy được thông tin mới.", "error_code": "internet_disabled"}
         query = resolve_query(arguments["query"], session)
+        question = resolve_query(event.text, session) if event.kind == "utterance" and event.text else query
+        if session.active and len(session.active.steps) > 1:
+            # The task's query describes this information step. Do not send
+            # unrelated vehicle commands or personal notes in the whole turn.
+            question = query
+        if "chủ đề:" in query:
+            question = query
+        for text in (query, question):
+            topic = assess_topic(text)
+            if topic.terminal:
+                return topic.result()
+        decision = information_decision(question)
+        if capability == "knowledge.lookup" and decision and decision.capability == "web.search":
+            capability, query = "web.search", question
+        if capability == "web.search" and decision and decision.capability == "web.search":
+            query = question if "chủ đề:" not in query else query
         # Avoid carrying memory or full conversation into provider requests.
         time_context = search_time_context(query, self.settings.information_timezone)
         information_context = {"capability": capability, "query": query, "topic_query": search_topic(query, session)}
@@ -271,12 +307,15 @@ class InformationService:
         if capability == "weather.get_forecast":
             weather_scope = {"position": {k: event.position[k] for k in ("lat", "lng") if k in event.position} if event.position else None,
                              "destination": destination(session), "previous_location": session.conversation_context.get("location"),
-                             "previous_position": session.conversation_context.get("position")}
+                             "previous_position": session.conversation_context.get("position"),
+                             "default_location": self.settings.weather_default_location}
         key = hashlib.sha256(json.dumps([capability, query, arguments.get("location"), arguments.get("forecast_day"), weather_scope,
                                          time_context["current_date"]], sort_keys=True).encode()).hexdigest()
         cached = self.cache.get(key)
         fetched = None
         cache_hit = False
+        deadline = time.monotonic() + self.settings.information_timeout_seconds
+        retrieval_attempts = []
         if cached and capability == "weather.get_forecast":
             forecast = cached[1].get("data", {})
             local_day = datetime.now(ZoneInfo(forecast.get("timezone") or self.settings.information_timezone)).date()
@@ -302,8 +341,12 @@ class InformationService:
                 if capability == "weather.get_forecast":
                     return {**fetched, "cache_hit": cache_hit}
                 source_metadata = {"information_provider": "tavily" if capability == "web.search" else "wikipedia",
-                                   "cache_hit": cache_hit, "source_count": len(fetched), "information_context": information_context}
-                if not fetched:
+                                   "cache_hit": cache_hit, "source_count": len(fetched), "information_context": information_context,
+                                   "source_policy": decision.reason if decision else "model_selected"}
+                if fetched and fetched[0].get("kind") == "web":
+                    source_metadata["information_provider"] = "tavily"
+                retrieval_attempts.append({"provider": source_metadata["information_provider"], "sources": len(fetched), "cache_hit": cache_hit})
+                if not fetched and capability == "web.search":
                     return {**source_metadata, "status": "blocked", "message": "Mình chưa tìm được nguồn phù hợp để trả lời câu này.", "error_code": "no_evidence", "grounding_status": "insufficient_evidence"}
                 if "gia vang" in normalize_text(query):
                     today = date.fromisoformat(time_context["current_date"])
@@ -316,10 +359,39 @@ class InformationService:
                                 "answer_basis": "sources",
                                 "citations": [{k: v for k, v in item.items() if k != "content"} for item in fetched]}
                     fetched = current
-                result = await self.conversation.respond(query, provider=provider, evidence=fetched, history=history, memory=memory,
-                                                         context=time_context)
-                return {**result, "answer_kind": "web" if capability == "web.search" else "knowledge",
-                        "information_provider": "tavily" if capability == "web.search" else "wikipedia",
+                context = {**time_context, "retrieval_query": query, "requested_capability": capability,
+                           "source_policy": decision.reason if decision else "model_selected"}
+                result = await self.conversation.respond(question, provider=provider, evidence=fetched, history=history, memory=memory,
+                    context=context, budget_seconds=max(.05, min(5, (deadline-time.monotonic()) * .55))) if fetched else {
+                        "status": "blocked", "error_code": "no_evidence", "generation_attempts": []}
+                # One bounded retrieval escalation. Never replace unsupported
+                # web facts with model recollection, and never loop indefinitely.
+                if result.get("error_code") in {"no_evidence", "insufficient_evidence", "answer_not_grounded"} and deadline - time.monotonic() > .5:
+                    try:
+                        richer = await self.search(time_context["search_query"] if capability == "web.search" else search_time_context(question, self.settings.information_timezone)["search_query"], richer=True)
+                        if "gia vang" in normalize_text(query):
+                            richer = [item for item in richer if re.search(date_pattern, item["content"])]
+                        retrieval_attempts.append({"provider": "tavily", "sources": len(richer), "richer": True})
+                        if richer:
+                            previous_attempts = result.get("generation_attempts", [])
+                            fetched = richer
+                            # Retry cache includes enriched passages, not another
+                            # paid read for every repetition of the same question.
+                            self.cache[key] = (time.monotonic() + (60 if "gia vang" in normalize_text(query) else 300), copy.deepcopy(fetched))
+                            result = await self.conversation.respond(question, provider=provider, evidence=fetched,
+                                history=history, memory=memory, context=context,
+                                budget_seconds=max(.05, deadline-time.monotonic()-.05))
+                            result["generation_attempts"] = [*previous_attempts, *result.get("generation_attempts", [])]
+                    except (InformationError, httpx.HTTPError):
+                        retrieval_attempts.append({"provider": "tavily", "outcome": "unavailable"})
+                actual_provider = "tavily" if fetched and fetched[0].get("kind") == "web" else source_metadata["information_provider"]
+                if result.get("error_code") == "generation_timeout":
+                    result["error_code"] = "information_timeout"
+                if result.get("error_code") == "no_evidence":
+                    result["message"] = "Mình chưa tìm được nguồn phù hợp để trả lời câu này."
+                return {**result, "answer_kind": "web" if actual_provider == "tavily" else "knowledge",
+                        "information_provider": actual_provider, "retrieval_attempts": retrieval_attempts,
+                        "source_policy": context["source_policy"], "answer_question": question,
                         "cache_hit": cache_hit, "source_count": len(fetched),
                         "information_context": information_context}
         except TimeoutError:

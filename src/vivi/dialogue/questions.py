@@ -32,10 +32,15 @@ def propose_question(session):
                                 yes_act="confirm", no_act="deny")
     if prefix not in {"navigation", "trip"}:
         if step and step.status == "waiting_slot":
+            choices = session.conversation_context.get("location_candidates", []) if prefix == "weather" else []
+            options = [QuestionOption(id="weather:" + fingerprint(p)[:24], label=p["label"], role="location",
+                effect=ActionDraft(capability=step.draft.capability,
+                    arguments={**step.draft.arguments.model_dump(exclude_none=True), "location": p["label"]})) for p in choices]
             return QuestionProposal(purpose="collect_slot", owner=prefix, target_id=step.id,
-                                    revision=task.revision, kind="provide_slot",
+                                    revision=task.revision, kind="choose_weather_location" if choices else "provide_slot",
                                     text=(step.result or {}).get("message", "Bạn bổ sung thông tin nhé."),
-                                    slot=next(iter(step.missing_slots), None), slot_effect=step.draft)
+                                    slot="location" if prefix == "weather" else next(iter(step.missing_slots), None),
+                                    options=options, slot_effect=step.draft)
         return None
     workspace = session.navigation_workspace
     owner = session.trip_plan if prefix == "trip" else workspace.draft or workspace.journey

@@ -202,11 +202,11 @@ async def test_weather_day_followup_and_values_without_generation(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_missing_weather_location_asks_before_http(tmp_path):
+async def test_explicit_here_without_gps_asks_before_http(tmp_path):
     calls = []
     composer, _ = conversation()
     service = InformationService(configuration(tmp_path), composer, transport=httpx.MockTransport(handler(calls)))
-    result = await service.execute("weather.get_forecast", {"query": "Thời tiết ngày mai", "forecast_day": "tomorrow"}, event(), SessionState(), provider="rules")
+    result = await service.execute("weather.get_forecast", {"query": "Thời tiết ở đây ngày mai", "forecast_day": "tomorrow"}, event(), SessionState(), provider="rules")
     assert result["status"] == "waiting_slot" and not calls
 
 
@@ -332,11 +332,11 @@ async def test_weather_disambiguation_selects_server_candidate_and_preserves_it(
 
 
 @pytest.mark.asyncio
-async def test_weather_uses_gps_for_unqualified_question(tmp_path):
+async def test_weather_uses_gps_for_explicit_here_question(tmp_path):
     calls = []
     composer, _ = conversation()
     service = InformationService(configuration(tmp_path), composer, transport=httpx.MockTransport(handler(calls)))
-    draft = OfflineParser().interpret("Thời tiết hôm nay như nào nhỉ?", SessionState()).actions[0]
+    draft = OfflineParser().interpret("Thời tiết ở đây hôm nay như nào nhỉ?", SessionState()).actions[0]
     result = await service.execute(draft.capability, draft.arguments.model_dump(exclude_none=True),
         event(position={"lat": 21.0245, "lng": 105.84117}), SessionState(), provider="rules")
     assert result["status"] == "completed"
@@ -449,7 +449,7 @@ async def test_source_synthesis_repairs_invalid_quote_once():
 async def test_graph_weather_location_slot_restart_and_date_followup(tmp_path):
     graph = graph_fixture(tmp_path)
     try:
-        first = await graph.ainvoke({"session_id": "driver", "turn_id": "one", "input_text": "Thời tiết ngày mai thế nào?"})
+        first = await graph.ainvoke({"session_id": "driver", "turn_id": "one", "input_text": "Thời tiết ở đây ngày mai thế nào?"})
         assert first["output"]["route"] == "clarify"
         task_id = first["session"]["active"]["id"]
     finally:
@@ -486,10 +486,9 @@ async def test_graph_replays_logged_weather_conversation(tmp_path, reply):
     service.transport = httpx.MockTransport(weather_at_hanoi)
     try:
         first = await graph.ainvoke({"session_id": "driver", "turn_id": "one", "input_text": "Thời tiết hôm nay như nào nhỉ?"})
-        assert first["output"]["response_text"] == "Bạn muốn xem thời tiết ở đâu?"
-        assert not calls
+        assert first["output"]["answer_kind"] == "weather"
+        assert "Hà Nội" in first["output"]["response_text"]
         second = await graph.ainvoke({"session_id": "driver", "turn_id": "two", "input_text": reply})
-        assert second["session"]["active"]["id"] == first["session"]["active"]["id"]
         assert second["output"]["answer_kind"] == "weather"
         assert "Hà Nội" in second["output"]["response_text"]
         assert not second["session"]["suspended"]

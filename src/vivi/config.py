@@ -65,6 +65,7 @@ class Settings(BaseSettings):
     information_http_timeout_seconds: float = Field(default=4, ge=0.1, le=10)
     information_max_results: int = Field(default=5, ge=1, le=5)
     information_timezone: str = "Asia/Ho_Chi_Minh"
+    weather_default_location: str = Field(default="Hà Nội", min_length=1, max_length=200)
 
     @field_validator("information_timezone")
     @classmethod

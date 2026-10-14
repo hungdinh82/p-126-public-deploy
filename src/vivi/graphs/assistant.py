@@ -18,6 +18,7 @@ from src.vivi.agents.contracts import AssistantOutput
 from src.vivi.capabilities.execution import CapabilityRuntime
 from src.vivi.capabilities.registry import REGISTRY, catalog
 from src.vivi.capabilities.result import CapabilityResult
+from src.vivi.conversation.guardrails import TopicDecision, assess_topic, output_violation, terminal_decision
 from src.vivi.dialogue.contracts import SemanticTurn, SessionState, TurnEvent
 from src.vivi.dialogue.planner import PROMPT_VERSION, SemanticResolver
 from src.vivi.dialogue.reducer import (
@@ -499,7 +500,11 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
         event = TurnEvent.model_validate(state["event"])
         session = SessionState.model_validate(state["session"])
         turn = dict(state["turn"])
-        if event.question_reply:
+        guardrail = terminal_decision(event.text, event.action, event.question_reply)
+        if guardrail:
+            semantic = SemanticTurn(act="reply", text=guardrail.message)
+            served, attempts = "rules", []
+        elif event.question_reply:
             from src.vivi.dialogue.answers import AnswerResolver
 
             semantic = AnswerResolver().resolve(event.text, session, reply=event.question_reply)
@@ -579,6 +584,16 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
                     or any(REGISTRY.get(d.capability) and not REGISTRY[d.capability].spec.read_only for d in resolved[0].drafts())
                 ),
             )
+        if not guardrail:
+            guardrail = terminal_decision([draft.arguments.model_dump(exclude_none=True) for draft in semantic.drafts()])
+        if not guardrail and semantic.text and output_violation(semantic.text, assess_topic(event.text)):
+            guardrail = TopicDecision("general", "refuse", "unsafe_semantic_response",
+                                      "Mình chưa thể trả lời hoặc thực hiện yêu cầu này trong giới hạn an toàn. Bạn có thể hỏi theo hướng kiến thức chung nhé.")
+        if guardrail:
+            # Block the whole compound turn before reducer/scheduler/effects.
+            # Retain the existing task; never turn a refusal into execution consent.
+            semantic = SemanticTurn(act="reply", text=guardrail.message)
+            turn["topic_result"] = guardrail.result()
         # Domain invalidity is a clarification, never a reason to ask a weaker model.
         if any(action.capability not in REGISTRY for action in semantic.drafts()):
             semantic = SemanticTurn(act="unsupported", text="Mình chưa hỗ trợ thao tác đó.")
@@ -720,10 +735,12 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
                 )
             elif spec.executor == "conversation":
                 from src.vivi.conversation.context import conversation_view
+                from src.vivi.information.time_context import search_time_context
 
                 result = await external_read(services.conversation.respond(
                     arguments["query"], provider=event.provider, mode=arguments.get("mode", "general"),
-                    history=turn["history"], memory=turn["memory"], context=conversation_view(session)), fence=False)
+                    history=turn["history"], memory=turn["memory"], context={**conversation_view(session),
+                        **search_time_context(arguments["query"], services.information.settings.information_timezone if services.information else "Asia/Ho_Chi_Minh")}), fence=False)
             elif spec.executor == "information":
                 if services.information is None:
                     result = {"status": "blocked", "message": "Mình chưa kết nối dịch vụ thông tin internet.", "error_code": "information_not_configured"}
@@ -812,7 +829,7 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
         results = turn["results"]
         if turn.get("navigation_result"):
             results = [turn["navigation_result"], *results]
-        last = results[-1] if results else {}
+        last = {"capability": "conversation.respond", **turn["topic_result"]} if turn.get("topic_result") else results[-1] if results else {}
         task = session.active
         current = task.current_index() if task else None
         steps = (
@@ -914,7 +931,10 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
             "information_provider": last.get("information_provider"),
             "information_cache_hit": last.get("cache_hit"),
             "source_count": last.get("source_count"),
+            "retrieval_attempts": last.get("retrieval_attempts", []),
+            "source_policy": last.get("source_policy"),
             "error_code": last.get("error_code"),
+            "topic_guardrail": last.get("topic_guardrail"),
         }
         output = AssistantOutput(
             runtime_epoch=runtime_epoch,

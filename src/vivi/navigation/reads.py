@@ -21,4 +21,3 @@ async def read_many(client, operations):
     async with asyncio.TaskGroup() as group:
         tasks = [group.create_task(single(operation)) for operation in operations]
     return [task.result() for task in tasks]
-
