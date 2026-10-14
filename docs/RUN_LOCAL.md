@@ -155,6 +155,9 @@ Setup vá hai chỗ ORT gọi `setHardwareCompatibilityLevel`, API chỉ có t�
 8.6, để biên dịch với 8.5.2. Tùy chọn hardware compatibility không được bật trên
 Xavier; nếu yêu cầu trên 8.5 thì báo lỗi rõ. Khi sửa lỗi build này, chạy lại setup
 sẽ dùng các object CUDA đã build trong cùng thư mục, không cần xóa cache build.
+ORT builder bật `FASTER_DYNAMIC_SHAPES_0805` riêng cho TensorRT 8.5.
+Chế độ native `VIVI_TRT_INT8_LINEAR_ONLY` chỉ gom Conv với hai đầu vào QDQ
+thành partition TensorRT; attention, KV cache, shape và sampling dùng CUDA/CPU.
 
 TTS GPU INT8 dùng **static QDQ S8S8**: thu đầu vào thật của ba graph khi FP32 sinh
 sáu câu tiếng Việt bằng giọng VIVI, hiệu chuẩn MinMax đối xứng và quantize MatMul
@@ -172,10 +175,34 @@ Các node không được TensorRT hỗ trợ vẫn có thể chạy CUDA/CPU; b
 cho thấy số sự kiện của từng provider. Đây là profile hỗn hợp, không phải mọi node
 đều INT8 hoặc đều trên GPU.
 
+TensorRT 8.5 trên Xavier có thể gom MatMul QDQ vào Myelin với phép tính FP32,
+và việc đổi kích thước cache có thể gây lỗi boolean/shape hoặc OOM lúc rebuild.
+Runtime tạo ONNX view trong cache, biểu diễn mỗi MatMul có trọng số INT8 hằng
+bằng Conv 1×1 tương đương: flatten các chiều batch, chuyển trọng số từ `[K,N]`
+thành `[N,K,1,1]`, giữ nguyên scale/zero point, rồi khôi phục shape đầu ra.
+Không hiệu chuẩn lại hoặc sửa model nguồn. Mỗi partition TensorRT chỉ có Conv
+và QDQ, nên không nhận logic KV cache hay partition FP32 cần calibration.
+Conv phải vượt qua profiling và inspector xác nhận kernel INT8 thực sự.
+CUDA arena dùng `kSameAsRequested`, cuDNN `HEURISTIC` và workspace convolution
+giới hạn thay vì tăng arena theo lũy thừa hai hoặc giữ workspace tối đa.
+
+ZeroTTS được khởi tạo tạm trên CPU rồi bỏ các session graph trước khi tạo TensorRT;
+codec chỉ chuyển sang CUDA sau khi xác minh các graph TTS. Warmup, WAV và PCM
+stream dùng codec streaming với chunk tối đa 4 frame, tránh giữ activation cho cả
+utterance trong graph `decode_full`. `using_gpu` vẫn kiểm tra các session thực tế
+sau khi codec đã chuyển sang CUDA. SDK script thêm đường dẫn cuDLA CUDA 11.4 của
+JetPack sau CUDA 11.8, nên không phụ thuộc vào `.bashrc` của shell tương tác.
+
 Cache engine nằm trong `models/speech/trt-cache/`, tách theo UUID GPU, driver,
 checksum thư viện TensorRT, ORT, model và lựa chọn precision/workspace. Engine
 không được sao chép từ PC sang Xavier. Hình dạng mới có thể khiến TensorRT build
 lại engine; cần đo TTFA/RTF với các câu thực tế trên Xavier trước khi dùng thường xuyên.
+
+Kích thước model trên ổ đĩa không phải lượng RAM khi chạy: Xavier chia sẻ RAM
+giữa CPU/GPU; còn có session, activation, KV cache, buffer codec và bộ nhớ tạm
+autotuning. Tài liệu [ZeroTTS browser](https://github.com/zeroweight-ai/ZeroTTS/blob/main/docs/BROWSER.md)
+giải thích streaming codec, KV cache tăng theo frame và cross-attention KV tính
+một lần. Kết quả INT8 chậm hơn FP32 trong WASM không phải benchmark CUDA/Xavier.
 
 Đo trên Xavier sau setup:
 

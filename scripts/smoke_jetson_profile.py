@@ -110,12 +110,22 @@ def smoke(args):
             raise RuntimeError("SLM returned empty text")
         llm_ms = round((time.monotonic() - started) * 1000)
         started = time.monotonic()
-        audio = models.synthesize("Xin chào bạn, đây là bài kiểm tra giọng nói trên máy Jetson.")
+        rng_state = np.random.get_state()
+        try:
+            np.random.seed(42)
+            audio = models.synthesize("Xin chào bạn, đây là bài kiểm tra giọng nói trên máy Jetson.")
+        finally:
+            np.random.set_state(rng_state)
         with wave.open(io.BytesIO(audio), "rb") as wav:
             if wav.getnchannels() != 1 or wav.getsampwidth() != 2 or wav.getnframes() < 1:
                 raise RuntimeError("TTS generated invalid/empty WAV")
             rate = wav.getframerate()
             samples = np.frombuffer(wav.readframes(wav.getnframes()), dtype="<i2").astype(np.float32)
+        if not np.any(samples):
+            raise RuntimeError("TTS generated silent WAV")
+        wav_path = logs / "setup-tts.wav"
+        wav_path.write_bytes(audio)
+        duration_s = round(samples.size / rate, 3)
         tts_ms = round((time.monotonic() - started) * 1000)
         samples = resample_poly(samples, 16000, rate)
         converted = io.BytesIO()
@@ -129,7 +139,8 @@ def smoke(args):
         if not transcript.strip():
             raise RuntimeError("STT returned empty text")
         report = {"llm_gpu_layers": offloads[-1], "llm_text": answer, "llm_ms": llm_ms,
-                  "tts_ms": tts_ms, "tts_bytes": len(audio), "stt_text": transcript,
+                  "tts_ms": tts_ms, "tts_bytes": len(audio), "tts_duration_s": duration_s,
+                  "tts_wav": str(wav_path), "stt_text": transcript,
                   "stt_ms": round((time.monotonic() - started) * 1000), "speech": models.info}
         (logs / "setup-smoke.json").write_text(json.dumps(report, ensure_ascii=False, indent=2))
         print(json.dumps(report, ensure_ascii=False, indent=2))

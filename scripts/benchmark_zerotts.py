@@ -13,6 +13,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from jetson_ai.speech import SpeechModels  # noqa: E402
+from jetson_ai.tensorrt_tts import CODEC_CHUNK_FRAMES  # noqa: E402
 
 
 def main():
@@ -42,7 +43,8 @@ def main():
         started = time.perf_counter()
         first = None
         chunks = []
-        stream = model.synthesize_stream(args.text, voice=voice, max_frames=300)
+        stream = model.synthesize_stream(args.text, voice=voice, max_frames=300,
+                                         max_chunk_frames=CODEC_CHUNK_FRAMES)
         try:
             for chunk in stream:
                 chunk = np.asarray(chunk, dtype=np.float32).reshape(-1)
@@ -72,7 +74,7 @@ def main():
                 wav.setframerate(model.sample_rate)
                 wav.writeframes((np.clip(audio, -1, 1) * 32767).astype("<i2").tobytes())
     report = {"model": models.info["tts"], "text": args.text, "seed": args.seed,
-              "max_frames": 300, "runs": results,
+              "max_frames": 300, "max_chunk_frames": CODEC_CHUNK_FRAMES, "runs": results,
               "mean_rtf": statistics.mean(row["rtf"] for row in results),
               "mean_first_audio_ms": statistics.mean(row["first_audio_ms"] for row in results)}
     (args.output / "report.json").write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n")

@@ -8,8 +8,14 @@ import subprocess
 from collections import Counter
 from pathlib import Path
 
+from jetson_ai.trt_linear import LINEAR_RECIPE, prepare_linear_graph
+
 ATTRIBUTES = {"text_encoder": "text_encoder_sess", "prefix_step": "prefix_step_sess",
               "local_frame_decode": "local_frame_decode_sess"}
+CUDA_OPTIONS = {"arena_extend_strategy": "kSameAsRequested", "cudnn_conv_algo_search": "HEURISTIC",
+                "cudnn_conv_use_max_workspace": False}
+MIN_SUBGRAPH_SIZE = 1
+CODEC_CHUNK_FRAMES = 4
 
 
 def device_identity() -> dict:
@@ -83,7 +89,8 @@ def inspect_int8_engines(cache: Path) -> dict:
     reports = {}
     for name in ATTRIBUTES:
         layers = []
-        for engine in sorted((cache / name).glob("*.engine")):
+        folder = cache / (name + "-" + LINEAR_RECIPE)
+        for engine in sorted(folder.glob("*.engine")):
             reply = subprocess.run([str(inspector.resolve()), str(engine)], check=True, capture_output=True,
                                    text=True, timeout=60)
             info = json.loads(reply.stdout)
@@ -107,11 +114,15 @@ def configure_sessions(model, path: Path):
     artifact = json.loads((path / "quantization.json").read_text())
     key = hashlib.sha256(json.dumps({"device": identity, "ort": ort.__version__,
                                    "artifact": artifact["output_sha256"], "workspace": 512 * 1024**2,
-                                   "fp16": False, "inspection_recipe": 1}, sort_keys=True).encode()).hexdigest()[:24]
+                                   "fp16": False, "inspection_recipe": 1,
+                                   "min_subgraph_size": MIN_SUBGRAPH_SIZE,
+                                   "cuda_options": CUDA_OPTIONS}, sort_keys=True).encode()).hexdigest()[:24]
     cache = path.parent / "trt-cache" / key
+    for attribute in ATTRIBUTES.values():
+        setattr(model, attribute, None)
     sessions = {}
     for name, attribute in ATTRIBUTES.items():
-        folder = cache / name
+        folder = cache / (name + "-" + LINEAR_RECIPE)
         folder.mkdir(parents=True, exist_ok=True)
         options = ort.SessionOptions()
         options.intra_op_num_threads = 2
@@ -124,14 +135,26 @@ def configure_sessions(model, path: Path):
         # supplied. CUDA/CPU handle unsupported shape/sampling operators.
         providers = [("TensorrtExecutionProvider", {
             "trt_int8_enable": True, "trt_fp16_enable": False,
+            # The native opt-in policy groups only Conv with its QDQ inputs.
+            # Attention, KV cache and sampling stay on CUDA/CPU.
+            "trt_min_subgraph_size": MIN_SUBGRAPH_SIZE,
             "trt_max_workspace_size": 512 * 1024**2,
             "trt_engine_cache_enable": True, "trt_engine_cache_path": str(folder),
             "trt_timing_cache_enable": True, "trt_timing_cache_path": str(folder),
-        }), "CUDAExecutionProvider", "CPUExecutionProvider"]
-        # Free the CUDA bootstrap session before allocating a TensorRT session.
-        setattr(model, attribute, None)
-        session = ort.InferenceSession(str(path / "onnx" / f"{name}.onnx"),
-                                       sess_options=options, providers=providers)
+        }), ("CUDAExecutionProvider", dict(CUDA_OPTIONS)), "CPUExecutionProvider"]
+        graph_path = prepare_linear_graph(path / "onnx" / f"{name}.onnx", folder / f"{name}.onnx")
+        # Only native graph partitioning reads this opt-in variable. Restore
+        # the caller's environment after session creation.
+        previous = os.environ.get("VIVI_TRT_INT8_LINEAR_ONLY")
+        os.environ["VIVI_TRT_INT8_LINEAR_ONLY"] = "1"
+        try:
+            session = ort.InferenceSession(str(graph_path), sess_options=options, providers=providers)
+        finally:
+            if previous is None:
+                os.environ.pop("VIVI_TRT_INT8_LINEAR_ONLY", None)
+            else:
+                os.environ["VIVI_TRT_INT8_LINEAR_ONLY"] = previous
+        session.disable_fallback()
         if session.get_providers()[0] != "TensorrtExecutionProvider":
             raise RuntimeError(f"{name}: TensorRT failed to initialize; refusing CUDA/CPU replacement")
         setattr(model, attribute, session)
@@ -147,7 +170,13 @@ def verify_execution(model, voice, sessions: dict, cache: Path) -> dict:
     rng_state = np.random.get_state()
     try:
         np.random.seed(42)
-        audio = model.synthesize("Xin chào bạn.", voice=voice, max_frames=12)
+        stream = model.synthesize_stream("Xin chào bạn.", voice=voice, max_frames=12,
+                                         max_chunk_frames=CODEC_CHUNK_FRAMES)
+        try:
+            chunks = [np.asarray(chunk).reshape(-1) for chunk in stream]
+        finally:
+            stream.close()
+        audio = np.concatenate(chunks) if chunks else np.empty(0)
         if not audio.size or not np.isfinite(audio).all() or not np.any(audio):
             raise RuntimeError("TensorRT warmup produced empty/non-finite/silent audio")
     finally:

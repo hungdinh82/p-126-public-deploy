@@ -1,6 +1,8 @@
 import json
+import os
 import shutil
 import subprocess
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -9,6 +11,202 @@ from jetson_ai.tensorrt_tts import int8_compute_layers, profile_counts, require_
 from jetson_ai.tts_profile import resolve_tts_model
 from scripts import prepare_ort_trt_inspection, prepare_speech_models
 from scripts.quantize_zerotts_gpu import FeedRecorder, quantize_graph
+
+
+def test_tensor_rt_failure_does_not_reset_session_to_cuda(tmp_path, monkeypatch):
+    ort = pytest.importorskip("onnxruntime")
+    from onnxruntime.capi import _pybind_state
+
+    from jetson_ai import tensorrt_tts
+
+    path = tmp_path / "model"
+    path.mkdir()
+    (path / "quantization.json").write_text('{"output_sha256":{"graph":"hash"}}')
+    monkeypatch.setattr(tensorrt_tts, "device_identity", lambda: {"gpu": "test"})
+    monkeypatch.setattr(tensorrt_tts, "prepare_linear_graph", lambda source, destination: source)
+    monkeypatch.setattr(ort, "get_available_providers", lambda: [
+        "TensorrtExecutionProvider", "CUDAExecutionProvider", "CPUExecutionProvider"])
+    original = ort.InferenceSession
+    provider_configs = []
+
+    class NativeSession:
+        def run(self, *args):
+            raise _pybind_state.EPFail("TensorRT engine build failed")
+
+    def create_session(path, *, sess_options, providers):
+        assert os.environ["VIVI_TRT_INT8_LINEAR_ONLY"] == "1"
+        provider_configs.append(providers)
+        # Exercise ORT's real run()/disable_fallback() logic with a failing
+        # native backend, so an accidental CUDA retry fails this regression.
+        session = object.__new__(original)
+        session._sess = NativeSession()
+        session._enable_fallback = True
+        session._inputs_meta = []
+        session._outputs_meta = [SimpleNamespace(name="y")]
+        session._providers = [p[0] if isinstance(p, tuple) else p for p in providers]
+        session._fallback_providers = ["CUDAExecutionProvider", "CPUExecutionProvider"]
+
+        def reset(*args):
+            pytest.fail("TensorRT failure must not recreate a CUDA session")
+
+        session.set_providers = reset
+        return session
+
+    monkeypatch.setattr(ort, "InferenceSession", create_session)
+    model = SimpleNamespace()
+    sessions, _, cache = tensorrt_tts.configure_sessions(model, path)
+    for session in sessions.values():
+        with pytest.raises(_pybind_state.EPFail, match="engine build failed"):
+            session.run(None, {})
+    assert all(p[1][1]["arena_extend_strategy"] == "kSameAsRequested" for p in provider_configs)
+    assert all(p[1][1]["cudnn_conv_algo_search"] == "HEURISTIC" for p in provider_configs)
+    assert all(p[1][1]["cudnn_conv_use_max_workspace"] is False for p in provider_configs)
+    assert all(p[0][1]["trt_min_subgraph_size"] == 1 for p in provider_configs)
+    assert "VIVI_TRT_INT8_LINEAR_ONLY" not in os.environ
+    # Different allocation settings must not reuse a previous engine cache.
+    monkeypatch.setattr(tensorrt_tts, "CUDA_OPTIONS", {"arena_extend_strategy": "kNextPowerOfTwo"})
+    _, _, other_cache = tensorrt_tts.configure_sessions(model, path)
+    assert other_cache != cache
+
+
+def test_wav_uses_bounded_streaming_codec_and_closes_generator():
+    import io
+    import wave
+
+    from jetson_ai.speech import SpeechModels
+
+    calls, closed = [], []
+    voice = object()
+
+    class Model:
+        sample_rate = 48000
+
+        def synthesize(self, *args, **kwargs):
+            pytest.fail("WAV must not decode the full utterance at once")
+
+        def synthesize_stream(self, text, **kwargs):
+            calls.append((text, kwargs))
+            try:
+                yield np.array([[0, 0.5]], dtype=np.float32)
+                yield np.array([[1, -1]], dtype=np.float32)
+            finally:
+                closed.append(True)
+
+    models = SpeechModels()
+    models.models["tts"] = Model(), voice
+    data = models.synthesize("Xin chào")
+    with wave.open(io.BytesIO(data), "rb") as wav:
+        assert (wav.getframerate(), wav.getnchannels(), wav.getsampwidth(), wav.getnframes()) == (48000, 1, 2, 4)
+        np.testing.assert_array_equal(np.frombuffer(wav.readframes(4), dtype="<i2"), [0, 16383, 32767, -32767])
+    assert calls == [("Xin chào", {"voice": voice, "max_chunk_frames": 4})]
+    assert closed == [True]
+
+
+def test_streaming_codec_rejects_nonfinite_audio_and_closes_generator():
+    from jetson_ai.speech import SpeechModels
+
+    closed = []
+
+    class Model:
+        sample_rate = 48000
+
+        def synthesize_stream(self, *args, **kwargs):
+            try:
+                yield np.array([np.nan], dtype=np.float32)
+            finally:
+                closed.append(True)
+
+    models = SpeechModels()
+    models.models["tts"] = Model(), None
+    with pytest.raises(RuntimeError, match="non-finite"):
+        models.synthesize("Xin chào")
+    assert closed == [True]
+
+
+@pytest.mark.parametrize("failed_verification", [False, True])
+def test_gpu_codec_is_promoted_only_after_tensor_rt_verification(tmp_path, monkeypatch, failed_verification):
+    import io
+    import zipfile
+
+    ort = pytest.importorskip("onnxruntime")
+    zerotts = pytest.importorskip("zerotts")
+    from jetson_ai import tensorrt_tts
+    from jetson_ai.speech import SpeechModels
+
+    base = tmp_path / "zerotts"
+    base.mkdir()
+    gpu_model = tmp_path / "zerotts-int8-gpu"
+    gpu_model.mkdir()
+    (gpu_model / "quantization.json").write_text(json.dumps({
+        "format": "int8-qdq-mixed", "execution_provider": "TensorrtExecutionProvider"}))
+    voice = tmp_path / "voice.zip"
+    data = io.BytesIO()
+    np.savez(data, voice_emb=np.zeros((1, 1, 2), dtype=np.float32))
+    with zipfile.ZipFile(voice, "w") as archive:
+        archive.writestr("VIVI/meta.json", "{}")
+        archive.writestr("VIVI/voice.npz", data.getvalue())
+    monkeypatch.setenv("JETSON_AI_TTS_MODEL", str(base))
+    monkeypatch.setenv("JETSON_AI_TTS_PRECISION", "int8-gpu")
+    monkeypatch.setenv("JETSON_AI_DEVICE", "cuda")
+    monkeypatch.setenv("JETSON_AI_VOICE_PACK", str(voice))
+    monkeypatch.setattr(ort, "get_available_providers", lambda: [
+        "TensorrtExecutionProvider", "CUDAExecutionProvider", "CPUExecutionProvider"])
+    monkeypatch.setattr(ort, "preload_dlls", lambda **kwargs: None, raising=False)
+    events = []
+
+    class Session:
+        def __init__(self, provider):
+            self.provider = provider
+
+        def get_providers(self):
+            return [self.provider]
+
+        def set_providers(self, providers):
+            events.append("codec_cuda")
+            self.provider = providers[0][0]
+
+        def disable_fallback(self):
+            pass
+
+    codec = SimpleNamespace(_decode_full_sess=Session("CPUExecutionProvider"),
+                            _decode_step_sess=Session("CPUExecutionProvider"))
+    model = SimpleNamespace(codec=codec, n_voice_queries=1, d_model=2, sample_rate=48000)
+
+    def bootstrap(*args, **kwargs):
+        assert kwargs["providers"] == ["CPUExecutionProvider"]
+        assert kwargs["warmup"] is False
+        events.append("bootstrap_cpu")
+        return model
+
+    def configure(model, path):
+        sessions = {}
+        for name, attribute in tensorrt_tts.ATTRIBUTES.items():
+            session = Session("TensorrtExecutionProvider")
+            setattr(model, attribute, session)
+            sessions[name] = session
+        return sessions, {"gpu": "test"}, tmp_path
+
+    def verify(model, voice, sessions, cache):
+        assert codec._decode_full_sess.provider == codec._decode_step_sess.provider == "CPUExecutionProvider"
+        events.append("verify_trt")
+        if failed_verification:
+            raise RuntimeError("TensorRT OOM")
+        return {"providers": {}, "int8_compute_layers": {"text_encoder": ["gemm"]}}
+
+    monkeypatch.setattr(zerotts.ZeroTTS, "from_pretrained", bootstrap)
+    monkeypatch.setattr(tensorrt_tts, "configure_sessions", configure)
+    monkeypatch.setattr(tensorrt_tts, "verify_execution", verify)
+    models = SpeechModels()
+    models.load("tts")
+    if failed_verification:
+        assert events == ["bootstrap_cpu", "verify_trt"]
+        assert models.info["tts"]["status"] == "unavailable"
+        assert models.info["tts"]["using_gpu"] is False
+        assert "TensorRT OOM" in models.info["tts"]["error"]
+    else:
+        assert events == ["bootstrap_cpu", "verify_trt", "codec_cuda", "codec_cuda"]
+        assert models.info["tts"]["status"] == "ready"
+        assert models.info["tts"]["using_gpu"] is True
 
 
 def test_gpu_artifact_is_separate_and_cannot_accept_cpu_quantization(tmp_path):
@@ -57,13 +255,18 @@ def test_feed_recording_is_bounded_and_copies_mutable_inputs():
 
 def test_trt_inspection_patch_is_guarded_and_idempotent(tmp_path):
     path = tmp_path / "provider.cc"
-    original = (prepare_ort_trt_inspection.ORIGINAL + "\n" + prepare_ort_trt_inspection.HARDWARE_ORIGINAL + "\n") * 2
+    original = ((prepare_ort_trt_inspection.ORIGINAL + "\n"
+                 + prepare_ort_trt_inspection.HARDWARE_ORIGINAL + "\n") * 2
+                + prepare_ort_trt_inspection.CAPABILITY_ORIGINAL)
     path.write_text(original)
     prepare_ort_trt_inspection.prepare(path)
     assert path.read_text().count("setProfilingVerbosity") == 2
+    assert path.read_text().count("setPreviewFeature") == 2
     assert path.read_text().count(prepare_ort_trt_inspection.HARDWARE_FIXED) == 2
+    assert path.read_text().count("VIVI_TRT_INT8_LINEAR_ONLY") == 1
     prepare_ort_trt_inspection.prepare(path)
     assert path.read_text().count("setProfilingVerbosity") == 2
+    assert path.read_text().count("setPreviewFeature") == 2
     assert path.with_name(path.name + ".before-trt-inspection").read_text() == original
     path.write_text("unexpected")
     with pytest.raises(ValueError, match="Unexpected"):
@@ -72,10 +275,28 @@ def test_trt_inspection_patch_is_guarded_and_idempotent(tmp_path):
 
 def test_trt_patch_upgrades_existing_inspection_source(tmp_path):
     path = tmp_path / "provider.cc"
-    path.write_text((prepare_ort_trt_inspection.FIXED + "\n" + prepare_ort_trt_inspection.HARDWARE_ORIGINAL + "\n") * 2)
+    path.write_text((prepare_ort_trt_inspection.FIXED + "\n"
+                    + prepare_ort_trt_inspection.HARDWARE_ORIGINAL + "\n") * 2
+                   + prepare_ort_trt_inspection.CAPABILITY_ORIGINAL)
     prepare_ort_trt_inspection.prepare(path)
     assert path.read_text().count("setProfilingVerbosity") == 2
+    assert path.read_text().count("setPreviewFeature") == 2
     assert path.read_text().count(prepare_ort_trt_inspection.HARDWARE_FIXED) == 2
+
+
+@pytest.mark.parametrize("minor", [5, 6])
+def test_dynamic_shapes_preview_guard_compiles_for_jetpack_api(tmp_path, minor):
+    compiler = shutil.which("g++")
+    if compiler is None:
+        pytest.skip("C++ compiler unavailable")
+    preview = prepare_ort_trt_inspection.DYNAMIC_FIXED.removeprefix(prepare_ort_trt_inspection.FIXED)
+    api = ("namespace nvinfer1 { enum class PreviewFeature { kFASTER_DYNAMIC_SHAPES_0805 }; }\n"
+           "struct Config { void setPreviewFeature(nvinfer1::PreviewFeature, bool) {} };"
+           if minor == 5 else "struct Config {};")
+    path = tmp_path / "preview.cc"
+    path.write_text(f"#define NV_TENSORRT_MAJOR 8\n#define NV_TENSORRT_MINOR {minor}\n" + api
+                    + "\nvoid configure(Config* trt_config) {\n" + preview + "\n}\n")
+    subprocess.run([compiler, "-std=c++17", "-fsyntax-only", str(path)], check=True, capture_output=True)
 
 
 @pytest.mark.parametrize("minor", [5, 6])
