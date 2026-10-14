@@ -468,6 +468,7 @@ async function speak(text, turnId = makeId(), sequencePlayback = null, announcem
     stopPlayback();
     if ('speechSynthesis' in window) speechSynthesis.cancel();
   }
+  if (sequencePlayback?.isCurrent && !sequencePlayback.isCurrent()) { stopPlayback(); return; }
   if (state.ttsAvailable) {
     const playback = sequencePlayback || createTtsPlayback();
     currentPlayback = playback;
@@ -516,6 +517,7 @@ async function speak(text, turnId = makeId(), sequencePlayback = null, announcem
         while (true) {
           const { value, done } = await reader.read();
           if (done || playback.cancelled) break;
+          if (playback.isCurrent && !playback.isCurrent()) { stopPlayback(); break; }
           const bytes = new Uint8Array(leftover.length + value.length);
           bytes.set(leftover); bytes.set(value, leftover.length);
           const usable = bytes.length - bytes.length % 2;
@@ -585,6 +587,134 @@ function applyBackendState(vehicle) {
 }
 
 let activeTurn = null;
+let recordingStartPending = false;
+const spokenTurnQueue = [];
+let spokenTurnDraining = false;
+let latestVoiceRevision = 0;
+const queuedVoiceResponses = new Set();
+const presentedVoiceResponses = (() => { try { return new Set(JSON.parse(localStorage.getItem('vivi-voice-presented-responses') || '[]')); } catch { return new Set(); } })();
+
+const voiceInputJobs = new Map();
+let presentedVoiceInputs;
+try { presentedVoiceInputs = new Set(JSON.parse(localStorage.getItem('vivi-voice-presented') || '[]')); }
+catch { presentedVoiceInputs = new Set(); }
+
+function voiceResponseChunks(text) {
+  const clauses = String(text || '').match(/[^.!?]+[.!?]+[”’"')\]]*|[^.!?]+$/gu) || [];
+  return clauses.map(value => value.trim()).filter(Boolean);
+}
+
+function rememberPresentedVoiceResponse(responseId) {
+  if (responseId) presentedVoiceResponses.add(responseId);
+  localStorage.setItem('vivi-voice-presented-responses', JSON.stringify([...presentedVoiceResponses].slice(-200)));
+}
+
+async function speakVoiceResponse(payload, responseId) {
+  const revision = payload.response_revision || payload.revision || 0;
+  const playback = createTtsPlayback();
+  playback.revision = revision;
+  playback.isCurrent = () => revision >= latestVoiceRevision;
+  for (const chunk of voiceResponseChunks(payload.message)) {
+    if (!playback.isCurrent()) { stopPlayback(); return; }
+    await speak(chunk, responseId, playback);
+  }
+  await finishTtsPlayback(playback);
+}
+
+async function presentVoiceResponse(payload) {
+  const revision = payload.response_revision || payload.revision || 0;
+  if (revision < latestVoiceRevision) return;
+  state.busy = true;
+  lockControls(true);
+  try {
+    renderTurnSteps(payload.steps || []);
+    await acceptNavigationResponse(payload);
+    renderAnswerSources(payload.evidence || [], payload.answer_kind);
+    setPhase(payload.status === 'verified' ? 'speaking' : payload.status, payload.message);
+    if (state.sound && recorder?.state !== 'recording') await speakVoiceResponse(payload, payload.turn_id);
+    if (recorder?.state !== 'recording') setPhase(payload.status === 'verified' ? 'idle' : payload.status, payload.message);
+  } finally { state.busy = false; lockControls(false); }
+}
+
+async function drainSpokenTurns() {
+  if (spokenTurnDraining || state.busy || recorder?.state === 'recording' || recordingStartPending) return;
+  spokenTurnDraining = true;
+  try {
+    while (spokenTurnQueue.length && !state.busy && recorder?.state !== 'recording') {
+      const next = spokenTurnQueue.shift();
+      if (next.revision < latestVoiceRevision || presentedVoiceResponses.has(next.response.turn_id)) {
+        queuedVoiceResponses.delete(next.response.turn_id);
+        rememberPresentedVoiceResponse(next.response.turn_id);
+        presentedVoiceInputs.add(next.id);
+        continue;
+      }
+      await presentVoiceResponse(next.response);
+      queuedVoiceResponses.delete(next.response.turn_id);
+      rememberPresentedVoiceResponse(next.response.turn_id);
+      next.ids.forEach(id => presentedVoiceInputs.add(id));
+      presentedVoiceInputs.add(next.id);
+      localStorage.setItem('vivi-voice-presented', JSON.stringify([...presentedVoiceInputs].slice(-200)));
+    }
+  } finally { spokenTurnDraining = false; }
+}
+
+function monitorVoiceInput(job) {
+  if (voiceInputJobs.has(job.id) || presentedVoiceInputs.has(job.id)) return;
+  const owned = { transcript: false };
+  voiceInputJobs.set(job.id, owned);
+  void (async () => {
+    try {
+      while (voiceInputJobs.get(job.id) === owned) {
+        const response = await fetch(`${API_BASE}/api/v1/voice/inputs/${encodeURIComponent(job.id)}?session_id=${encodeURIComponent(sessionId)}`);
+        if (response.status === 404) return;
+        if (!response.ok) { await wait(2000); continue; }
+        const value = await response.json();
+        latestVoiceRevision = Math.max(latestVoiceRevision, value.revision || 0, value.response_revision || 0);
+        if (currentPlayback?.revision != null && currentPlayback.revision < latestVoiceRevision) stopPlayback();
+        if (value.transcript && !owned.transcript) {
+          owned.transcript = true;
+          rememberEdgeCommand(value.transcript);
+          if (recorder?.state !== 'recording') $('#command-input').value = value.transcript;
+        }
+        if (value.status === 'completed') {
+          const responseId=value.response?.turn_id;
+          if (!responseId || (!queuedVoiceResponses.has(responseId) && !presentedVoiceResponses.has(responseId))) {
+            queuedVoiceResponses.add(responseId);
+            spokenTurnQueue.push({ id: value.id, ids:[value.id], sequence: value.sequence, revision:value.response_revision || value.revision || 0, response:{...value.response,response_revision:value.response_revision} });
+            spokenTurnQueue.sort((a,b) => a.sequence-b.sequence);
+          } else {
+            presentedVoiceInputs.add(value.id);
+            localStorage.setItem('vivi-voice-presented', JSON.stringify([...presentedVoiceInputs].slice(-200)));
+          }
+          void drainSpokenTurns();
+          return;
+        }
+        if (value.status === 'superseded') {
+          presentedVoiceInputs.add(value.id);
+          localStorage.setItem('vivi-voice-presented', JSON.stringify([...presentedVoiceInputs].slice(-200)));
+          return;
+        }
+        if (['failed','interrupted'].includes(value.status)) {
+          if (!state.busy && recorder?.state !== 'recording') setPhase('blocked', value.error || 'Lời nói đã lưu; lượt xử lý chưa hoàn tất.');
+          presentedVoiceInputs.add(value.id);
+          return;
+        }
+        if (!state.busy && recorder?.state !== 'recording') setPhase('thinking', value.transcript
+          ? `Đã ghi nhận: “${value.transcript}”. Đang chờ xử lý…` : 'Đã nhận lời nói. Đang chuyển thành văn bản…');
+        await wait(1000);
+      }
+    } catch (error) {
+      console.warn('Voice input remains saved on backend:', error.message);
+    } finally { if (voiceInputJobs.get(job.id) === owned) voiceInputJobs.delete(job.id); }
+  })();
+}
+
+async function restoreVoiceInputs() {
+  const response = await fetch(`${API_BASE}/api/v1/voice/inputs?session_id=${encodeURIComponent(sessionId)}`);
+  if (!response.ok) return;
+  const data = await response.json();
+  for (const job of [...data.inputs].reverse()) monitorVoiceInput(job);
+}
 let currentNavigationRevision = 0;
 async function acceptNavigationResponse(payload,authoritative=false) {
   let accepted;
@@ -726,6 +856,7 @@ async function runBackendCommand(command, turnId = makeId(), { autoConfirm = fal
       }
       if (event.type === 'trip_plan' && event.committed!==false) acceptNavigationResponse(event).catch(error => console.warn('Trip plan display:', error.message));
       if (event.type === 'step' && event.step?.message) setPhase('thinking', event.step.message);
+      if (event.type === 'status' && event.text) setPhase('thinking', event.text);
       if (event.type === 'error') {
         if (event.error_code === 'turn_timeout') void synchronizeNavigation();
         throw new Error(event.detail || 'Pipeline streaming bị lỗi');
@@ -833,6 +964,7 @@ async function runBackendCommand(command, turnId = makeId(), { autoConfirm = fal
     if (activeTurn === ownedTurn) {
       activeTurn = null;
       state.busy = false; lockControls(false); document.body.classList.remove('busy');
+      if (spokenTurnQueue.length) void drainSpokenTurns();
       if (spoken && (spoken === 'wake' || ['confirm', 'clarify'].includes(state.phase))) listenForFollowUp(spoken);
       else if (spoken) console.info('[vivi] follow-up: not reopened, answer complete and the turn did not start with the wake word');
     }
@@ -877,7 +1009,7 @@ function runCommand(command, options = {}) {
   return Promise.resolve();
 }
 
-let recorder = null, recorderStream = null, recorderChunks = [], audioContext = null, silenceFrame = null, sttSocket = null, sttResult = null, unanswered = false;
+let recorder = null, captureSession = null;
 function stopRecording() {
   if (recorder?.state === 'recording') recorder.stop();
 }
@@ -932,7 +1064,7 @@ async function finishStreaming(socket, result, blob, turnId, followUp = null) {
   } catch {
     // Live STT failed (network, quota…): the upload endpoint uses the local fallback.
     lockControls(false);
-    await submitRecording(blob, turnId);
+    await submitRecording(blob, turnId, followUp);
     return;
   }
   $('#command-input').value = transcript;
@@ -940,23 +1072,37 @@ async function finishStreaming(socket, result, blob, turnId, followUp = null) {
   lockControls(false);
   const answer = followUpAnswer(transcript, followUp);
   if (answer === null) return;
-  await runBackendCommand(answer, turnId);
+  const response = await fetch(`${API_BASE}/api/v1/voice/transcripts`, {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({session_id:sessionId,turn_id:turnId,transcript:answer,llm_provider:state.llmProvider,position:getJourneyPosition()})
+  });
+  const job = await response.json();
+  if (!response.ok) throw new Error(job.detail || 'Chưa lưu được lời nói');
+  monitorVoiceInput(job);
 }
 async function submitRecording(blob, turnId, followUp = null) {
-  lockControls(true); setPhase('transcribing', `${state.sttProvider || 'STT local'} đang chuyển giọng nói thành văn bản…`);
-  try {
-    const form = new FormData();
-    form.append('audio', blob, `vivi-${turnId}.webm`); form.append('session_id', sessionId); form.append('turn_id', turnId);
-    const response = await fetch(`${API_BASE}/api/v1/stt`, { method: 'POST', body: form });
-    const payload = await response.json();
-    if (!response.ok) throw new Error(payload.detail || 'STT lỗi');
-    $('#command-input').value = payload.transcript;
-    lockControls(false);
-    const answer = followUpAnswer(payload.transcript, followUp);
-    if (answer === null) { lockControls(false); return; }
-    await runBackendCommand(answer, turnId);
-  } catch (error) {
-    setPhase('blocked', error.message); lockControls(false);
+  if (recorder?.state !== 'recording' && !state.busy) setPhase('transcribing', 'Đang lưu lời nói của bạn…');
+  const form = new FormData();
+  form.append('audio', blob, `vivi-${turnId}.webm`);
+  form.append('session_id', sessionId); form.append('turn_id', turnId);
+  form.append('llm_provider', state.llmProvider || 'local');
+  form.append('position', JSON.stringify(getJourneyPosition()));
+  // Reuse the same turn ID on transport/storage retries. Once acknowledged,
+  // the backend owns STT and dialogue; closing this tab does not discard input.
+  while (true) {
+    try {
+      const response = await fetch(`${API_BASE}/api/v1/voice/inputs`, {method:'POST',body:form});
+      const job = await response.json();
+      if (!response.ok) {
+        if (response.status === 503) { await wait(5000); continue; }
+        throw new Error(job.detail || 'Chưa lưu được lời nói');
+      }
+      monitorVoiceInput(job);
+      return;
+    } catch (error) {
+      if (error instanceof TypeError) { await wait(2000); continue; }
+      setPhase('blocked', error.message); return;
+    }
   }
 }
 // After a "ViVi ơi" turn the mic reopens briefly, so a follow-up ("thêm 2 độ nữa")
@@ -975,35 +1121,40 @@ async function startRecording(options) {
   if (!state.backendAvailable) { setPhase('blocked', 'Hãy chạy backend local trước khi dùng microphone.'); return; }
   if (!state.sttAvailable) { setPhase('blocked', 'STT local chưa sẵn sàng. Kiểm tra trang health và hướng dẫn setup runtime.'); return; }
   if (recorder?.state === 'recording') { stopRecording(); return; }
-  interruptActiveTurn();
+  if (recordingStartPending) return;
+  recordingStartPending = true;
+  stopPlayback();
   // Where a follow-up returns to if it only hears ViVi's own voice.
   const resume = followUp ? { phase: state.phase, text: $('#response-text')?.textContent || '', kind: followUpArmed } : null;
   try {
-    recorderStream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } });
-    recorderChunks = [];
+    const capture = { stream: await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } }), chunks: [], socket: null, result: null, unanswered: false, context: null, frame: null };
+    captureSession = capture;
     const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : '';
-    recorder = new MediaRecorder(recorderStream, mimeType ? { mimeType } : undefined);
+    const currentRecorder = new MediaRecorder(capture.stream, mimeType ? { mimeType } : undefined);
+    recorder = currentRecorder;
     const turnId = makeId();
-    sttSocket = null; sttResult = null;
     // The live socket opens alongside the recorder rather than before it, so the mic
     // is live at once; what it heard meanwhile is sent when the socket opens. Without
     // one the upload endpoint is used.
     const socketOpening = state.sttStreaming ? openSttStream(turnId).then(socket => {
-      sttSocket = socket; sttResult = listenSttStream(socket); $('#command-input').value = '';
-      recorderChunks.forEach(chunk => socket.send(chunk));
-    }, () => { sttSocket = null; }) : Promise.resolve();
-    recorder.ondataavailable = event => {
+      if (recorder !== currentRecorder || currentRecorder.state !== 'recording') { socket.close(); return; }
+      capture.socket = socket; capture.result = listenSttStream(socket); $('#command-input').value = '';
+      capture.chunks.forEach(chunk => socket.send(chunk));
+    }, () => { capture.socket = null; }) : Promise.resolve();
+    currentRecorder.ondataavailable = event => {
       if (!event.data.size) return;
-      recorderChunks.push(event.data);
-      if (sttSocket?.readyState === WebSocket.OPEN) sttSocket.send(event.data);
+      capture.chunks.push(event.data);
+      if (capture.socket?.readyState === WebSocket.OPEN) capture.socket.send(event.data);
     };
-    recorder.onstop = async () => {
+    currentRecorder.onstop = async () => {
+      if (recorder === currentRecorder) recorder = null;
+      if (captureSession === capture) captureSession = null;
       $('#demo-mic').classList.remove('recording'); $('#demo-mic').setAttribute('aria-label', 'Bắt đầu thu âm');
-      cancelAnimationFrame(silenceFrame); voiceLevel.mic = 0; recorderStream?.getTracks().forEach(track => track.stop()); await audioContext?.close(); audioContext = null;
-      const blob = new Blob(recorderChunks, { type: recorder.mimeType || 'audio/webm' }); recorder = null;
+      cancelAnimationFrame(capture.frame); voiceLevel.mic = 0; capture.stream.getTracks().forEach(track => track.stop()); await capture.context?.close();
+      const blob = new Blob(capture.chunks, { type: currentRecorder.mimeType || 'audio/webm' });
       await socketOpening;
-      const socket = sttSocket, result = sttResult; sttSocket = null; sttResult = null;
-      if (unanswered) {
+      const socket = capture.socket, result = capture.result;
+      if (capture.unanswered) {
         // Nobody spoke after ViVi's answer: end the conversation quietly.
         followUpArmed = false;
         socket?.close();
@@ -1013,25 +1164,31 @@ async function startRecording(options) {
       if (socket) await finishStreaming(socket, result, blob, turnId, resume);
       else await submitRecording(blob, turnId, resume);
     };
-    recorder.start(250); $('#demo-mic').classList.add('recording'); $('#demo-mic').setAttribute('aria-label', 'Dừng thu âm');
+    currentRecorder.start(250); $('#demo-mic').classList.add('recording'); $('#demo-mic').setAttribute('aria-label', 'Dừng thu âm');
     setPhase('listening', followUp ? 'Mình vẫn đang nghe… cứ nói tiếp nếu bạn cần.' : state.sttStreaming ? 'Mình đang nghe… lời bạn nói sẽ hiện ở đây.' : 'Mình đang nghe… Nhấn mic lần nữa để dừng.');
-    audioContext = new AudioContext();
-    const source = audioContext.createMediaStreamSource(recorderStream), analyser = audioContext.createAnalyser(), samples = new Uint8Array(512);
+    capture.context = new AudioContext(); audioContext = capture.context;
+    const source = capture.context.createMediaStreamSource(capture.stream), analyser = capture.context.createAnalyser(), samples = new Uint8Array(512);
     analyser.fftSize = 1024; source.connect(analyser);
     let heardSpeech = false, silentSince = 0, startedAt = performance.now();
-    unanswered = false;
     const monitor = () => {
       analyser.getByteTimeDomainData(samples);
       const rms = Math.sqrt(samples.reduce((sum, value) => sum + ((value - 128) / 128) ** 2, 0) / samples.length);
       voiceLevel.mic = rms;
       if (rms > .035) { heardSpeech = true; silentSince = 0; }
       else if (heardSpeech && !silentSince) silentSince = performance.now();
-      if (quietLimit && !heardSpeech && performance.now() - startedAt > quietLimit) { unanswered = true; stopRecording(); }
-      else if ((silentSince && performance.now() - silentSince > 1400) || performance.now() - startedAt > 15000) stopRecording();
-      else silenceFrame = requestAnimationFrame(monitor);
+      if (quietLimit && !heardSpeech && performance.now() - startedAt > quietLimit) { unanswered = capture.unanswered = true; stopRecording(); }
+      else if ((silentSince && performance.now() - silentSince > 1400) || performance.now() - startedAt > 30000) stopRecording();
+      else capture.frame = requestAnimationFrame(monitor);
     };
     monitor();
-  } catch (error) { sttSocket?.close(); sttSocket = null; setPhase('blocked', `Không mở được microphone: ${error.message}`); }
+  } catch (error) {
+    const capture=captureSession; captureSession=null;
+    capture?.socket?.close(); capture?.stream?.getTracks().forEach(track=>track.stop());
+    await capture?.context?.close().catch(()=>{});
+    if (recorder && recorder.state !== 'recording') recorder=null;
+    setPhase('blocked', `Không mở được microphone: ${error.message}`);
+  }
+  finally { recordingStartPending = false; void drainSpokenTurns(); }
 }
 
 function resolveLlmProvider(options, backendDefault, savedProvider, savedDefault) {
@@ -1064,6 +1221,7 @@ async function checkBackend() {
     try {
       await synchronizeNavigation();
       lockControls(state.busy);
+      void restoreVoiceInputs();
     } catch { state.navigationSynced=false;setPhase('blocked','Đang chờ đồng bộ trạng thái xe.'); }
   } catch {
     state.backendAvailable = false; $('#backend-status').classList.add('offline'); $('#backend-status').innerHTML = '<i></i> Backend offline';
@@ -1387,6 +1545,14 @@ updateClock(); setInterval(updateClock, 60000); updateVehicle(); checkBackend().
 
 window.addEventListener('storage', event => {
   if (event.key !== 'vivi-history-reset') return;
+  voiceInputJobs.clear();
+  spokenTurnQueue.length = 0;
+  queuedVoiceResponses.clear();
+  presentedVoiceInputs.clear();
+  presentedVoiceResponses.clear();
+  latestVoiceRevision = 0;
+  localStorage.removeItem('vivi-voice-presented');
+  localStorage.removeItem('vivi-voice-presented-responses');
   edgeCommandHistory = [];
   state.lastCommand = '';
   state.manualAnswer = '';

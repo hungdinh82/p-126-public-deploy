@@ -587,7 +587,7 @@ def create_langgraph_orchestrator(
             candidate = create_services(config, provider=name)
             client = candidate.semantic_client
             client.max_tokens, client.max_attempts = config.planner_max_tokens, 1
-            budget = config.local_budget_seconds if name == "local" else config.cloud_budget_seconds
+            budget = config.local_request_budget_seconds if name == "local" else config.cloud_budget_seconds
             providers[name] = ModelProvider(name, client, budget)
             generators[name] = candidate.generator
         except Exception as exc:
@@ -602,7 +602,9 @@ def create_langgraph_orchestrator(
         fallback_chains["local"] = ["local", *cloud]
     resolver = SemanticResolver(
         providers, breaker_seconds=config.provider_breaker_seconds,
-        budget_seconds=config.semantic_budget_seconds, fallback_chains=fallback_chains
+        budget_seconds=config.semantic_budget_seconds, fallback_chains=fallback_chains,
+        requested_budgets={"local": config.local_request_budget_seconds}
+        if config.jetson_ai_policy != "disabled" and config.jetson_ai_url else {}
     )
     from src.vivi.conversation.service import ConversationService
     from src.vivi.information.service import InformationService
@@ -629,7 +631,7 @@ def create_langgraph_orchestrator(
         default_provider=config.llm_provider,
         provider_errors=errors,
         ledger=ledger,
-        timeout_seconds=config.turn_timeout_seconds,
+        timeout_seconds=config.effective_turn_timeout_seconds,
         profile_id=config.memory_profile_id,
     )
     result.local_semantic_client = providers["local"].client if "local" in providers else None

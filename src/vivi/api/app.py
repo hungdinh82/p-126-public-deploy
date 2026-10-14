@@ -18,6 +18,7 @@ from src.vivi.api.routes import (
     speech,
     turns,
     vehicle,
+    voice_inputs,
     web,
 )
 from src.vivi.api.runtime import runtime
@@ -40,6 +41,9 @@ async def lifespan(app: FastAPI):
     config = runtime.settings
     background = []
     try:
+        from src.vivi.speech.input_service import VoiceInputService
+        runtime.voice = VoiceInputService(runtime)
+        await runtime.voice.start()
         if config.tts_provider != "off" and config.zerotts_preload:
             await runtime.tts.preload()
         if config.stt_provider != "off" and config.phowhisper_preload:
@@ -50,14 +54,19 @@ async def lifespan(app: FastAPI):
         if client is not None and config.jetson_ai_url and config.jetson_ai_policy != "disabled":
             from src.vivi.dialogue.planner import warmup_local_client
 
-            try:
-                await warmup_local_client(client)
-                logger.info("Đã warmup prompt cố định của SLM từ xa")
-            except Exception:
-                logger.exception("Warmup SLM từ xa chưa thành công; app vẫn nhận request")
+            async def warmup():
+                try:
+                    await warmup_local_client(client)
+                    logger.info("Đã warmup prompt cố định của SLM từ xa")
+                except Exception:
+                    logger.exception("Warmup SLM từ xa chưa thành công; app vẫn nhận request")
+
+            background.append(asyncio.create_task(warmup()))
         yield
     finally:
         metrics.stop_gpu_sampler()
+        if runtime.voice is not None:
+            await runtime.voice.close()
         for task in background:
             task.cancel()
         await asyncio.gather(*background, return_exceptions=True)
@@ -89,6 +98,7 @@ def create_app() -> FastAPI:
         navigation.router,
         turns.router,
         speech.router,
+        voice_inputs.router,
         roles.router,
         engineer.router,
         web.router,  # last: it has a catch-all /{asset_name} route

@@ -293,12 +293,13 @@ def semantic_workspace_context(workspace):
 
 
 class SemanticResolver:
-    def __init__(self, providers=None, *, parser=None, breaker_seconds=30, fallback_chains=None, budget_seconds=2.5):
+    def __init__(self, providers=None, *, parser=None, breaker_seconds=30, fallback_chains=None, budget_seconds=2.5, requested_budgets=None):
         self.providers = providers or {}
         self.parser = parser or OfflineParser()
         self.breaker_seconds = breaker_seconds
         self.fallback_chains = fallback_chains or {}
         self.budget_seconds = budget_seconds
+        self.requested_budgets = requested_budgets or {}
 
     def chain(self, requested):
         if requested == "rules":
@@ -359,7 +360,7 @@ class SemanticResolver:
             },
             ensure_ascii=False,
         )
-        deadline = time.monotonic() + self.budget_seconds
+        deadline = time.monotonic() + self.requested_budgets.get(requested, self.budget_seconds)
         chain = self.chain(requested)
         for index, name in enumerate(chain):
             provider = self.providers.get(name)

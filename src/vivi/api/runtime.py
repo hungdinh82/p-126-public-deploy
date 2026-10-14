@@ -25,6 +25,7 @@ class Runtime:
     tts_engines: dict[str, Any]
     alerts: AlertEngine
     llm_models: dict[str, str]
+    voice: Any = None
 
     def close(self) -> None:
         for graph in set(self.orchestrator.graphs.values()):

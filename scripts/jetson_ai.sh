@@ -323,6 +323,10 @@ case "${1:-}" in
       [[ $# == 2 && "$1" == --tts-precision && ( "$2" == int8 || "$2" == fp32 || "$2" == int8-gpu ) ]] \
         || fail "Usage: bash scripts/jetson_ai.sh run [--tts-precision int8-gpu|int8|fp32]"
       export JETSON_AI_TTS_PRECISION="$2"
+    else
+      # Do not inherit an old model-selection file from a prior experiment.
+      # Production starts with the known fp32 profile unless explicitly asked.
+      export JETSON_AI_TTS_PRECISION="${JETSON_AI_TTS_PRECISION:-fp32}"
     fi
     run ;;
   doctor) check_platform; check_sdk; [[ -x "$VIVI_VENV/bin/python" ]] || fail "Run setup first: missing profile venv"

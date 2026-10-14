@@ -15,6 +15,14 @@ import httpx
 from jetson_ai.tts_profile import resolve_tts_model
 
 
+def available_memory_mb() -> int:
+    """Read system RAM headroom; Xavier shares memory between CPU and GPU."""
+    for line in Path('/proc/meminfo').read_text().splitlines():
+        if line.startswith('MemAvailable:'):
+            return int(line.split()[1]) // 1024
+    raise RuntimeError('MemAvailable is missing; refusing to load another model')
+
+
 class SpeechModels:
     def __init__(self):
         self.stt_engine = os.environ.get("JETSON_AI_STT_ENGINE", "transformers")
@@ -84,13 +92,27 @@ class SpeechModels:
                                 gpu_name=torch.cuda.get_device_name(0) if actual.startswith("cuda") else None)
 
     def _load_tts(self):
+        if not self.tts_path or not Path(self.tts_path).is_dir():
+            raise FileNotFoundError("TTS model missing; run setup")
+        path, precision = resolve_tts_model(Path(self.tts_path), os.environ.get("JETSON_AI_TTS_PRECISION"))
+        # The CPU dynamic INT8 artifact is much smaller than the fp32 and
+        # TensorRT variants. Use a conservative profile-specific estimate,
+        # while allowing an operator override for measured deployments.
+        default_estimate = 3072 if precision == "int8-dynamic-mixed" else 6144
+        estimate = int(os.environ.get('JETSON_AI_TTS_LOAD_ESTIMATE_MB', str(default_estimate)))
+        reserve = int(os.environ.get('JETSON_AI_MEMORY_RESERVE_MB', '2048'))
+        if estimate <= 0 or reserve <= 0:
+            raise ValueError('TTS load estimate and RAM reserve must be positive')
+        available = available_memory_mb()
+        if available < estimate + reserve:
+            raise MemoryError(
+                f'TTS load deferred: {available} MB RAM available, '
+                f'{estimate + reserve} MB required to preserve the {reserve} MB system reserve'
+            )
         import numpy as np
         import onnxruntime as ort
         from zerotts import ZeroTTS
         from zerotts.voices import Voice
-        if not self.tts_path or not Path(self.tts_path).is_dir():
-            raise FileNotFoundError("TTS model missing; run setup")
-        path, precision = resolve_tts_model(Path(self.tts_path), os.environ.get("JETSON_AI_TTS_PRECISION"))
         # Dynamic MatMulInteger quantization is a CPU experiment, not CUDA or
         # TensorRT INT8. Keep STT/SLM on their independently requested device.
         device = "cpu" if precision == "int8-dynamic-mixed" else self.requested_device

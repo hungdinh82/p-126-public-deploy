@@ -156,6 +156,18 @@ class Settings(BaseSettings):
         "AI_SERVER_TOKEN", "JETSON_AI_TOKEN", "ai_server_token", "jetson_ai_token"
     ))
     jetson_ai_probe_timeout_seconds: float = Field(default=0.75, gt=0, le=5)
+    ai_server_request_timeout_seconds: float = Field(default=180, ge=1, le=300)
+
+    @property
+    def local_request_budget_seconds(self) -> float:
+        return self.ai_server_request_timeout_seconds if self.jetson_ai_policy != "disabled" and self.jetson_ai_url else self.local_budget_seconds
+
+    @property
+    def effective_turn_timeout_seconds(self) -> float:
+        # Semantic analysis and answer generation can each need a long prefill.
+        if self.jetson_ai_policy != "disabled" and self.jetson_ai_url:
+            return max(self.turn_timeout_seconds, 2 * self.local_request_budget_seconds + 15)
+        return self.turn_timeout_seconds
     ai_server_auth_required: bool = Field(default=True, validation_alias=AliasChoices(
         "AI_SERVER_AUTH_REQUIRED", "JETSON_AI_AUTH_REQUIRED", "ai_server_auth_required"
     ))
