@@ -21,6 +21,21 @@ def test_unknown_pid_and_unavailable_proc(tmp_path):
     assert system['total_bytes'] is None
 
 
+def test_system_proc_falls_back_to_ps_for_process_rss(monkeypatch):
+    import subprocess
+
+    def fake_run(command, **kwargs):
+        assert command == ['ps', '-o', 'rss=', '-p', '999999']
+        return subprocess.CompletedProcess(command, 0, stdout='2048\n', stderr='')
+
+    monkeypatch.setattr(subprocess, 'run', fake_run)
+    models = {'llm': {'pid': 999999}}
+
+    memory_snapshot(models)
+
+    assert models['llm']['memory']['rss_bytes'] == 2048 * 1024
+
+
 def test_capabilities_reports_native_pid_and_architecture(monkeypatch, tmp_path):
     import asyncio
     import os

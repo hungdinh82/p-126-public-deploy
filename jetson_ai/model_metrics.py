@@ -1,4 +1,5 @@
-"""Lightweight Linux resident-memory readings; RSS is per process, not per model."""
+"""Lightweight resident-memory readings; RSS is per process, not per model."""
+import subprocess
 from pathlib import Path
 
 GIB = 1024 ** 3
@@ -17,6 +18,26 @@ def _kib_fields(path: Path) -> dict[str, int]:
     return result
 
 
+def _process_rss(pid: int, proc: Path) -> int | None:
+    rss = _kib_fields(proc / str(pid) / "status").get("VmRSS")
+    if rss is not None or proc != Path("/proc"):
+        return rss
+    try:
+        result = subprocess.run(
+            ["ps", "-o", "rss=", "-p", str(pid)],
+            capture_output=True,
+            text=True,
+            timeout=1,
+            check=False,
+        )
+        if result.returncode != 0:
+            return None
+        value = result.stdout.strip()
+        return int(value) * 1024 if value.isdigit() else None
+    except (OSError, subprocess.SubprocessError, ValueError):
+        return None
+
+
 def memory_snapshot(models: dict, proc: Path = Path("/proc")) -> dict:
     """Enrich copied capability records; never attribute shared RSS to one model."""
     groups: dict[int, list[str]] = {}
@@ -29,7 +50,7 @@ def memory_snapshot(models: dict, proc: Path = Path("/proc")) -> dict:
         if pid > 0:
             groups.setdefault(pid, []).append(name)
     for pid, names in groups.items():
-        rss = _kib_fields(proc / str(pid) / "status").get("VmRSS")
+        rss = _process_rss(pid, proc)
         for name in names:
             models[name]["memory"] = {
                 "rss_bytes": rss,
