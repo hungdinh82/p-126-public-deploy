@@ -165,8 +165,10 @@ Model hiểu mục đích, tên/vùng/loại địa điểm, một chiều/khứ
 `PendingQuestion` cần có ID, loại, target ID/revision, các câu trả lời hợp lệ và hành động tương ứng:
 
 - `accept_place`: “Đúng chỗ này chứ?” → đồng ý chọn handle, chưa chạy.
-- `change_destination`: “Bạn muốn đổi điểm cụ thể khác không?” → “không” giữ trung tâm; “có” hỏi tên mới.
+- `confirm_destination`: “Bạn xác nhận dùng điểm này nhé, hoặc nói địa điểm muốn đổi.” → “OK”, “xác nhận”, “giữ địa điểm”, “có” giữ điểm đề xuất; “không”, “đổi địa điểm” hỏi tên mới. Chưa khởi hành.
+- `change_destination`: tương thích checkpoint cũ hỏi “Bạn muốn đổi điểm cụ thể khác không?” → “không” giữ điểm; “có” hỏi tên mới. “OK”, “xác nhận”, “giữ địa điểm” vẫn giữ điểm.
 - `choose_place`: “Bạn chọn chỗ nào?” → số thứ tự/tên/handle.
+- `place_area`: bổ sung khu vực cho POI chưa tìm được, giữ tên POI trong `clarification.query`; không đổi thành điểm đại diện tỉnh/thành.
 - `provide_origin/destination`: bổ sung slot, chưa xác nhận.
 - `start_plan/replace_route`: đồng ý chấp nhận đúng offer, revalidate rồi thực hiện.
 

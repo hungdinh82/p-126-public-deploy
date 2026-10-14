@@ -56,6 +56,7 @@ class ConfirmationOutput(BaseModel):
 
 
 class AssistantOutput(BaseModel):
+    pending_question: dict[str, Any] | None = None
     control_revision: int = 0
     receipt: dict[str, Any] | None = None
     control_receipts: list[dict[str, Any]] = Field(default_factory=list)
@@ -69,6 +70,8 @@ class AssistantOutput(BaseModel):
     status: str
     response_text: str
     tts_text: str
+    answer_kind: str | None = None
+    answer_basis: str | None = None
     action_proposal: ActionProposal | None = None
     requires_execution: bool = False
     execution: ActionExecution | None = None

@@ -32,6 +32,13 @@ cloud_budget_seconds = 10
 local_budget_seconds = 60
 provider_breaker_seconds = 30
 planner_max_tokens = 2048
+conversation_enabled = true
+information_enabled = true
+tavily_monthly_limit = 900
+information_timeout_seconds = 12
+information_http_timeout_seconds = 4
+information_max_results = 5
+information_timezone = "Asia/Ho_Chi_Minh"
 
 # Language model: rules, local, openai, google, openrouter
 # Cloud providers require rag_local_only = false.

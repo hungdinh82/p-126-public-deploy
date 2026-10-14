@@ -4,8 +4,9 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 from urllib.parse import urlsplit
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import AliasChoices, Field, model_validator
+from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict, TomlConfigSettingsSource
 
 
@@ -53,8 +54,28 @@ class Settings(BaseSettings):
     turn_timeout_seconds: float = Field(default=45, ge=1, le=180)
     cloud_budget_seconds: float = Field(default=10, ge=0.1, le=60)
     local_budget_seconds: float = Field(default=12, ge=0.1, le=60)
+    semantic_budget_seconds: float = Field(default=2.5, ge=0.1, le=60)
     provider_breaker_seconds: float = Field(default=30, ge=0, le=300)
     planner_max_tokens: int = Field(default=2048, ge=512, le=8192)
+    conversation_enabled: bool = True
+    information_enabled: bool = True
+    tavily_api_key: str = ""
+    tavily_monthly_limit: int = Field(default=900, ge=0, le=1000)
+    information_timeout_seconds: float = Field(default=12, ge=1, le=30)
+    information_http_timeout_seconds: float = Field(default=4, ge=0.1, le=10)
+    information_max_results: int = Field(default=5, ge=1, le=5)
+    information_timezone: str = "Asia/Ho_Chi_Minh"
+    weather_default_location: str = Field(default="Hà Nội", min_length=1, max_length=200)
+
+    @field_validator("information_timezone")
+    @classmethod
+    def valid_information_timezone(cls, value):
+        try:
+            ZoneInfo(value)
+        except (ZoneInfoNotFoundError, ValueError) as exc:
+            raise ValueError("information_timezone must be a valid IANA timezone") from exc
+        return value
+
     store_audio: bool = Field(default=False, validation_alias="VIVI_STORE_AUDIO")
     store_transcripts: bool = Field(default=False, validation_alias="VIVI_STORE_TRANSCRIPTS")
     memory_enabled: bool = Field(default=True, validation_alias="VIVI_MEMORY_ENABLED")

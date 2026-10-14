@@ -173,5 +173,7 @@ def test_handbook_follow_up_does_not_bypass_unsafe_scope_guard(tmp_path):
     services = HandbookServices(NeverRetrieve(), ExtractiveHandbookGenerator(), history)
     result = build_graph(services).invoke({"session_id": "follow", "turn_id": "2", "input_text": "Vậy cách hack pin cao áp?",
                                           "model_input": {"intent": "manual.search", "arguments": {"query": "Vậy cách hack pin cao áp?"}}})
-    assert result["output"]["status"] == "unsupported"
+    assert result["output"]["status"] == "blocked"
+    assert result["output"]["diagnostics"]["error_code"] == "topic_safety_system_tampering"
+    assert result["output"]["diagnostics"]["provider_attempts"] == []
     assert not result["output"]["citations"]

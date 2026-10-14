@@ -77,6 +77,8 @@ Khi áp dụng trên dữ liệu đang dùng: dừng process nhận request, b�
 
 ## Map và trace
 
+Tên trong `data/navigation/regions.json` là danh mục alias, không cố định cấp hành chính. Khi tìm điểm đại diện, workflow xác minh tên với `boundaries` của VietMap; nếu lớp `CITY` không có kết quả đúng tên, thử thêm `WARD` một lần. Ví dụ “Nam Định” được tìm lại thành phường Nam Định thay vì nhận tỉnh Ninh Bình từ lớp `CITY`. Tiền tố người dùng nói rõ như “phường”, “xã”, “tỉnh” được giữ tại language boundary và xác định lớp tìm kiếm; không ghép khu vực cũ của câu hỏi trước vào tên hành chính mới. Kết quả trùng tên ở nhiều tỉnh/thành được đọc kèm tỉnh/thành để người dùng chọn. Kết quả POI hoặc tên chỉ khớp một phần không được dùng làm điểm đại diện. Xác nhận bắt đầu hành trình vẫn tách khỏi việc tìm địa điểm và xem trước tuyến.
+
 Map config trả ngay, health probe chạy nền qua `/map-health`. SDK/style/tiles có lifecycle tải/lỗi/retry riêng; search không bị disable khi map lỗi. Retry/style reload dựng lại layers/markers từ snapshot mới nhất. `ResizeObserver` cập nhật kích thước; timer chỉ là fallback.
 
 Geometry tuyến cache theo route ID (mỗi phép tính tạo ID mới) và được tham chiếu trong progress/charge response khi client đã có. Snapshot bootstrap đầy đủ để phục hồi cache. Không fit bounds khi chỉ thay đổi progress. Camera/marker tối đa 30 Hz, traveled geometry 5 Hz. Map ẩn ngừng cập nhật map, mô phỏng vẫn tiếp tục. Mobile dùng panel gọn, có nút Chi tiết/Thu gọn; mở chi tiết tự động khi cần chọn điểm. CSS tôn trọng hidden, padding fit bounds không vượt viewport và nút đóng không bị recenter che. Các geometry bên trong energy alternatives vẫn thuộc DTO tương thích; chưa tách toàn bộ geometry thành bảng riêng.

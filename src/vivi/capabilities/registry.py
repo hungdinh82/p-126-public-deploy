@@ -87,7 +87,11 @@ for name in TOOL_REGISTRY:
     if fields.intersection({"zone", "zones"}):
         transferable |= {"target_side", "target_row"}
     executor = (
-        "memory"
+        "conversation"
+        if name == "conversation.respond"
+        else "information"
+        if name in {"web.search", "weather.get_forecast", "knowledge.lookup"}
+        else "memory"
         if name.startswith("memory.")
         else "handbook"
         if name == "manual.search"
@@ -127,6 +131,21 @@ def merge_arguments(old, incoming):
         else transferable_arguments(old, incoming)
     )
     updates = incoming.arguments.model_dump(exclude_none=True)
+    if incoming.capability.startswith(("navigation.", "trip.")):
+        if "query" in updates and "destination" not in updates:
+            # An absolute query replacement cannot retain a structured name
+            # from an earlier slot answer. The executor treats it as authoritative.
+            merged.pop("destination", None)
+        if "destination" in updates:
+            from src.vivi.navigation.contracts import DestinationSpec
+
+            destination = DestinationSpec.model_validate(updates["destination"])
+            if destination.selection == "reference":
+                merged.pop("query", None)
+            else:
+                updates["query"] = destination.query()
+                if "destination_scope" in REGISTRY[incoming.capability].spec.parameters.model_fields:
+                    updates["destination_scope"] = "region" if destination.selection == "region" else "place"
     for group in REGISTRY[incoming.capability].exclusive_arguments:
         if len(group.intersection(updates)) == 1:
             for key in group - updates.keys():
@@ -144,11 +163,13 @@ def merge_arguments(old, incoming):
     return merged
 
 
-def catalog(navigation=False):
+def catalog(navigation=False, *, conversation=True, information=True):
     return [
         cap.spec.prompt_spec()
         for cap in REGISTRY.values()
-        if navigation or cap.executor != "navigation" or cap.name == "navigation.set_gear"
+        if (navigation or cap.executor != "navigation" or cap.name == "navigation.set_gear")
+        and (conversation or cap.executor != "conversation")
+        and (information or cap.executor != "information")
     ]
 
 

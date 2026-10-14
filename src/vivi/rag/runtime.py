@@ -64,6 +64,8 @@ class HandbookServices:
     energy_planner: object | None = None
     navigation_categories: dict | None = None
     charging_discovery: object | None = None
+    conversation: object | None = None
+    information: object | None = None
 
 
 @lru_cache(maxsize=2)

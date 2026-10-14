@@ -323,7 +323,7 @@ async def test_voice_navigation_through_http_stream_confirmation_and_progress(se
         json={
             "session_id": "driver",
             "turn_id": "api-plan",
-            "transcript": "dẫn tôi đến hiệu thuốc gần nhất",
+            "transcript": "dẫn tôi đến hiệu thuốc",
             "position": {"lat": 21, "lng": 105.8, "simulated": True},
             "llm_provider": "rules",
         },
@@ -628,7 +628,7 @@ async def test_navigation_preview_restart_consent_and_replay(services, tmp_path)
 async def test_origin_event_resumes_original_request(services, tmp_path):
     services = replace(services, navigation=Maps(), energy_planner=EnergyPlanner(profile()))
     graph, _, _ = build(services, tmp_path)
-    result = await invoke(graph, "dẫn tôi đến hiệu thuốc gần nhất", "1")
+    result = await invoke(graph, "dẫn tôi đến hiệu thuốc", "1")
     assert result["status"] == "clarify", result["output"]
     result = await graph.ainvoke(
         {

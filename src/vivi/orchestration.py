@@ -168,6 +168,7 @@ class LangGraphOrchestrator:
             "confirmation_decision": request.confirmation_decision,
             "provider": request.llm_provider or "rules",
             "action": request.action.model_dump(mode="json") if request.action else None,
+            "question_reply": request.question_reply.model_dump(mode="json") if request.question_reply else None,
             "navigation_event": request.navigation_event,
             "position": request.position,
         }
@@ -180,8 +181,9 @@ class LangGraphOrchestrator:
                 return TurnResponse.model_validate(cached)
             result = await graph.ainvoke({**self._graph_input(request), "provider": provider})
             output = AssistantOutput.model_validate(result["output"])
-            response = self._to_turn_response(request, provider, output)
-            response.latency_ms["total"] = round((time.perf_counter() - started) * 1000, 2)
+            response = self._to_turn_response(
+                request, provider, output, total_ms=round((time.perf_counter() - started) * 1000, 2)
+            )
             await self.complete(request, response)
             return response
 
@@ -246,9 +248,12 @@ class LangGraphOrchestrator:
         result: dict[str, Any] = {}
         spoken = False
         reported_results = 0
-        async for mode, chunk in graph.astream(
-            {**self._graph_input(request), "provider": provider}, stream_mode=["updates", "values"]
-        ):
+        graph_input = {**self._graph_input(request), "provider": provider}
+        stream = (
+            graph.astream_dialogue(graph_input) if hasattr(graph, "astream_dialogue")
+            else graph.astream(graph_input, stream_mode=["updates", "values"])
+        )
+        async for mode, chunk in stream:
             if mode == "values":
                 result = chunk
             elif "interpret" in chunk:
@@ -260,6 +265,9 @@ class LangGraphOrchestrator:
                 }
                 if any(a.get("capability") == "manual.search" for a in turn.get("semantic", {}).get("actions", [])):
                     yield {"type": "progress", "text": random.choice(PROGRESS_MESSAGES)}
+                elif any(a.get("capability") in {"web.search", "knowledge.lookup", "weather.get_forecast"}
+                         for a in turn.get("semantic", {}).get("actions", [])):
+                    yield {"type": "progress", "text": "Mình đang tra thông tin, bạn chờ một chút nhé."}
             elif "capability" in chunk or "validate" in chunk:
                 update = chunk.get("capability", chunk.get("validate")) or {}
                 turn = update.get("turn", {})
@@ -295,8 +303,9 @@ class LangGraphOrchestrator:
                         }
                 reported_results = len(results)
         output = AssistantOutput.model_validate(result["output"])
-        response = self._to_turn_response(request, provider, output)
-        response.latency_ms["total"] = round((time.perf_counter() - started) * 1000, 2)
+        response = self._to_turn_response(
+            request, provider, output, total_ms=round((time.perf_counter() - started) * 1000, 2)
+        )
         await self.complete(request, response)
         speech_segments, remainder = self._take_speech_segments(response.message)
         if remainder.strip():
@@ -315,6 +324,8 @@ class LangGraphOrchestrator:
         request: TurnRequest,
         provider: str,
         output: AssistantOutput,
+        *,
+        total_ms: float,
     ) -> TurnResponse:
         action = None
         if output.action_proposal is not None:
@@ -361,6 +372,7 @@ class LangGraphOrchestrator:
                 source_id=item.get("source_id", ""),
                 section=" > ".join(item.get("section_path") or []),
                 source_url=item.get("source_url"),
+                **{key: item.get(key) for key in ("title", "kind", "published_at", "retrieved_at", "valid_date", "timezone")},
             )
             for item in output.citations
         ]
@@ -401,6 +413,7 @@ class LangGraphOrchestrator:
             navigation_workspace=output.navigation_workspace,
             navigation=output.navigation,
             trip_plan=output.trip_plan,
+            pending_question=output.pending_question,
             ui_events=output.ui_events,
             route=route_map[output.route],
             status=status,
@@ -412,10 +425,18 @@ class LangGraphOrchestrator:
             grounding_status=output.grounding_status,
             vehicle_state=vehicle_state,
             message=output.response_text,
+            answer_kind=output.answer_kind,
+            answer_basis=output.answer_basis,
             error="; ".join(item["message"] for item in output.errors) or None,
-            latency_ms={**output.timings, "total": round(sum(output.timings.values()), 2)},
+            # Dependency spans overlap their containing capability span. Log
+            # the same elapsed wall time returned to the client, not their sum.
+            latency_ms={**output.timings, "total": total_ms},
             trace=trace,
-            diagnostics=output.diagnostics,
+            diagnostics={
+                **output.diagnostics,
+                **({"io_timings": current_control.get().io_timings}
+                   if current_control.get() and current_control.get().io_timings else {}),
+            },
         )
         if (request.navigation_event or {}).get("kind") not in {"progress", "charge"}:
             self.store.append_event({"event_type": "turn", **response.model_dump(mode="json")})
@@ -580,8 +601,14 @@ def create_langgraph_orchestrator(
         )
         fallback_chains["local"] = ["local", *cloud]
     resolver = SemanticResolver(
-        providers, breaker_seconds=config.provider_breaker_seconds, fallback_chains=fallback_chains
+        providers, breaker_seconds=config.provider_breaker_seconds,
+        budget_seconds=config.semantic_budget_seconds, fallback_chains=fallback_chains
     )
+    from src.vivi.conversation.service import ConversationService
+    from src.vivi.information.service import InformationService
+
+    services.conversation = ConversationService(providers, fallback_chains=fallback_chains, enabled=config.conversation_enabled)
+    services.information = InformationService(config, services.conversation)
     saver = ThreadedSqliteSaver(config.data_dir / "runtime" / "conversation-v3.sqlite3")
     graph = build_assistant_graph(
         services,

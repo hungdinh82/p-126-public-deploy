@@ -1,4 +1,4 @@
-import { closeJourney, initJourney, openJourney, applyNavigation, getJourneyPosition, setJourneyMotionBlocked, resetJourneyRuntime } from './journey.js?v=23';
+import { closeJourney, initJourney, openJourney, applyNavigation, getJourneyPosition, setJourneyMotionBlocked, resetJourneyRuntime } from './journey.js?v=24';
 import { GearController } from './navigation-state.js?v=2';
 import { NavigationStore, MissingRouteError } from './navigation-store.js?v=1';
 import { createCabinMusic } from './music.js?v=2';
@@ -114,6 +114,28 @@ function setResponseText(text) {
   $('#response-text').classList.remove('live');
   $('#response-text').textContent = text;
 }
+function renderAnswerSources(evidence = [], answerKind = '') {
+  const response = $('#response');
+  if (response?.classList) response.classList.toggle('expanded-answer', ['creative', 'general', 'web', 'knowledge'].includes(answerKind));
+  const container = $('#answer-sources');
+  if (!container) return;
+  container.replaceChildren();
+  for (const item of evidence) {
+    let url;
+    try { url = new URL(item.source_url); } catch { continue; }
+    if (!['https:', 'http:'].includes(url.protocol)) continue;
+    const source = document.createElement('a');
+    source.href = url.href;
+    source.target = '_blank';
+    source.rel = 'noopener noreferrer';
+    source.textContent = item.title || item.section || item.source_id || url.hostname;
+    const date = item.valid_date || item.published_at;
+    if (date) source.textContent += ` · ${date}`;
+    if (item.retrieved_at) source.title = `Truy xuất: ${item.retrieved_at}`;
+    container.append(source);
+  }
+  container.hidden = !container.childElementCount;
+}
 function renderLiveCaption(final, interim) {
   const caption = $('#response-text');
   if (!caption.classList.contains('live')) { caption.textContent = ''; caption.classList.add('live'); liveWords = []; }
@@ -211,7 +233,7 @@ function updateHud() {
   const driving = state.driving && !gearController.frozen;
   const speed = driving ? Math.round(nav?.speedKmh ?? cruise.speed) : 0;
   $('#gear-letter').textContent = state.driving ? 'D' : 'P';
-  $('#mode-label').textContent = gearController.status!=='idle' ? (gearController.status==='unknown'?'CHƯA ĐỒNG BỘ':gearController.status==='syncing'?'ĐANG ĐỒNG BỘ':`ĐANG CHUYỂN ${gearController.desired}`) : driving ? (nav ? `ĐẾN ${nav.destination.toUpperCase()}` : 'ĐANG DI CHUYỂN') : 'ĐỖ XE';
+  $('#mode-label').textContent = gearController.status!=='idle' ? (gearController.status==='unknown'?'CHƯA ĐỒNG BỘ':gearController.status==='syncing'?'ĐANG ĐỒNG BỘ':`ĐANG CHUYỂN ${gearController.desired}`) : driving ? (nav ? `ĐẾN ${nav.destination.toUpperCase()}` : 'ĐANG DI CHUYỂN') : nav?.chargingMinutes != null ? `ĐANG SẠC · CÒN KHOẢNG ${nav.chargingMinutes} PHÚT` : 'ĐỖ XE';
   $('#hud-primary').innerHTML = driving ? `${speed}<small>km/h</small>` : `${state.battery}<small>%</small>`;
   $('#hud-primary-label').textContent = driving ? 'TỐC ĐỘ' : 'PIN';
   $('#hud-range').textContent = driving ? `Pin ${state.battery}% · ${state.range} km` : `${state.range} km`;
@@ -574,6 +596,7 @@ async function acceptNavigationResponse(payload,authoritative=false) {
     return false;
   }
   payload=accepted;
+  if(Object.hasOwn(payload, "pending_question"))state.pendingQuestion=payload.pending_question;
   const restarted=state.runtimeEpoch && state.runtimeEpoch!==snapshotOrder.epoch;
   state.runtimeEpoch=snapshotOrder.epoch;
   if(restarted){state.vehicleVersion=null;currentNavigationRevision=0;resetJourneyRuntime();}
@@ -657,7 +680,7 @@ function interruptActiveTurn() {
   lockControls(false);
 }
 
-async function runBackendCommand(command, turnId = makeId(), { autoConfirm = false, action = null } = {}) {
+async function runBackendCommand(command, turnId = makeId(), { autoConfirm = false, action = null, questionReply = null } = {}) {
   if (!command.trim()) return;
   if (state.busy) interruptActiveTurn();
   if (handleSpeakerCommand(command)) return;
@@ -668,13 +691,14 @@ async function runBackendCommand(command, turnId = makeId(), { autoConfirm = fal
   followUpArmed = false;
   rememberEdgeCommand(command);
   renderTurnSteps([]);
+  renderAnswerSources();
   state.busy = true; state.lastCommand = command; lockControls(true); $('#command-input').value = '';
   try {
     setPhase('thinking', `“${command}”`);
     const response = await fetch(`${API_BASE}/api/v1/turn/stream`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       signal: ownedTurn.controller.signal,
-      body: JSON.stringify({ transcript: command, session_id: sessionId, turn_id: turnId, llm_provider: state.llmProvider, ...(action ? { action } : {}), position: getJourneyPosition() })
+      body: JSON.stringify({ transcript: command, session_id: sessionId, turn_id: turnId, llm_provider: state.llmProvider, ...(action ? { action } : {}), ...(questionReply ? { question_reply: questionReply } : {}), position: getJourneyPosition() })
     });
     if (!response.ok) {
       const payload = await response.json();
@@ -787,6 +811,7 @@ async function runBackendCommand(command, turnId = makeId(), { autoConfirm = fal
       ? 'speaking'
       : payload.status === 'confirmation_required' ? 'confirm' : payload.status;
     setPhase(phase, payload.message);
+    renderAnswerSources(payload.evidence || [], payload.answer_kind);
     if (payload.status === 'verified') {
       const intent = payload.action?.intent || '';
       const card = DOCK_BY_INTENT[intent.split('.')[0]] || null;
@@ -1266,7 +1291,18 @@ initJourney({
   route: route => { plannedRoute = route; scene?.setRoute(route); },
   travel: distance => scene?.setRouteDistance(distance),
   network: roads => scene?.setNetwork(roads),
-  command: (text, action) => runBackendCommand(text, makeId(), { action }),
+  command: (text, action) => {
+    const question=state.pendingQuestion,args=action?.arguments || {};
+    const option=args.choice_handle || args.place_handle
+      || (action?.capability?.endsWith('.start') && question?.accepts_yes ? 'yes' : null)
+      || (action?.capability?.endsWith('.decline') && question?.accepts_no ? 'no' : null);
+    const bound=question && question.owner===action?.capability?.split('.')[0]
+      && (!args.plan_id || args.plan_id===question.target_id)
+      && (!args.route_revision || args.route_revision===question.revision)
+      && (question.choices?.some(entry=>entry.handle===option) || option==='yes' && question.accepts_yes || option==='no' && question.accepts_no);
+    return runBackendCommand(text, makeId(), { action,
+      questionReply:bound?{question_id:question.id,option_id:option}:null });
+  },
   confirm: grant => confirmNavigation(grant),
   position: position => sendNavigationEvent({ kind:'position', id:makeId(), revision:currentNavigationRevision, position }),
   event: event => sendNavigationEvent(event),

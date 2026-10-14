@@ -19,6 +19,7 @@ from pydantic import (
     model_validator,
 )
 
+from src.vivi.navigation.contracts import DestinationSpec
 from src.vivi.vehicle.zones import CABIN_ZONE_CHOICES
 
 Zone = Literal["driver", "front_passenger", "rear_left", "rear_right", "all"]
@@ -112,6 +113,7 @@ class MemoryRemember(MemoryForget):
 
 
 class NavigationSearch(Parameters):
+    destination: DestinationSpec | None = None
     query: str = Field(min_length=2, max_length=200)
     category: Literal["pharmacy", "charging"] | None = None
     nearest: bool = False
@@ -123,13 +125,14 @@ class NavigationSelect(Parameters):
 
 
 class NavigationRefine(Parameters):
+    destination: DestinationSpec | None = None
     reject_candidates: bool | None = None
     choice_handle: str | None = Field(default=None, min_length=1, max_length=80)
     query: str | None = Field(default=None, min_length=2, max_length=200)
 
     @model_validator(mode="after")
     def choice_or_query(self):
-        if sum((bool(self.choice_handle), bool(self.query), self.reject_candidates is True)) != 1:
+        if sum((bool(self.choice_handle), bool(self.query or self.destination), self.reject_candidates is True)) != 1:
             raise ValueError("Provide exactly one choice, query, or reject_candidates=true")
         return self
 
@@ -141,8 +144,8 @@ class NavigationPlan(NavigationSearch):
     use_search_results: bool = False
 
     @model_validator(mode="after")
-    def destination(self):
-        if not self.query and not self.use_search_results:
+    def valid_destination(self):
+        if not self.query and not (self.destination and (self.destination.query() or self.destination.reference)) and not self.use_search_results:
             raise ValueError("A destination query or preceding search is required")
         return self
 
@@ -173,7 +176,20 @@ class ToolSpec:
         }
 
 
+class ConversationQuery(SearchQuery):
+    mode: Literal["chat", "general", "creative"] = "general"
+
+
+class WeatherQuery(SearchQuery):
+    location: str | None = Field(default=None, max_length=200)
+    forecast_day: Literal["today", "tomorrow", "day_after_tomorrow"] = "today"
+
+
 TOOLS = (
+    ToolSpec("conversation.respond", "Trò chuyện, kiến thức phổ thông ổn định hoặc truyện ngắn giải trí. Không báo dữ liệu live hoặc thực thi xe.", ConversationQuery, "Bạn muốn trò chuyện về điều gì?", True),
+    ToolSpec("web.search", "Tìm thông tin internet có nguồn: du lịch, địa điểm tham quan, tin mới, giá vàng. Không lập tuyến hay bắt đầu dẫn đường.", SearchQuery, "Bạn muốn tìm thông tin gì?", True),
+    ToolSpec("weather.get_forecast", "Thời tiết hôm nay/ngày mai tại địa điểm hoặc vị trí hiện tại. Không lấy nhiệt độ điều hoà xe.", WeatherQuery, "Bạn muốn xem thời tiết ở đâu?", True),
+    ToolSpec("knowledge.lookup", "Tra Wikipedia cho thông tin nền: địa danh, lịch sử, văn hóa. Không tra giá hoặc thời tiết mới nhất.", SearchQuery, "Bạn muốn tìm hiểu chủ đề nào?", True),
     ToolSpec(
         "memory.recall",
         "Đọc thông tin người dùng đã yêu cầu lưu. Không suy diễn từ lịch sử.",

@@ -6,12 +6,14 @@ import asyncio
 import json
 import sqlite3
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 
 from src.vivi.dialogue.contracts import SessionState
 from src.vivi.navigation.projections import dialogue_result
 from src.vivi.persistence.runtime_store import fingerprint
+from src.vivi.turn_control import record_io
 
 DOMAIN_FIELDS = {
     "snapshot_sequence",
@@ -62,7 +64,11 @@ class NavigationRepository:
             if self._closing:
                 raise RuntimeError("Navigation store is closing")
             future = self._executor.submit(function, *args)
-        return await asyncio.shield(asyncio.wrap_future(future))
+        started = time.perf_counter()
+        try:
+            return await asyncio.shield(asyncio.wrap_future(future))
+        finally:
+            record_io("navigation_store", started)
 
     def close(self):
         with self._lifecycle:
@@ -76,9 +82,13 @@ class NavigationRepository:
         await asyncio.shield(asyncio.wrap_future(self._close_future))
 
     def load(self, key):
+        payload = self.load_payload(key)
+        return json.loads(payload) if payload is not None else None
+
+    def load_payload(self, key):
         with self.ledger.connect() as db:
             row = db.execute("SELECT payload FROM navigation_sessions WHERE session=?", (key,)).fetchone()
-        return json.loads(row[0]) if row else None
+        return row[0] if row else None
 
     def save(self, key, session, receipt=None):
         payload = json.dumps(domain_payload(session), ensure_ascii=False)
@@ -93,6 +103,7 @@ class NavigationRepository:
                     "UPDATE navigation_receipts SET status=?,receipt=? WHERE session=? AND event=?",
                     (receipt["status"], json.dumps(receipt, ensure_ascii=False), key, receipt["event_id"]),
                 )
+        return payload
 
     def receipt(self, key, identifier):
         with self.ledger.connect() as db:
