@@ -18,6 +18,7 @@ from src.vivi.agents.contracts import AssistantOutput
 from src.vivi.capabilities.execution import CapabilityRuntime
 from src.vivi.capabilities.registry import REGISTRY, catalog
 from src.vivi.capabilities.result import CapabilityResult
+from src.vivi.conversation.guardrails import TopicDecision, assess_topic, output_violation, terminal_decision
 from src.vivi.dialogue.contracts import SemanticTurn, SessionState, TurnEvent
 from src.vivi.dialogue.planner import PROMPT_VERSION, SemanticResolver
 from src.vivi.dialogue.reducer import (
@@ -81,11 +82,12 @@ class AssistantGraph:
             else "confirmation"
             if state.get("confirmation_id")
             else "action"
-            if state.get("action")
+            if state.get("action") or state.get("question_reply")
             else "utterance",
             confirmation_id=state.get("confirmation_id"),
             confirmation_decision=state.get("confirmation_decision"),
             action=state.get("action"),
+            question_reply=state.get("question_reply"),
             navigation_event=state.get("navigation_event"),
             position=state.get("position"),
             vehicle_model=state.get("vehicle_model", "VF8"),
@@ -256,19 +258,27 @@ class AssistantGraph:
             await self.compiled.aupdate_state(config, result, as_node="await_input")
         return await self.aproject(result)
 
-    async def astream(self, state, stream_mode):
+    async def astream_dialogue(self, state):
+        """Project domain state only for updates consumed by the chat stream."""
+        async with aclosing(self.astream(
+            state, stream_mode=["updates", "values"], navigation_updates_only=True
+        )) as stream:
+            async for item in stream:
+                yield item
+
+    async def astream(self, state, stream_mode, *, navigation_updates_only=False):
         if self._closing:
             raise RuntimeError("Assistant runtime is closing")
         task = asyncio.current_task()
         self._tasks.add(task)
         try:
-            async with aclosing(self._astream(state, stream_mode)) as stream:
+            async with aclosing(self._astream(state, stream_mode, navigation_updates_only=navigation_updates_only)) as stream:
                 async for item in stream:
                     yield item
         finally:
             self._tasks.discard(task)
 
-    async def _astream(self, state, stream_mode):
+    async def _astream(self, state, stream_mode, *, navigation_updates_only=False):
         event = self.event(state)
         config = self.config(event)
         lock = self.thread_lock(config)
@@ -283,10 +293,18 @@ class AssistantGraph:
                     async for item in stream:
                         multiple = isinstance(stream_mode, (list, tuple))
                         mode, chunk = item if multiple else (stream_mode, item)
-                        if mode == "values" and chunk.get("output"):
+                        if mode == "values" and (chunk.get("output") or {}).get("turn_id") == event["turn_id"]:
                             chunk = await self.aproject(chunk)
                         elif mode == "updates":
                             for name, update in chunk.items():
+                                if navigation_updates_only and (
+                                    name not in {"capability", "validate"}
+                                    or not any(
+                                        r.get("navigation_update") or r.get("trip_plan_update")
+                                        for r in ((update or {}).get("turn") or {}).get("results", [])
+                                    )
+                                ):
+                                    continue
                                 if isinstance(update, dict) and update.get("session"):
                                     hydrated = await self.navigation.hydrate(
                                         SessionState.model_validate(update["session"]), event["session_id"]
@@ -310,24 +328,26 @@ class AssistantGraph:
         session = await self.navigation.hydrate(
             SessionState.model_validate(state.get("session") or {}), event.get("session_id", "cli")
         )
-        return self.project({**state, "session": session.model_dump(mode="json")})
+        return self.project({**state, "session": session})
 
     @staticmethod
     def project(state):
         event = state.get("event", {})
         session = SessionState.model_validate(state.get("session") or {})
+        payload = session.model_dump(mode="json")
         output, turn = dict(state.get("output", {})), state.get("turn", {})
         output.update(
+            pending_question=session.pending_question(),
             navigation=session.navigation.model_dump(mode="json"),
             control_revision=session.control_revision,
-            navigation_workspace=session.navigation_workspace.model_dump(mode="json"),
-            trip_plan=session.trip_plan.model_dump(mode="json") if session.trip_plan else None,
+            navigation_workspace=payload["navigation_workspace"],
+            trip_plan=payload["trip_plan"],
             control_receipts=session.control_receipts,
             snapshot_sequence=session.snapshot_sequence,
         )
         return {
             **state,
-            "session": session.model_dump(mode="json"),
+            "session": payload,
             **output,
             "output": output,
             "answer": output.get("response_text"),
@@ -360,6 +380,10 @@ class AssistantGraph:
 def build_assistant_graph(services, saver, store=None, provider=None, *, resolver=None, generators=None, budgets=None):
     runtime_epoch = str(uuid4())
     resolver = resolver or SemanticResolver()
+    if services.conversation is None:
+        from src.vivi.conversation.service import ConversationService
+
+        services.conversation = ConversationService(resolver.providers, fallback_chains=resolver.fallback_chains)
     runtime = CapabilityRuntime(
         services, store, generators, budgets, resolver.breaker_seconds, provider_chains=resolver.fallback_chains
     )
@@ -476,7 +500,16 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
         event = TurnEvent.model_validate(state["event"])
         session = SessionState.model_validate(state["session"])
         turn = dict(state["turn"])
-        if event.kind == "navigation":
+        guardrail = terminal_decision(event.text, event.action, event.question_reply)
+        if guardrail:
+            semantic = SemanticTurn(act="reply", text=guardrail.message)
+            served, attempts = "rules", []
+        elif event.question_reply:
+            from src.vivi.dialogue.answers import AnswerResolver
+
+            semantic = AnswerResolver().resolve(event.text, session, reply=event.question_reply)
+            served, attempts = "event", []
+        elif event.kind == "navigation":
             result, session = await domain.event(event, session)
             turn["navigation_result"] = result
             turn["timings"].update(result.get("timings", {}))
@@ -543,13 +576,24 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
                     requested=event.provider,
                     history=turn["history"],
                     memory=turn["memory"],
-                    catalog=catalog(services.navigation is not None),
+                    catalog=catalog(services.navigation is not None, conversation=services.conversation.enabled,
+                                    information=services.information is not None and services.information.online),
                 ),
                 fence=lambda resolved: (
                     resolved[0].act in {"confirm", "deny", "modify", "resume", "cancel"}
-                    or any(d.capability != "manual.search" for d in resolved[0].drafts())
+                    or any(REGISTRY.get(d.capability) and not REGISTRY[d.capability].spec.read_only for d in resolved[0].drafts())
                 ),
             )
+        if not guardrail:
+            guardrail = terminal_decision([draft.arguments.model_dump(exclude_none=True) for draft in semantic.drafts()])
+        if not guardrail and semantic.text and output_violation(semantic.text, assess_topic(event.text)):
+            guardrail = TopicDecision("general", "refuse", "unsafe_semantic_response",
+                                      "Mình chưa thể trả lời hoặc thực hiện yêu cầu này trong giới hạn an toàn. Bạn có thể hỏi theo hướng kiến thức chung nhé.")
+        if guardrail:
+            # Block the whole compound turn before reducer/scheduler/effects.
+            # Retain the existing task; never turn a refusal into execution consent.
+            semantic = SemanticTurn(act="reply", text=guardrail.message)
+            turn["topic_result"] = guardrail.result()
         # Domain invalidity is a clarification, never a reason to ask a weaker model.
         if any(action.capability not in REGISTRY for action in semantic.drafts()):
             semantic = SemanticTurn(act="unsupported", text="Mình chưa hỗ trợ thao tác đó.")
@@ -689,6 +733,21 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
                 result = await external_read(
                     runtime.handbook(event, arguments, turn["effective_provider"], turn["history"]), fence=False
                 )
+            elif spec.executor == "conversation":
+                from src.vivi.conversation.context import conversation_view
+                from src.vivi.information.time_context import search_time_context
+
+                result = await external_read(services.conversation.respond(
+                    arguments["query"], provider=event.provider, mode=arguments.get("mode", "general"),
+                    history=turn["history"], memory=turn["memory"], context={**conversation_view(session),
+                        **search_time_context(arguments["query"], services.information.settings.information_timezone if services.information else "Asia/Ho_Chi_Minh")}), fence=False)
+            elif spec.executor == "information":
+                if services.information is None:
+                    result = {"status": "blocked", "message": "Mình chưa kết nối dịch vụ thông tin internet.", "error_code": "information_not_configured"}
+                else:
+                    result = await external_read(services.information.execute(
+                        step.draft.capability, arguments, event, session, provider=event.provider,
+                        history=turn["history"], memory=turn["memory"]), fence=False)
             else:
                 result = await external_read(
                     domain.execute(event, session, step, arguments, command_id, turn["effective_provider"]), fence=False
@@ -702,10 +761,12 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
                 event.turn_id,
                 step.draft.capability,
             )
-            result = {
-                "status": "unknown",
-                "message": "Mình chưa xác minh được kết quả bước này. Bạn kiểm tra trước khi yêu cầu lại nhé.",
-            }
+            result = (
+                {"status": "blocked", "message": "Mình chưa tạo được câu trả lời đáng tin cậy. Bạn thử lại nhé.",
+                 "error_code": "answer_unavailable"}
+                if spec.executor in {"conversation", "information"}
+                else {"status": "unknown", "message": "Mình chưa xác minh được kết quả bước này. Bạn kiểm tra trước khi yêu cầu lại nhé."}
+            )
             turn["errors"] = [
                 *turn["errors"],
                 {"stage": "capability", "error_type": type(exc).__name__, "message": str(exc)},
@@ -731,7 +792,21 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
             confirmation=result.get("confirmation"),
             command_id=command_id if result["status"] != "waiting_slot" else None,
         )
+        if spec.executor in {"conversation", "information"}:
+            session.conversation_context = {
+                **(result.get("information_context") or {"capability": step.draft.capability, "query": arguments.get("query")}),
+                "focus": "information",
+            }
+        elif spec.executor == "navigation":
+            session.conversation_context.pop("focus", None)
         session = await domain.hydrate(session, event.session_id)
+        from src.vivi.dialogue.questions import propose_question
+        from src.vivi.dialogue.reducer import synchronize_question
+
+        proposal = propose_question(session)
+        if proposal:
+            result = {**result, "question_proposal": proposal.model_dump(mode="json")}
+        session = synchronize_question(session, proposal)
         turn["results"] = [
             *turn["results"],
             {"step_id": step.id, "index": index, "capability": step.draft.capability, **result},
@@ -740,11 +815,13 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
         return {"session": session.model_dump(mode="json"), "turn": turn}
 
     async def response(state):
+        from src.vivi.dialogue.reducer import synchronize_question
         control = current_control.get()
         if control:
             control.stage = "response"
         event = TurnEvent.model_validate(state["event"])
         session = await domain.hydrate(SessionState.model_validate(state["session"]), event.session_id)
+        session = synchronize_question(session)
         if not state["turn"].get("domain_control"):
             session = await domain.allocate_snapshot(session, event.session_id)
         turn = state["turn"]
@@ -752,7 +829,7 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
         results = turn["results"]
         if turn.get("navigation_result"):
             results = [turn["navigation_result"], *results]
-        last = results[-1] if results else {}
+        last = {"capability": "conversation.respond", **turn["topic_result"]} if turn.get("topic_result") else results[-1] if results else {}
         task = session.active
         current = task.current_index() if task else None
         steps = (
@@ -774,7 +851,7 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
             "handbook"
             if last.get("capability") == "manual.search"
             else "conversation"
-            if last.get("capability", "").startswith(("memory.", "navigation.", "trip."))
+            if last.get("capability", "").startswith(("memory.", "navigation.", "trip.", "conversation.", "web.", "weather.", "knowledge."))
             else "action"
             if last
             else "unsupported"
@@ -788,7 +865,7 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
             "waiting_slot": "clarify",
             "waiting_confirmation": "confirmation_required",
             "blocked": "insufficient_evidence" if route == "handbook" else "blocked",
-            "unknown": "action_unverified",
+            "unknown": "generation_error" if route == "conversation" else "action_unverified",
         }.get(
             last.get("status"),
             "unsupported" if semantic.act == "unsupported" else "clarify" if semantic.act == "clarify" else "answered",
@@ -851,6 +928,16 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
             "suspended_tasks": len(session.suspended),
             "generation_provider": last.get("generation_provider"),
             "generation_attempts": last.get("generation_attempts", []),
+            "information_provider": last.get("information_provider"),
+            "information_cache_hit": last.get("cache_hit"),
+            "source_count": last.get("source_count"),
+            "retrieval_attempts": last.get("retrieval_attempts", []),
+            "source_policy": last.get("source_policy"),
+            "error_code": last.get("error_code"),
+            "topic_guardrail": last.get("topic_guardrail"),
+            "evidence_stats": last.get("evidence_stats"),
+            "retrieval_query": (last.get("information_context") or {}).get("search_query") or (last.get("information_context") or {}).get("query"),
+            "answer_question": last.get("answer_question"),
         }
         output = AssistantOutput(
             runtime_epoch=runtime_epoch,
@@ -871,13 +958,15 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
             status=status,
             response_text=message,
             tts_text=message,
+            answer_kind=last.get("answer_kind"),
+            answer_basis=last.get("answer_basis"),
             action_proposal=action,
             execution=last.get("execution"),
             confirmation=confirmation,
             vehicle_state=next(
                 (item["vehicle_state"] for item in reversed(results) if item.get("vehicle_state")), None
             ),
-            citations=last.get("citations", []),
+            citations=list({item["source_id"]: item for result in results for item in result.get("citations", [])}.values()),
             grounding_status=last.get("grounding_status", "not_applicable"),
             errors=turn["errors"],
             timings=turn["timings"],
@@ -885,14 +974,13 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
             control_receipts=session.control_receipts,
             receipt=turn.get("navigation_result", {}).get("receipt"),
             steps=steps,
-            navigation_workspace=session.navigation_workspace.model_dump(mode="json"),
-            navigation=session.navigation.model_dump(mode="json"),
-            trip_plan=session.trip_plan.model_dump(mode="json") if session.trip_plan else None,
             ui_events=[item for result in results for item in result.get("ui_events", [])],
         )
-        projected = output.model_dump(mode="json")
-        for name in ("navigation", "navigation_workspace", "trip_plan", "control_receipts"):
-            projected.pop(name, None)
+        # Public projection hydrates domain fields after the checkpoint. Avoid
+        # serializing full geometry here only to throw it away immediately.
+        projected = output.model_dump(
+            mode="json", exclude={"navigation", "navigation_workspace", "trip_plan", "control_receipts"}
+        )
         return {"output": projected, "session": checkpoint_session(session)}
 
     async def control(event_data, previous, queued, superseded=False, coalesced=None):

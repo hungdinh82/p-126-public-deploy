@@ -23,6 +23,51 @@ function nav(status='preview',revision=1,sequence=1) {
 }
 async function apply(h,value,confirmation=null){h.sandbox.payload={navigation:value,confirmation,ui_events:[{type:'navigation.preview'}]};await vm.runInContext('applyNavigation(payload)',h.sandbox);}
 
+test('charging legs drive the HUD and transition announcements are deduplicated',async()=>{
+  const h=harness();
+  const plan={stops:[{station_id:'s1',name:'Trạm một',leg_index:0,charge_minutes:10},
+                    {station_id:'s2',name:'Trạm hai',leg_index:1,charge_minutes:15}],
+    legs:[{to:'s1',distance_m:3000,duration_s:150},{to:'s2',distance_m:4000,duration_s:200},
+          {to:'destination',distance_m:3000,duration_s:150}],total_seconds:2000};
+  const base={...nav('running'),route_id:'route:test',stop_index:0,energy:{selected_plan:plan}};
+  await apply(h,base);
+  let leg=vm.runInContext('currentLeg(0)',h.sandbox);
+  assert.match(leg.destination,/Trạm một/);assert.equal(leg.remaining,3000);
+  h.sandbox.payload={navigation:{...base,status:'charging',progress_m:3000,event_sequence:2},
+    ui_events:[{type:'navigation.charging',id:'arrival-1',route_id:'route:test',message:'Đã đến trạm một. Sạc khoảng 10 phút.'}]};
+  await vm.runInContext('applyNavigation(payload); applyNavigation(payload)',h.sandbox);
+  assert.deepEqual(h.announcements,['Đã đến trạm một. Sạc khoảng 10 phút.']);
+  assert.equal(vm.runInContext('currentLeg().chargingMinutes',h.sandbox),10);
+  const atStation=vm.runInContext('getJourneyPosition()',h.sandbox);
+  assert.ok(Math.abs(atStation.lng-105.83)<.001);
+  await apply(h,{...base,status:'charging',progress_m:3000,charge_elapsed_s:120,event_sequence:3});
+  assert.equal(vm.runInContext('currentLeg().chargingMinutes',h.sandbox),8);
+  h.sandbox.payload={navigation:{...base,stop_index:1,progress_m:3000,event_sequence:4},
+    ui_events:[{type:'navigation.next_leg',id:'charged-1',route_id:'route:test',message:'Đã sạc đủ. Đi tới trạm hai.'}]};
+  await vm.runInContext('applyNavigation(payload)',h.sandbox);
+  leg=vm.runInContext('currentLeg()',h.sandbox);
+  assert.match(leg.destination,/Trạm hai/);assert.equal(leg.remaining,4000);
+  assert.equal(h.announcements.length,2);
+  await apply(h,{...base,stop_index:2,progress_m:7000,event_sequence:5});
+  leg=vm.runInContext('currentLeg()',h.sandbox);
+  assert.equal(leg.destination,'TEST destination');assert.equal(leg.remaining,3000);
+});
+
+test('a repeated charging station targets its return visit and restored charging is quiet',async()=>{
+  const h=harness();
+  const plan={stops:[{station_id:'same',name:'Trạm TEST',leg_index:0,charge_minutes:10},
+                    {station_id:'same',name:'Trạm TEST',leg_index:2,charge_minutes:12}],
+    legs:[{to:'same',distance_m:2000,duration_s:100},{to:'destination',distance_m:3000,duration_s:150},
+          {to:'same',distance_m:3000,duration_s:150},{to:'return',distance_m:2000,duration_s:100}],total_seconds:2000};
+  await apply(h,{...nav('running'),trip_kind:'round_trip',stop_index:1,progress_m:5000,energy:{selected_plan:plan}});
+  assert.equal(vm.runInContext('currentLeg().remaining',h.sandbox),3000);
+  await apply(h,{...nav('charging',1,2),trip_kind:'round_trip',stop_index:1,progress_m:8000,charge_elapsed_s:120,energy:{selected_plan:plan}});
+  assert.equal(vm.runInContext('currentLeg().chargingMinutes',h.sandbox),10);
+  assert.deepEqual(h.announcements,[]);
+  await apply(h,{...nav('running',1,3),trip_kind:'round_trip',stop_index:2,progress_m:8000,energy:{selected_plan:plan}});
+  assert.equal(vm.runInContext('currentLeg().destination',h.sandbox),'TEST');
+});
+
 test('server preview waits for consent and active simulation ignores old route/sequence',async()=>{
   const h=harness();
   await apply(h,nav(),{confirmation_id:'grant-1'});

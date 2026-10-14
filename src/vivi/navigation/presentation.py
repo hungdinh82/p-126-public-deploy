@@ -4,6 +4,8 @@ import math
 import re
 from collections import Counter
 
+from src.vivi.navigation.destinations import administrative_match
+
 
 def short_name(name):
     # VietMap may append the street to the business name. This only formats a
@@ -31,6 +33,12 @@ def short_address(address):
 
 
 def place_label(place, *, full_name=False):
+    if administrative_match(place, place["name"]):
+        name = place["name"]
+        parent = next((b for b in place.get("boundaries", []) if b.get("type") == 0), None)
+        if parent and parent.get("name", "").casefold() not in name.casefold():
+            return f"{name}, {parent.get('full_name') or parent['name']}"
+        return name
     name = place["name"] if full_name else short_name(place["name"])
     area = locality(place.get("address", ""))
     return f"{name}, {area}" if area and area.casefold() not in name.casefold() else name
@@ -62,10 +70,8 @@ def route_summary(nav, *, ask_start=True):
     if plan:
         if not stops:
             speech += " Không cần dừng sạc."
-        elif len(stops) <= 2:
-            speech += " Dừng " + "; ".join(f"{s['label']} khoảng {s['minutes']} phút" for s in stops) + "."
         else:
-            speech += f" Dừng sạc {len(stops)} lần, tổng khoảng {sum(s['minutes'] for s in stops)} phút."
+            speech += f" Đã gồm thời gian sạc, dự tính dừng sạc {len(stops)} lần."
     else:
         speech += " " + energy.get("message", "")
     if ask_start:
@@ -78,6 +84,40 @@ def route_summary(nav, *, ask_start=True):
         "stops": stops,
         "speech": speech,
     }
+
+
+def next_leg_message(nav):
+    stops = ((nav.energy or {}).get("selected_plan") or {}).get("stops", [])
+    if nav.stop_index < len(stops):
+        stop = stops[nav.stop_index]
+        return f"Điểm đến tiếp theo là trạm sạc thứ {nav.stop_index + 1}: {station_label(stop)}."
+    if nav.trip_kind == "round_trip":
+        traveled = 0
+        for leg in ((nav.energy or {}).get("selected_plan") or {}).get("legs", []):
+            traveled += leg["distance_m"]
+            if leg.get("to") == "destination":
+                if nav.progress_m >= traveled:
+                    return "Tiếp tục lộ trình khứ hồi về điểm xuất phát."
+                break
+    label = nav.selected.get("spoken_label") or place_label(nav.selected)
+    return f"Tiếp tục lộ trình đến {label}."
+
+
+def charging_message(nav, *, resuming=False):
+    stop = nav.energy["selected_plan"]["stops"][nav.stop_index]
+    minutes = math.ceil(max(0, stop["charge_minutes"] * 60 - nav.charge_elapsed_s) / 60)
+    prefix = "Tiếp tục sạc tại" if resuming else "Đã đến"
+    return f"{prefix} trạm sạc thứ {nav.stop_index + 1}: {station_label(stop)}. Dự kiến dừng sạc khoảng {minutes} phút rồi đi tiếp."
+
+
+def resume_message(nav):
+    stops = ((nav.energy or {}).get("selected_plan") or {}).get("stops", [])
+    if nav.status == "charging":
+        return charging_message(nav, resuming=True) if nav.stop_index < len(stops) else "Tiếp tục sạc theo kế hoạch."
+    message = "Đã chuyển D, tiếp tục hành trình."
+    if stops:
+        message += " " + next_leg_message(nav)
+    return message
 
 
 def choice_message(candidates):

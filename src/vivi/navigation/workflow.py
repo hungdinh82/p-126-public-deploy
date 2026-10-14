@@ -12,12 +12,29 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from src.vivi.navigation.destinations import administrative_match, region_for
+from src.vivi.navigation.contracts import DestinationSpec
+from src.vivi.navigation.destinations import (
+    administrative_layer,
+    administrative_match,
+    center_requested,
+    region_for,
+)
 from src.vivi.navigation.effects import vehicle_effect
 from src.vivi.navigation.energy import ChargingStation, EnergyPlanner
-from src.vivi.navigation.presentation import choice_message, place_label, route_summary, short_address, station_label
-from src.vivi.navigation.selection import decide_place, distinct_places
+from src.vivi.navigation.presentation import (
+    charging_message,
+    choice_message,
+    next_leg_message,
+    place_label,
+    resume_message,
+    route_summary,
+    station_label,
+)
+from src.vivi.navigation.reads import read_many
+from src.vivi.navigation.resolver import PlaceResolver, satisfies_area
+from src.vivi.navigation.selection import decide_place
 from src.vivi.navigation.vietmap import VietMapError
+from src.vivi.persistence.runtime_store import fingerprint
 from src.vivi.turn_control import current_control
 
 logger = logging.getLogger(__name__)
@@ -72,24 +89,6 @@ def coordinates(value):
     return value["lat"], value["lng"]
 
 
-async def read_many(client, operations):
-    if hasattr(client, "batch"):
-        return await client.batch(operations)
-    semaphore = asyncio.Semaphore(3)
-
-    async def single(operation):
-        async with semaphore:
-            name, args, kwargs = operation
-            try:
-                return await getattr(client, name)(*args, **kwargs)
-            except (VietMapError, TimeoutError) as exc:
-                return exc
-
-    async with asyncio.TaskGroup() as group:
-        tasks = [group.create_task(single(operation)) for operation in operations]
-    return [task.result() for task in tasks]
-
-
 def read_budget(maximum):
     control = current_control.get()
     # Reserve time for the domain commit, response, checkpoint and turn receipt.
@@ -142,6 +141,7 @@ class NavigationWorkflow:
         self.services, self.ledger, self.resolver = services, ledger, resolver
         self.energy = services.energy_planner or EnergyPlanner()
         self.discovery = services.charging_discovery
+        self.places = PlaceResolver(services.navigation, getattr(services, "navigation_categories", None))
 
     def clarify_region(self, nav, region):
         nav.revision += 1
@@ -188,6 +188,15 @@ class NavigationWorkflow:
                 ),
                 session,
             )
+        if arguments.get("destination"):
+            destination = DestinationSpec.from_arguments(arguments)
+            arguments = {**arguments, "query": destination.query()}
+            if destination.nearest:
+                arguments["nearest"] = True
+            if destination.selection == "region":
+                arguments["destination_scope"] = "region"
+            if destination.selection == "category" and destination.entity_type in {"pharmacy", "charging"}:
+                arguments["category"] = destination.entity_type
         binding_arguments = dict(arguments)
         if name in {"navigation.plan", "navigation.search"} and not (
             step.result and step.result.get("status") == "waiting_slot"
@@ -205,7 +214,7 @@ class NavigationWorkflow:
             if arguments["route_revision"] != nav.revision:
                 return {"status": "blocked", "message": "Yêu cầu đã thay đổi.", "error_code": "stale_route"}
             nav.revision += 1
-            nav.clarification, nav.pending, nav.candidates = None, None, []
+            nav.clarification, nav.pending, nav.candidates, nav.offer = None, None, [], None
             if not has_active_journey(nav):
                 nav.status, nav.selected, nav.route, nav.energy = "idle", None, None, None
                 nav.summary, nav.alternatives = None, []
@@ -310,6 +319,8 @@ class NavigationWorkflow:
         representative = False
         default_region = None
         nav.trip_kind = arguments.get("trip_kind") or nav.trip_kind or "one_way"
+        if arguments.get("query"):
+            nav.destination = DestinationSpec.from_arguments(arguments)
         if name == "navigation.refine":
             clarification = nav.clarification
             if not clarification and (
@@ -351,7 +362,7 @@ class NavigationWorkflow:
                         question=f"Bạn muốn đến địa điểm nào ở {clarification['region']}?",
                     )
                     return self.result(nav, nav.clarification["question"], "waiting_slot", "navigation.results")
-                if clarification.get("phase") == "change_destination" and nav.route and nav.selected:
+                if clarification.get("phase") in {"change_destination", "confirm_destination"} and nav.route and nav.selected:
                     if nav.pending and nav.pending.get("navigation"):
                         from src.vivi.dialogue.contracts import NavigationState
 
@@ -371,16 +382,19 @@ class NavigationWorkflow:
                 # Search within the region only when the reply didn't name one.
                 if (
                     not representative
+                    and not arguments.get("destination")
                     and clarification.get("region")
+                    and not administrative_layer(query)
                     and not any(region_for(part.strip()) for part in query.split(","))
                 ):
                     query += ", " + clarification["region"]
                 if not representative:
-                    arguments = {"query": query, "destination_scope": "place"}
+                    arguments = {**arguments, "query": query, "destination_scope": "place"}
         elif (
             name in {"navigation.plan", "navigation.search"}
             and not arguments.get("category")
             and not arguments.get("use_search_results")
+            and not (arguments.get("destination") or {}).get("reference")
         ):
             region = region_for(arguments.get("query"))
             if region or arguments.get("destination_scope") == "region":
@@ -408,12 +422,14 @@ class NavigationWorkflow:
                 "error_code": "origin_required",
                 "ui_events": [{"type": "navigation.locate"}],
             }
-        if name == "navigation.select":
+        reference = (arguments.get("destination") or {}).get("reference")
+        if name == "navigation.select" or reference:
             station_choices = list((nav.energy or {}).get("station_candidates", []))
             if nav.pending:
                 station_choices = (nav.pending.get("navigation", {}).get("energy") or {}).get("station_candidates", [])
             selected = next(
-                (p for p in [*nav.candidates, *station_choices] if p["handle"] == arguments["place_handle"]), None
+                (p for p in [*nav.candidates, *station_choices, *([nav.selected] if reference and nav.selected else [])]
+                 if p["handle"] == (reference or arguments["place_handle"])), None
             )
             if not selected:
                 return {
@@ -421,10 +437,26 @@ class NavigationWorkflow:
                     "message": "Danh sách địa điểm đã thay đổi. Bạn tìm lại nhé.",
                     "error_code": "stale_place",
                 }
+            if reference and not satisfies_area(selected, DestinationSpec.from_arguments(arguments).area):
+                return {"status": "blocked", "message": "Địa điểm đã chọn không thuộc khu vực bạn yêu cầu. Bạn tìm lại nhé.",
+                        "error_code": "destination_area_mismatch"}
+            if reference:
+                nav.destination = DestinationSpec.from_arguments(arguments)
         else:
             if not arguments.get("use_search_results"):
                 try:
-                    nav.candidates = await self.search(arguments, nav.origin, representative=representative)
+                    destination = DestinationSpec.from_arguments(arguments)
+                    # Legacy refinement appends a region to query. Merge it
+                    # into the typed slot instead of losing an existing name.
+                    if destination.query() != arguments.get("query") and not destination.area:
+                        scoped = DestinationSpec.from_arguments({"query": arguments["query"]})
+                        destination = destination.model_copy(update={"area": scoped.area})
+                    nav.destination = destination
+                    resolution = await self.places.resolve(destination, nav.origin, representative=representative,
+                                                           with_travel=name == "navigation.search" or bool(arguments.get("nearest")))
+                    nav.candidates = resolution.candidates
+                    if resolution.status == "provider_unavailable":
+                        raise VietMapError("Không kết nối được bản đồ")
                 except VietMapError:
                     nav.revision += 1
                     nav.candidates = []
@@ -448,7 +480,8 @@ class NavigationWorkflow:
                 and any(administrative_match(p, arguments.get("query", "")) for p in nav.candidates)
             ):
                 nav.candidates = [p for p in nav.candidates if administrative_match(p, arguments["query"])]
-                default_region = {"name": arguments["query"]}
+                if not administrative_layer(arguments["query"]):
+                    default_region = {"name": arguments["query"]}
                 representative = True
             nav.revision += 1
             nav.clarification = None
@@ -474,14 +507,32 @@ class NavigationWorkflow:
                         active.pending = {"status": "selecting", "message": nav.clarification["question"]}
                         nav = active
                     return self.result(nav, nav.clarification["question"], "waiting_slot", "navigation.results")
-                question = "Chưa tìm được kết quả phù hợp. Bạn cho thêm địa chỉ hoặc khu vực nhé?"
+                query = arguments.get("query", "")
+                required_slot = resolution.required_slot if not arguments.get("use_search_results") else "area"
+                question = (
+                    f"Mình chưa tìm được {query}. Địa điểm này ở tỉnh/thành hoặc địa chỉ nào?"
+                    if required_slot == "area"
+                    else f"Mình chưa xác minh được {query}. Bạn cho tên địa điểm cụ thể hoặc địa chỉ khác nhé."
+                ) if not arguments.get("category") else (
+                    "Chưa tìm được kết quả phù hợp. Bạn cho thêm địa chỉ hoặc khu vực nhé?"
+                )
                 nav.clarification = {
-                    "phase": "specific",
+                    "phase": "place_area" if required_slot == "area" else "specific",
+                    "destination": nav.destination.model_dump(mode="json") if nav.destination else None,
+                    "query": query,
                     "region": "",
                     "question": question,
                     "revision": nav.revision,
                     "choices": [],
                 }
+                nav.selection_decision = {"resolution": resolution.status, "reason": resolution.reason,
+                                          "required_slot": resolution.required_slot, "queries": resolution.queries} if not arguments.get("use_search_results") else None
+                if has_active_journey(session.navigation):
+                    active = session.navigation.model_copy(deep=True)
+                    active.revision, active.request_id = nav.revision, nav.request_id
+                    active.candidates, active.clarification = [], nav.clarification
+                    active.pending = {"status": "selecting", "message": question}
+                    nav = active
                 return self.result(nav, question, "waiting_slot", "navigation.results")
             decision = None
             nav.selection_decision = None
@@ -489,18 +540,24 @@ class NavigationWorkflow:
                 decision = await decide_place(
                     self.resolver,
                     effective_provider,
-                    arguments.get("query", ""),
+                    (nav.destination.model_copy(update={"area": None}).query() if nav.destination and nav.destination.area and nav.destination.area.constraint == "preferred"
+                     else arguments.get("query", "")),
                     nav.candidates,
                     nearest=bool(arguments.get("nearest")),
                 )
             nav.selection_decision = decision
+            if decision and not arguments.get("use_search_results"):
+                nav.selection_decision = {**decision, "resolution": resolution.status,
+                                          "evidence": resolution.evidence, "queries": resolution.queries}
             if decision and decision["mode"] == "propose":
                 selected = next(p for p in nav.candidates if p["handle"] == decision["handle"])
                 selected["selection_decision"] = decision
             elif representative and len(nav.candidates) == 1:
                 selected = nav.candidates[0]
                 selected["representative"] = True
-                selected["spoken_label"] = "Điểm đại diện " + selected["name"]
+                selected["spoken_label"] = "Điểm đại diện " + place_label(selected)
+                if default_region and not default_region.get("representative_label"):
+                    default_region = {**default_region, "representative_label": "điểm đại diện " + place_label(selected)}
             else:
                 message = (
                     "Chọn điểm đến cụ thể: " if arguments.get("destination_scope") == "region" else ""
@@ -568,13 +625,13 @@ class NavigationWorkflow:
         if selected_plan:
             nav.route = self.compose_route(selected_plan)
         nav.status = "preview"
-        if default_region:
+        if default_region and not center_requested(binding_arguments.get("query")):
             nav.summary = route_summary(nav, ask_start=False)
             label = default_region.get("representative_label", "trung tâm " + default_region["name"])
-            question = f"Mình lấy {label}. Bạn muốn đổi sang địa điểm cụ thể khác không?"
+            question = f"Mình đề xuất {label}. Bạn xác nhận dùng điểm này nhé, hoặc nói địa điểm muốn đổi."
             nav.clarification = {
                 "region": default_region["name"],
-                "phase": "change_destination",
+                "phase": "confirm_destination",
                 "revision": nav.revision,
                 "question": question,
                 "choices": [
@@ -601,97 +658,13 @@ class NavigationWorkflow:
         return await self.preview(event, nav, step, binding_arguments, command_id, session.navigation)
 
     async def search(self, arguments, origin, *, representative=False):
-        category = arguments.get("category")
-        categories = getattr(self.services, "navigation_categories", {}) or {}
-        # Without a verified category code use a bounded alias query plus a
-        # local POI identity check, rather than fabricating a vendor code.
-        kwargs = {"near": coordinates(origin)}
-        if representative:
-            kwargs["layers"] = "WARD" if region_for(arguments["query"].split(",")[0]) is None else "CITY"
-        if category and categories.get(category):
-            kwargs["category"] = categories[category]
-        places = await self.services.navigation.search(arguments["query"], **kwargs)
-        missing = [place for place in places[:10] if place.lat is None or place.lng is None]
-        details = await read_many(
-            self.services.navigation, [("place", (place.ref_id,), {}) for place in missing]
-        )
-        details = dict(zip((place.ref_id for place in missing), details))
-        candidates = []
-        for place in places[:10]:
-            if representative and not administrative_match(place.model_dump(), arguments["query"].split(",")[0]):
-                continue
-            if representative and "," in arguments["query"]:
-                from src.vivi.text import normalize_text
-
-                region = region_for(arguments["query"].split(",")[-1].strip())
-                if region and not any(
-                    normalize_text(b.get("name", "")) == normalize_text(region["name"]) for b in place.boundaries
-                ):
-                    continue
-            if category and not categories.get(category):
-                from src.vivi.dialogue.parser import poi_matches
-
-                if not poi_matches(place.name, category):
-                    continue
-            if place.lat is None or place.lng is None:
-                detail = details.get(place.ref_id)
-                if detail is None or isinstance(detail, Exception):
-                    continue
-                place = place.model_copy(
-                    update={"lat": detail.lat, "lng": detail.lng, "address": place.address or detail.address}
-                )
-                if category and not categories.get(category) and not poi_matches(place.name, category):
-                    continue
-            if place.lat is None or place.lng is None:
-                continue
-            value = place.model_dump()
-            if not representative and not category:
-                from src.vivi.dialogue.parser import place_query_matches
-
-                if not place_query_matches(arguments["query"], value):
-                    continue
-            if all(p["ref_id"] != value["ref_id"] for p in candidates):
-                candidates.append(
-                    {
-                        **value,
-                        "handle": "place:" + str(uuid4()),
-                        "category": category,
-                        "spoken_label": place_label(value),
-                        "short_address": short_address(value.get("address", "")),
-                    }
-                )
-            if len(candidates) == 5:
-                break
-        candidates = distinct_places(candidates)
-        distances = None
-        if candidates and hasattr(self.services.navigation, "matrix"):
-            try:
-                distances = await self.services.navigation.matrix([coordinates(origin), *map(coordinates, candidates)])
-            except Exception:
-                pass
-        reachable = []
-        indexed = [
-            (index, place) for index, place in enumerate(candidates)
-            if not (distances and index < len(distances) and (distances[index] is None or distances[index] < 0))
-        ]
-        routes = await read_many(self.services.navigation, [
-            ("route", (coordinates(origin), coordinates(place)), {}) for _, place in indexed
-        ])
-        for (index, place), route in zip(indexed, routes):
-            if isinstance(route, Exception):
-                continue
-            place["distance_m"], place["duration_s"] = route.distance_m, route.duration_s
-            place["_rank_distance"] = (
-                distances[index]
-                if distances and index < len(distances) and distances[index] is not None
-                else route.distance_m
-            )
-            reachable.append(place)
-        if arguments.get("nearest"):
-            reachable.sort(key=lambda p: p["_rank_distance"])
-        for place in reachable:
-            place.pop("_rank_distance")
-        return reachable[:3]
+        """Compatibility list API over the shared PlaceResolver."""
+        destination = DestinationSpec.from_arguments(arguments)
+        result = await self.places.resolve(destination, origin, representative=representative,
+                                           with_travel=arguments.get("_travel", True))
+        if result.status == "provider_unavailable":
+            raise VietMapError("Không kết nối được bản đồ")
+        return result.candidates
 
     async def revalidate_preview(self, event, nav, current, step, arguments, command_id):
         observed = await self.services.action_gateway.vehicle.get_state(event.session_id)
@@ -772,7 +745,40 @@ class NavigationWorkflow:
         candidate.waypoint_routes = [route.model_dump()]
         candidate.route = route.model_dump()
 
-    async def plan_energy(self, nav, soc, provider):
+    def station_basis(self, nav):
+        assumptions = getattr(self.discovery, "assumptions", None)
+        return fingerprint({
+            "destination": coordinates(nav.selected),
+            "trip_kind": nav.trip_kind,
+            "profile": self.energy.profile.model_dump(mode="json"),
+            "assumptions": assumptions.model_dump(mode="json") if assumptions else None,
+            "equipment": [s.model_dump(mode="json") for s in getattr(self.discovery, "equipment", [])],
+        })
+
+    async def cached_discovery(self, nav, basis):
+        from src.vivi.navigation.charging import StationDiscovery, reproject_stations
+
+        previous = nav.energy or {}
+        search = previous.get("station_search") or {}
+        if previous.get("status") != "planned" or search.get("basis") != basis:
+            return None
+        try:
+            observed = datetime.fromisoformat(search["observed_at"])
+            age = (datetime.now(UTC) - observed).total_seconds()
+            if not 0 <= age <= 600:
+                return None
+            stations = [ChargingStation.model_validate(s) for s in previous.get("corridor_stations", [])]
+        except (KeyError, TypeError, ValueError):
+            return None
+        stations = await asyncio.to_thread(reproject_stations, stations, nav.route, self.discovery.radius_m)
+        if not stations:
+            return None
+        return StationDiscovery(
+            stations=stations, observed_at=search["observed_at"],
+            incomplete=search.get("incomplete", False), errors=list(search.get("errors", [])),
+        )
+
+    async def plan_energy(self, nav, soc, provider, *, reuse_stations=True):
         assessment = self.energy.assess(nav.route, soc)
         if not self.energy.profile:
             return assessment, []
@@ -790,23 +796,39 @@ class NavigationWorkflow:
             return {**assessment, "selected_plan": choices[0]}, choices
         started = time.monotonic()
         if self.discovery:
-            from src.vivi.navigation.charging import StationDiscovery
+            from src.vivi.navigation.charging import StationDiscovery, VietMapChargingDiscovery
 
-            try:
-                async with asyncio.timeout(read_budget(getattr(self.discovery, "budget_seconds", 8))):
-                    work = self.discovery.discover(nav.route)
-                    discovered = await self.services.navigation.run_read(work) if hasattr(
-                        self.services.navigation, "run_read"
-                    ) else await work
-            except TimeoutError:
-                discovered = StationDiscovery(incomplete=True, errors=["station_search_budget"])
+            basis = self.station_basis(nav)
+            discovered = await self.cached_discovery(nav, basis) if reuse_stations else None
+            cache_hit = discovered is not None
+            if discovered is None:
+                try:
+                    budget = read_budget(getattr(self.discovery, "budget_seconds", 8))
+                    # The built-in discovery owns its deadline and returns partial
+                    # results. An identical outer deadline used to discard them.
+                    work = (
+                        self.discovery.discover(nav.route, budget_seconds=budget)
+                        if isinstance(self.discovery, VietMapChargingDiscovery)
+                        else self.discovery.discover(nav.route)
+                    )
+                    async with asyncio.timeout(None if isinstance(self.discovery, VietMapChargingDiscovery) else budget):
+                        discovered = (
+                            await self.services.navigation.run_read(work)
+                            if hasattr(self.services.navigation, "run_read")
+                            else await work
+                        )
+                except TimeoutError:
+                    discovered = StationDiscovery(incomplete=True, errors=["station_search_budget"])
             stations = discovered.stations
             assessment["station_search"] = {
                 "source": "vietmap",
                 "observed_at": discovered.observed_at,
                 "incomplete": discovered.incomplete,
                 "errors": discovered.errors,
+                "basis": basis,
+                "cache_hit": cache_hit,
             }
+            assessment["corridor_stations"] = [s.model_dump(mode="json") for s in stations]
         else:
             # Explicit offline/test adapters can still use their own catalogue.
             # Production wires the live provider, with no synthetic fallback.
@@ -825,11 +847,12 @@ class NavigationWorkflow:
         points = {"origin": origin, "destination": destination, **{s.id: (s.lat, s.lng) for s in stations}}
         if round_trip:
             points["return"] = origin
+
         async def collect_edges(pairs):
             pairs = list(pairs)
-            results = await read_many(self.services.navigation, [
-                ("route", (points[a], points[b]), {}) for a, b in pairs
-            ])
+            results = await read_many(
+                self.services.navigation, [("route", (points[a], points[b]), {}) for a, b in pairs]
+            )
             for (a, b), result in zip(pairs, results):
                 if isinstance(result, (VietMapError, TimeoutError)):
                     assessment["routing_incomplete"] = True
@@ -865,12 +888,34 @@ class NavigationWorkflow:
                         <= nav.route["distance_m"] + self.discovery.max_detour_m
                     ]
                 powered = EnergyPlanner(self.energy.profile, stations).compatible_stations()
+                progress = {s.id: s.route_progress_m for s in powered}
+                capacities = {s.id: s.max_soc for s in powered}
+                from src.vivi.navigation.charging import distance
+
                 await collect_edges(
                     (a, b)
                     for a in ["origin", *(["destination"] if round_trip else []), *(s.id for s in powered)]
                     if a != "destination" or round_trip
                     for b in ["destination", *(["return"] if round_trip else []), *(s.id for s in powered)]
-                    if b != "origin" and a != b and (a, b) not in edges
+                    if b != "origin"
+                    and a != b
+                    and (a, b) not in edges
+                    # One-way corridor plans visit later route segments. Avoid
+                    # expanding permutations that drive back through earlier
+                    # chargers and exhaust the bounded solver before arrival.
+                    and not (
+                        self.discovery
+                        and not round_trip
+                        and a in progress
+                        and b in progress
+                        and progress[a] is not None
+                        and progress[b] is not None
+                        and progress[b] <= progress[a]
+                    )
+                    # Air distance is a lower bound on every road route. Do
+                    # not request roads that cannot fit even a full charge.
+                    and self.energy.soc_cost(distance(points[a], points[b]))
+                    <= capacities.get(a, soc if a == "origin" else 100) - self.energy.reserve
                 )
         except TimeoutError:
             logger.warning("Charging route calculation budget exceeded", exc_info=True)
@@ -937,6 +982,10 @@ class NavigationWorkflow:
         choices = self.energy.solve(
             origin, destination, soc, edges, powered, waypoints=waypoints, allowed_stations_by_phase=allowed
         )
+        if not choices and self.discovery and assessment["station_search"].get("cache_hit"):
+            # A changed road corridor may require additional stations even when
+            # old POIs remain nearby. Refresh once rather than declaring failure.
+            return await self.plan_energy(nav, soc, provider, reuse_stations=False)
         if self.energy.last_search_incomplete:
             assessment["search_limit_reached"] = True
         high = self.energy.solve(
@@ -1018,20 +1067,6 @@ class NavigationWorkflow:
         nav.selected["spoken_label"] = name
         energy = nav.energy or {}
         suffix = energy.get("message", "")
-        plan = energy.get("selected_plan")
-        if plan:
-            suffix = f" Dự kiến còn khoảng {math.floor(plan['arrival_soc'])}% pin khi đến."
-            if plan["stops"]:
-                suffix += (
-                    " Dừng sạc: "
-                    + "; ".join(
-                        f"{station_label(s)}"
-                        + (f", gần {s['road_context']}" if s.get("road_context") else "")
-                        + f" khoảng {math.ceil(s['charge_minutes'])} phút"
-                        for s in plan["stops"]
-                    )
-                    + "."
-                )
         if energy.get("status") in {
             "no_feasible_plan",
             "charging_required",
@@ -1157,7 +1192,10 @@ class NavigationWorkflow:
         nav.candidates, nav.clarification, nav.pending = [], None, None
         result = self.result(
             nav,
-            "Đã thay tuyến. Chuyển D để tiếp tục." if keep_parked else "Đã bắt đầu dẫn đường.",
+            "Đã thay tuyến. Chuyển D để tiếp tục."
+            if keep_parked
+            else "Đã bắt đầu dẫn đường."
+            + (" " + next_leg_message(nav) if ((nav.energy or {}).get("selected_plan") or {}).get("stops") else ""),
             "completed",
             "navigation.start",
         )
@@ -1251,7 +1289,7 @@ class NavigationWorkflow:
         except ValueError as exc:
             return {"status": "blocked", "message": str(exc), "error_code": "simulation_policy"}
         nav.status, nav.resume_status = nav.resume_status, None
-        result = self.result(nav, "Đã chuyển D, tiếp tục hành trình.", "completed", "navigation.resume")
+        result = self.result(nav, resume_message(nav), "completed", "navigation.resume")
         result["vehicle_state"] = vehicle.model_dump(mode="json")
         return result
 
@@ -1556,7 +1594,14 @@ class NavigationWorkflow:
                 nav.status = "completed"
                 await vehicle_effect(self.services.action_gateway.vehicle.set_driving, event.session_id, False)
         nav.applied_events = [*nav.applied_events[-99:], value.id]
-        result = self.result(nav, "", "completed", "navigation.progress")
+        message, ui_type = "", "navigation.progress"
+        if value.kind == "progress" and nav.status == "charging" and session.navigation.status != "charging":
+            message, ui_type = charging_message(nav), "navigation.charging"
+        elif value.kind == "charge" and nav.stop_index > session.navigation.stop_index:
+            message, ui_type = "Đã sạc đủ pin. " + next_leg_message(nav), "navigation.next_leg"
+        result = self.result(nav, message, "completed", ui_type)
+        if message:
+            result["ui_events"][0].update(message=message, id=value.id, route_id=nav.route_id)
         if value.kind in {"progress", "charge"}:
             observed = await self.services.action_gateway.vehicle.get_state(event.session_id)
             result["vehicle_state"] = observed.model_dump(mode="json")

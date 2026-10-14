@@ -16,7 +16,7 @@ function harness(events) {
     state: {busy: false, sound: false, llmProvider: 'google'}, API_BASE: 'http://test', sessionId: 'driver', DOCK_BY_INTENT: {},
     document: {createElement: () => ({}), body: {classList: {remove() {}}}},
     $: selector => selector === '#turn-steps' ? container : {value: ''},
-    handleSpeakerCommand: () => false, rememberEdgeCommand() {}, lockControls() {},
+    handleSpeakerCommand: () => false, rememberEdgeCommand() {}, lockControls() {}, renderAnswerSources() {},
     setPhase: (...args) => phases.push(args), updateModelStatus() {}, say() {},
     applyBackendState() {throw new Error('No new observation must preserve UI car state');},
     speak: async text => speech.push(text), wait: async () => {},

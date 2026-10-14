@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import json
 import time
 from contextvars import ContextVar
 from dataclasses import replace
@@ -115,6 +116,7 @@ class NavigationService:
         adapted = replace(services, navigation=ReadClient(services.navigation) if services.navigation else None)
         self.workflow = NavigationWorkflow(adapted, ledger, resolver)
         self.trips = TripWorkflow(adapted, ledger, resolver)
+        self.trips.places = self.workflow.places
         self.workflow.energy = MeasuredEnergy(self.workflow.energy)
         self.trips.energy = MeasuredEnergy(self.trips.energy)
         self.transitions = NavigationTransitions(self.vehicle, self.workflow.energy)
@@ -131,16 +133,18 @@ class NavigationService:
     async def hydrate(self, session, session_id):
         key = self.key(session_id)
         if key not in self._cache:
-            stored = await self.repository.run(self.repository.load, key)
-            self._cache[key] = stored or domain_payload(session)
-        state = session.model_copy(deep=True)
-        data = {**state.model_dump(mode="json"), **self._cache[key]}
+            stored = await self.repository.run(self.repository.load_payload, key)
+            self._cache[key] = stored or json.dumps(domain_payload(session), ensure_ascii=False)
+        # Domain values are replaced from the repository. Do not copy and
+        # serialize the old geometry first; isolate the cached dictionaries.
+        # Cache immutable JSON; parsing it isolates mutable state considerably
+        # faster than recursively deep-copying duplicated route point arrays.
+        data = {**session.model_dump(mode="json", exclude=DOMAIN_FIELDS), **json.loads(self._cache[key])}
         return SessionState.model_validate(data)
 
     async def save(self, session, session_id, *, receipt=None, invalidate=False):
         key = self.key(session_id)
-        await self.repository.run(self.repository.save, key, session, receipt)
-        self._cache[key] = domain_payload(session)
+        self._cache[key] = await self.repository.run(self.repository.save, key, session, receipt)
         if invalidate:
             self._generations[key] = self.generation(key) + 1
         return session
@@ -188,7 +192,7 @@ class NavigationService:
         """Persist only explicit domain changes from a dialogue reducer node."""
         ignored = {"snapshot_sequence", "control_revision", "control_receipts"}
         fields = DOMAIN_FIELDS - ignored
-        if session.model_dump(mode="json", include=fields) == before.model_dump(mode="json", include=fields):
+        if all(getattr(session, field) == getattr(before, field) for field in fields):
             return await self.hydrate(session, session_id)
         key = self.key(session_id)
         async with self.lock(key):
@@ -346,6 +350,24 @@ class NavigationService:
         lock = self.lock(key)
         async with lock:
             session = await self.synchronize(session, event.session_id)
+            if event.question_reply:
+                question = session.dialogue_question
+                owner = session.trip_plan if question and question.owner == "trip" else session.navigation
+                target = (getattr(owner, "id", None) or getattr(owner, "request_id", None)
+                          or getattr(owner, "route_id", None) or "navigation")
+                task_bound = question and question.task_id and question.target_id == question.step_id
+                if task_bound:
+                    task = session.active
+                    revision = question.revision + (1 if question.purpose == "collect_slot" else 0)
+                    valid_target = (task is not None and task.id == question.task_id
+                                    and task.revision == revision and step.id == question.target_id)
+                else:
+                    valid_target = (question is not None and owner is not None
+                                    and owner.revision == question.revision and target == question.target_id)
+                if (question is None or question.id != event.question_reply.question_id
+                    or not valid_target):
+                    return {"status": "blocked", "message": "Câu hỏi đã thay đổi. Bạn chọn lại nhé.",
+                            "error_code": "stale_question"}
             name = step.draft.capability
             if name in {"navigation.set_gear", "navigation.stop", "navigation.end"}:
                 value = {

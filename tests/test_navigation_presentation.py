@@ -10,7 +10,7 @@ from src.vivi.navigation.presentation import choice_message, locality, place_lab
 from src.vivi.navigation.vietmap import Place, Route
 from tests.test_dialogue_v2 import ScriptedModel, build, invoke
 from tests.test_long_term_memory import services as services
-from tests.test_navigation_workflow import HANOI, STOP, IntercityMaps, profile, station
+from tests.test_navigation_workflow import HANOI, STOP, IntercityMaps, profile, progress, station
 
 
 class LoggedCoffeeMaps:
@@ -216,7 +216,12 @@ async def test_charging_speech_rounds_minutes_but_preserves_calculation(services
         result = await invoke(graph, "chỗ đầu tiên", "choose")
         plan = result["navigation"]["energy"]["selected_plan"]
         assert plan["stops"][0]["charge_minutes"] == pytest.approx(10.4)
-        assert "khoảng 11 phút" in result["response_text"]
+        assert "dừng sạc 1 lần" in result["response_text"]
+        assert "11 phút" not in result["response_text"]
+        started = await invoke(graph, "đồng ý", "start")
+        assert "trạm sạc thứ 1" in started["response_text"]
+        arrived = await progress(graph, started["navigation"], "to-station", kind="progress", distance_m=50000)
+        assert "khoảng 11 phút" in arrived["response_text"]
         assert "10.4" not in result["response_text"] and "mô phỏng" not in result["response_text"]
         assert plan["simulated"] and result["navigation"]["energy"]["simulated"]
     finally:

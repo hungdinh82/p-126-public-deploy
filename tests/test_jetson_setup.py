@@ -4,12 +4,24 @@ import ctypes
 import hashlib
 import subprocess
 import sys
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 from scripts import check_jetson_runtime, prepare_ort_metadata, prepare_ort_platform, prepare_speech_models
 from scripts.smoke_jetson_profile import stop
+
+
+def test_sdk_activation_includes_jetpack_cudla_without_interactive_shell():
+    script = Path(__file__).resolve().parents[1] / "scripts/jetson_profile.sh"
+    result = subprocess.run([
+        "bash", "-c", 'source "$1"; jetson_activate_sdk; printf "%s" "$LD_LIBRARY_PATH"',
+        "bash", str(script),
+    ], env={"PATH": "/usr/bin:/bin", "HOME": "/tmp"}, check=True, capture_output=True, text=True)
+    libraries = result.stdout.split(":")
+    assert "/usr/local/cuda-11.4/lib64" in libraries
+    assert libraries.index("/usr/local/cuda-11.8/lib64") < libraries.index("/usr/local/cuda-11.4/lib64")
 
 
 def test_eigen_metadata_changes_only_verified_dependency_and_preserves_backup(tmp_path):

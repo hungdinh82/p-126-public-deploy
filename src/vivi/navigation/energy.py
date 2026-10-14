@@ -176,9 +176,19 @@ class EnergyPlanner:
         reserve = reserve or self.reserve
         waypoints = waypoints or ["destination"]
         nodes = {s.id: s for s in stations}
+        forward_only = (
+            len(waypoints) == 1
+            and all(s.route_progress_m is not None for s in stations)
+            and all(
+                nodes[a].route_progress_m < nodes[b].route_progress_m for a, b in edges if a in nodes and b in nodes
+            )
+        )
         frontier = [("origin", float(soc), 0.0, [], [], frozenset(), 0)]
         solutions = []
-        for _ in range((min(len(stations), 5) + 1) * len(waypoints)):
+        # Visiting a station does not necessarily mean charging there. The
+        # previous five-visit bound could stop a valid long corridor before
+        # its final leg even though all discovered road edges were feasible.
+        for _ in range((min(len(stations), 24) + 1) * len(waypoints)):
             following, labels = [], {}
             for current, arrival, elapsed, stops, legs, visited, phase in frontier:
                 available = allowed_stations_by_phase.get(phase, []) if allowed_stations_by_phase is not None else nodes
@@ -270,7 +280,10 @@ class EnergyPlanner:
                                 )
                             )
             for item in following:
-                key = (item[0], item[6], item[5], len(item[3]))
+                # In a forward-only corridor, an earlier station cannot be
+                # visited again; visited-set permutations do not affect future
+                # feasibility. Keep the SOC/time frontier by node/stop count.
+                key = (item[0], item[6], None if forward_only else item[5], len(item[3]))
                 existing = labels.setdefault(key, [])
                 if any(old[1] >= item[1] and old[2] <= item[2] for old in existing):
                     continue

@@ -86,8 +86,30 @@ PY
   echo 'Next: bash scripts/jetson_ai.sh setup --profile agx'
 )
 
+install_tensorrt_sdk() {
+  jetson_platform
+  jetson_trt_check >/dev/null 2>&1 && { echo 'TensorRT SDK already ready.'; return; }
+  local version
+  version="$(dpkg-query -W -f='${Version}' libnvinfer8)"
+  [[ "$version" =~ ^8\.5\.2([.-]|$) ]] || { echo 'Expected existing JetPack TensorRT 8.5.2 runtime; do not upgrade JetPack.' >&2; return 1; }
+  local packages=("libnvinfer-dev=$version" "libnvinfer-plugin8=$version" "libnvinfer-plugin-dev=$version"
+                  "libnvonnxparsers8=$version" "libnvonnxparsers-dev=$version")
+  local plan="$VIVI_DATA/cache/system/apt-tensorrt-plan.txt"
+  mkdir -p "$(dirname "$plan")" "$VIVI_DATA/cache/apt/partial"
+  sudo apt-get --simulate --no-install-recommends install "${packages[@]}" > "$plan"
+  cat "$plan"
+  if grep -Eq '^Remv |^Inst (nvidia-l4t-|linux-image-|linux-headers-|libnvinfer8 )' "$plan"; then
+    echo 'TensorRT SDK plan would remove packages or change BSP/runtime; inspect plan.' >&2; return 1;
+  fi
+  sudo apt-get -y --no-install-recommends -o "Dir::Cache::archives=$VIVI_DATA/cache/apt" install "${packages[@]}"
+  jetson_trt_check
+}
+
 case "${1:-check}" in
   check) jetson_platform; jetson_sdk_check; echo 'System prerequisites ready.' ;;
-  install) system_install ;;
+  install)
+    [[ $# == 1 || ( $# == 2 && "$2" == --tensorrt ) ]] || { echo 'Usage: install [--tensorrt]' >&2; exit 2; }
+    system_install
+    if [[ "${2:-}" == --tensorrt ]]; then install_tensorrt_sdk; fi ;;
   *) echo 'Usage: bash scripts/jetson_system.sh {check|install}' >&2; exit 2 ;;
 esac

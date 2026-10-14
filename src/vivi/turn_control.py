@@ -12,6 +12,7 @@ class TurnControl:
     dispatched: bool = False
     stage: str = "queue"
     timings: dict = field(default_factory=dict)
+    io_timings: dict = field(default_factory=dict)
     lock: threading.Lock = field(default_factory=threading.Lock)
 
     def cancel(self):
@@ -27,3 +28,12 @@ class TurnControl:
 
 
 current_control: ContextVar[TurnControl | None] = ContextVar("vivi_turn_control", default=None)
+
+
+def record_io(name, started):
+    """Cumulative await time, diagnostic only; never add it to wall-time total."""
+    control = current_control.get()
+    if control is not None:
+        metric = control.io_timings.setdefault(name, {"calls": 0, "latency_ms": 0.0})
+        metric["calls"] += 1
+        metric["latency_ms"] = round(metric["latency_ms"] + (time.perf_counter() - started) * 1000, 2)

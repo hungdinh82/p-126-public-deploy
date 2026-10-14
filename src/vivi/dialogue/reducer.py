@@ -30,6 +30,21 @@ def expire(session: SessionState):
     return state
 
 
+def synchronize_question(session, proposal=None):
+    """The reducer owns the persisted foreground question, including legacy import."""
+    from src.vivi.dialogue.questions import current_question
+
+    session.dialogue_question = current_question(session, proposal)
+    if (session.dialogue_question and session.dialogue_question.expires_at <= datetime.now(UTC)
+        and session.dialogue_question.kind != "confirm_action"):
+        from uuid import uuid4
+
+        session.dialogue_question = session.dialogue_question.model_copy(update={
+            "id": "question:" + str(uuid4()), "expires_at": datetime.now(UTC) + timedelta(minutes=3),
+        })
+    return session
+
+
 def reject_modification(state, task, message):
     """An ambiguous correction changes no slots and revokes prior consent."""
     grants = [s for s in task.steps if s.status in {"waiting_confirmation", "approved"}]
@@ -44,49 +59,12 @@ def reduce_turn(
     session: SessionState, value: SemanticTurn, *, revoke_consent_on_clarify=True
 ) -> tuple[SessionState, str | None]:
     state = expire(session)
-    # A yes/no answers the current typed place question before execution consent.
-    index = state.active.current_index() if state.active else None
-    current = state.active.steps[index] if index is not None else None
-    if (
-        value.act in {"confirm", "deny"}
-        and current
-        and current.status == "waiting_slot"
-        and current.draft.capability.startswith(("navigation.", "trip."))
-    ):
-        prefix = current.draft.capability.split(".")[0]
-        owner = state.trip_plan if prefix == "trip" else state.navigation
-        args = {"plan_id": owner.id, "route_revision": owner.revision} if prefix == "trip" else {}
-        question = owner.clarification or {}
-        action = None
-        if question.get("phase") == "change_destination":
-            kind = "specific" if value.act == "confirm" else "representative"
-            choice = next((c for c in question.get("choices", []) if c["kind"] == kind), None)
-            if choice:
-                action = ActionDraft(
-                    capability=f"{prefix}.refine", arguments={**args, "choice_handle": choice["handle"]}
-                )
-        elif not question and owner.candidates:
-            if value.act == "deny":
-                action = ActionDraft(capability=f"{prefix}.refine", arguments={**args, "reject_candidates": True})
-            elif len(owner.candidates) == 1:
-                action = ActionDraft(
-                    capability=f"{prefix}.select", arguments={**args, "place_handle": owner.candidates[0]["handle"]}
-                )
-        if action:
-            value = SemanticTurn(act="request", actions=[action])
-    if value.act in {"confirm", "deny"} and current is None and state.navigation_focus == "navigation":
-        nav = state.navigation
-        candidate = (nav.pending or {}).get("navigation") or nav.model_dump(mode="json")
-        if (candidate.get("offer") or {}).get("status") == "pending" and not candidate.get("clarification"):
-            value = SemanticTurn(
-                act="request",
-                actions=[
-                    ActionDraft(
-                        capability="navigation.start" if value.act == "confirm" else "navigation.decline",
-                        arguments={"route_revision": nav.revision},
-                    )
-                ],
-            )
+    if value.act in {"confirm", "deny"}:
+        from src.vivi.dialogue.answers import AnswerResolver
+
+        answer = AnswerResolver().resolve("", state, act=value.act)
+        if answer and answer.actions:
+            value = answer
     # All tiers, including typed UI, validate references before changing a task.
     for draft in value.drafts():
         if not draft.capability.startswith(("trip.", "navigation.")):
@@ -117,25 +95,6 @@ def reduce_turn(
             places = [*owner.candidates, *(energy or {}).get("station_candidates", [])] if owner else []
             if not any(place.get("handle") == args.place_handle for place in places):
                 return state, "Địa điểm đã thay đổi. Bạn chọn lại nhé."
-    plan = state.trip_plan
-    if (
-        plan
-        and state.navigation_focus == "trip"
-        and plan.offer
-        and plan.offer.get("status") == "pending"
-        and not plan.clarification
-        and value.act in {"confirm", "deny"}
-        and (not state.active or state.active.current_index() is None)
-    ):
-        value = SemanticTurn(
-            act="request",
-            actions=[
-                ActionDraft(
-                    capability="trip.start" if value.act == "confirm" else "trip.decline",
-                    arguments={"plan_id": plan.id, "route_revision": plan.revision},
-                )
-            ],
-        )
     # A selection is a slot answer to the existing route step, including UI
     # events. Keep the task and its remaining steps instead of replacing them.
     current_index = state.active.current_index() if state.active else None
@@ -153,22 +112,28 @@ def reduce_turn(
                 return state, "Yêu cầu đã thay đổi. Bạn chọn lại nhé."
             if current.draft.capability.split(".")[0] == incoming.capability.split(".")[0]:
                 prefix = incoming.capability.split(".")[0] + "."
+                whole_task = value.task_ref == "active"
                 for item in state.active.steps:
-                    if item.draft.capability.startswith(prefix) and item.status not in {"completed", "unknown", "running"}:
+                    if (whole_task or item.draft.capability.startswith(prefix)) and item.status not in {"completed", "unknown", "running"}:
                         item.status, item.confirmation = "cancelled", None
                 state.active.revision += 1
-                if prefix == "navigation.":
-                    nav = state.navigation
-                    nav.revision += 1
-                    nav.pending, nav.offer, nav.clarification, nav.candidates = None, None, None, []
-                    if nav.status in {"preview", "selecting"}:
-                        nav.status, nav.route, nav.selected, nav.energy = "idle", None, None, None
-                    state.navigation = nav
-                elif state.trip_plan:
-                    state.trip_plan.revision += 1
-                    state.trip_plan.calculation_status = "cancelled"
-                    state.trip_plan.offer, state.trip_plan.clarification = None, None
-                return state, None if state.active.current_index() is not None else "Đã huỷ yêu cầu lập tuyến."
+                if not whole_task:
+                    # A component cancel (e.g. the trip UI) keeps independently
+                    # requested steps. A bare voice cancel targets the whole task.
+                    if prefix == "navigation.":
+                        nav = state.navigation
+                        nav.revision += 1
+                        nav.pending, nav.offer, nav.clarification, nav.candidates = None, None, None, []
+                        if nav.status in {"preview", "selecting"}:
+                            nav.status, nav.route, nav.selected, nav.energy = "idle", None, None, None
+                        state.navigation = nav
+                    elif state.trip_plan:
+                        state.trip_plan.revision += 1
+                        state.trip_plan.calculation_status = "cancelled"
+                        state.trip_plan.offer, state.trip_plan.clarification = None, None
+                    return state, None if state.active.current_index() is not None else "Đã huỷ yêu cầu lập tuyến."
+                # Schedule the whole-task cancellation through the domain writer
+                # to revoke the saved route proposal without running later steps.
         if (
             incoming.capability in {"trip.select", "trip.refine", "trip.start"}
             and current.status == "waiting_slot"
@@ -232,10 +197,6 @@ def reduce_turn(
         )
         return state, value.text or "Bạn nói rõ thao tác muốn thực hiện ngay nhé."
     if value.act in {"clarify", "unsupported", "reply"}:
-        if value.act == "reply" and state.active and any(s.status == "offer" for s in state.active.steps):
-            for step in state.active.steps:
-                if step.status == "offer":
-                    step.status = "cancelled"
         return state, value.text or "Bạn nói rõ yêu cầu nhé."
     if value.act in {"confirm", "deny"} and value.task_ref != "active":
         return state, "Mình đã bỏ qua yêu cầu đó." if value.act == "deny" else "Mình chưa có đề xuất đang chờ xác nhận."

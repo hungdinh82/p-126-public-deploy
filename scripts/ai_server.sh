@@ -14,8 +14,7 @@ if [[ "$(uname -m)" == aarch64 ]]; then
 fi
 case "$action" in
   setup)
-    [[ $# == 0 ]] || { echo 'PC setup does not accept arguments.' >&2; exit 2; }
-    bash scripts/setup_ai_ui.sh
+    bash scripts/setup_ai_ui.sh "$@"
     uv pip install --python .venv/bin/python -r requirements.txt
     ;;
   run)

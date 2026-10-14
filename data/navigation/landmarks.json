@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "note": "Chỉ chuẩn hoá tên thường gọi; không lưu tọa độ. VietMap phải xác minh địa điểm và khu vực.",
+  "landmarks": [
+    {"name": "Hồ Hoàn Kiếm", "region": "Hà Nội", "aliases": ["Hồ Gươm"]},
+    {"name": "Hồ Tây", "region": "Hà Nội", "aliases": []},
+    {"name": "Lăng Chủ tịch Hồ Chí Minh", "region": "Hà Nội", "aliases": ["Lăng Bác"]}
+  ]
+}

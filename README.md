@@ -2,6 +2,16 @@
 
 Contract LangGraph/navigation, migration và kết quả kiểm chứng hiện tại: [Navigation runtime unified-6](docs/navigation_runtime.md).
 
+Hỏi–đáp UI/voice, slot địa điểm và phân giải POI dùng chung: [Conversation generalization](docs/conversation_generalization_runtime.md).
+
+Thời tiết mặc định Hà Nội và cách chọn model knowledge/Wikipedia/web: [Information review 14/10](docs/information_review_2026-10-14.md).
+
+Chủ đề conversation, giới hạn tư vấn và các điểm kiểm soát an toàn: [Topic guardrails](docs/topic_guardrails.md).
+
+Query tham chiếu, timeout tổng hợp và kiểm chứng đơn vị số liệu: [Search reliability 14/10](docs/search_reliability_2026-10-14.md).
+
+Sửa destination, câu dẫn đường kèm giới thiệu và hủy chuỗi thao tác: [Dialogue review — log 1353–1379](docs/dialogue_review_2026-10-14_latest.md).
+
 > Runtime chuẩn sau khi hợp nhất là `src.vivi.api.app:app`; không còn backend `/assist`
 > hay entrypoint thứ hai. Xem [contract runtime](docs/contracts.md),
 > [setup PC](docs/setup_pc.md), [setup Jetson Nano 4 GB](docs/setup_jetson_nano.md) và
@@ -180,6 +190,11 @@ monitor không xoá SQLite history hay long-term memory.
 - `google`, `openai`, `openrouter`: semantic planner qua API, cần khóa tương ứng và
   `rag_local_only = false`. Config repo hiện chọn Google.
 
+Planner Google dùng JSON mode kèm schema trong prompt vì endpoint từ chối schema
+semantic đầy đủ với HTTP 400. Server vẫn kiểm tra `SemanticTurn`, sửa JSON lỗi
+một lần và áp dụng guard/policy trước khi chạy capability. Các đáp án ngắn tiếp
+tục dùng structured output.
+
 Mọi provider và nút điều khiển có kiểu đi qua cùng reducer/scheduler/policy.
 Cloud → local → parser chỉ khi tầng trước lỗi; câu hỏi làm rõ hay policy từ chối
 không gây fallback. Đổi provider giữ nguyên session và pending task. Local chỉ
@@ -301,3 +316,20 @@ Restart backend sau khi build index mới.
 Output handbook được ánh xạ vào `TurnResponse.evidence`; UI hiển thị câu trả lời cùng link
 nguồn trong panel Cẩm nang. `/api/v1/turn/stream` chỉ phát câu trả lời sau khi grounding,
 safety và verify tương ứng đã hoàn tất—không stream sớm nội dung chưa được kiểm chứng.
+
+## Hội thoại và thông tin internet
+
+ViVi hỗ trợ trò chuyện, kiến thức phổ thông và truyện ngắn bằng model đang cấu hình.
+Information Service dùng Tavily cho tìm kiếm web, Open-Meteo cho thời tiết và Wikipedia
+cho thông tin lịch sử/văn hóa. Khi đang tới Ninh Bình, “Ở đó có gì chơi?” lấy điểm đến từ
+NavigationService để tìm thông tin; yêu cầu dẫn đường tới địa điểm được chọn vẫn đi qua
+luồng lập tuyến/xác nhận hiện có. Search được model tổng hợp thành một câu ngắn,
+có kiểm tra nguồn và một lượt sửa đáp án nếu cần; nguồn hiển thị dưới câu trả lời.
+Model chọn mã đoạn bằng chứng thay vì chép lại trích dẫn; server giữ nguyên đoạn
+nguồn, gắn link tương ứng và kiểm tra số liệu trong câu trả lời dựa trên các đoạn đã chọn.
+Model tổng hợp được chọn độc lập với kết quả fallback của planner.
+
+Thêm `TAVILY_API_KEY` vào `.env` để bật live web search; hai nguồn còn lại không cần key.
+Ứng dụng mặc định giới hạn 900 Tavily basic request/tháng. `offline_only` hoặc
+`rag_local_only` chặn mọi HTTP của Information Service. Xem [cấu hình, kiến trúc và giới
+hạn](docs/conversation_open_world_plan.md), bao gồm dự báo ngày và cách xử lý nguồn giá vàng.

@@ -5,9 +5,10 @@ from pathlib import Path
 
 import pytest
 
-from src.vivi.dialogue.contracts import NavigationState, SessionState
+from src.vivi.dialogue.contracts import NavigationState, SemanticTurn, SessionState
 from src.vivi.dialogue.parser import OfflineParser
 from src.vivi.navigation.charging import VietMapChargingDiscovery
+from src.vivi.navigation.destinations import region_for
 from src.vivi.navigation.energy import EnergyPlanner, load_assumptions
 from src.vivi.navigation.vietmap import Place, Route
 from src.vivi.navigation.workflow import NavigationWorkflow
@@ -15,6 +16,81 @@ from tests.test_charging_discovery import DEST, ORIGIN, Maps, equipment, road
 from tests.test_dialogue_v2 import ScriptedModel, build, invoke
 from tests.test_long_term_memory import services as services
 from tests.test_navigation_workflow import profile
+
+
+@pytest.mark.parametrize("query", ["TP.HCM", "TP. HCM", "TPHCM", "trung tâm thành phố Hồ Chí Minh"])
+def test_hcm_abbreviations_and_explicit_center_are_regions(query):
+    assert region_for(query)["name"] == "Hồ Chí Minh"
+    assert region_for("Sport House Tp Hcm") is None
+
+
+def test_new_city_center_cannot_select_an_unrelated_previous_poi():
+    parser = OfflineParser()
+    session = SessionState(
+        navigation=NavigationState(
+            status="selecting",
+            candidates=[
+                {"handle": "place:sport-house", "name": "Sport House Tp Hcm", "address": "Phường TEST"},
+            ],
+        )
+    )
+    semantic = SemanticTurn.model_validate(
+        {
+            "act": "request",
+            "actions": [
+                {"capability": "navigation.select", "arguments": {"place_handle": "place:sport-house"}},
+            ],
+        }
+    )
+    result = parser.guard("Đưa tôi đến trung tâm thành phố Hồ Chí Minh.", semantic, session)
+    assert result.actions[0].capability == "navigation.plan"
+    assert result.actions[0].arguments.destination_scope == "region"
+    assert not result.actions[0].arguments.place_handle
+
+
+@pytest.mark.asyncio
+async def test_log_hcm_search_and_center_use_city_evidence_without_businesses(services, tmp_path):
+    class CityMaps(DestinationMaps):
+        async def search(self, text, **kwargs):
+            self.queries.append((text, kwargs))
+            assert text == "Hồ Chí Minh" and kwargs["layers"] == "CITY"
+            return [
+                Place(
+                    ref_id="hcm",
+                    name="Thành phố Hồ Chí Minh",
+                    address="Việt Nam",
+                    lat=10.77,
+                    lng=106.7,
+                    boundaries=[{"name": "Hồ Chí Minh", "full_name": "Thành phố Hồ Chí Minh"}],
+                )
+            ]
+
+    maps = CityMaps()
+    model = ScriptedModel(
+        [
+            {"act": "request", "actions": [{"capability": "navigation.search", "arguments": {"query": "TP.HCM"}}]},
+            {"act": "reply", "text": "Được nhé"},
+        ]
+    )
+    graph, _, _ = build(replace(services, navigation=maps, energy_planner=EnergyPlanner(profile())), tmp_path, model)
+    graph.default_provider = "google"
+    try:
+        first = await graph.ainvoke(
+            {
+                "session_id": "driver",
+                "turn_id": "city",
+                "input_text": "Hi ViVi, bây giờ tôi muốn đi TP.HCM.",
+                "position": {"lat": 10.78, "lng": 106.69, "simulated": True},
+            }
+        )
+        assert "Hồ Chí Minh" in first["response_text"] and "Sport House" not in first["response_text"]
+        second = await invoke(graph, "Đưa tôi đến trung tâm thành phố Hồ Chí Minh.", "center")
+        assert second["navigation"]["selected"]["ref_id"] == "hcm"
+        assert second["navigation"]["status"] == "preview"
+        assert second["navigation"]["offer"]
+        assert not second["navigation"]["clarification"]
+    finally:
+        graph.close()
 
 
 class DestinationMaps:

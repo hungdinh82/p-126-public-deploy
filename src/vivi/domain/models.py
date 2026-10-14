@@ -5,7 +5,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, model_validator
 
-from src.vivi.dialogue.contracts import ActionDraft
+from src.vivi.dialogue.contracts import ActionDraft, QuestionReply
 from src.vivi.navigation.workflow import NavigationEvent, Position
 
 Intent = Literal[
@@ -222,6 +222,12 @@ class Evidence(BaseModel):
     section: str | None = None
     source_url: str | None = None
     excerpt: str = ""
+    title: str | None = None
+    kind: str | None = None
+    published_at: str | None = None
+    retrieved_at: str | None = None
+    valid_date: str | None = None
+    timezone: str | None = None
 
 
 class TraceSpan(BaseModel):
@@ -240,6 +246,7 @@ class ConfirmationPreview(BaseModel):
 
 
 class TurnRequest(BaseModel):
+    question_reply: QuestionReply | None = None
     action: ActionDraft | None = None
     navigation_event: dict[str, Any] | None = None
     position: dict[str, Any] | None = None
@@ -274,6 +281,9 @@ class TurnRequest(BaseModel):
 
 
 class TurnResponse(BaseModel):
+    pending_question: dict[str, Any] | None = None
+    answer_kind: str | None = None
+    answer_basis: str | None = None
     control_revision: int = 0
     receipt: dict[str, Any] | None = None
     control_receipts: list[dict[str, Any]] = Field(default_factory=list)

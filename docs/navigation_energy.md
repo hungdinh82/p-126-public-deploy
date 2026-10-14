@@ -63,6 +63,14 @@ lên và vẫn nói là ước tính. Không đọc nhãn mô phỏng của dữ
 metadata, nguồn và số liệu tính đầy đủ được giữ trên giao diện. TTS đã phát
 các đoạn trả lời streaming sẽ không đọc lại toàn bộ câu trả lời cuối lượt.
 Lời nhắc đến nơi dùng `spoken_label` do server cung cấp; tên bản đồ vẫn đầy đủ.
+
+Lời xem trước chỉ đọc tổng quãng đường, tổng thời gian (gồm sạc) và số lần
+dừng sạc dự tính. Chi tiết từng trạm vẫn nằm trên giao diện. Khi bắt đầu,
+ViVi báo trạm sạc thứ nhất là điểm đến tiếp theo; đến trạm mới đọc số phút sạc
+ước tính (làm tròn lên, đã gồm thời gian thao tác). Sạc đủ mức pin trong kế
+hoạch thì báo trạm tiếp theo, hoặc đích cuối nếu đã xong các lần sạc.
+HUD hiển thị khoảng cách/ETA tới trạm hiện tại; trong lúc sạc hiển thị số phút
+còn lại. Các tick tiến trình/sạc thông thường không phát lại thông báo.
 Nhấn Bắt đầu trên tuyến đã xem trước chỉ hỏi xác nhận ngắn, không đọc lại
 quãng đường/pin; grant mới vẫn gắn đúng revision và chưa cho xe chạy.
 
@@ -148,14 +156,20 @@ VinFast/V-Green. Công suất rỗng/đầu sạc không tương thích/không t
 khỏi bộ tính; không suy công suất từ tên POI. Trụ từ 250 kW thuộc V-Green/VinFast
 giới hạn 80% theo [chính sách V-Green](https://vgreen.net/vi/tram-sac-o-to-dien).
 
-Discovery lấy tối đa 6 điểm dọc tuyến, tìm `trạm sạc` và `trạm dừng nghỉ` bằng
+Discovery lấy mẫu khoảng mỗi 35km, tối đa 64 điểm dọc tuyến, tìm `trạm sạc` và `trạm dừng nghỉ` bằng
 Autocomplete v4 `circle_center`/`circle_radius`, `layers=POI`. Hydrate tọa độ qua
-Place v4, loại sai loại/ngoài hành lang, deduplicate ref_id. Tối đa 24 chi tiết
-trạm sạc và 12 trạm dừng nghỉ; shortlist 8 trạm để kiểm tra road route. Tên trạm
+Place v4, loại sai loại/ngoài hành lang, deduplicate ref_id. Budget chi tiết
+trạm sạc tăng theo số điểm lấy mẫu (24–128), thêm tối đa 12 trạm dừng nghỉ;
+shortlist 8–24 trạm phân bố theo khoảng cách dọc tuyến để kiểm tra road route. Tên trạm
 dừng nghỉ được liên kết nếu có POI thật trong 300m; lời đọc nói “gần”, không
 khẳng định cùng khuôn viên/cùng chiều. Tên đoạn đường lấy từ bước Route gần
 projection của POI; progress là vị trí tương đối, không phải cột km chính thức.
 Hai chặng origin→trạm→đích bắt buộc có Route; tổng vòng thêm mặc định ≤15km.
+Tuyến một chiều chỉ mở chặng giữa các trạm tiến về phía đích; bỏ yêu cầu Route
+nếu ngay cả khoảng cách đường chim bay cũng vượt tầm pin. Solver giữ frontier
+SOC/thời gian theo node và số lần sạc cho đồ thị chỉ tiến về trước để tránh
+tăng trạng thái theo các tập trạm đã đi qua. Giới hạn thời gian tìm/tính vẫn
+được áp dụng; tuyến thiếu dữ liệu không được coi là hoàn chỉnh.
 Trạm có connector đã biết không tương thích bị loại. Khi đủ pin không gọi
 discovery. API lỗi không dùng trạm synthetic hay file để thay thế vị trí.
 

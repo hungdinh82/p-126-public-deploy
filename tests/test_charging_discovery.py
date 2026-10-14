@@ -133,11 +133,130 @@ async def test_vietmap_search_uses_a_bounded_poi_area():
 
 def test_samples_cover_the_route_and_projection_is_not_an_official_km_marker():
     samples = sample_points(road().model_dump())
-    assert len(samples) == 6 and samples[0] == ORIGIN
+    assert len(samples) == 7 and samples[0] == ORIGIN
     assert samples[-1] == pytest.approx(DEST)
     gap, along, street = route_context(STOP, road().model_dump())
     assert gap < 4000 and 60000 < along < 100000 and street == "Cao tốc TEST"
     assert distance(ORIGIN, ORIGIN) == 0
+
+
+def test_long_route_samples_have_no_large_gaps_between_search_circles():
+    route = road((21, 106), (14.3, 106), 746000).model_dump()
+    samples = sample_points(route)
+    assert len(samples) == 23
+    assert all(distance(a, b) < 35000 for a, b in zip(samples, samples[1:]))
+
+
+@pytest.mark.asyncio
+async def test_long_route_charging_plan_has_coverage_beyond_the_origin(services):
+    from src.vivi.navigation.energy import ChargingAssumptions
+
+    origin, destination = (21, 106), (14.3, 106)
+    route = road(origin, destination, 746000)
+    locations = [(21 - 6.7 * i / 22, 106) for i in range(23)]
+
+    class CorridorMaps:
+        async def search(self, text, *, near, **kwargs):
+            if text == "trạm dừng nghỉ":
+                return []
+            index = min(range(len(locations)), key=lambda i: distance(near, locations[i]))
+            rest = " Trạm Dừng Nghỉ" if index in {6, 14} else ""
+            return [
+                Place(
+                    ref_id=f"corridor-{index}-{j}",
+                    name=f"Trạm Sạc VinFast{rest} TEST {index}-{j}",
+                    lat=locations[index][0],
+                    lng=106,
+                )
+                for j in range(10 if index == 0 else 1)
+            ]
+
+        async def route(self, a, b):
+            return road(a, b, abs(a[0] - b[0]) / 6.7 * 746000)
+
+    maps = CorridorMaps()
+    assumptions = ChargingAssumptions(
+        power_kw=120, max_soc=80, networks=["vgreen"], source="Synthetic test equipment", updated_at="2026-10-12"
+    )
+    discovery = VietMapChargingDiscovery(maps, assumptions=assumptions)
+    found = await discovery.discover(route.model_dump())
+    assert len(found.stations) == 10
+    assert any(250000 < s.route_progress_m < 500000 for s in found.stations)
+    assert all(b.route_progress_m - a.route_progress_m < 190000 for a, b in zip(found.stations, found.stations[1:]))
+    runtime = replace(services, navigation=maps, energy_planner=EnergyPlanner(profile()), charging_discovery=discovery)
+    nav = NavigationState(
+        origin={"lat": origin[0], "lng": origin[1]},
+        selected={"lat": destination[0], "lng": destination[1]},
+        route=route.model_dump(),
+    )
+    energy, plans = await NavigationWorkflow(runtime).plan_energy(nav, 82, "rules")
+    assert energy["status"] == "planned" and plans, str(
+        {
+            k: energy.get(k)
+            for k in ["status", "station_search", "routing_errors", "routing_incomplete", "search_limit_reached"]
+        }
+    )
+    assert len(plans[0]["stops"]) >= 2
+    assert all(s["arrival_soc"] >= 15 and s["departure_soc"] <= 80 for s in plans[0]["stops"])
+    assert plans[0]["arrival_soc"] >= 15
+
+
+def test_solver_can_visit_six_stations_before_the_final_leg():
+    stations = [station(identifier=f"s{i}", lat=21 - i * 0.8, lng=106) for i in range(6)]
+    nodes = ["origin", *(s.id for s in stations), "destination"]
+    edges = {(a, b): road(length=100000).model_dump() for a, b in zip(nodes, nodes[1:])}
+    planner = EnergyPlanner(profile())
+    plans = planner.solve(ORIGIN, DEST, 82, edges, stations)
+    assert plans and len(plans[0]["legs"]) == 7
+    assert plans[0]["arrival_soc"] >= 15
+
+
+@pytest.mark.asyncio
+async def test_north_south_route_retains_full_charging_coverage_with_bounded_edges(services):
+    from src.vivi.navigation.energy import ChargingAssumptions
+
+    origin, destination = (21, 106), (6.6, 106)
+    route = road(origin, destination, 1600000)
+    samples = sample_points(route.model_dump())
+    assert len(samples) == 47
+    assert all(distance(a, b) <= 35000 for a, b in zip(samples, samples[1:]))
+
+    class LongCorridorMaps:
+        def __init__(self):
+            self.roads = []
+
+        async def search(self, text, *, near, **kwargs):
+            if text != "trạm sạc":
+                return []
+            i = min(range(len(samples)), key=lambda i: distance(samples[i], near))
+            return [Place(ref_id=f"long-{i}", name=f"Trạm Sạc VinFast TEST {i}", lat=samples[i][0], lng=samples[i][1])]
+
+        async def route(self, a, b):
+            self.roads.append((a, b))
+            return road(a, b, abs(a[0] - b[0]) / 14.4 * 1600000)
+
+    maps = LongCorridorMaps()
+    assumptions = ChargingAssumptions(
+        power_kw=120, max_soc=80, networks=["vgreen"], source="Test only", updated_at="2026-10-12"
+    )
+    discovery = VietMapChargingDiscovery(maps, assumptions=assumptions)
+    found = await discovery.discover(route.model_dump())
+    assert len(found.stations) == 19
+    assert found.stations[-1].route_progress_m > 1550000
+    assert all(b.route_progress_m - a.route_progress_m <= 105000 for a, b in zip(found.stations, found.stations[1:]))
+    runtime = replace(services, navigation=maps, energy_planner=EnergyPlanner(profile()), charging_discovery=discovery)
+    nav = NavigationState(
+        origin={"lat": origin[0], "lng": origin[1]},
+        selected={"lat": destination[0], "lng": destination[1]},
+        route=route.model_dump(),
+    )
+    energy, plans = await NavigationWorkflow(runtime).plan_energy(nav, 82, "rules")
+    assert energy["status"] == "planned" and plans
+    plan = energy["selected_plan"]
+    assert len(plan["stops"]) >= 7 and plan["arrival_soc"] >= 15
+    assert all(stop["arrival_soc"] >= 15 and stop["departure_soc"] <= 80 for stop in plan["stops"])
+    assert len(maps.roads) < 150
+    assert not energy.get("search_limit_reached")
 
 
 def test_thanhhoa_is_a_region_and_charging_ordinal_uses_the_station_list():
@@ -215,7 +334,7 @@ async def test_discovery_deduplicates_hydrates_and_keeps_real_map_identity():
     assert found.lat == STOP[0] and found.power_kw is None and found.connector == "unknown"
     assert not found.simulated and not result.incomplete
     assert maps.details == ["s1"]
-    assert len(maps.queries) <= 12
+    assert len(maps.queries) <= 48
     assert all(kwargs["layers"] == "POI" and kwargs["radius_m"] == 20000 for _, kwargs in maps.queries)
 
 
@@ -300,7 +419,11 @@ async def test_unusable_stations_are_not_proposed(services, case):
         route=road().model_dump(),
     )
     result, plans = await NavigationWorkflow(services).plan_energy(nav, 30 if case == "low_soc" else 50, "rules")
-    assert result["status"] == ("incomplete" if case == "no_road" else "no_feasible_plan") and not result["station_candidates"] and not plans
+    assert (
+        result["status"] == ("incomplete" if case == "no_road" else "no_feasible_plan")
+        and not result["station_candidates"]
+        and not plans
+    )
 
 
 @pytest.mark.asyncio

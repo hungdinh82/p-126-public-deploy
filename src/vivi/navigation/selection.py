@@ -3,10 +3,13 @@
 import asyncio
 import json
 import math
+import re
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
+from src.vivi.navigation.contracts import DestinationSpec, entity_type
+from src.vivi.navigation.destinations import landmark_query
 from src.vivi.navigation.presentation import short_name
 from src.vivi.text import normalize_text
 
@@ -37,8 +40,81 @@ class PlaceDecision(BaseModel):
     reason: Literal["exact_destination", "nearest_requested", "ambiguous", "insufficient_evidence"]
 
 
+def destination_rank(query, place):
+    target = normalize_text(landmark_query(query).split(",")[0]).strip()
+    name = normalize_text(short_name(place["name"]))
+    return 0 if name == target else 1 if name.startswith(target + " ") else 2
+
+
+def candidate_evidence(query, candidates):
+    destination = DestinationSpec.from_arguments({"query": landmark_query(query)})
+    target = normalize_text(destination.name or "")
+    result = []
+    for place in candidates:
+        name = normalize_text(short_name(place["name"]))
+        kind = entity_type(place["name"])
+        exact = name == target
+        child = target in name and bool(re.search(r"\b(?:t\d+|toa|tang|building|tower|\d+)\b", name))
+        branch = bool(re.search(r"\b(?:chi nhanh|co so|cong|cua|loi vao)\b", name))
+        score = 1.0 if exact else .82 if name.startswith(target + " ") else .6 if target in name else .3
+        result.append({"handle": place["handle"], "exact_name": exact, "name_score": score,
+                       "entity_type": kind, "expected_type": destination.entity_type,
+                       "role": "branch" if branch else "subunit" if child else "street" if kind == "street" else "venue",
+                       "coordinates_known": place.get("lat") is not None and place.get("lng") is not None,
+                       "address_known": bool(place.get("address")),
+                       "score": score})
+    return result
+
+
+def exact_destination(query, candidates):
+    """A general evidence policy; names/brands are not routing eligibility."""
+    destination = DestinationSpec.from_arguments({"query": landmark_query(query)})
+    if not destination.complete():
+        return None
+    evidence = candidate_evidence(query, candidates)
+    exact = [e for e in evidence if e["exact_name"]]
+    if len(exact) != 1:
+        return None
+    winner = exact[0]
+    if any(p.get("match_basis") == "hypothesis" for p in candidates):
+        return None
+    if not winner["coordinates_known"] or not winner["address_known"]:
+        return None
+    public = destination.entity_type in {"lake", "square", "park", "temple", "mausoleum"}
+    if len(candidates) == 1:
+        if not public or not destination.area:
+            return None
+    else:
+        primary = next(p for p in candidates if p["handle"] == winner["handle"])
+        for alternate in evidence:
+            if alternate is winner:
+                continue
+            other = next(p for p in candidates if p["handle"] == alternate["handle"])
+            if alternate["role"] == "branch" or destination.entity_type in {"school", "station"}:
+                return None
+            related = alternate["role"] in {"street", "subunit"} or public and alternate["name_score"] == .82
+            if not related or normalize_text(primary.get("address", "")) != normalize_text(other.get("address", "")):
+                return None
+            if winner["score"] - alternate["score"] < .15:
+                return None
+    return {"mode": "propose", "handle": winner["handle"], "reason": "exact_destination", "source": "rules"}
+
+
 async def decide_place(resolver, provider, query, candidates, *, nearest=False):
     fallback = {"mode": "clarify", "handle": None, "reason": "insufficient_evidence", "source": "fallback"}
+    if any(p.get("match_basis") == "hypothesis" for p in candidates):
+        return {**fallback, "source": "rules"}
+    if nearest and candidates and all(isinstance(p.get("distance_m"), (int, float)) for p in candidates):
+        selected = min(candidates, key=lambda p: p["distance_m"])
+        return {"mode": "propose", "handle": selected["handle"], "reason": "nearest_requested", "source": "rules"}
+    exact = exact_destination(query, candidates)
+    if exact and not nearest:
+        return exact
+    evidence = candidate_evidence(query, candidates)
+    explicit_branch = re.search(r"\b(?:cong|cua|loi vao|chi nhanh|co so)\b", normalize_text(query))
+    if (sum(e["exact_name"] for e in evidence) > 1
+        or any(e["role"] == "branch" for e in evidence) and not explicit_branch):
+        return {"mode": "clarify", "handle": None, "reason": "ambiguous", "source": "rules"}
     if not resolver or provider not in resolver.providers:
         return fallback
     try:

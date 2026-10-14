@@ -31,3 +31,8 @@ def strip_address(text: str) -> str:
     """Drop a leading call to ViVi; a bare call is kept so it can be answered."""
     rest = _ADDRESS.sub("", unicodedata.normalize("NFC", text), count=1)
     return rest if rest.strip() else text
+
+
+def strip_fillers(text: str) -> str:
+    """Drop leading hesitation sounds with punctuation, never a bare consent."""
+    return re.sub(r"^\s*(?:(?:ừm|ờm|ờ|à|uhm|hmm)[,.…:;]+\s*)+(?=\S)", "", text, flags=re.I)

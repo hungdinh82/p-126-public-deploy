@@ -135,7 +135,7 @@ async def test_logged_voice_selection_keeps_task_then_previews_without_driving(s
 
 
 @pytest.mark.asyncio
-async def test_search_routes_run_concurrently_and_selected_route_is_reused(services, tmp_path):
+async def test_ambiguous_plan_routes_only_user_selected_candidate_and_return(services, tmp_path):
     from src.vivi.navigation.vietmap import Place, Route
 
     class Maps(TripMaps):
@@ -170,9 +170,11 @@ async def test_search_routes_run_concurrently_and_selected_route_is_reused(servi
     try:
         result = await graph.ainvoke({"session_id": "driver", "turn_id": "return", "input_text": "đi Sầm Sơn và quay lại",
                                      "position": {"lat": ORIGIN[0], "lng": ORIGIN[1]}})
+        assert result["trip_plan"]["calculation_status"] == "draft" and maps.routes == []
+        result = await graph.ainvoke({"session_id": "driver", "turn_id": "select", "input_text": "chọn số 1"})
         assert result["trip_plan"]["calculation_status"] == "ready"
-        assert maps.peak == 3
-        assert len(maps.routes) == 4  # Three candidates plus return; outbound is not fetched twice.
+        assert maps.peak == 1
+        assert len(maps.routes) == 2  # Only the chosen outbound and return legs.
     finally:
         await graph.aclose()
 
@@ -185,16 +187,24 @@ async def test_timeout_is_logged_with_stage_and_turn_identity(services, tmp_path
     from src.vivi.persistence.event_store import EventStore
 
     class Model:
+        started = False
+
         async def agenerate_json(self, **kwargs):
+            self.started = True
             await asyncio.Future()
 
-    graph, ledger, gateway = build(services, tmp_path, Model())
+    model = Model()
+    graph, ledger, gateway = build(services, tmp_path, model)
+    # Allow SQLite/checkpoint setup to finish; the turn deadline must expire
+    # while interpreting, before the provider's own fallback timeout.
+    graph.navigation.workflow.resolver.providers["google"].budget_seconds = 5
     events = EventStore(Settings(data_dir=tmp_path))
-    orchestrator = LangGraphOrchestrator({"google": graph}, gateway, events, ledger=ledger, timeout_seconds=.05)
+    orchestrator = LangGraphOrchestrator({"google": graph}, gateway, events, ledger=ledger, timeout_seconds=1)
     try:
         with pytest.raises(TimeoutError):
             await orchestrator.run(TurnRequest(session_id="driver", turn_id="timeout", transcript="đi Sầm Sơn"), "google")
         error = events.last_event
+        assert model.started
         assert error["event_type"] == "turn_error" and error["error_code"] == "turn_timeout"
         assert error["stage"] == "interpret" and error["turn_id"] == "timeout"
         assert ledger.turn_status("default:driver", "timeout")["status"] == "interrupted"
@@ -259,7 +269,7 @@ async def test_parking_preempts_candidate_batch_and_fences_all_results(services,
     graph, _, gateway = build(replace(services, navigation=Maps(), energy_planner=EnergyPlanner(profile())), tmp_path)
     pending = asyncio.create_task(graph.ainvoke({
         "session_id": "driver", "turn_id": "search", "input_text": "tính tuyến", "position": {"lat": 21, "lng": 105.8},
-        "action": {"capability": "trip.plan", "arguments": {"query": "Sầm Sơn", "trip_kind": "one_way"}},
+        "action": {"capability": "navigation.search", "arguments": {"query": "Sầm Sơn"}},
     }))
     try:
         await asyncio.wait_for(started.wait(), 2)

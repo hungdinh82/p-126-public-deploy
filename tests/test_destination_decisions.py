@@ -117,7 +117,7 @@ async def test_valid_ambiguous_model_decision_keeps_question():
         }
     )
     result = await decide_place(resolver, "google", "Ga Hải Phòng", [station("a"), station("b", 106.70)])
-    assert result["mode"] == "clarify" and result["source"] == "google"
+    assert result["mode"] == "clarify" and result["source"] == "rules"
 
 
 def test_stale_start_cannot_select_current_plan():

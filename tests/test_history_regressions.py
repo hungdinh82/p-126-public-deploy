@@ -127,7 +127,9 @@ def test_model_query_rewrite_cannot_erase_an_unsafe_original_request(tmp_path):
     result = graph.invoke({"input_text": "Cách tháo pin cao áp", "model_input": {
         "route": "handbook", "intent": "manual.search", "arguments": {"query": "Sạc pin VF8"}
     }})
-    assert result["output"]["status"] == "unsupported"
+    assert result["output"]["status"] == "blocked"
+    assert result["output"]["diagnostics"]["error_code"] == "topic_safety_system_tampering"
+    assert result["output"]["diagnostics"]["provider_attempts"] == []
 
 
 def test_evidence_gate_rejects_wrong_charging_domain_for_any_retriever(tmp_path):

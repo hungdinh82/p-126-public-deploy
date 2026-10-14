@@ -1,4 +1,4 @@
-import { closeJourney, initJourney, openJourney, applyNavigation, getJourneyPosition, setJourneyMotionBlocked, resetJourneyRuntime } from './journey.js?v=23';
+import { closeJourney, initJourney, openJourney, applyNavigation, getJourneyPosition, setJourneyMotionBlocked, resetJourneyRuntime } from './journey.js?v=24';
 import { GearController } from './navigation-state.js?v=2';
 import { NavigationStore, MissingRouteError } from './navigation-store.js?v=1';
 import { createCabinMusic } from './music.js?v=2';
@@ -114,6 +114,28 @@ function setResponseText(text) {
   $('#response-text').classList.remove('live');
   $('#response-text').textContent = text;
 }
+function renderAnswerSources(evidence = [], answerKind = '') {
+  const response = $('#response');
+  if (response?.classList) response.classList.toggle('expanded-answer', ['creative', 'general', 'web', 'knowledge'].includes(answerKind));
+  const container = $('#answer-sources');
+  if (!container) return;
+  container.replaceChildren();
+  for (const item of evidence) {
+    let url;
+    try { url = new URL(item.source_url); } catch { continue; }
+    if (!['https:', 'http:'].includes(url.protocol)) continue;
+    const source = document.createElement('a');
+    source.href = url.href;
+    source.target = '_blank';
+    source.rel = 'noopener noreferrer';
+    source.textContent = item.title || item.section || item.source_id || url.hostname;
+    const date = item.valid_date || item.published_at;
+    if (date) source.textContent += ` · ${date}`;
+    if (item.retrieved_at) source.title = `Truy xuất: ${item.retrieved_at}`;
+    container.append(source);
+  }
+  container.hidden = !container.childElementCount;
+}
 function renderLiveCaption(final, interim) {
   const caption = $('#response-text');
   if (!caption.classList.contains('live')) { caption.textContent = ''; caption.classList.add('live'); liveWords = []; }
@@ -211,7 +233,7 @@ function updateHud() {
   const driving = state.driving && !gearController.frozen;
   const speed = driving ? Math.round(nav?.speedKmh ?? cruise.speed) : 0;
   $('#gear-letter').textContent = state.driving ? 'D' : 'P';
-  $('#mode-label').textContent = gearController.status!=='idle' ? (gearController.status==='unknown'?'CHƯA ĐỒNG BỘ':gearController.status==='syncing'?'ĐANG ĐỒNG BỘ':`ĐANG CHUYỂN ${gearController.desired}`) : driving ? (nav ? `ĐẾN ${nav.destination.toUpperCase()}` : 'ĐANG DI CHUYỂN') : 'ĐỖ XE';
+  $('#mode-label').textContent = gearController.status!=='idle' ? (gearController.status==='unknown'?'CHƯA ĐỒNG BỘ':gearController.status==='syncing'?'ĐANG ĐỒNG BỘ':`ĐANG CHUYỂN ${gearController.desired}`) : driving ? (nav ? `ĐẾN ${nav.destination.toUpperCase()}` : 'ĐANG DI CHUYỂN') : nav?.chargingMinutes != null ? `ĐANG SẠC · CÒN KHOẢNG ${nav.chargingMinutes} PHÚT` : 'ĐỖ XE';
   $('#hud-primary').innerHTML = driving ? `${speed}<small>km/h</small>` : `${state.battery}<small>%</small>`;
   $('#hud-primary-label').textContent = driving ? 'TỐC ĐỘ' : 'PIN';
   $('#hud-range').textContent = driving ? `Pin ${state.battery}% · ${state.range} km` : `${state.range} km`;
@@ -574,6 +596,7 @@ async function acceptNavigationResponse(payload,authoritative=false) {
     return false;
   }
   payload=accepted;
+  if(Object.hasOwn(payload, "pending_question"))state.pendingQuestion=payload.pending_question;
   const restarted=state.runtimeEpoch && state.runtimeEpoch!==snapshotOrder.epoch;
   state.runtimeEpoch=snapshotOrder.epoch;
   if(restarted){state.vehicleVersion=null;currentNavigationRevision=0;resetJourneyRuntime();}
@@ -657,7 +680,7 @@ function interruptActiveTurn() {
   lockControls(false);
 }
 
-async function runBackendCommand(command, turnId = makeId(), { autoConfirm = false, action = null } = {}) {
+async function runBackendCommand(command, turnId = makeId(), { autoConfirm = false, action = null, questionReply = null } = {}) {
   if (!command.trim()) return;
   if (state.busy) interruptActiveTurn();
   if (handleSpeakerCommand(command)) return;
@@ -668,13 +691,14 @@ async function runBackendCommand(command, turnId = makeId(), { autoConfirm = fal
   followUpArmed = false;
   rememberEdgeCommand(command);
   renderTurnSteps([]);
+  renderAnswerSources();
   state.busy = true; state.lastCommand = command; lockControls(true); $('#command-input').value = '';
   try {
     setPhase('thinking', `“${command}”`);
     const response = await fetch(`${API_BASE}/api/v1/turn/stream`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       signal: ownedTurn.controller.signal,
-      body: JSON.stringify({ transcript: command, session_id: sessionId, turn_id: turnId, llm_provider: state.llmProvider, ...(action ? { action } : {}), position: getJourneyPosition() })
+      body: JSON.stringify({ transcript: command, session_id: sessionId, turn_id: turnId, llm_provider: state.llmProvider, ...(action ? { action } : {}), ...(questionReply ? { question_reply: questionReply } : {}), position: getJourneyPosition() })
     });
     if (!response.ok) {
       const payload = await response.json();
@@ -787,6 +811,7 @@ async function runBackendCommand(command, turnId = makeId(), { autoConfirm = fal
       ? 'speaking'
       : payload.status === 'confirmation_required' ? 'confirm' : payload.status;
     setPhase(phase, payload.message);
+    renderAnswerSources(payload.evidence || [], payload.answer_kind);
     if (payload.status === 'verified') {
       const intent = payload.action?.intent || '';
       const card = DOCK_BY_INTENT[intent.split('.')[0]] || null;
@@ -1241,7 +1266,7 @@ function openPanel(view) {
   const contents = {
     vehicle: vehicleDetailsMarkup(),
     manual: manualContent,
-    settings: `<h2>Cấu hình ViVi</h2><p>Chọn cách ViVi suy nghĩ và chuyển động trong không gian của bạn.</p><section class="config-section"><div class="config-heading"><span>MÔ HÌNH HỘI THOẠI</span><strong id="active-model">${escapeHtml(modelLabels[state.llmProvider] || state.llmProvider || 'Chưa kết nối')} · ${escapeHtml(currentModel?.model || '')}</strong></div><div class="model-options">${modelOptionsMarkup()}</div><p class="dialog-note">Lựa chọn được áp dụng từ lượt hội thoại tiếp theo. Model ID và API key vẫn được quản lý an toàn trong .env.</p></section><section class="config-section"><div class="config-heading"><span>GIỌNG PHẢN HỒI</span><strong id="active-voice">${state.ttsAvailable ? `${escapeHtml(ttsLabels[state.ttsProvider] || state.ttsProvider)} · ${escapeHtml(ttsVoiceLabel(state.ttsVoice))}` : 'Trình duyệt/text fallback'}</strong></div><div class="model-options">${ttsOptionsMarkup()}</div><p class="dialog-note">Áp dụng từ câu trả lời tiếp theo. Lần đầu dùng ViVi local cần vài giây để nạp model.</p></section><section class="config-section"><div class="config-heading"><span>TRẢI NGHIỆM</span><strong>Không gian & giọng nói</strong></div><label class="motion-setting"><span><strong>Giảm chuyển động</strong><small>Dừng lơ lửng, quỹ đạo và hiệu ứng sóng</small></span><input id="reduce-motion" type="checkbox" ${state.reduced ? 'checked' : ''}><i></i></label><label class="motion-setting"><span><strong>Gọi “ViVi ơi”</strong><small>Nghe từ khoá ngay trên máy; âm thanh chỉ được gửi đi sau khi bạn gọi</small></span><input id="wake-word" type="checkbox" ${wakeWordEnabled() ? 'checked' : ''}><i></i></label><div class="config-runtime"><div><span>NHẬN DIỆN GIỌNG NÓI</span><strong>${state.sttAvailable ? `${escapeHtml(state.sttProvider)} · ${state.sttDevice === 'cloud' ? `cloud${state.sttStreaming ? ' · trực tiếp' : ''}` : 'local'}` : 'Chưa sẵn sàng'}</strong></div></div><p class="dialog-note">Audio: ${state.storeAudio ? 'đang lưu' : 'không lưu'} · transcript: ${state.storeTranscripts ? 'đang lưu' : 'không lưu'}.</p></section>`
+    settings: `<h2>Cấu hình ViVi</h2><p>Chọn cách ViVi suy nghĩ và chuyển động trong không gian của bạn.</p><section class="config-section"><div class="config-heading"><span>MÔ HÌNH HỘI THOẠI</span><strong id="active-model">${escapeHtml(modelLabels[state.llmProvider] || state.llmProvider || 'Chưa kết nối')} · ${escapeHtml(currentModel?.model || '')}</strong></div><div class="model-options">${modelOptionsMarkup()}</div><p class="dialog-note">Lựa chọn được áp dụng từ lượt hội thoại tiếp theo. Model ID và API key vẫn được quản lý an toàn trong .env.</p></section><section class="config-section"><div class="config-heading"><span>GIỌNG PHẢN HỒI</span><strong id="active-voice">${state.ttsAvailable ? `${escapeHtml(ttsLabels[state.ttsProvider] || state.ttsProvider)} · ${escapeHtml(ttsVoiceLabel(state.ttsVoice))}` : 'Trình duyệt/text fallback'}</strong></div><div class="model-options">${ttsOptionsMarkup()}</div><p class="dialog-note">Áp dụng từ câu trả lời tiếp theo. Lần đầu dùng ViVi local cần vài giây để nạp model.</p></section><section class="config-section"><div class="config-heading"><span>TRẢI NGHIỆM</span><strong>Không gian & giọng nói</strong></div><label class="motion-setting"><span><strong>Giảm chuyển động</strong><small>Dừng lơ lửng, quỹ đạo và hiệu ứng sóng</small></span><input id="reduce-motion" type="checkbox" ${state.reduced ? 'checked' : ''}><i></i></label><label class="motion-setting"><span><strong>Gọi “ViVi ơi”</strong><small>Nghe từ khoá ngay trên máy; âm thanh chỉ được gửi đi sau khi bạn gọi</small></span><input id="wake-word" type="checkbox" ${wakeWordEnabled() ? 'checked' : ''}><i></i></label><div class="config-runtime"><div><span>NHẬN DIỆN GIỌNG NÓI</span><strong>${state.sttAvailable ? `${escapeHtml(state.sttProvider)} · ${state.sttDevice === 'cloud' ? `cloud${state.sttStreaming ? ' · trực tiếp' : ''}` : state.sttDevice === 'remote' ? 'Jetson từ xa' : 'local'}` : 'Chưa sẵn sàng'}</strong></div></div><p class="dialog-note">Audio: ${state.storeAudio ? 'đang lưu' : 'không lưu'} · transcript: ${state.storeTranscripts ? 'đang lưu' : 'không lưu'}.</p></section>`
   };
   $('#dialog-content').innerHTML = contents[view];
   dialog.classList.toggle('config-dialog', view === 'settings');
@@ -1266,7 +1291,18 @@ initJourney({
   route: route => { plannedRoute = route; scene?.setRoute(route); },
   travel: distance => scene?.setRouteDistance(distance),
   network: roads => scene?.setNetwork(roads),
-  command: (text, action) => runBackendCommand(text, makeId(), { action }),
+  command: (text, action) => {
+    const question=state.pendingQuestion,args=action?.arguments || {};
+    const option=args.choice_handle || args.place_handle
+      || (action?.capability?.endsWith('.start') && question?.accepts_yes ? 'yes' : null)
+      || (action?.capability?.endsWith('.decline') && question?.accepts_no ? 'no' : null);
+    const bound=question && question.owner===action?.capability?.split('.')[0]
+      && (!args.plan_id || args.plan_id===question.target_id)
+      && (!args.route_revision || args.route_revision===question.revision)
+      && (question.choices?.some(entry=>entry.handle===option) || option==='yes' && question.accepts_yes || option==='no' && question.accepts_no);
+    return runBackendCommand(text, makeId(), { action,
+      questionReply:bound?{question_id:question.id,option_id:option}:null });
+  },
   confirm: grant => confirmNavigation(grant),
   position: position => sendNavigationEvent({ kind:'position', id:makeId(), revision:currentNavigationRevision, position }),
   event: event => sendNavigationEvent(event),

@@ -67,6 +67,7 @@ class StructuredChatClient:
         schema_in_prompt: bool = False,
         max_attempts: int = 3,
         schema_subset: bool = False,
+        json_object_schema_names: frozenset[str] = frozenset(),
     ) -> None:
         if not model:
             raise RuntimeError("A model name is required for structured generation")
@@ -83,6 +84,7 @@ class StructuredChatClient:
         self.schema_in_prompt = schema_in_prompt
         self.max_attempts = max(1, min(3, max_attempts))
         self.schema_subset = schema_subset
+        self.json_object_schema_names = json_object_schema_names
 
     def generate_json(
         self,
@@ -184,6 +186,13 @@ class StructuredChatClient:
                 f"{system}\nChỉ trả về một object JSON hợp lệ theo JSON Schema sau, "
                 f"không thêm chữ nào khác:\n{json.dumps(schema, ensure_ascii=False)}"
             )
+        # Gemini accepts small structured answers but rejects the complete
+        # semantic DTO (HTTP 400). JSON mode still receives its schema in the
+        # prompt; SemanticTurn validation and repair remain authoritative.
+        response_format = {"type": "json_object"} if schema_name in self.json_object_schema_names else {
+            "type": "json_schema",
+            "json_schema": {"name": schema_name, "strict": True, "schema": strict_schema(schema)},
+        }
         return {
             **self.extra_body,
             "model": self.model,
@@ -193,14 +202,7 @@ class StructuredChatClient:
             ],
             "temperature": 0,
             "max_tokens": self.max_tokens,
-            "response_format": {
-                "type": "json_schema",
-                "json_schema": {
-                    "name": schema_name,
-                    "strict": True,
-                    "schema": strict_schema(schema),
-                },
-            },
+            "response_format": response_format,
         }
 
     def _headers(self) -> dict[str, str]:
@@ -250,6 +252,7 @@ def google_client(config: Any) -> StructuredChatClient:
         schema_in_prompt=True,
         max_attempts=1,
         schema_subset=True,
+        json_object_schema_names=frozenset({"vivi_semantic_turn"}),
     )
 
 

@@ -73,7 +73,7 @@
   </aside>
 
   <section class="assistant" aria-label="Trò chuyện với ViVi">
-    <div class="response" id="response" role="status" aria-live="polite"><span id="orb-state" class="assistant-state">ViVi đang ở đây</span><p id="response-text">Chạm vào sóng và nói điều bạn cần.</p><ol id="turn-steps" class="turn-steps" hidden aria-label="Các bước thực hiện"></ol></div>
+    <div class="response" id="response" role="status" aria-live="polite"><span id="orb-state" class="assistant-state">ViVi đang ở đây</span><p id="response-text">Chạm vào sóng và nói điều bạn cần.</p><div id="answer-sources" class="answer-sources" hidden aria-label="Nguồn thông tin"></div><ol id="turn-steps" class="turn-steps" hidden aria-label="Các bước thực hiện"></ol></div>
     <form id="command-form" class="voice">
       <button type="button" id="demo-mic" class="voice-capsule" aria-label="Nói với ViVi" title="Chạm để nói, chạm lần nữa để dừng"><canvas id="wave" aria-hidden="true"></canvas></button>
       <label class="voice-input"><input id="command-input" aria-label="Yêu cầu dành cho ViVi" placeholder="Nhập điều bạn cần…" autocomplete="off" maxlength="240" /><button type="submit" class="send-button" aria-label="Gửi yêu cầu"><svg><use href="#i-arrow"/></svg></button></label>
@@ -191,6 +191,6 @@
   </section>
 
   <dialog id="info-dialog"><div class="dialog-top"><span class="eyebrow">VIVI / SPACE CONCEPT</span><button id="close-dialog" aria-label="Đóng">×</button></div><div id="dialog-content"></div></dialog>
-  <script type="module" src="./app.js?v=79"></script>
+  <script type="module" src="./app.js?v=80"></script>
 </body>
 </html>

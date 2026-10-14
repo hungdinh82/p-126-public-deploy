@@ -8,6 +8,7 @@ from uuid import uuid4
 from src.vivi.dialogue.contracts import NavigationWorkspace
 from src.vivi.dialogue.reducer import clear_journey
 from src.vivi.navigation.effects import vehicle_effect
+from src.vivi.navigation.presentation import resume_message
 from src.vivi.navigation.workflow import current_origin
 
 CONTROL_KINDS = {"gear", "pause", "resume", "end", "clear", "history_clear"}
@@ -109,7 +110,7 @@ class NavigationTransitions:
                 )
                 if kind == "resume":
                     journey.status, journey.resume_status = journey.resume_status, None
-                message = "Đã chuyển D, tiếp tục hành trình." if kind == "resume" else "Đã chuyển D."
+                message = resume_message(journey) if kind == "resume" else "Đã chuyển D."
                 ui = "navigation.resume" if kind == "resume" else "navigation.gear"
             elif kind == "clear":
                 observed = await self.vehicle.get_state(event.session_id)
@@ -133,10 +134,27 @@ class NavigationTransitions:
         except ValueError as exc:
             return self.blocked(str(exc), "simulation_policy"), session
         workspace.event_sequence += 1
+        ui_events = [{"type": ui, "id": str(uuid4()), "revision": workspace.revision}]
+        if (
+            value["kind"] == "gear"
+            and kind == "resume"
+            and ((journey.energy or {}).get("selected_plan") or {}).get("stops")
+        ):
+            # The gear button normally stays silent. Resuming a charging route
+            # still needs its current station/remaining charge announcement.
+            ui_events.append(
+                {
+                    "type": "navigation.next_leg",
+                    "id": value["id"],
+                    "revision": workspace.revision,
+                    "route_id": journey.route_id,
+                    "message": message,
+                }
+            )
         return {
             "status": "completed",
             "message": message,
             "domain_applied": True,
-            "ui_events": [{"type": ui, "id": str(uuid4()), "revision": workspace.revision}],
+            "ui_events": ui_events,
             "navigation_update": session.navigation.model_dump(mode="json"),
         }, session
