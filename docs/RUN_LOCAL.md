@@ -151,6 +151,11 @@ runtime đã có. Setup build ORT 1.20.1 với `--use_tensorrt` trong thư mục
 riêng và thêm metadata engine để kiểm tra precision. Build ORT lần đầu có thể
 mất nhiều giờ trên Xavier. Qwen/Whisper tiếp tục dùng CUDA như profile hiện có.
 
+Setup vá hai chỗ ORT gọi `setHardwareCompatibilityLevel`, API chỉ có từ TensorRT
+8.6, để biên dịch với 8.5.2. Tùy chọn hardware compatibility không được bật trên
+Xavier; nếu yêu cầu trên 8.5 thì báo lỗi rõ. Khi sửa lỗi build này, chạy lại setup
+sẽ dùng các object CUDA đã build trong cùng thư mục, không cần xóa cache build.
+
 TTS GPU INT8 dùng **static QDQ S8S8**: thu đầu vào thật của ba graph khi FP32 sinh
 sáu câu tiếng Việt bằng giọng VIVI, hiệu chuẩn MinMax đối xứng và quantize MatMul
 có trọng số hằng, per-channel. Codec, sampling và phần còn lại vẫn FP32. Model
@@ -193,8 +198,9 @@ Corpus mặc định là smoke ban đầu, chưa phải bộ đánh giá chất 
 
 Đã kiểm tra local: tạo ba graph QDQ với 72/72/425 MatMul INT8, giữ integer I/O,
 chạy các feed thật và sinh WAV/streaming VIVI bằng QDQ trên CPU. Model tổng cộng
-khoảng 356 MB, gồm codec FP32. **Chưa xác nhận native build, engine INT8 hay tốc độ
-GPU trên AGX Xavier** vì môi trường phát triển chưa có kết nối tới thiết bị.
+khoảng 356 MB, gồm codec FP32. Đã build thành công provider CUDA/TensorRT trên
+AGX Xavier sau bản vá API TensorRT 8.5.2. **Chưa xác nhận engine INT8 hay tốc độ
+GPU trên AGX Xavier**; setup vẫn cần vượt qua smoke suy luận và engine inspector.
 
 ### INT8 trên CPU — thử nghiệm trước đó
 

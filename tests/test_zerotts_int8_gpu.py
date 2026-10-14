@@ -1,4 +1,6 @@
 import json
+import shutil
+import subprocess
 
 import numpy as np
 import pytest
@@ -55,16 +57,40 @@ def test_feed_recording_is_bounded_and_copies_mutable_inputs():
 
 def test_trt_inspection_patch_is_guarded_and_idempotent(tmp_path):
     path = tmp_path / "provider.cc"
-    original = prepare_ort_trt_inspection.ORIGINAL + "\n" + prepare_ort_trt_inspection.ORIGINAL
+    original = (prepare_ort_trt_inspection.ORIGINAL + "\n" + prepare_ort_trt_inspection.HARDWARE_ORIGINAL + "\n") * 2
     path.write_text(original)
     prepare_ort_trt_inspection.prepare(path)
     assert path.read_text().count("setProfilingVerbosity") == 2
+    assert path.read_text().count(prepare_ort_trt_inspection.HARDWARE_FIXED) == 2
     prepare_ort_trt_inspection.prepare(path)
     assert path.read_text().count("setProfilingVerbosity") == 2
     assert path.with_name(path.name + ".before-trt-inspection").read_text() == original
     path.write_text("unexpected")
     with pytest.raises(ValueError, match="Unexpected"):
         prepare_ort_trt_inspection.prepare(path)
+
+
+def test_trt_patch_upgrades_existing_inspection_source(tmp_path):
+    path = tmp_path / "provider.cc"
+    path.write_text((prepare_ort_trt_inspection.FIXED + "\n" + prepare_ort_trt_inspection.HARDWARE_ORIGINAL + "\n") * 2)
+    prepare_ort_trt_inspection.prepare(path)
+    assert path.read_text().count("setProfilingVerbosity") == 2
+    assert path.read_text().count(prepare_ort_trt_inspection.HARDWARE_FIXED) == 2
+
+
+@pytest.mark.parametrize("minor", [5, 6])
+def test_hardware_compatibility_guard_compiles_with_old_and_new_trt_api(tmp_path, minor):
+    compiler = shutil.which("g++")
+    if compiler is None:
+        pytest.skip("C++ compiler unavailable")
+    path = tmp_path / "guard.cc"
+    # TRT 8.5 deliberately has neither the enum nor the builder method.
+    api = """namespace nvinfer1 { enum class HardwareCompatibilityLevel { kAMPERE_PLUS }; }
+struct Config { void setHardwareCompatibilityLevel(nvinfer1::HardwareCompatibilityLevel) {} };""" if minor >= 6 else "struct Config {};"
+    path.write_text(f"#define NV_TENSORRT_MAJOR 8\n#define NV_TENSORRT_MINOR {minor}\n"
+                    "#define ORT_MAKE_STATUS(...) -1\n" + api + "\nint build(Config* trt_config) {\n"
+                    + prepare_ort_trt_inspection.HARDWARE_FIXED + "\nreturn 0;\n}\n")
+    subprocess.run([compiler, "-std=c++17", "-fsyntax-only", str(path)], check=True, capture_output=True)
 
 
 def test_gpu_preparation_can_defer_active_profile(tmp_path, monkeypatch):

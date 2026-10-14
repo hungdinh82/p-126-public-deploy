@@ -118,7 +118,8 @@ build_ort() {
     fi
     local wheels=("$source/$ort_build"/Release/dist/onnxruntime_gpu-1.20.1-cp312-cp312-linux_aarch64.whl)
     if [[ ! -f "${wheels[0]}" || ! -f "${wheels[0]}.sha256" || \
-          ! -f "${wheels[0]}.platform-fix" || "$(cat "${wheels[0]}.platform-fix")" != "$VIVI_ORT_FIX" ]]; then
+          ! -f "${wheels[0]}.platform-fix" || "$(cat "${wheels[0]}.platform-fix")" != "$VIVI_ORT_FIX" || \
+          ( "$trt" == 1 && ( ! -f "${wheels[0]}.trt-fix" || "$(cat "${wheels[0]}.trt-fix")" != "$VIVI_TRT_FIX" ) ) ]]; then
       rm -f "${wheels[0]}.platform-fix"
       (cd "$source"
        "$python_bin" tools/ci_build/build.py --config Release --build_wheel --parallel 2 \
@@ -130,6 +131,7 @@ build_ort() {
       [[ -f "${wheels[0]}" ]] || fail "Native cp312/aarch64 CUDA wheel was not produced"
       sha256sum "${wheels[0]}" > "${wheels[0]}.sha256"
       printf '%s\n' "$VIVI_ORT_FIX" > "${wheels[0]}.platform-fix"
+      if [[ "$trt" == 1 ]]; then printf '%s\n' "$VIVI_TRT_FIX" > "${wheels[0]}.trt-fix"; fi
     fi
     sha256sum -c "${wheels[0]}.sha256" || fail "Cached ORT wheel checksum mismatch"
     uv pip install --python "$python_bin" --no-deps --reinstall --refresh "${wheels[0]}"
