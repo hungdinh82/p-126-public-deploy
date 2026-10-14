@@ -101,8 +101,17 @@ Backend chạy workflow `unified-3`, RAG, session/history và vehicle gateway.
 AI server thực hiện inference SLM theo URL đã cấu hình. Mặc định cấu hình hiện
 tại dùng xe mô phỏng memory; cấu hình MQTT vẫn hoạt động theo module hiện có.
 
-Giọng nói của app chính vẫn dùng adapter STT/TTS trong cấu hình backend.
-Remote STT/TTS của AI server chưa được nối vào public API của app chính.
+Để thu âm trên Laptop và nhận diện bằng Whisper ở Jetson, đặt
+`stt_provider = "jetson"` và `ai_server_url` trỏ tới gateway Jetson.
+Adapter chuyển audio thành WAV mono PCM16 16 kHz bằng ffmpeg, rồi gọi
+`/v1/stt/transcriptions`; phiên bản này gửi audio sau khi dừng ghi âm.
+TTS của app vẫn dùng adapter được chọn trong cấu hình/backend UI.
+
+Khi policy AI gateway bật và có local semantic client, app gửi trước đúng
+system prompt và schema tool của workflow với giới hạn một token đầu ra lúc
+startup để prime KV cache. Request này không chạy workflow hay tác động xe.
+Warmup lỗi được ghi log và không ngăn app khởi động; cache có thể bị thay thế
+bởi request khác hoặc mất khi restart Jetson. Lượt thật vẫn phải sinh câu trả lời.
 Nếu chỉ muốn nhập bằng chữ và tránh nạp speech ở backend, chạy:
 
 ```bash
@@ -249,6 +258,11 @@ VRAM riêng của GPU. Sau load, `malloc_trim` chỉ trả lại khoảng 115 Mi
 không thể coi phần RAM còn lại là heap tạm có thể giải phóng đơn giản.
 Báo cáo và WAV ở `eval/results/jetson-int8-gpu/`. Lượt này chỉ kiểm tra TTS;
 chưa đo chất lượng giọng trên corpus rộng hoặc chứng minh INT8 nhanh hơn FP32.
+Llama.cpp mở context 12.288 token để nhận prompt semantic của app (khoảng
+8.000 token); có thể override bằng `JETSON_AI_CONTEXT_SIZE`. Thời gian chờ
+local cần bao gồm cả prefill và sinh output, ví dụ `local_budget_seconds = 60`,
+`llm_timeout_seconds = 60`, `turn_timeout_seconds = 120` khi thử trên Xavier.
+
 Chạy cả Qwen/Whisper/TTS vẫn có thể thiếu RAM khi TensorRT nạp engine; lượt
 TTS riêng thành công không chứng minh cả ba model cùng chạy đủ RAM.
 

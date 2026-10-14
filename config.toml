@@ -27,16 +27,16 @@ mqtt_timeout_seconds = 3
 vehicle_simulator_url = "http://127.0.0.1:8788"
 
 # One checkpoint-owned workflow. Availability fallback: cloud -> configured local -> parser.
-turn_timeout_seconds = 45
+turn_timeout_seconds = 120
 cloud_budget_seconds = 10
-local_budget_seconds = 12
+local_budget_seconds = 60
 provider_breaker_seconds = 30
 planner_max_tokens = 2048
 
 # Language model: rules, local, openai, google, openrouter
 # Cloud providers require rag_local_only = false.
 llm_provider = "local"
-llm_timeout_seconds = 30
+llm_timeout_seconds = 60
 openai_model = "gpt-4o-mini"
 google_model = "gemini-3.5-flash-lite"
 google_base_url = "https://generativelanguage.googleapis.com/v1beta/openai"
@@ -54,14 +54,14 @@ local_llm_max_tokens = 512
 # Change only this URL; /v1 and the shared authentication are wired automatically.
 # Docker: use the server's LAN/Tailscale IP, or host.docker.internal for the host PC.
 # Authentication is optional for personal testing on a private network.
-ai_server_url = "http://127.0.0.1:8789"
+ai_server_url = "http://100.123.27.125:8789"
 ai_server_auth_required = false
 jetson_ai_policy = "prefer_local"
 # To use a standalone LM Studio/llama.cpp server instead, set policy = "disabled"
 # and configure local_llm_base_url / local_llm_api_key above.
 
 # Speech: provider = off to disable; preload = true to load at startup
-stt_provider = "off"
+stt_provider = "jetson"
 stt_fallback_provider = "off"
 stt_fallback_preload = false
 phowhisper_model = "vinai/PhoWhisper-medium"

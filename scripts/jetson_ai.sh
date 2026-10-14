@@ -11,6 +11,7 @@ VIVI_WHISPER_REF=v1.7.6
 VIVI_BACKEND_PORT="${JETSON_AI_BACKEND_PORT:-1235}"
 VIVI_PORT="${JETSON_AI_PORT:-8789}"
 VIVI_STT_PORT="${JETSON_AI_STT_PORT:-1236}"
+VIVI_CONTEXT_SIZE="${JETSON_AI_CONTEXT_SIZE:-12288}"
 
 fail() { echo "jetson_ai: $*" >&2; exit 1; }
 check_platform() { jetson_platform || fail "Platform preflight failed"; }
@@ -260,10 +261,11 @@ run() {
   fi
   bind="${bind:-127.0.0.1}"
   [[ "$(cat "$VIVI_DATA/build/llama-mode-cu118-gcc10")" == cuda ]] || fail "Run setup again: a CUDA build is required"
+  [[ "$VIVI_CONTEXT_SIZE" =~ ^[1-9][0-9]*$ ]] || fail "JETSON_AI_CONTEXT_SIZE must be a positive integer"
   local gpu_layers=99 started=$SECONDS
   "$VIVI_DATA/build/llama.cpp/$VIVI_NATIVE_BUILD/bin/llama-server" \
     --model "$VIVI_MODEL" --alias vivi-qwen3-1.7b --host 127.0.0.1 \
-    --port "$VIVI_BACKEND_PORT" --ctx-size 4096 --parallel 1 \
+    --port "$VIVI_BACKEND_PORT" --ctx-size "$VIVI_CONTEXT_SIZE" --parallel 1 \
     --n-gpu-layers "$gpu_layers" --reasoning off --log-verbosity 4 \
     > "$VIVI_DATA/logs/llama-server.log" 2>&1 &
   local llm_pid=$!
