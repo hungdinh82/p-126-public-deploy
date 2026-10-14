@@ -128,6 +128,10 @@ build_ort() {
          --compile_no_warning_as_error --cmake_extra_defines CMAKE_CUDA_ARCHITECTURES=72 \
          "CMAKE_CUDA_COMPILER=$VIVI_CUDA/bin/nvcc" "CMAKE_CUDA_HOST_COMPILER=$CXX" \
          "CMAKE_C_COMPILER=$CC" "CMAKE_CXX_COMPILER=$CXX" onnxruntime_BUILD_UNIT_TESTS=OFF)
+      # CMake stages provider libraries before rebuilding them. An incremental
+      # build can therefore package the previous TensorRT/CUDA binaries.
+      "$python_bin" "$VIVI_REPO/scripts/package_ort_wheel.py" \
+        "$source/$ort_build/Release" "$source/setup.py"
       [[ -f "${wheels[0]}" ]] || fail "Native cp312/aarch64 CUDA wheel was not produced"
       sha256sum "${wheels[0]}" > "${wheels[0]}.sha256"
       printf '%s\n' "$VIVI_ORT_FIX" > "${wheels[0]}.platform-fix"
@@ -142,6 +146,8 @@ build_ort() {
   if [[ "$trt" == 1 ]]; then
     "$python_bin" -c 'import onnxruntime as o; assert "TensorrtExecutionProvider" in o.get_available_providers()' \
       || fail "ORT wheel lacks TensorRT provider"
+    "$python_bin" -c 'import pathlib, onnxruntime as o; p=pathlib.Path(o.__file__).parent/"capi/libonnxruntime_providers_tensorrt.so"; assert b"VIVI_TRT_INT8_LINEAR_ONLY" in p.read_bytes()' \
+      || fail "Installed TensorRT provider lacks the INT8 linear partition patch"
     printf '%s\n' "$VIVI_TRT_FIX" > "$VIVI_VENV/ort-trt-inspection"
   else
     rm -f "$VIVI_VENV/ort-trt-inspection"

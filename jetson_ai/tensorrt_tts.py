@@ -19,6 +19,13 @@ CODEC_CHUNK_FRAMES = 4
 
 
 def device_identity() -> dict:
+    import onnxruntime as ort
+
+    from scripts.quantize_zerotts import file_hash
+
+    provider = Path(ort.__file__).parent / "capi/libonnxruntime_providers_tensorrt.so"
+    if not provider.is_file() or b"VIVI_TRT_INT8_LINEAR_ONLY" not in provider.read_bytes():
+        raise RuntimeError("Installed TensorRT provider lacks INT8 linear support; rerun Xavier int8-gpu setup")
     # The Xavier deployment deliberately uses JetPack's TensorRT 8 libraries.
     # Loading them here catches missing dependencies before ORT silently falls back.
     ctypes.CDLL("libnvinfer.so.8")
@@ -42,8 +49,8 @@ def device_identity() -> dict:
         if not matches:
             raise RuntimeError(f"Cannot fingerprint JetPack library {soname}")
         # Engine compatibility depends on the exact native TensorRT build.
-        from scripts.quantize_zerotts import file_hash
         libraries[soname] = file_hash(matches[0])
+    libraries["onnxruntime_tensorrt_provider"] = file_hash(provider)
     return {"gpu": name.value.decode(), "uuid": uuid.raw.hex(), "compute_capability": f"{major.value}.{minor.value}",
             "driver": version.value, "libraries": libraries}
 
@@ -77,7 +84,10 @@ def int8_compute_layers(layers: list[dict]) -> list[str]:
         kind = str(layer.get("LayerType", layer.get("ParameterType", ""))).lower()
         if not any(word in kind for word in ("matrix", "matmul", "gemm", "fullyconnected", "convolution")):
             continue
-        if has_int8_format(layer):
+        # TRT 8.5 can report N/A formats for dynamic engines even with an
+        # inspection context. Selected compute tactics identify INT8 kernels.
+        tactic = str(layer.get("TacticName", "")).lower()
+        if has_int8_format(layer) or "int8" in tactic:
             result.append(str(layer.get("Name", kind)))
     return result
 
@@ -90,13 +100,15 @@ def inspect_int8_engines(cache: Path) -> dict:
     for name in ATTRIBUTES:
         layers = []
         folder = cache / (name + "-" + LINEAR_RECIPE)
-        for engine in sorted(folder.glob("*.engine")):
-            reply = subprocess.run([str(inspector.resolve()), str(engine)], check=True, capture_output=True,
-                                   text=True, timeout=60)
+        engines = sorted(folder.glob("*.engine"))
+        if engines:
+            reply = subprocess.run([str(inspector.resolve()), *(str(engine) for engine in engines)],
+                                   check=True, capture_output=True, text=True, timeout=120)
             info = json.loads(reply.stdout)
-            # TRT 8 exports an object containing Layers; tolerate list output too.
-            found = info.get("Layers", []) if isinstance(info, dict) else info
-            layers.extend(int8_compute_layers(found))
+            # One runtime/context per graph avoids hundreds of CUDA startups.
+            batch = [info] if isinstance(info, dict) else info
+            for item in batch:
+                layers.extend(int8_compute_layers(item.get("Layers", [])))
         if not layers:
             raise RuntimeError(f"{name}: engine inspection found no INT8 compute layers; profile rejected")
         reports[name] = layers
@@ -116,6 +128,7 @@ def configure_sessions(model, path: Path):
                                    "artifact": artifact["output_sha256"], "workspace": 512 * 1024**2,
                                    "fp16": False, "inspection_recipe": 1,
                                    "min_subgraph_size": MIN_SUBGRAPH_SIZE,
+                                   "context_memory_sharing": True,
                                    "cuda_options": CUDA_OPTIONS}, sort_keys=True).encode()).hexdigest()[:24]
     cache = path.parent / "trt-cache" / key
     for attribute in ATTRIBUTES.values():
@@ -135,6 +148,7 @@ def configure_sessions(model, path: Path):
         # supplied. CUDA/CPU handle unsupported shape/sampling operators.
         providers = [("TensorrtExecutionProvider", {
             "trt_int8_enable": True, "trt_fp16_enable": False,
+            "trt_context_memory_sharing_enable": True,
             # The native opt-in policy groups only Conv with its QDQ inputs.
             # Attention, KV cache and sampling stay on CUDA/CPU.
             "trt_min_subgraph_size": MIN_SUBGRAPH_SIZE,

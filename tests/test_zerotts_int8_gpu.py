@@ -62,6 +62,7 @@ def test_tensor_rt_failure_does_not_reset_session_to_cuda(tmp_path, monkeypatch)
     assert all(p[1][1]["cudnn_conv_algo_search"] == "HEURISTIC" for p in provider_configs)
     assert all(p[1][1]["cudnn_conv_use_max_workspace"] is False for p in provider_configs)
     assert all(p[0][1]["trt_min_subgraph_size"] == 1 for p in provider_configs)
+    assert all(p[0][1]["trt_context_memory_sharing_enable"] is True for p in provider_configs)
     assert "VIVI_TRT_INT8_LINEAR_ONLY" not in os.environ
     # Different allocation settings must not reuse a previous engine cache.
     monkeypatch.setattr(tensorrt_tts, "CUDA_OPTIONS", {"arena_extend_strategy": "kNextPowerOfTwo"})
@@ -238,6 +239,16 @@ def test_reformat_int8_is_not_compute_precision_evidence():
     assert int8_compute_layers(layers) == ["int8-gemm"]
 
 
+def test_dynamic_engine_int8_compute_tactic_is_precision_evidence():
+    layers = [{"Name": "linear", "LayerType": "CaskConvolution",
+               "Inputs": [{"Format/Datatype": "N/A due to dynamic shapes"}],
+               "TacticName": "volta_fp32_i8816cudnn_int8_128x128_ldg16_relu_small_nt_v1"},
+              {"Name": "cast", "LayerType": "Reformat", "TacticName": "int8_to_fp32"}]
+    assert int8_compute_layers(layers) == ["linear"]
+    layers[0]["TacticName"] = "volta_fp32_convolution"
+    assert int8_compute_layers(layers) == []
+
+
 def test_feed_recording_is_bounded_and_copies_mutable_inputs():
     class Session:
         def run(self, outputs, feeds):
@@ -257,13 +268,16 @@ def test_trt_inspection_patch_is_guarded_and_idempotent(tmp_path):
     path = tmp_path / "provider.cc"
     original = ((prepare_ort_trt_inspection.ORIGINAL + "\n"
                  + prepare_ort_trt_inspection.HARDWARE_ORIGINAL + "\n") * 2
-                + prepare_ort_trt_inspection.CAPABILITY_ORIGINAL)
+                + prepare_ort_trt_inspection.CAPABILITY_ORIGINAL
+                + (prepare_ort_trt_inspection.CONTEXT_ORIGINAL + "\n"
+                   + prepare_ort_trt_inspection.BUFFER_ORIGINAL + "\n") * 2)
     path.write_text(original)
     prepare_ort_trt_inspection.prepare(path)
     assert path.read_text().count("setProfilingVerbosity") == 2
     assert path.read_text().count("setPreviewFeature") == 2
     assert path.read_text().count(prepare_ort_trt_inspection.HARDWARE_FIXED) == 2
     assert path.read_text().count("VIVI_TRT_INT8_LINEAR_ONLY") == 1
+    assert path.read_text().count(prepare_ort_trt_inspection.BUFFER_FIXED) == 2
     prepare_ort_trt_inspection.prepare(path)
     assert path.read_text().count("setProfilingVerbosity") == 2
     assert path.read_text().count("setPreviewFeature") == 2
@@ -277,11 +291,55 @@ def test_trt_patch_upgrades_existing_inspection_source(tmp_path):
     path = tmp_path / "provider.cc"
     path.write_text((prepare_ort_trt_inspection.FIXED + "\n"
                     + prepare_ort_trt_inspection.HARDWARE_ORIGINAL + "\n") * 2
-                   + prepare_ort_trt_inspection.CAPABILITY_ORIGINAL)
+                   + prepare_ort_trt_inspection.CAPABILITY_ORIGINAL
+                   + (prepare_ort_trt_inspection.CONTEXT_ORIGINAL + "\n"
+                      + prepare_ort_trt_inspection.BUFFER_ORIGINAL + "\n") * 2)
     prepare_ort_trt_inspection.prepare(path)
     assert path.read_text().count("setProfilingVerbosity") == 2
     assert path.read_text().count("setPreviewFeature") == 2
     assert path.read_text().count(prepare_ort_trt_inspection.HARDWARE_FIXED) == 2
+
+
+def test_shared_context_buffer_lives_through_enqueue(tmp_path):
+    compiler = shutil.which("g++")
+    if compiler is None:
+        pytest.skip("C++ compiler unavailable")
+    source = tmp_path / "lifetime.cc"
+    source.write_text("""
+#include <cassert>
+#include <cstdint>
+#include <cstdlib>
+#include <functional>
+#include <memory>
+bool alive = false;
+struct IAllocator {
+  template<class T> static auto MakeUniquePtrFromOrtAllocator(void*, size_t size) {
+    alive = true;
+    return std::unique_ptr<void, std::function<void(void*)>>(std::calloc(size, 1), [](void* p) {
+      std::free(p); alive = false;
+    });
+  }
+};
+struct State { bool context_memory_sharing_enable = true; };
+struct Context {
+  void* buffer = nullptr;
+  void setDeviceMemory(void* p) {
+    assert(reinterpret_cast<uintptr_t>(p) % 512 == 0);
+    buffer = p; *static_cast<int*>(buffer) = 42;
+  }
+  void enqueue() { assert(alive); assert(*static_cast<int*>(buffer) == 42); }
+};
+int main() {
+  State state; auto* trt_state = &state;
+  Context context; auto* trt_context = &context;
+  void* alloc = nullptr; size_t size = 16; auto* max_context_mem_size_ptr = &size;
+  {
+""" + prepare_ort_trt_inspection.CONTEXT_FIXED
+                      + "\n" + prepare_ort_trt_inspection.BUFFER_FIXED
+                      + "\n}\ntrt_context->enqueue();\n}\nassert(!alive);\n}\n")
+    executable = tmp_path / "lifetime"
+    subprocess.run([compiler, "-std=c++17", str(source), "-o", str(executable)], check=True)
+    subprocess.run([str(executable)], check=True)
 
 
 @pytest.mark.parametrize("minor", [5, 6])

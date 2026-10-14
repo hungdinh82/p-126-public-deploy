@@ -60,6 +60,11 @@ Xem trạng thái từng model, thiết bị GPU và thời gian xử lý tại:
 http://127.0.0.1:8789/test
 ```
 
+Trang này hiển thị kiến trúc, runtime, precision và RAM tiến trình (RSS) của
+mỗi model, cùng RAM tổng/khả dụng và swap của máy; cập nhật mỗi 2 giây.
+RSS gồm model và bộ nhớ runtime, không phải dung lượng weights hay VRAM riêng.
+Các model cùng PID được ghi rõ dùng chung RAM, không cộng các số này hai lần.
+PID không xác định hoặc tiến trình đã dừng hiển thị chưa đo được.
 Trang này theo dõi và gọi trực tiếp model; không chạy workflow/RAG/xe của app.
 Log service nằm trong `data/ai-server/`.
 
@@ -158,6 +163,10 @@ sẽ dùng các object CUDA đã build trong cùng thư mục, không cần xóa
 ORT builder bật `FASTER_DYNAMIC_SHAPES_0805` riêng cho TensorRT 8.5.
 Chế độ native `VIVI_TRT_INT8_LINEAR_ONLY` chỉ gom Conv với hai đầu vào QDQ
 thành partition TensorRT; attention, KV cache, shape và sampling dùng CUDA/CPU.
+Shared context giữ buffer sống đến hết enqueue, thêm padding và căn pointer
+theo biên 512 byte TensorRT 8.5 yêu cầu. Buffer scratch được tái sử dụng giữa
+các engine. Build tăng dần cũng làm mới staging thư viện trước khi đóng gói
+wheel và so SHA256 với binary vừa compile, tránh cài lại provider cũ.
 
 TTS GPU INT8 dùng **static QDQ S8S8**: thu đầu vào thật của ba graph khi FP32 sinh
 sáu câu tiếng Việt bằng giọng VIVI, hiệu chuẩn MinMax đối xứng và quantize MatMul
@@ -169,8 +178,10 @@ ngoài vào TensorRT. Tham khảo [ORT TensorRT EP](https://onnxruntime.ai/docs/
 Setup không chọn profile GPU trước khi smoke suy luận thật thành công. Runtime
 bắt buộc `--device cuda`, khởi tạo TensorRT EP và từ chối thay toàn bộ session
 bằng CUDA/CPU khi TensorRT lỗi. Mỗi graph phải có sự kiện thực thi TensorRT trong
-ORT profiling, đồng thời engine inspector phải tìm thấy lớp MatMul/GEMM/FC có
-format INT8. Nếu thiếu bằng chứng thì TTS báo `unavailable`, không báo INT8 GPU ready.
+ORT profiling, đồng thời engine inspector phải tìm thấy lớp MatMul/GEMM/FC/Conv
+có format hoặc compute tactic INT8. TensorRT 8.5 có thể báo `N/A` cho format
+của shape động; kernel như `volta_*_cudnn_int8_*` vẫn xác nhận phép tính INT8.
+Nếu thiếu bằng chứng thì TTS báo `unavailable`, không báo INT8 GPU ready.
 Các node không được TensorRT hỗ trợ vẫn có thể chạy CUDA/CPU; báo cáo `provider_profile`
 cho thấy số sự kiện của từng provider. Đây là profile hỗn hợp, không phải mọi node
 đều INT8 hoặc đều trên GPU.
@@ -226,8 +237,30 @@ Corpus mặc định là smoke ban đầu, chưa phải bộ đánh giá chất 
 Đã kiểm tra local: tạo ba graph QDQ với 72/72/425 MatMul INT8, giữ integer I/O,
 chạy các feed thật và sinh WAV/streaming VIVI bằng QDQ trên CPU. Model tổng cộng
 khoảng 356 MB, gồm codec FP32. Đã build thành công provider CUDA/TensorRT trên
-AGX Xavier sau bản vá API TensorRT 8.5.2. **Chưa xác nhận engine INT8 hay tốc độ
-GPU trên AGX Xavier**; setup vẫn cần vượt qua smoke suy luận và engine inspector.
+AGX Xavier sau bản vá API TensorRT 8.5.2. Đã xác nhận riêng TTS INT8 GPU trên
+Xavier ngày 14/10/2026: ba graph đều có sự kiện TensorRT, inspector tìm thấy
+72/63/425 lớp tính toán INT8 lần lượt ở text encoder/prefix/local decoder.
+Câu `Xin chào bạn, tôi là trợ lý ViVi.` sinh WAV và streaming 2,32 giây, PCM
+không rỗng/không im lặng. Lượt streaming sau warmup mất 5,93 giây, âm thanh
+đầu tiên 297 ms, RTF 2,56: chạy được nhưng chưa đạt thời gian thực.
+Peak RSS của tiến trình TTS là 7,18 GiB, RAM khả dụng toàn máy thấp nhất
+5,06 GiB. RSS gồm CPU và các mapping trên hệ thống RAM chia sẻ, không phải
+VRAM riêng của GPU. Sau load, `malloc_trim` chỉ trả lại khoảng 115 MiB;
+không thể coi phần RAM còn lại là heap tạm có thể giải phóng đơn giản.
+Báo cáo và WAV ở `eval/results/jetson-int8-gpu/`. Lượt này chỉ kiểm tra TTS;
+chưa đo chất lượng giọng trên corpus rộng hoặc chứng minh INT8 nhanh hơn FP32.
+Chạy cả Qwen/Whisper/TTS vẫn có thể thiếu RAM khi TensorRT nạp engine; lượt
+TTS riêng thành công không chứng minh cả ba model cùng chạy đủ RAM.
+
+Để kiểm tra riêng TTS và giao diện mà không nạp Qwen/Whisper trên Jetson:
+
+```bash
+bash scripts/test_jetson_tts.sh
+```
+
+Helper mở server ở `127.0.0.1:8789`; từ Laptop chuyển tiếp cổng bằng
+`ssh -L 8789:127.0.0.1:8789 p126@100.123.27.125`, rồi mở
+`http://localhost:8789/test`. Dừng server đang dùng cổng này trước khi chạy helper.
 
 ### INT8 trên CPU — thử nghiệm trước đó
 
