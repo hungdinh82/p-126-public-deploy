@@ -32,7 +32,17 @@ class ScenarioRequest(BaseModel):
 
 
 class ModelSelectionRequest(BaseModel):
-    profile_id: Literal["runtime", "pc_offline", "jetson_offline"]
+    profile_id: Literal[
+        "auto", "cloud_only", "jetson_only", "rules_only",
+        "runtime", "pc_offline", "jetson_offline",
+    ]
+
+
+class ConnectivityScenarioRequest(BaseModel):
+    scenario: Literal[
+        "actual", "internet_down", "jetson_down", "both_down",
+        "stt_down", "llm_down", "tts_down",
+    ]
 
 
 class OtaDeployRequest(BaseModel):
@@ -128,7 +138,7 @@ class EngineerService:
         self.twin_alerts = {vehicle_id: runtime.alerts.__class__() for vehicle_id in SIMULATED_IDS}
         self.audit: deque[AuditEvent] = deque(maxlen=100)
         self.ota_history: deque[dict[str, Any]] = deque(maxlen=20)
-        self.selected_profile = "runtime"
+        self.selected_profile = runtime.connectivity.profile
 
     def _record(self, actor: str, action: str, target: str, detail: str, result: str = "ok") -> None:
         self.audit.appendleft(AuditEvent(occurred_at=datetime.now(UTC), actor=actor, action=action, target=target, detail=detail, result=result))
@@ -140,7 +150,12 @@ class EngineerService:
         from src.vivi.api.routes.metrics import metrics
 
         health_payload, metrics_payload = await health(), metrics()
-        return {"health": health_payload, "metrics": metrics_payload, "selected_profile": self.selected_profile}
+        return {
+            "health": health_payload,
+            "metrics": metrics_payload,
+            "selected_profile": self.runtime.connectivity.profile,
+            "connectivity": self.runtime.connectivity.snapshot(),
+        }
 
     async def _runtime_state(self) -> VehicleState | None:
         try:
@@ -222,20 +237,50 @@ class EngineerService:
 
     async def models(self) -> dict[str, Any]:
         settings = self.runtime.settings
-        return {"selected_profile": self.selected_profile, "profiles": [
-            {"id": "runtime", "label": "Runtime hiện tại", "mode": "runtime", "verified": True,
-             "detail": f"STT {settings.stt_provider}; LLM {settings.llm_provider}; TTS {settings.tts_provider}"},
-            {"id": "pc_offline", "label": "PC offline", "mode": "simulation", "verified": False,
-             "detail": "PhoWhisper + local Qwen GGUF Q4 + ZeroTTS"},
-            {"id": "jetson_offline", "label": "Jetson/Nano offline", "mode": "simulation", "verified": False,
-             "detail": "Whisper.cpp + local model + TTS fallback"},
+        return {"selected_profile": self.runtime.connectivity.profile, "profiles": [
+            {"id": "auto", "label": "Tự động", "mode": "runtime", "verified": True,
+             "detail": f"Cloud khi có Internet; Jetson khi offline; cuối cùng Rules ({settings.llm_provider})"},
+            {"id": "cloud_only", "label": "Chỉ Cloud", "mode": "runtime", "verified": True,
+             "detail": "Không gọi Jetson; vẫn giữ Rules, RAG và điều khiển xe trên Laptop"},
+            {"id": "jetson_only", "label": "Chỉ Jetson", "mode": "runtime", "verified": True,
+             "detail": "Không gọi Cloud; vẫn giữ Rules, RAG và điều khiển xe trên Laptop"},
+            {"id": "rules_only", "label": "Chỉ Rules", "mode": "runtime", "verified": True,
+             "detail": "Không gọi Cloud/Jetson; text, RAG trích xuất và điều khiển xe vẫn hoạt động"},
         ]}
 
     async def select_model_profile(self, request: ModelSelectionRequest, actor: str) -> dict[str, Any]:
+        if request.profile_id in {"runtime", "pc_offline", "jetson_offline"}:
+            # Compatibility for older dashboard clients. New clients use the
+            # four explicit runtime profiles above.
+            self.selected_profile = request.profile_id
+            self._record(actor, "model.select", request.profile_id, "legacy simulation; config không thay đổi")
+            return {"selected_profile": request.profile_id, "mode": "simulation", "changed_runtime": False}
         self.selected_profile = request.profile_id
-        mode = "runtime" if request.profile_id == "runtime" else "simulation"
-        self._record(actor, "model.select", request.profile_id, f"mode: {mode}; config không thay đổi")
-        return {"selected_profile": request.profile_id, "mode": mode, "changed_runtime": False}
+        self.runtime.connectivity.set_profile(request.profile_id)
+        self._record(actor, "model.select", request.profile_id, "runtime routing profile changed")
+        return {"selected_profile": request.profile_id, "mode": "runtime", "changed_runtime": True}
+
+    async def connectivity_scenarios(self) -> dict[str, Any]:
+        return {
+            "selected": self.runtime.connectivity.override,
+            "scenarios": [
+                {"id": "actual", "label": "Trạng thái thực / Auto"},
+                {"id": "internet_down", "label": "Mất Internet"},
+                {"id": "jetson_down", "label": "Mất Jetson"},
+                {"id": "both_down", "label": "Mất cả Internet và Jetson"},
+                {"id": "stt_down", "label": "Chỉ STT Jetson lỗi"},
+                {"id": "llm_down", "label": "Chỉ LLM Jetson lỗi"},
+                {"id": "tts_down", "label": "Chỉ TTS Jetson lỗi"},
+            ],
+            "state": self.runtime.connectivity.snapshot(),
+        }
+
+    async def apply_connectivity_scenario(
+        self, request: ConnectivityScenarioRequest, actor: str
+    ) -> dict[str, Any]:
+        self.runtime.connectivity.set_override(request.scenario)
+        self._record(actor, "connectivity.apply", "runtime", request.scenario)
+        return self.runtime.connectivity.snapshot()
 
     async def ota(self) -> dict[str, Any]:
         return {"simulation": True, "history": list(self.ota_history)}

@@ -52,6 +52,11 @@ async def navigation_event(request: NavigationRequest):
 
 
 def _client() -> VietMapClient:
+    if not runtime.connectivity.capability_available("rag", "cloud"):
+        raise HTTPException(
+            status_code=503,
+            detail="Đang offline: tuyến hiện tại vẫn hoạt động nhưng không thể tìm hoặc lập tuyến mới.",
+        )
     client = VietMapClient(runtime.settings)
     if not client.available:
         raise HTTPException(status_code=503, detail="Chưa cấu hình VIETMAP_API_KEY trong .env")

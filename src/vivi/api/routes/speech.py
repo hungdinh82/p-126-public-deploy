@@ -162,12 +162,30 @@ async def transcribe_stream(socket: WebSocket, session_id: str, turn_id: str):
 
 
 def _tts(request: TTSRequest):
-    if request.tts_provider is None:
-        return runtime.tts
-    engine = runtime.tts_engines.get(request.tts_provider)
-    if engine is None:
-        raise HTTPException(status_code=400, detail="TTS provider không khả dụng trong profile này")
-    return engine
+    if runtime.settings.app_env == "test":
+        if request.tts_provider in {None, "auto"}:
+            return runtime.tts
+        engine = runtime.tts_engines.get(request.tts_provider)
+        if engine is None:
+            raise HTTPException(status_code=400, detail="TTS provider không khả dụng trong profile này")
+        return engine
+    preference = None if request.tts_provider in {None, "auto"} else request.tts_provider
+    cloud_ok = runtime.connectivity.capability_available("tts", "cloud")
+    jetson_ok = runtime.connectivity.capability_available("tts", "jetson")
+    order = ["vieneu", "zerotts"] if preference is None else [preference, "zerotts" if preference == "vieneu" else "vieneu"]
+    for name in order:
+        if name == "vieneu" and not cloud_ok:
+            continue
+        if name == "zerotts" and not jetson_ok:
+            continue
+        engine = runtime.tts_engines.get(name)
+        if engine is not None and engine.availability()[0]:
+            runtime.connectivity.store.append(
+                "selection", "tts", "selected", provider=name,
+                reason=f"preference={preference or 'auto'}",
+            )
+            return engine
+    raise HTTPException(status_code=503, detail="Không có TTS Cloud hoặc Jetson khả dụng; dùng giọng trình duyệt")
 
 
 @router.post("/tts")

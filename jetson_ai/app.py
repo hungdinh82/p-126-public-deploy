@@ -18,6 +18,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 from jetson_ai.config import auth_required
+from jetson_ai.scheduler import PriorityGpuScheduler
 from jetson_ai.speech import SpeechModels
 from jetson_ai.stream_routes import ModelStreams
 
@@ -62,7 +63,9 @@ class ServiceConfig:
 
 
 def create_app(config: ServiceConfig, *, transport: httpx.AsyncBaseTransport | None = None) -> FastAPI:
-    slots = asyncio.Semaphore(config.max_concurrent)
+    # Xavier shares one GPU across speech and language models. The scheduler
+    # gives safety-critical listening priority over response audio.
+    slots = PriorityGpuScheduler()
     active = 0
     last_llm_latency = None
     last_llm_first_chunk = None
@@ -70,7 +73,7 @@ def create_app(config: ServiceConfig, *, transport: httpx.AsyncBaseTransport | N
     load_task = None
 
     async def load_speech():
-        async with slots:
+        async with slots.slot("llm", timeout=2):
             for name in ("stt", "tts"):
                 if speech.info[name]["status"] != "ready":
                     await asyncio.to_thread(speech.load, name)
@@ -204,11 +207,13 @@ def create_app(config: ServiceConfig, *, transport: httpx.AsyncBaseTransport | N
         if state != "ready":
             code = "MODEL_LOADING" if state == "loading" else "CAPABILITY_UNAVAILABLE"
             return error(code, "LLM backend is not ready", 503, request=request, retryable=True)
-        if slots.locked():
+        try:
+            await slots.acquire("llm", timeout=2)
+        except TimeoutError:
             result = error("BACKEND_BUSY", "LLM backend is busy", 429, request=request, retryable=True)
             result.headers["Retry-After"] = "1"
             return result
-        async with slots:
+        try:
             active += 1
             started = time.monotonic()
             try:
@@ -234,6 +239,8 @@ def create_app(config: ServiceConfig, *, transport: httpx.AsyncBaseTransport | N
                 active -= 1
                 last_llm_latency = round((time.monotonic() - started) * 1000)
                 last_llm_first_chunk = None
+        finally:
+            slots.release()
 
     async def validate_json(request: Request) -> dict[str, Any] | JSONResponse:
         body = bytearray()
@@ -333,8 +340,6 @@ def create_app(config: ServiceConfig, *, transport: httpx.AsyncBaseTransport | N
         if speech.info["stt"]["status"] != "ready":
             return error("CAPABILITY_UNAVAILABLE", speech.info["stt"].get("error") or "STT not ready",
                          503, request=request, capability="stt")
-        if slots.locked():
-            return error("BACKEND_BUSY", "GPU stage is busy", 429, request=request, capability="stt", retryable=True)
         form = await request.form()
         upload = form.get("file") or form.get("audio")
         if not hasattr(upload, "read"):
@@ -354,21 +359,25 @@ def create_app(config: ServiceConfig, *, transport: httpx.AsyncBaseTransport | N
         except (wave.Error, EOFError, ValueError) as exc:
             return error("INVALID_REQUEST", str(exc), 400, request=request, capability="stt")
         started = time.monotonic()
-        async with slots:
-            speech.info["stt"]["status"] = "busy"
+        try:
+            await slots.acquire("stt", timeout=2)
+        except TimeoutError:
+            return error("BACKEND_BUSY", "GPU stage is busy", 429, request=request, capability="stt", retryable=True)
+        speech.info["stt"]["status"] = "busy"
+        try:
+            task = asyncio.create_task(asyncio.to_thread(speech.transcribe, audio))
             try:
-                task = asyncio.create_task(asyncio.to_thread(speech.transcribe, audio))
-                try:
-                    text = await asyncio.shield(task)
-                except asyncio.CancelledError:
-                    await task
-                    raise
-                if not text:
-                    raise RuntimeError("Empty transcript")
-            except Exception as exc:
-                return error("MODEL_ERROR", str(exc), 502, request=request, capability="stt")
-            finally:
-                speech.info["stt"].update(status="ready", last_latency_ms=round((time.monotonic() - started) * 1000), first_chunk_ms=None)
+                text = await asyncio.shield(task)
+            except asyncio.CancelledError:
+                await task
+                raise
+            if not text:
+                raise RuntimeError("Empty transcript")
+        except Exception as exc:
+            return error("MODEL_ERROR", str(exc), 502, request=request, capability="stt")
+        finally:
+            speech.info["stt"].update(status="ready", last_latency_ms=round((time.monotonic() - started) * 1000), first_chunk_ms=None)
+            slots.release()
         return {"contract_version": VERSION, "model_id": "whisper-base", "text": text,
                 "latency_ms": speech.info["stt"]["last_latency_ms"]}
 
@@ -391,22 +400,24 @@ def create_app(config: ServiceConfig, *, transport: httpx.AsyncBaseTransport | N
             if payload.get("format", "pcm_s16le") != "pcm_s16le":
                 return error("INVALID_REQUEST", "TTS stream format is pcm_s16le", 400, request=request, capability="tts")
             return await streams.tts(text.strip(), request)
-        if slots.locked():
-            return error("BACKEND_BUSY", "GPU stage is busy", 429, request=request, capability="tts", retryable=True)
         started = time.monotonic()
-        async with slots:
-            speech.info["tts"]["status"] = "busy"
+        try:
+            await slots.acquire("tts", timeout=2)
+        except TimeoutError:
+            return error("BACKEND_BUSY", "GPU stage is busy", 429, request=request, capability="tts", retryable=True)
+        speech.info["tts"]["status"] = "busy"
+        try:
+            task = asyncio.create_task(asyncio.to_thread(speech.synthesize, text.strip()))
             try:
-                task = asyncio.create_task(asyncio.to_thread(speech.synthesize, text.strip()))
-                try:
-                    audio = await asyncio.shield(task)
-                except asyncio.CancelledError:
-                    await task
-                    raise
-            except Exception as exc:
-                return error("MODEL_ERROR", str(exc), 502, request=request, capability="tts")
-            finally:
-                speech.info["tts"].update(status="ready", last_latency_ms=round((time.monotonic() - started) * 1000), first_chunk_ms=None)
+                audio = await asyncio.shield(task)
+            except asyncio.CancelledError:
+                await task
+                raise
+        except Exception as exc:
+            return error("MODEL_ERROR", str(exc), 502, request=request, capability="tts")
+        finally:
+            speech.info["tts"].update(status="ready", last_latency_ms=round((time.monotonic() - started) * 1000), first_chunk_ms=None)
+            slots.release()
         return Response(audio, media_type="audio/wav", headers={
             "X-ViVi-Latency-Ms": str(speech.info["tts"]["last_latency_ms"]),
             "X-Audio-Sample-Rate": str(speech.info["tts"]["sample_rate"]),

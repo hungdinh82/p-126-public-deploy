@@ -53,16 +53,17 @@ local_llm_max_tokens = 512
 # Private AI gateway: can run on Jetson, this PC, or another reachable server.
 # Change only this URL; /v1 and the shared authentication are wired automatically.
 # Docker: use the server's LAN/Tailscale IP, or host.docker.internal for the host PC.
-# Authentication is optional for personal testing on a private network.
-ai_server_url = "http://127.0.0.1:8789"
-ai_server_auth_required = false
-jetson_ai_policy = "prefer_local"
+# In-vehicle USB-C link: Jetson 192.168.55.1, Laptop 192.168.55.100.
+# Tailscale remains a manual maintenance route and is never an automatic fallback.
+ai_server_url = ""
+ai_server_auth_required = true
+jetson_ai_policy = "allow_cloud"
 # To use a standalone LM Studio/llama.cpp server instead, set policy = "disabled"
 # and configure local_llm_base_url / local_llm_api_key above.
 
 # Speech: provider = off to disable; preload = true to load at startup
-stt_provider = "off"
-stt_fallback_provider = "off"
+stt_provider = "soniox"
+stt_fallback_provider = "whisper_cpp"
 stt_fallback_preload = false
 phowhisper_model = "vinai/PhoWhisper-medium"
 phowhisper_device = "auto"
@@ -79,6 +80,15 @@ soniox_endpoint_detection = true
 soniox_max_endpoint_delay_ms = 1000
 soniox_timeout_seconds = 30
 soniox_stream_max_seconds = 60
+
+# Connectivity hysteresis: two 2-second observations avoids false switching
+# while still detecting a pulled Wi-Fi/Ethernet link in roughly 3–5 seconds.
+internet_probe_url = "https://clients3.google.com/generate_204"
+internet_probe_timeout_seconds = 1.5
+connectivity_probe_interval_seconds = 2.0
+connectivity_failure_threshold = 2
+connectivity_success_threshold = 2
+connectivity_retention_days = 7
 
 tts_provider = "vieneu"
 zerotts_model = "zeroweight-ai/ZeroTTS"

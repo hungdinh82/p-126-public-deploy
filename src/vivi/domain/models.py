@@ -253,7 +253,7 @@ class TurnRequest(BaseModel):
     )
     confirmation_id: str | None = Field(default=None, max_length=100)
     confirmation_decision: Literal["approve", "deny"] | None = None
-    llm_provider: Literal["rules", "openai", "google", "local", "openrouter"] | None = None
+    llm_provider: Literal["auto", "rules", "openai", "google", "local", "openrouter"] | None = None
 
     @model_validator(mode="after")
     def validate_navigation(self):
@@ -320,14 +320,14 @@ class TTSRequest(BaseModel):
     session_id: str
     turn_id: str
     # Engine picked in the settings panel; None uses TTS_PROVIDER.
-    tts_provider: Literal["zerotts", "vieneu"] | None = None
+    tts_provider: Literal["auto", "zerotts", "vieneu"] | None = None
 
 
 class ConfirmationDecisionRequest(BaseModel):
     session_id: str = Field(min_length=1, max_length=100)
     turn_id: str = Field(min_length=1, max_length=100)
     decision: Literal["approve", "deny"]
-    llm_provider: Literal["rules", "openai", "google", "local", "openrouter"] | None = None
+    llm_provider: Literal["auto", "rules", "openai", "google", "local", "openrouter"] | None = None
 
 
 class DemoDrivingRequest(BaseModel):

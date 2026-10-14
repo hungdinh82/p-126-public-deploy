@@ -28,14 +28,21 @@ class ModelStreams:
         self.backend_status, self.error, self.record_llm = backend_status, error, record_llm
         self.transport = transport
 
+    async def _acquire(self, capability):
+        try:
+            await self.slots.acquire(capability, timeout=2)
+        except TypeError:
+            await asyncio.wait_for(self.slots.acquire(), 2)
+
     async def chat(self, payload, request, timeout_ms=None, envelope=None):
         state = await self.backend_status()
         if state != "ready":
             return self.error("MODEL_LOADING" if state == "loading" else "CAPABILITY_UNAVAILABLE",
                               "LLM backend is not ready", 503, request=request, retryable=True)
-        if self.slots.locked():
+        try:
+            await self._acquire("llm")
+        except TimeoutError:
             return self.error("BACKEND_BUSY", "GPU stage is busy", 429, request=request, retryable=True)
-        await self.slots.acquire()
         started = time.monotonic()
         timeout = min(self.config.timeout_seconds, timeout_ms / 1000) if timeout_ms else self.config.timeout_seconds
         client = httpx.AsyncClient(transport=self.transport, timeout=timeout)
@@ -143,9 +150,10 @@ class ModelStreams:
                                  background=BackgroundTask(cleanup))
 
     async def tts(self, text, request):
-        if self.slots.locked():
+        try:
+            await self._acquire("tts")
+        except TimeoutError:
             return self.error("BACKEND_BUSY", "GPU stage is busy", 429, request=request, capability="tts", retryable=True)
-        await self.slots.acquire()
         started = time.monotonic()
         state = self.speech.info["tts"]
         state["status"] = "busy"
@@ -212,18 +220,20 @@ class ModelStreams:
                 await socket.close(code=1008)
 
             async def decode():
-                if self.slots.locked():
-                    raise BackendBusyError("GPU stage is busy")
-                async with self.slots:
-                    state["status"] = "busy"
-                    output = io.BytesIO()
-                    with wave.open(output, "wb") as wav:
-                        wav.setparams((1, 2, 16000, 0, "NONE", "not compressed"))
-                        wav.writeframes(pcm)
-                    try:
-                        return await worker(self.speech.transcribe, output.getvalue())
-                    finally:
-                        state["status"] = "ready"
+                try:
+                    await self._acquire("stt")
+                except TimeoutError as exc:
+                    raise BackendBusyError("GPU stage is busy") from exc
+                state["status"] = "busy"
+                output = io.BytesIO()
+                with wave.open(output, "wb") as wav:
+                    wav.setparams((1, 2, 16000, 0, "NONE", "not compressed"))
+                    wav.writeframes(pcm)
+                try:
+                    return await worker(self.speech.transcribe, output.getvalue())
+                finally:
+                    state["status"] = "ready"
+                    self.slots.release()
 
             try:
                 async with asyncio.timeout(90):

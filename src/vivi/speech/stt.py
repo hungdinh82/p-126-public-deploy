@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import shutil
+import tempfile
 from pathlib import Path
 
 from src.vivi.config import Settings
@@ -168,6 +169,95 @@ class FallbackSTTAdapter:
         return await self.primary.stream(audio_chunks, on_update)
 
 
+class JetsonSTTAdapter:
+    """Batch STT adapter for the private Jetson inference gateway."""
+
+    name = "jetson-whisper"
+    device = "jetson"
+    dtype = "remote"
+
+    def __init__(self, config: Settings):
+        self.config = config
+        self.transport = None
+
+    def availability(self) -> tuple[bool, str]:
+        if not self.config.jetson_ai_url:
+            return False, "AI_SERVER_URL chưa cấu hình"
+        if self.config.ai_server_auth_required and not self.config.jetson_ai_token:
+            return False, "Thiếu AI_SERVER_TOKEN"
+        if shutil.which(self.config.ffmpeg_binary) is None:
+            return False, "Không tìm thấy ffmpeg để chuẩn hóa audio cho Jetson"
+        return True, "ready-via-gateway"
+
+    async def preload(self) -> None:
+        return None
+
+    async def transcribe(self, path: Path) -> str:
+        import httpx
+
+        available, reason = self.availability()
+        if not available:
+            raise RuntimeError(reason)
+        with tempfile.NamedTemporaryFile(prefix="vivi-jetson-", suffix=".wav", delete=False) as handle:
+            wav_path = Path(handle.name)
+        try:
+            process = await asyncio.create_subprocess_exec(
+                self.config.ffmpeg_binary, "-v", "error", "-y", "-i", str(path),
+                "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", str(wav_path),
+                stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.PIPE,
+            )
+            _, error = await process.communicate()
+            if process.returncode:
+                raise RuntimeError(f"Không chuyển được audio cho Jetson: {error.decode('utf-8', 'replace')[:160]}")
+            headers = (
+                {"Authorization": f"Bearer {self.config.jetson_ai_token}"}
+                if self.config.ai_server_auth_required else {}
+            )
+            async with httpx.AsyncClient(timeout=self.config.soniox_timeout_seconds, transport=self.transport) as client:
+                with wav_path.open("rb") as audio:
+                    response = await client.post(
+                        self.config.jetson_ai_url.rstrip("/") + "/v1/stt/transcriptions",
+                        headers=headers, files={"file": ("audio.wav", audio, "audio/wav")},
+                    )
+            response.raise_for_status()
+            return str(response.json().get("text", "")).strip()
+        finally:
+            wav_path.unlink(missing_ok=True)
+
+
+class AdaptiveSTTAdapter(FallbackSTTAdapter):
+    def __init__(self, primary, fallback, connectivity):
+        super().__init__(primary, fallback)
+        self.connectivity = connectivity
+
+    def _active(self):
+        if self.connectivity.capability_available("stt", "cloud") and self.primary.availability()[0]:
+            return self.primary
+        return self.fallback
+
+    @property
+    def streaming(self) -> bool:
+        return self._active() is self.primary and super().streaming
+
+    def availability(self) -> tuple[bool, str]:
+        if self.connectivity.capability_available("stt", "cloud") and self.primary.availability()[0]:
+            return self.primary.availability()
+        if self.connectivity.capability_available("stt", "jetson"):
+            return self.fallback.availability()
+        return False, "STT không khả dụng theo trạng thái kết nối/profile hiện tại"
+
+    async def transcribe(self, path: Path) -> str:
+        available, reason = self.availability()
+        if not available:
+            raise RuntimeError(reason)
+        if self._active() is self.primary:
+            try:
+                return await self.primary.transcribe(path)
+            except Exception:
+                logger.exception("%s lỗi, chuyển sang %s", self.primary.name, self.fallback.name)
+        return await self.fallback.transcribe(path)
+
+
 def _create_single(provider: str, config: Settings):
     if provider == "off":
         return DisabledSTTAdapter()
@@ -184,7 +274,7 @@ def _create_single(provider: str, config: Settings):
     raise ValueError(f"STT_PROVIDER không hợp lệ: {provider}")
 
 
-def create_stt(config: Settings):
+def create_stt(config: Settings, connectivity=None):
     if config.jetson_ai_policy == "offline_only" and config.stt_provider == "soniox":
         # The configured on-device fallback becomes the primary in offline mode.
         return _create_single(config.stt_fallback_provider, config)
@@ -192,4 +282,9 @@ def create_stt(config: Settings):
     fallback = config.stt_fallback_provider
     if config.stt_provider in {"off", fallback} or fallback == "off":
         return primary
-    return FallbackSTTAdapter(primary, _create_single(fallback, config))
+    fallback_adapter = _create_single(fallback, config)
+    if connectivity is not None and config.jetson_ai_url and config.jetson_ai_token and config.jetson_ai_policy != "disabled":
+        fallback_adapter = JetsonSTTAdapter(config)
+    if connectivity is not None:
+        return AdaptiveSTTAdapter(primary, fallback_adapter, connectivity)
+    return FallbackSTTAdapter(primary, fallback_adapter)

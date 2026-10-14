@@ -191,11 +191,11 @@ run() {
   if [[ -r "$VIVI_DATA/service.env" ]]; then source "$VIVI_DATA/service.env"; fi
   set +a
   export JETSON_AI_LLM_URL="http://127.0.0.1:$VIVI_BACKEND_PORT"
-  local bind="${JETSON_AI_BIND:-}"
-  if [[ -z "$bind" ]] && command -v tailscale >/dev/null 2>&1; then
-    bind="$(tailscale ip -4 2>/dev/null | head -n 1 || true)"
-  fi
-  bind="${bind:-127.0.0.1}"
+  # The Laptop reaches the gateway through the direct USB-C subnet
+  # (Jetson 192.168.55.1). Bearer auth is mandatory in the vehicle profile, so
+  # listening on all Jetson interfaces is safe and avoids Tailscale-dependent
+  # automatic routing. Tailscale remains available for manual maintenance.
+  local bind="${JETSON_AI_BIND:-0.0.0.0}"
   [[ "$(cat "$VIVI_DATA/build/llama-mode-cu118-gcc10")" == cuda ]] || fail "Run setup again: a CUDA build is required"
   local gpu_layers=99 started=$SECONDS
   "$VIVI_DATA/build/llama.cpp/$VIVI_NATIVE_BUILD/bin/llama-server" \

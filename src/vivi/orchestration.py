@@ -517,6 +517,8 @@ def create_langgraph_orchestrator(
     vehicle: VehicleSimulator,
     store: EventStore,
     config=None,
+    *,
+    connectivity=None,
 ) -> LangGraphOrchestrator:
     config = config or get_settings()
     from src.vivi.dialogue.planner import ModelProvider, SemanticResolver
@@ -533,6 +535,10 @@ def create_langgraph_orchestrator(
     )
     repair_logged_name(config.memory_path)
     services = create_services(config, provider="rules")
+    if connectivity is not None and services.navigation is not None:
+        from src.vivi.navigation.connectivity import ConnectivityMapClient
+
+        services.navigation = ConnectivityMapClient(services.navigation, connectivity)
     services.action_gateway = gateway
     import json
 
@@ -579,8 +585,16 @@ def create_langgraph_orchestrator(
             else [name for name in ("google", "openai", "openrouter") if name in providers]
         )
         fallback_chains["local"] = ["local", *cloud]
+    chain_provider = None
+    if connectivity is not None:
+        available_names = {"rules", *providers}
+
+        def chain_provider(requested):
+            return connectivity.llm_chain(requested, available_names)
     resolver = SemanticResolver(
-        providers, breaker_seconds=config.provider_breaker_seconds, fallback_chains=fallback_chains
+        providers, breaker_seconds=config.provider_breaker_seconds,
+        fallback_chains=fallback_chains, chain_provider=chain_provider,
+        result_recorder=connectivity.record_provider_result if connectivity is not None else None,
     )
     saver = ThreadedSqliteSaver(config.data_dir / "runtime" / "conversation-v3.sqlite3")
     graph = build_assistant_graph(

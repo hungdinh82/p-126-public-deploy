@@ -183,6 +183,7 @@ class ModelProvider:
     client: object
     budget_seconds: float
     unavailable_until: float = 0
+    consecutive_failures: int = 0
 
 
 def semantic_navigation_context(navigation):
@@ -212,15 +213,20 @@ def semantic_navigation_context(navigation):
 
 
 class SemanticResolver:
-    def __init__(self, providers=None, *, parser=None, breaker_seconds=30, fallback_chains=None):
+    def __init__(self, providers=None, *, parser=None, breaker_seconds=30, fallback_chains=None,
+                 chain_provider=None, result_recorder=None):
         self.providers = providers or {}
         self.parser = parser or OfflineParser()
         self.breaker_seconds = breaker_seconds
         self.fallback_chains = fallback_chains or {}
+        self.chain_provider = chain_provider
+        self.result_recorder = result_recorder
 
     def chain(self, requested):
         if requested == "rules":
             return []
+        if self.chain_provider is not None:
+            return list(self.chain_provider(requested))
         if requested in self.fallback_chains:
             return list(self.fallback_chains[requested])
         return [requested] if requested == "local" else [requested, "local"]
@@ -260,16 +266,21 @@ class SemanticResolver:
                 async with asyncio.timeout(provider.budget_seconds):
                     value = await self.interpret(provider, prompt)
             except (Exception,) as exc:
-                provider.unavailable_until = time.monotonic() + self.breaker_seconds
+                provider.consecutive_failures += 1
+                status = getattr(getattr(exc, "response", None), "status_code", None)
+                cooldown = min(300, self.breaker_seconds * (2 ** (provider.consecutive_failures - 1)))
+                provider.unavailable_until = float("inf") if status in {401, 403} else time.monotonic() + cooldown
                 attempts.append(
                     {
                         "provider": name,
                         "outcome": "fallback",
                         "reason": type(exc).__name__,
-                        "http_status": getattr(getattr(exc, "response", None), "status_code", None),
+                        "http_status": status,
                         "latency_ms": round((time.perf_counter() - started) * 1000, 2),
                     }
                 )
+                if self.result_recorder:
+                    self.result_recorder(name, "fallback", attempts[-1]["latency_ms"], type(exc).__name__)
                 if isinstance(exc, ValidationError):
                     # Field paths/codes help diagnose repair failures without
                     # persisting model input, prompt text or arbitrary output.
@@ -280,6 +291,10 @@ class SemanticResolver:
             attempts.append(
                 {"provider": name, "outcome": "served", "latency_ms": round((time.perf_counter() - started) * 1000, 2)}
             )
+            provider.consecutive_failures = 0
+            provider.unavailable_until = 0
+            if self.result_recorder:
+                self.result_recorder(name, "served", attempts[-1]["latency_ms"], None)
             guarded = self.parser.guard(text, value, session, memory, history)
             # Keep the model's proposed operations for audit, not free-form
             # model text that could contain leaked prompt or false claims.

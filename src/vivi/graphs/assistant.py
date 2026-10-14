@@ -361,7 +361,8 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
     runtime_epoch = str(uuid4())
     resolver = resolver or SemanticResolver()
     runtime = CapabilityRuntime(
-        services, store, generators, budgets, resolver.breaker_seconds, provider_chains=resolver.fallback_chains
+        services, store, generators, budgets, resolver.breaker_seconds,
+        provider_chains=resolver.fallback_chains, chain_provider=resolver.chain_provider,
     )
     if store is None:
         from pathlib import Path

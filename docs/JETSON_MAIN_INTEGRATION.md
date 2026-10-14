@@ -57,25 +57,23 @@ Log nằm trong `data/ai-server/`. Dừng bằng Ctrl+C; một engine dừng s�
 service thay vì để app tiếp tục gọi process hỏng. Các model speech nạp ở nền;
 xem trạng thái tại gateway `/test`. Nếu thiếu model/runtime, chạy `setup` trước.
 Trên Xavier, cùng launcher gọi script Jetson native, dùng lại môi trường đã setup.
-Remote STT/TTS chưa được ghép vào app chính; app vẫn giữ adapter speech hiện có.
+Remote STT/TTS đã được ghép vào app Laptop. Soniox/VieNeu là tầng Cloud;
+Whisper/ZeroTTS trên Jetson là tầng offline; browser voice là TTS cuối cùng.
 
 Gateway AI có thể chạy trên Jetson, PC hoặc máy khác có runtime phù hợp.
 Laptop chỉ cần địa chỉ truy cập được; không phụ thuộc SSH alias hay loại máy.
 Trong `config.toml`:
 
 ```toml
-llm_provider = "local"
+llm_provider = "google"
 local_llm_model = "vivi-qwen3-1.7b"
-ai_server_url = "http://<IP-hoặc-hostname-server>:8789"
-jetson_ai_policy = "prefer_local"
+ai_server_url = "http://192.168.55.1:8789"
+ai_server_auth_required = true
+jetson_ai_policy = "allow_cloud"
 ```
 
-Để test cá nhân không cần token, đặt `ai_server_auth_required = false` trong
-`config.toml` của cả backend và AI server (mặc định của nhánh này). Restart cả
-hai process; không cần setup/build lại model. Gateway `/test` tự ẩn ô token.
-Chế độ này cho phép mọi client truy cập được địa chỉ server gọi model.
-Muốn bật lại xác thực, đặt `ai_server_auth_required = true` ở cả hai máy và
-trong `.env` của backend đặt `AI_SERVER_TOKEN=<token từ service.env trên AI server>`.
+Trong xe luôn giữ `ai_server_auth_required = true`. Trong `.env` của Laptop đặt
+`AI_SERVER_TOKEN=<token từ /mnt/jetson-data/vivi-ai/service.env trên Jetson>`.
 Backend tự dùng cùng URL và token cho capability probe và SLM; tự nối `/v1`.
 Biến môi trường ưu tiên hơn TOML. Xóa/cập nhật các override `LLM_PROVIDER`,
 `AI_SERVER_URL` hoặc `JETSON_AI_URL` cũ nếu muốn dùng cấu hình trong file.
@@ -93,7 +91,7 @@ Thay URL cần restart backend; dùng Docker thì chạy
 Các endpoint capability của gateway ViVi vẫn cần thiết khi policy được bật.
 Với LM Studio/llama.cpp độc lập, đặt `jetson_ai_policy = "disabled"` và cấu hình
 `local_llm_base_url`, model, API key trực tiếp như trước.
-Phần cấu hình này nối SLM; remote STT/TTS chưa được nối vào public Laptop API.
+Phần cấu hình này dùng chung capability probe và adapter LLM/STT/TTS.
 
 Sau khi bạn tự commit/push bản merge, cập nhật checkout Laptop/Jetson bằng nhánh
 feature. Nếu có local edits, sao lưu/ghép trước; không reset chúng để pull.
@@ -110,20 +108,15 @@ Laptop cần dependency mới của main, trong venv hiện có:
 
 ```bash
 uv pip install --python .venv/bin/python -r requirements.txt
-export LLM_PROVIDER=local
-export LOCAL_LLM_MODEL=vivi-qwen3-1.7b
-export LOCAL_LLM_BASE_URL=http://<jetson-private-ip>:8789/v1
-export LOCAL_LLM_API_KEY='<token trong service.env>'
-export JETSON_AI_URL=http://<jetson-private-ip>:8789
-export JETSON_AI_TOKEN="$LOCAL_LLM_API_KEY"
-export JETSON_AI_POLICY=prefer_local
+export AI_SERVER_URL=http://192.168.55.1:8789
+export AI_SERVER_TOKEN='<token trong service.env>'
+export AI_SERVER_AUTH_REQUIRED=true
 .venv/bin/python -m uvicorn src.vivi.api.app:app --host 127.0.0.1 --port 8787
 ```
 
-Cloud fallback dùng API key/provider đã cấu hình trên Laptop. Dùng
-`JETSON_AI_POLICY=offline_only` nếu không cho phép cloud. Không commit token.
-STT/TTS trên public Laptop API vẫn dùng adapter/config hiện có; remote speech
-adapter chưa thuộc bản ghép này. Jetson `/test` kiểm thử trực tiếp cả ba model.
+Cloud dùng API key/provider đã cấu hình trên Laptop. Connectivity Supervisor tự
+chuyển Cloud → Jetson → Rules và không bao giờ tự dùng IP Tailscale. Không commit
+token. Jetson `/test` vẫn kiểm thử trực tiếp cả ba model.
 
 Smoke text, history và xe mô phỏng riêng, không sửa config cá nhân:
 
