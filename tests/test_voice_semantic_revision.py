@@ -48,6 +48,15 @@ def test_cold_complaint_cannot_be_routed_to_old_conversation_topic(act):
     assert frame.actions[0].arguments.temperature_delta_celsius == 2
 
 
+def test_committed_climate_continuation_works_without_replaying_completed_task():
+    session = SessionState(active=DialogueTask(steps=[TaskStep(status='completed', draft=ActionDraft(
+        capability='climate.set_temperature', arguments={'value_celsius':26}))]))
+    assert SemanticResolver.context(session)['active'] is None
+    frame = OfflineParser().guard('tăng tiếp', SemanticTurn(act='clarify', text='Tăng gì?'), session)
+    assert frame.act == 'request'
+    assert frame.actions[0].arguments.temperature_delta_celsius == 2
+
+
 @pytest.mark.parametrize('text', [
     'Mở gửi xe xa cho tôi',
     'Mở gửi xe xa cho tôi\nMở gửi xe xa cho tôi',

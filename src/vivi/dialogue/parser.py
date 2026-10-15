@@ -260,20 +260,8 @@ class OfflineParser:
             cleaned = re.sub(r"^(?:khong[, ]+|doi (?:thanh|sang) |chi )", "", value)
             if patch := self.slot_patch(cleaned, current.draft, text):
                 return SemanticTurn(act="modify", task_ref="active", actions=[patch])
-        if not live and task:
-            previous = next(
-                (
-                    s
-                    for s in reversed(task.steps)
-                    if s.draft.capability == "climate.set_temperature" and s.status == "completed"
-                ),
-                None,
-            )
-            patch = self.slot_patch(value, previous.draft, text) if previous else None
-            if patch and (
-                patch.arguments.temperature_delta_celsius is not None or patch.arguments.value_celsius is not None
-            ):
-                return self.request("climate.set_temperature", patch.arguments.model_dump(exclude_none=True))
+        if patch := self.completed_slot_patch(value, text, session):
+            return self.request(patch.capability, patch.arguments.model_dump(exclude_none=True))
         if affirmed(value):
             return (
                 SemanticTurn(act="confirm", task_ref="active")
@@ -721,6 +709,18 @@ class OfflineParser:
             if year := re.search(r"\b(?:nam|doi|mau|phien ban|vf\d+)\s+(20\d{2})\b", query):
                 arguments["requested_model_year"] = int(year[1])
         return SemanticTurn(act=act, actions=[ActionDraft(capability=capability, arguments=arguments or {})])
+
+    def completed_slot_patch(self, value, text, session):
+        """Resolve explicit slot continuations from committed effects, not tasks to replay."""
+        task = session.active
+        if task is None or task.current_index() is not None:
+            return None
+        previous = next((step for step in reversed(task.steps)
+                         if step.draft.capability == "climate.set_temperature" and step.status == "completed"), None)
+        patch = self.slot_patch(value, previous.draft, text) if previous else None
+        if patch and (patch.arguments.temperature_delta_celsius is not None or patch.arguments.value_celsius is not None):
+            return patch
+        return None
 
     def interpret_segments(self, segments, session, memory=None, history=None):
         """Compose pending speech without executing or changing checkpoint state.
@@ -1614,6 +1614,9 @@ class OfflineParser:
                 if not query.strip() or normalize_text(query).strip() not in normalize_text(text):
                     action.arguments.query = text
         bounded = self.interpret(text, session, memory, history)
+        if (bounded.act == "request" and self.command(value) is None
+            and self.completed_slot_patch(value, text, session)):
+            return bounded
         if len([part for part in text.splitlines() if part.strip()]) > 1:
             if bounded.act == "request" and bounded.actions:
                 return bounded
@@ -1622,6 +1625,7 @@ class OfflineParser:
             if bounded.act == "clarify" and any(self.control_utterance(part) for part in bounded.unresolved):
                 return bounded
         if (bounded.act == "clarify" and result.drafts()
+            and not any(a.capability.startswith(("navigation.", "trip.")) for a in result.drafts())
             and (any(self.control_utterance(part) for part in bounded.unresolved)
                  or (self.control_utterance(text) and len(self.lexer.clauses(text)) == 1
                      and not bounded.clarification_drafts))):
