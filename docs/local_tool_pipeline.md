@@ -122,3 +122,51 @@ Sau sửa: 21 lượt graph thật trên xe giả lập (ba lần hai chuỗi), 
 Probe thêm 13 ca × hai lần (một lần đầu, một lần kế tiếp), gồm nhạc chung/nhạc thư giãn/dừng nhạc và các ca cũ: **24/26 proposal đúng trước guard, 26/26 kết quả cuối đúng**. Hai proposal sai là câu `đừng mở cốp`, được guard kế thừa main chặn; model chưa hiểu phủ định ổn định. Các ca nhạc warm khoảng 533–691 ms, tăng nhiệt độ không nêu số 774 ms. Không coi bộ nhỏ này là bảo đảm chất lượng mọi câu nói. Adapter chuẩn hoá danh từ `nhạc` thừa thành không có search query chỉ với lệnh nhạc chung; không đổi tên bài cụ thể.
 
 223 test Python liên quan pass, cộng hardware regression nêu trên. Runtime khai báo jsonschema trong requirements và lock; cloud không import validator này trước khi cần adapter local. Không đổi model, inference backend hoặc UI.
+
+## Model-owned request forms (2026-10-15)
+
+Local now exposes three lifecycle tools. Forms are projections of the existing
+session task/step checkpoint; there is no new store on Jetson.
+
+- `form_create(operation, values)` creates a typed request draft. Unknown values
+  remain absent. The executable capability schema determines what is missing.
+- `form_update(form_id, revision, values)` changes fields in the live form. Qwen
+  reads its current values, question, field schema and location labels. Slot text
+  is not converted into values by regex, and local location schemas no longer
+  force values inferred lexically from the utterance.
+- `form_submit(form_id, revision, values)` supplies all reviewed values after user
+  consent. The host checks the form's task identity, revision and exact values;
+  the existing confirmation/policy/effect ledger still executes and verifies the
+  action. Policy decides which operations need confirmation, as before.
+
+A confirmed voice OK goes through Qwen and `form_submit`. The consent boundary
+remains host-owned: a model tool call cannot invent user consent. A stale or
+mismatched submit fails; it never executes through a hidden rules fallback. A
+failed submit after a genuine OK can retry the same reviewed form. New ambiguous
+or changed instructions retain the existing consent invalidation behavior.
+
+Changing topic closes obsolete forms through the existing lifecycle. Completed
+forms are not exposed as live work. Cloud's main semantic contract and the
+explicit Rules mode keep their existing behavior. Legacy native action calls
+remain supported for compatibility; the live local prompt advertises lifecycle
+tools. Native lifecycle results bypass the linguistic `parser.guard()` rewrite.
+`diagnostics.provider_attempts[].model_form_calls` records the model's tool names
+and arguments, including the full submitted values, to distinguish a genuine
+model call from host handling.
+
+Live check with the existing Qwen3-1.7B Q4_K_M/CUDA at port 8789, separate memory
+vehicle and checkpoints: four complete create → update → OK → submit sequences
+passed (answers: `sau phải`, `sau phai`, `bên tài`, `phụ`). All 12 turns were
+served by local Qwen and called the expected lifecycle tool without guard repair.
+Single-run medians: create 1,895 ms; update 3,156 ms; submit 2,652 ms. These are
+samples, not p95 or an inference speedup claim. The former 18–30 ms measurements
+were a discarded parser implementation, not model inference. Spelling tolerance
+is model-dependent: probes of `sau phảii` and `bên tàii` also showed clarification
+or unhelpful patches. No claim of perfect typo recognition; unchanged patches
+are rejected for repair rather than silently accepted as progress.
+
+The ZeroTTS cancellation cleanup now shields the wait for an in-flight native
+step from repeated AnyIO cancellation before closing its generator. The Jetson
+launcher writes gateway output to `logs/gateway-run.log`, so a stalled terminal
+cannot block its HTTP event loop. No model weights, inference backend or GPU
+scheduler were changed.

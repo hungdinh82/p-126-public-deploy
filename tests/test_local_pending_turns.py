@@ -63,7 +63,7 @@ def test_target_schema_and_adapter_never_invent_a_missing_location(text, args):
     frame = proposals_to_turn([('door_set_open', args)], caps, utterance=text)
     assert frame.actions[0].arguments.model_dump(exclude_none=True) == args
     with pytest.raises(ValueError):
-        proposals_to_turn([('door_set_open', {'open': True, 'zone': 'driver'})], caps, utterance=text)
+        proposals_to_turn([('door_set_open', {'open': True, 'zone': 'roof'})], caps, utterance=text)
 
 
 def test_current_conversation_query_is_host_bound_and_clarify_does_not_echo_stt():
@@ -104,6 +104,8 @@ async def test_graph_form_collects_row_then_closes_on_new_topic_and_revokes_old_
                 return [('door_set_open', {'open': True, 'target_side': 'right'})]
             if kwargs['user'].endswith('tôi lạnh quá'):
                 return [('climate_adjust_temperature', {'direction': 'increase'})]
+            if kwargs['user'].endswith('phía sau'):
+                return [('update_active_step_0__door_set_open', {'target_row': 'rear'})]
             return [('dialogue_reply', {'text': 'Mình nghe bạn.'})]
 
     graph, _, gateway = build(services, tmp_path, local=Model())
@@ -136,3 +138,57 @@ def test_filtered_suspended_form_keeps_its_original_task_handle():
     frame = proposals_to_turn([('update_suspended_1_step_0__door_set_open', {'target_row': 'rear'})],
                               catalog(False), tasks={'suspended': [task]})
     assert frame.task_ref == 'suspended:1'
+
+
+@pytest.mark.parametrize('text,zone', [
+    ('sau phải', 'rear_right'), ('sau phai', 'rear_right'), ('sau phảii', 'rear_right'),
+    ('sau trái', 'rear_left'), ('bên tài', 'driver'), ('bên tàii', 'driver'),
+    ('phụ', 'front_passenger'), ('hành khách', 'front_passenger'),
+])
+@pytest.mark.asyncio
+async def test_model_fills_location_form_without_lexical_override(services, tmp_path, monkeypatch, text, zone):
+    from src.vivi.dialogue.parser import OfflineParser
+    from tests.test_dialogue_v2 import build, invoke
+
+    class Model:
+        calls = 0
+
+        async def agenerate_tools(self, **kwargs):
+            self.calls += 1
+            if self.calls == 1:
+                return [('form_create', {'operation': 'door_set_open', 'values': {'open': True}})]
+            if self.calls == 3:
+                assert kwargs['user'].endswith('ok')
+                tool = next(t['function'] for t in kwargs['tools'] if t['function']['name'] == 'form_submit')
+                props = tool['parameters']['properties']
+                return [('form_submit', {'form_id': props['form_id']['enum'][0], 'revision': props['revision']['enum'][0],
+                                         'values': {'open': True, 'zone': zone}})]
+            assert kwargs['user'].endswith(text)
+            assert 'field_schema' in kwargs['user']
+            name = 'form_update'
+            tool = next(t['function'] for t in kwargs['tools'] if t['function']['name'] == name)
+            assert 'const' not in str(tool['parameters']['properties']['values'])
+            props = tool['parameters']['properties']
+            return [(name, {'form_id': props['form_id']['enum'][0], 'revision': props['revision']['enum'][0], 'values': {'zone': zone}})]
+
+    model = Model()
+    graph, _, gateway = build(services, tmp_path, local=model)
+    graph.default_provider = 'local'
+    try:
+        first = await invoke(graph, 'mở cửa xe cho tôi', 'start-form')
+        # A location grammar must not repair or replace the model proposal.
+        def forbidden(*args, **kwargs):
+            pytest.fail('Model-owned form must not call parser.guard')
+        monkeypatch.setattr(OfflineParser, 'guard', forbidden)
+        second = await invoke(graph, text, 'fill-form')
+        assert model.calls == 2
+        assert second['session']['active']['id'] == first['session']['active']['id']
+        assert second['output']['action_proposal']['arguments'] == {'open': True, 'zone': zone}
+        assert second['output']['confirmation']['confirmation_id']
+        assert all(not door['open'] for door in gateway.vehicle.state_for('driver').door_states.model_dump().values())
+        done = await invoke(graph, 'ok', 'confirm-form')
+        assert done['output']['status'] == 'action_verified'
+        assert model.calls == 3
+        assert gateway.vehicle.state_for('driver').door_states.model_dump()[zone]['open']
+    finally:
+        graph.close()

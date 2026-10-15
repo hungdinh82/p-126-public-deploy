@@ -6,11 +6,12 @@ import json
 import re
 
 from src.vivi.dialogue.contracts import ActionDraft, SemanticTurn
+from src.vivi.dialogue.form_tools import FORM_CAPABILITIES, decode_form_call, lifecycle_tools
 from src.vivi.dialogue.local_semantics import local_semantic_tools
 from src.vivi.dialogue.parser import Lexer
 from src.vivi.dialogue.tool_discovery import DISCOVERY_TERMS
 
-LOCAL_TOOL_INSTRUCTION = """Phân tích yêu cầu hiện tại của người dùng và gọi công cụ đúng. Khi người dùng lạnh cần làm ấm bằng tăng nhiệt độ; khi nóng cần làm mát bằng giảm nhiệt độ. Đề xuất thao tác, không tự thực hiện. Tăng/giảm hoặc than nóng/lạnh dùng climate_adjust_temperature(direction, amount); không tự bịa nhiệt độ đích, amount mặc định 2 độ. Câu nghe không hiểu dùng dialogue_clarify để hỏi lại, không dùng reply. Với lệnh cấm/phủ định, điều kiện hoặc hẹn giờ: hỏi lại, không đề xuất thao tác.
+LOCAL_TOOL_INSTRUCTION = """Phân tích yêu cầu hiện tại của người dùng và gọi công cụ đúng. Với thao tác xe: form_create tạo form; khi có form, đọc values và field_schema rồi dùng form_update để điền hoặc sửa values. Không hỏi lặp lại khi người dùng đã bổ sung vị trí, hiểu không dấu và lỗi gõ nhẹ. Khi form đủ và người dùng đồng ý, gọi form_submit với toàn bộ values đã được hỏi xác nhận. Không tự chọn vị trí bị thiếu. Chỉ trả lời người dùng bằng tiếng Việt. Khi người dùng lạnh cần làm ấm bằng tăng nhiệt độ; khi nóng cần làm mát bằng giảm nhiệt độ. Đề xuất thao tác, không tự thực hiện. Tăng/giảm hoặc than nóng/lạnh dùng climate_adjust_temperature(direction, amount); không tự bịa nhiệt độ đích, amount mặc định 2 độ. Câu nghe không hiểu dùng dialogue_clarify để hỏi lại, không dùng reply. Với lệnh cấm/phủ định, điều kiện hoặc hẹn giờ: hỏi lại, không đề xuất thao tác.
 """
 
 
@@ -147,39 +148,13 @@ def native_proposal_tools(capabilities, *, include_suggestions=False, utterance=
             schema = tool['function']['parameters']
             schema['properties'].pop('query', None)
             schema['required'] = [key for key in schema.get('required', []) if key != 'query']
-    # Partial locations must remain partial: "right" is not "rear right".
-    zoned = {'window.set_position', 'door.set_open', 'door.set_lock', 'seat.set_heat_level'}
-    candidates = [item['name'] for item in capabilities if item['name'] in zoned]
-    normalized = Lexer().normalize(utterance)
-    locations = set(re.findall(r'\b(?:driver|front_passenger|rear_left|rear_right|all)\b', normalized))
-    ambiguous = re.search(r'\b(?:khong|dung|tru|ngoai|do|ay)\b', normalized)
-    if len(candidates) == 1 and len(locations) <= 1 and not ambiguous:
-        bindings = {}
-        if locations:
-            bindings['zone'] = next(iter(locations))
-        else:
-            for field, words in (('target_side', {'trai': 'left', 'phai': 'right'}),
-                                 ('target_row', {'truoc': 'front', 'sau': 'rear'})):
-                values = {value for word, value in words.items() if re.search(r'\b' + word + r'\b', normalized)}
-                if len(values) > 1:
-                    ambiguous = True
-                    break
-                if values:
-                    bindings[field] = next(iter(values))
-        if not ambiguous:
-            for tool in tools:
-                if tool['function']['name'] == candidates[0].replace('.', '_'):
-                    old = tool['function']['parameters']
-                    props = {key: value for key, value in old['oneOf'][0]['properties'].items()
-                             if key not in {'zone', 'zones', 'target_side', 'target_row'}}
-                    props.update({key: {'type': 'string', 'const': value} for key, value in bindings.items()})
-                    tool['function']['parameters'] = {'type': 'object', 'properties': props,
-                        'required': list(bindings), 'additionalProperties': False,
-                        **({'$defs': old['$defs']} if '$defs' in old else {})}
+    # Slot values come from the model. Schemas restrict types and allowed zones,
+    # never force a location inferred by a lexical match of the utterance.
     # Each editable step has its own small, typed patch tools. No arbitrary task
     # IDs, completed steps or capabilities can be invented in a patch proposal.
     by_name = {item['name']: item for item in local_tool_documents(capabilities)}
     updates = []
+    bound_names = set()
     for handle, task in _editable_tasks(tasks):
         for index in task.get('editable_steps', []):
             step = next((step for step in task.get('steps', []) if step['step_index'] == index), None)
@@ -188,17 +163,47 @@ def native_proposal_tools(capabilities, *, include_suggestions=False, utterance=
             for name, document in by_name.items():
                 if document['_meta'].get('capability') != step['capability']:
                     continue
+                parameters = document['inputSchema']
+                description = f"Chỉ sửa/bổ sung bước {index} của {handle}: {document['description']}. Không dùng cho yêu cầu mới không liên quan."
+                if (step.get('status') == 'waiting_slot'
+                    and not set(step.get('missing_slots', [])) - {'zone', 'target_side', 'target_row'}
+                    and step['capability'] in {
+                        'door.set_open', 'door.set_lock', 'window.set_position', 'seat.set_heat_level'}):
+                    description = ('Điền vị trí vào biểu mẫu đang hỏi. Giữ nguyên thao tác trước đó. '
+                        'zone: driver=bên tài/ghế lái; front_passenger=bên phụ/phụ/hành khách; '
+                        'rear_left=sau trái; rear_right=sau phải; all=tất cả. '
+                        'Thiếu hàng ghế: target_side=left/right. Thiếu bên: target_row=front/rear. '
+                        'Tài là người lái xe, thuộc driver; phụ là người ngồi cạnh tài xế, thuộc front_passenger. '
+                        'Hiểu không dấu và lỗi gõ nhẹ, ký tự cuối bị lặp vẫn giữ nghĩa từ gốc. '
+                        'Chỉ dùng khi lời hiện tại trả lời vị trí, không cho yêu cầu mới.')
+                    parameters = {'type': 'object', 'properties': {
+                        'zone': {'type': 'string', 'enum': ['driver', 'front_passenger', 'rear_left', 'rear_right', 'all'],
+                                 'description': 'driver: ghế lái/bên tài/trước trái. front_passenger: ghế phụ/hành khách phía trước. rear_left: sau trái. rear_right: sau phải. all: tất cả.'},
+                        'target_side': {'type': 'string', 'enum': ['left', 'right']},
+                        'target_row': {'type': 'string', 'enum': ['front', 'rear']}},
+                        'additionalProperties': False, 'minProperties': 1}
+                if step.get('status') == 'waiting_slot':
+                    bound_names.add(name)
                 updates.append({'type': 'function', 'function': {
                     'name': _update_name(handle, index, name),
-                    'description': f"Chỉ sửa/bổ sung bước {index} của {handle}: {document['description']}. Không dùng cho yêu cầu mới không liên quan.",
-                    'parameters': document['inputSchema']}})
+                    'description': description, 'parameters': parameters}})
     # Location is a form slot; the requested operation itself is mandatory.
     for tool in tools:
         if tool['function']['name'] == 'door_set_open':
             schema = tool['function']['parameters']
             for branch in schema.get('oneOf', [schema]):
                 branch['required'] = list(dict.fromkeys([*branch.get('required', []), 'open']))
-    return [*tools, *updates]
+    legacy = [*[tool for tool in tools if tool['function']['name'] not in bound_names], *updates]
+    if tasks is None:
+        return legacy
+    documents = list(by_name.values())
+    forms = lifecycle_tools(documents, tasks)
+    if tasks.get('confirmation_allowed') and any(t['function']['name'] == 'form_submit' for t in forms):
+        return [t for t in forms if t['function']['name'] == 'form_submit']
+    managed = {item['name'] for item in documents
+               if item.get('_meta', {}).get('capability') in FORM_CAPABILITIES}
+    return [*forms, *[tool for tool in legacy if tool['function']['name'] not in managed
+                     and not tool['function']['name'].startswith('update_active_')]]
 
 
 def _editable_tasks(tasks):
@@ -236,6 +241,9 @@ def native_proposal_prompt(value):
     if navigation.get('status') == 'idle' and not any(navigation.get(key) for key in (
             'request_id', 'destination', 'route_id', 'candidates', 'selected', 'origin')):
         context.get('tasks', {}).pop('navigation', None)
+    if context.get('form'):
+        for key in ('tasks', 'recent_turns', 'conversation_context'):
+            context.pop(key, None)
     context = prune(context)
     # Preserve real speech boundaries instead of asking a small SLM to decode
     # escaped newlines inside a JSON string. Context remains before current input.
@@ -251,6 +259,14 @@ def proposals_to_turn(calls, capabilities, *, include_suggestions=False, utteran
 
     docs = {item['name']: item for item in local_tool_documents(capabilities)
             if include_suggestions or item['_meta'].get('act') != 'offer'}
+    decoded = decode_form_call(calls, list(docs.values()), tasks,
+                               allow_submit=bool((tasks or {}).get('confirmation_allowed')))
+    if isinstance(decoded, SemanticTurn):
+        return decoded
+    if decoded is None and (tasks or {}).get('confirmation_allowed'):
+        raise ValueError('The current form was approved: use form_submit with all reviewed values')
+    if decoded is not None:
+        calls = [(name, values) for _, name, values in decoded]
     updates = {}
     for handle, task in _editable_tasks(tasks):
         for step in task.get('steps', []):
@@ -262,6 +278,12 @@ def proposals_to_turn(calls, capabilities, *, include_suggestions=False, utteran
                     updates[_update_name(handle, index, name)] = (handle, index, name)
     offered = {tool['function']['name']: tool['function']['parameters'] for tool in native_proposal_tools(
         capabilities, include_suggestions=include_suggestions, utterance=utterance or '', tasks=tasks)}
+    # Existing native callers remain wire-compatible, but the model is shown
+    # the form lifecycle tools when a task context is supplied.
+    for name, document in docs.items():
+        offered.setdefault(name, document['inputSchema'])
+    for name, (_, _, original) in updates.items():
+        offered.setdefault(name, docs[original]['inputSchema'])
     actions = []
     patches = []
     patch_handle = None

@@ -49,18 +49,17 @@ def test_unrecognized_vocabulary_retains_all_tools_and_allows_discovery():
     assert native_proposal_tools([])
 
 
-def test_schema_binds_only_unambiguous_spoken_target():
+def test_schema_leaves_location_interpretation_to_model_including_misspellings():
     caps = discover_capabilities('mở cửa kính bên tài', catalog(False))
-    tool = next(item for item in native_proposal_tools(caps, utterance='mở cửa kính bên tài')
-                if item['function']['name'] == 'window_set_position')
-    validator = Draft202012Validator(tool['function']['parameters'])
-    validator.validate({'zone': 'driver', 'position_percent': 100})
-    assert list(validator.iter_errors({'position_percent': 100}))
-    assert list(validator.iter_errors({'zone': 'front_passenger', 'position_percent': 100}))
-    for text in ['mở cửa kính trừ bên tài', 'mở kính bên tài và bên phụ']:
+    for text in ['mở cửa kính bên tài', 'mở kính bên tàii', 'sau phảii']:
         tool = next(item for item in native_proposal_tools(caps, utterance=text)
                     if item['function']['name'] == 'window_set_position')
-        assert 'oneOf' in tool['function']['parameters']
+        validator = Draft202012Validator(tool['function']['parameters'])
+        validator.validate({'zone': 'driver', 'position_percent': 100})
+        validator.validate({'zone': 'rear_right', 'position_percent': 100})
+        validator.validate({'target_side': 'right', 'position_percent': 100})
+        assert list(validator.iter_errors({'zone': 'roof', 'position_percent': 100}))
+        assert 'const' not in str(tool['function']['parameters'])
 
 
 def test_ordered_multi_tool_proposals_are_atomic_and_only_normalize_equivalent_slots():

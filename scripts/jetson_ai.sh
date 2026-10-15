@@ -315,7 +315,11 @@ run() {
   echo "Jetson AI API: http://$bind:$VIVI_PORT (STT/TTS tiếp tục nạp ở nền)."
   echo "Giao diện test: http://$bind:$VIVI_PORT/test"
   cd "$VIVI_REPO"
-  "$VIVI_VENV/bin/python" -m uvicorn jetson_ai.app:app --host "$bind" --port "$VIVI_PORT" --workers 1 &
+  # A stalled SSH/VS Code terminal must never block the HTTP event loop.
+  # Read this file from a separate terminal with tail -F.
+  echo "Gateway log: $VIVI_DATA/logs/gateway-run.log"
+  "$VIVI_VENV/bin/python" -m uvicorn jetson_ai.app:app --host "$bind" --port "$VIVI_PORT" --workers 1 \
+    >> "$VIVI_DATA/logs/gateway-run.log" 2>&1 &
   local gateway_pid=$!
   trap 'kill "$gateway_pid" "$stt_pid" "$llm_pid" 2>/dev/null || true; wait "$gateway_pid" "$stt_pid" "$llm_pid" 2>/dev/null || true' EXIT INT TERM
   wait "$gateway_pid"

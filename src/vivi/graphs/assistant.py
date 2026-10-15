@@ -618,7 +618,12 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
             from src.vivi.dialogue.local_forms import close_obsolete_forms
             reducer_input = close_obsolete_forms(reducer_input, semantic)
         session, message = reduce_turn(
-            reducer_input, semantic, revoke_consent_on_clarify=state["event"]["kind"] == "utterance"
+            reducer_input, semantic, revoke_consent_on_clarify=(
+                state["event"]["kind"] == "utterance" and not any(
+                    attempt.get("source") == "model_form_unavailable" and attempt.get("preserve_form")
+                    for attempt in state["turn"].get("provider_attempts", [])
+                )
+            )
         )
         if semantic.act == "clarify" and session.clarification:
             session.clarification.source_text = (

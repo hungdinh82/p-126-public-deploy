@@ -43,9 +43,11 @@ async def test_local_uses_documented_native_proposals():
         assert body["tool_choice"] == "required" and body["parallel_tool_calls"] is True
         assert body["chat_template_kwargs"]["enable_thinking"] is False
         names = [t['function']['name'] for t in body['tools']]
-        assert 'media_play' in names and 'trunk_set_open' not in names
+        assert 'form_create' in names
+        form = next(t['function']['parameters'] for t in body['tools'] if t['function']['name'] == 'form_create')
+        assert form['properties']['operation']['enum'] == ['media_play']
         assert 'interpret_turn' not in names
-        return response({"act":"request", "actions":[{"capability":"media.play"}]})
+        return response({'operation': 'media_play', 'values': {}}, name='form_create')
     frame, tier, _ = await resolve(handler)
     assert tier == "local" and frame.actions[0].capability == "media.play"
 

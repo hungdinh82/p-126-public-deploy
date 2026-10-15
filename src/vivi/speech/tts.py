@@ -10,6 +10,8 @@ import wave
 import zipfile
 from pathlib import Path
 
+import anyio
+
 from src.vivi.config import Settings
 
 
@@ -199,7 +201,8 @@ class ZeroTTSAdapter:
                         chunk = await asyncio.shield(next_task)
                     except asyncio.CancelledError:
                         # Keep the model lock until the in-flight inference step ends.
-                        await next_task
+                        with anyio.CancelScope(shield=True):
+                            await next_task
                         raise
                     if chunk is None:
                         break

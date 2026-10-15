@@ -332,9 +332,22 @@ class SemanticResolver:
         from src.vivi.dialogue.local_answers import resolve_location_component
         from src.vivi.dialogue.questions import current_question
 
-        # A typed form answer keeps its meaning even when connectivity changes
-        # the next model provider. This only binds a short location component.
-        answer = resolve_location_component(text, session) or AnswerResolver().resolve(text, session)
+        question = current_question(session)
+        current_index = session.active.current_index() if session.active else None
+        current_draft = session.active.steps[current_index].draft if current_index is not None else None
+        model_form_answer = bool(
+            requested == 'local' and 'local' in self.providers
+            and hasattr(self.providers['local'].client, 'agenerate_tools')
+            and question and question.purpose in {'collect_slot', 'approve_execution'}
+            and current_draft and current_draft.capability in {
+                'door.set_open', 'door.set_lock', 'window.set_position', 'seat.set_heat_level',
+                'hood.set_open', 'trunk.set_open', 'body.set_open', 'climate.set_temperature', 'media.play', 'media.pause'}
+        )
+        # Location language, including misspellings, belongs to the model.
+        # Explicit confirmation remains a host-owned consent boundary.
+        answer = None if model_form_answer else (
+            resolve_location_component(text, session)
+            or AnswerResolver().resolve(text, session))
         if answer:
             question = current_question(session)
             return answer, "rules", [{"provider": "rules", "outcome": "served", "latency_ms": 0,
@@ -355,7 +368,7 @@ class SemanticResolver:
             return cancellation, "rules", [{"provider": "rules", "outcome": "served", "latency_ms": 0,
                                              "reference": "task_cancellation"}]
         consent = self.parser.confirmation_reference(text, session)
-        if consent:
+        if consent and not model_form_answer:
             return consent, "rules", [{"provider": "rules", "outcome": "served", "latency_ms": 0,
                                        "source": "pending_confirmation"}]
         reference = self.parser.place_reference(text, session)
@@ -370,10 +383,14 @@ class SemanticResolver:
                 "provider": "rules", "outcome": "served", "latency_ms": 0,
                 "source": "explicit_navigation",
             }]
+        task_context = self.context(session)
+        if model_form_answer and question.purpose == 'approve_execution':
+            consent_answer = AnswerResolver().resolve(text, session)
+            task_context['confirmation_allowed'] = bool(consent_answer and consent_answer.act == 'confirm')
         prompt = json.dumps(
             {
                 "utterance": text,
-                "tasks": self.context(session),
+                "tasks": task_context,
                 "conversation_context": conversation_view(session),
                 "recent_turns": [{k: t.get(k) for k in ("query", "answer")} for t in (history or [])[-6:]],
                 "explicit_user_memory": memory or [],
@@ -413,9 +430,12 @@ class SemanticResolver:
                             from src.vivi.capabilities.registry import catalog as default_catalog
                             value['capabilities'] = default_catalog(False, conversation=True, information=True)
                         value["tasks"] = local_context(session)
+                        if "confirmation_allowed" in task_context:
+                            value["tasks"]["confirmation_allowed"] = task_context["confirmation_allowed"]
                         value["recent_turns"] = compact_history(history or [])
                         provider_prompt = json.dumps(value, ensure_ascii=False)
-                    value = await self.interpret(provider, provider_prompt)
+                    tool_audit = []
+                    value = await self.interpret(provider, provider_prompt, tool_audit=tool_audit)
                     value = self.destination_slots(value, text, session)
             except (Exception,) as exc:
                 if name != "local" or not isinstance(exc, (ValidationError, ValueError)):
@@ -445,13 +465,15 @@ class SemanticResolver:
             attempts.append(
                 {"provider": name, "outcome": "served", "latency_ms": round((time.perf_counter() - started) * 1000, 2)}
             )
+            if tool_audit:
+                attempts[-1]["model_form_calls"] = tool_audit
             provider.consecutive_failures = 0
             provider.unavailable_until = 0
             if self.result_recorder:
                 self.result_recorder(name, "served", attempts[-1]["latency_ms"], None)
             if name == "local" and hasattr(provider.client, "agenerate_tools"):
                 attempts[-1]["semantic_contract"] = "local-proposals-v2"
-            guarded = self.parser.guard(text, value, session, memory, history)
+            guarded = value if model_form_answer or tool_audit else self.parser.guard(text, value, session, memory, history)
             # Keep the model's proposed operations for audit, not free-form
             # model text that could contain leaked prompt or false claims.
             attempts[-1]["model_semantic"] = value.model_dump(mode="json", exclude_none=True, exclude={"text"})
@@ -460,6 +482,13 @@ class SemanticResolver:
                 before, after = value.model_dump(), guarded.model_dump()
                 attempts[-1]["semantic_guard_fields"] = [key for key in before if before[key] != after[key]]
             return guarded, name, attempts
+        if model_form_answer:
+            # Failed model filling/submission must not silently pass through a
+            # regex answer or execute via the offline confirmation shortcut.
+            attempts.append({"provider": "rules", "outcome": "served", "latency_ms": 0,
+                             "source": "model_form_unavailable",
+                             "preserve_form": bool(task_context.get("confirmation_allowed"))})
+            return SemanticTurn(act='clarify', text=question.text), 'rules', attempts
         started = time.perf_counter()
         value = self.parser.interpret(text, session, memory, history)
         attempts.append(
@@ -562,7 +591,7 @@ class SemanticResolver:
         }
 
     @staticmethod
-    async def interpret(provider, prompt):
+    async def interpret(provider, prompt, *, tool_audit=None):
         instruction = VOICE_PERSONA + SEMANTIC_INSTRUCTION + TOPIC_INSTRUCTION + "\nFor a disallowed intent return unsupported with a brief safe alternative, no drafts. For emergencies return reply with immediate safe support, no drafts. Return compact JSON: omit null argument slots and unused optional fields; include only the operations and slots needed for this turn."
         if provider.name == "local":
             from src.vivi.capabilities.registry import catalog
@@ -579,6 +608,20 @@ class SemanticResolver:
                 instruction = LOCAL_TOOL_INSTRUCTION + TOPIC_INSTRUCTION
                 value['utterance'] = coalesce_explicit_revisions(value.get('utterance', ''))
                 visible_capabilities, index = initial_tool_documents(value.get('utterance', ''), capabilities)
+                active = tasks.get('active')
+                waiting = [step for step in (active or {}).get('steps', []) if step.get('status') in {'waiting_slot', 'waiting_confirmation'}]
+                if waiting:
+                    # A short answer may have no catalog keywords. Keep the
+                    # pending operation's docs and bound patch tool available.
+                    names = ({item['name'] for item in visible_capabilities} if index is None else set()) | {step['capability'] for step in waiting}
+                    # Discovery remains callable for a genuinely new topic;
+                    # a keyword-free slot reply does not need the whole index.
+                    index = None
+                    visible_capabilities = [item for item in capabilities if item['name'] in names]
+                    from src.vivi.dialogue.form_tools import current_form
+                    from src.vivi.dialogue.local_tools import local_tool_documents
+                    value['form'] = current_form(tasks, local_tool_documents(visible_capabilities))
+
                 # Operational tools consume the current utterance and typed task
                 # forms. Old free-text assistant questions are not pending slots.
                 operational = {'climate', 'window', 'door', 'hood', 'trunk', 'body', 'seat', 'media'}
@@ -607,6 +650,8 @@ class SemanticResolver:
                     calls = await client.agenerate_tools(system=instruction, user=prompt,
                                                          tools=native_proposal_tools(visible_capabilities, include_suggestions=expanded,
                                                                                     utterance=value.get('utterance', ''), tasks=tasks))
+                    if tool_audit is not None:
+                        tool_audit.extend({'name': name, 'arguments': args} for name, args in calls if name.startswith('form_'))
                     if any(name == 'dialogue_find_tools' for name, _ in calls):
                         if expanded or len(calls) != 1:
                             raise ValueError('Tool discovery must be a single call, at most once')
@@ -657,6 +702,8 @@ class SemanticResolver:
 def local_context(session):
     """Expose live task state; completed tasks remain in history, never as active work."""
     context = SemanticResolver.context(session)
+    if session.active and context.get("active"):
+        context["active"]["form_identity"] = session.active.id
     if session.active and session.active.current_index() is None:
         context["active"] = None
     return context
