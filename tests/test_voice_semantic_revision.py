@@ -21,12 +21,9 @@ from src.vivi.structured_llm import StructuredChatClient
      [('window.set_position', {'position_percent': 100, 'zone': 'driver'}),
       ('climate.set_temperature', {'value_celsius': 23.0})]),
 ])
-def test_chronological_snapshot_keeps_additions_and_only_corrected_effect(text, expected):
+def test_offline_fallback_snapshot_keeps_additions_and_only_corrected_effect(text, expected):
     parser = OfflineParser()
-    # Simulate Qwen omitting new speech and copying an older temperature.
-    proposal = SemanticTurn(act='request', actions=[ActionDraft(
-        capability='climate.set_temperature', arguments={'value_celsius': 24})])
-    frame = parser.guard(text, proposal, SessionState())
+    frame = parser.interpret(text, SessionState())
     assert [(a.capability, a.arguments.model_dump(exclude_none=True)) for a in frame.actions] == expected
 
 
@@ -38,14 +35,14 @@ def test_weather_correction_keeps_place_and_replaces_date():
 
 
 @pytest.mark.parametrize('act', ['request', 'question'])
-def test_cold_complaint_cannot_be_routed_to_old_conversation_topic(act):
+def test_current_query_replaces_old_topic_without_overriding_model_routing(act):
     proposal = SemanticTurn(act=act, actions=[ActionDraft(
         capability='conversation.respond', arguments={'query':'Một cục xe ở đâu?'})])
     frame = OfflineParser().guard('Tôi lạnh quá!', proposal, SessionState())
-    assert frame.act == 'request'
+    assert frame.act == act
     assert len(frame.actions) == 1
-    assert frame.actions[0].capability == 'climate.set_temperature'
-    assert frame.actions[0].arguments.temperature_delta_celsius == 2
+    assert frame.actions[0].capability == 'conversation.respond'
+    assert frame.actions[0].arguments.query == 'Tôi lạnh quá!'
 
 
 def test_committed_climate_continuation_works_without_replaying_completed_task():
@@ -62,12 +59,37 @@ def test_committed_climate_continuation_works_without_replaying_completed_task()
     'Mở gửi xe xa cho tôi\nMở gửi xe xa cho tôi',
     'mở cửa kính bên tài\nmở gửi xe xa cho tôi',
 ])
-def test_unclear_control_does_not_authorize_guessed_or_partial_effects(text):
+def test_unknown_offline_grammar_does_not_reject_valid_model_action(text):
     proposal = SemanticTurn(act='request', actions=[ActionDraft(
         capability='vehicle.get_status', arguments={'query': 'summary'})])
     frame = OfflineParser().guard(text, proposal, SessionState())
-    assert frame.act == 'clarify'
-    assert not frame.actions
+    assert frame.act == 'request'
+    assert frame.actions == proposal.actions
+    fallback = OfflineParser().interpret(text, SessionState())
+    assert fallback.act == 'clarify'
+
+
+@pytest.mark.parametrize('text', [
+    'tăng nhiệt độ điều hòa trong cabin lên một chút',
+    'chỉnh máy lạnh tới hai mươi lăm độ',
+    'tăng nhiệt độ điều hòa trong cabin lên một chút\nchỉnh thành hai mươi lăm độ',
+])
+@pytest.mark.asyncio
+async def test_slm_temperature_action_survives_unrecognized_offline_grammar(text):
+    proposal = {'act': 'request', 'actions': [{'capability': 'climate.set_temperature',
+                                             'arguments': {'value_celsius': 25}}]}
+
+    class Model:
+        async def agenerate_json(self, **kwargs):
+            assert json.loads(kwargs['user'])['utterance'] == text
+            return json.dumps(proposal)
+
+    assert OfflineParser().interpret(text, SessionState()).act == 'clarify'
+    resolver = SemanticResolver({'local': ModelProvider('local', Model(), 1)})
+    frame, served, attempts = await resolver.resolve(text, SessionState(), requested='local')
+    assert served == 'local'
+    assert frame == SemanticTurn.model_validate(proposal)
+    assert not attempts[-1].get('semantic_guard')
 
 
 @pytest.mark.asyncio

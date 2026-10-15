@@ -2,6 +2,14 @@
 
 Device: Jetson AGX Xavier 16 GB, JetPack/L4T R35, CUDA 11.8, compute capability 7.2. The candidate ran from `feat/jetson-realtime-voice-pipeline` on staging ports 8795/1249/1250, with model artifacts read from the existing data directory and logs isolated under `/mnt/jetson-data/vivi-ai-staging`.
 
+Behavior update, 2026-10-15: the added offline-grammar overrides were removed
+after they rejected valid SLM interpretations when a phrase was outside the
+grammar. The measurements below are historical: cases reported as repaired or
+rejected by those overrides do not describe the current model-output policy.
+The original main-branch guards, schema/domain validation, current-query
+grounding and asynchronous speech buffering remain. Offline snapshot parsing
+is still available as a fallback, rather than replacing a successful SLM plan.
+
 ## Before the pipeline change
 
 Three concurrent Qwen + Whisper requests used a short synthetic Qwen prompt (350 characters, 64 output tokens) and a one-second silent STT WAV:

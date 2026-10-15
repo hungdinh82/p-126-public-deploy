@@ -194,7 +194,7 @@ async def test_local_tool_semantic_contract():
 
 
 @pytest.mark.asyncio
-async def test_model_cannot_replace_unparsed_vehicle_command_with_generic_greeting():
+async def test_offline_grammar_does_not_veto_model_reply_to_unparsed_command():
     greeting_offer = {
         "act": "offer",
         "text": "Mình đây, bạn cần gì thế?",
@@ -207,8 +207,9 @@ async def test_model_cannot_replace_unparsed_vehicle_command_with_generic_greeti
         "Mở gửi xe xa cho tôi Mở gửi xe xa cho tôi", SessionState(), requested="local"
     )
     assert served == "local"
-    assert value.act == "clarify"
-    assert value.text == "Mình chưa hiểu đủ thao tác này. Bạn nói rõ yêu cầu nhé."
+    assert value.act == "offer"
+    assert value.actions[0].capability == "conversation.respond"
+    assert value.actions[0].arguments.query == "Mở gửi xe xa cho tôi Mở gửi xe xa cho tôi"
 
 
 @pytest.mark.asyncio

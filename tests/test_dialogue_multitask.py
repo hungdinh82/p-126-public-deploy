@@ -82,9 +82,13 @@ async def test_named_air_conditioner_temperature_uses_default_increment(services
     graph, _, gateway = build(services, tmp_path, local=model if tier == "local" else None)
     graph.default_provider = tier
     result = await invoke(graph, "tăng nhiệt độ điều hòa lên", "named-temperature")
-    assert result["execution"]["verified"]
-    assert gateway.vehicle.state_for("driver").temperature_celsius == 25
-    assert "25" in result["response_text"]
+    if tier == "local" and reply["act"] == "clarify":
+        assert result["status"] == "clarify"
+        assert gateway.vehicle.state_for("driver").state_version == 0
+    else:
+        assert result["execution"]["verified"]
+        assert gateway.vehicle.state_for("driver").temperature_celsius == 25
+        assert "25" in result["response_text"]
     graph.close()
 
 

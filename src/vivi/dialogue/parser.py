@@ -170,11 +170,6 @@ class OfflineParser:
     def __init__(self):
         self.lexer = Lexer()
 
-    def control_utterance(self, text):
-        return bool(re.match(
-            r"^(?:mo|dong|ha|nang|khoa|bat|tat|phat|dung|dat|chinh|tang|giam|gui|goi|xoa|quen|ghi|nho)\b",
-            self.lexer.normalize(text)))
-
     def interpret(self, text: str, session: SessionState, memory=None, history=None) -> SemanticTurn:
         segments = [part.strip() for part in text.splitlines() if part.strip()]
         if len(segments) > 1:
@@ -1619,58 +1614,6 @@ class OfflineParser:
         if (bounded.act == "request" and self.command(value) is None
             and self.completed_slot_patch(value, text, session)):
             return bounded
-        if len([part for part in text.splitlines() if part.strip()]) > 1:
-            if bounded.act == "request" and bounded.actions:
-                return bounded
-            # Do not let a model drop an undecoded vehicle command from a
-            # multi-segment snapshot and execute only the parts it guessed.
-            if bounded.act == "clarify" and any(self.control_utterance(part) for part in bounded.unresolved):
-                return bounded
-        if (bounded.act == "clarify" and result.drafts()
-            and not any(a.capability.startswith(("navigation.", "trip.")) for a in result.drafts())
-            and (any(self.control_utterance(part) for part in bounded.unresolved)
-                 or (self.control_utterance(text) and len(self.lexer.clauses(text)) == 1
-                     and not bounded.clarification_drafts))):
-            return bounded
-        literal = self.command(value)
-        if (literal and literal.capability == "climate.set_temperature"
-            and bounded.act == "request" and len(bounded.actions) == 1
-            and result.act == "clarify"
-            and not (result.conflicting or result.conditional or result.scheduled)
-            and literal.arguments.temperature_delta_celsius is not None
-            and re.match(r"^(?:tang|giam|ha)\b", value)
-            and not re.search(r"\d", value)):
-            # An unspecified increase/decrease has an established +/-2C
-            # default; asking for its magnitude would contradict that policy.
-            return bounded
-        if (literal and bounded.act == "request" and len(bounded.actions) == 1
-            and result.act in {"request", "question"} and result.actions
-            and [action.capability for action in result.actions] != [literal.capability]):
-            # A completely parsed literal command cannot authorize additional
-            # or unrelated effects suggested by the model.
-            return bounded
-        if (literal and bounded.act == "request" and len(bounded.actions) == 1
-            and result.act in {"request", "question"} and len(result.actions) == 1
-            and result.actions[0].capability == literal.capability):
-            result.act = "request"
-            if literal.capability in {"window.set_position", "door.set_open", "door.set_lock", "seat.set_heat_level"}:
-                # A named seat/side in a completely consumed literal command
-                # outranks a model's unrelated seat copied from prior context.
-                if literal.arguments.zone is not None or literal.arguments.zones is not None:
-                    result.actions[0].arguments = result.actions[0].arguments.model_copy(update={
-                        key: getattr(literal.arguments, key) for key in ("zone", "zones", "target_side", "target_row")})
-        if result.act in {"reply", "offer"}:
-            # A model must not turn a recognizable request into a generic
-            # greeting/offer. Keep the bounded interpretation whenever it has
-            # grounded meaning; if it cannot parse a command-shaped utterance,
-            # ask for clarification instead of silently discarding the command.
-            if bounded.act in {"request", "question", "modify"} and bounded.actions:
-                return bounded
-            if bounded.act == "clarify" and re.match(
-                r"^(?:mo|dong|ha|nang|len|khoa|mo khoa|bat|tat|phat|dung|dat|chinh|tang|giam|tim|dan|chi duong|gui|goi|xoa|quen|ghi|nho)\b",
-                value,
-            ):
-                return bounded
         if session.active and session.active.current_index() is not None and re.fullmatch(r"(?:xin )?chao(?: vivi| ban)?|vivi|hello|hi", value):
             return bounded
         # Explicit internet/weather/story requests cannot be answered as stale
