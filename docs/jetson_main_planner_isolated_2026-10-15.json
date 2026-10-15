@@ -1,0 +1,440 @@
+{
+  "baseline_commit": "8ff1b7a",
+  "input": "mở cốp xe",
+  "warmup": false,
+  "model": "Qwen3-1.7B-Q4_K_M",
+  "max_tokens": 2048,
+  "wall_ms": 82969.75,
+  "backend_calls": 2,
+  "calls": [
+    {
+      "wall_ms": 63553.01,
+      "usage": {
+        "completion_tokens": 1382,
+        "prompt_tokens": 10388,
+        "total_tokens": 11770,
+        "prompt_tokens_details": {
+          "cached_tokens": 5
+        }
+      },
+      "tool": "interpret_turn",
+      "output": {
+        "act": "offer",
+        "task_ref": "active",
+        "step_index": 0,
+        "actions": [
+          {
+            "capability": "door.set_open",
+            "arguments": {
+              "query": "mở cốp xe",
+              "destination": null,
+              "mode": "general",
+              "location": null,
+              "forecast_day": null,
+              "gear": null,
+              "value_celsius": null,
+              "position_percent": null,
+              "open": true,
+              "locked": false,
+              "level": null,
+              "zone": "driver",
+              "zones": [
+                "driver"
+              ],
+              "media_query": null,
+              "memory_key": null,
+              "memory_value": null,
+              "target_side": "left",
+              "target_row": "front",
+              "place_handle": null,
+              "choice_handle": null,
+              "reject_candidates": false,
+              "use_search_results": false,
+              "category": "charging",
+              "nearest": false,
+              "destination_scope": "place",
+              "trip_kind": "one_way",
+              "origin_query": null,
+              "plan_id": null,
+              "route_revision": null,
+              "requested_vehicle_model": "VF8",
+              "requested_model_year": 2023,
+              "question_kind": "charging_duration",
+              "charging_mode": null,
+              "temperature_delta_celsius": null
+            },
+            "excluded_zones": [
+              "driver"
+            ],
+            "exclusion_mode": "add",
+            "referenced_target": false
+          }
+        ],
+        "step_updates": [
+          {
+            "step_index": 0,
+            "action": {
+              "capability": "door.set_open",
+              "arguments": {
+                "query": "mở cốp xe",
+                "destination": null,
+                "mode": "general",
+                "location": null,
+                "forecast_day": null,
+                "gear": null,
+                "value_celsius": null,
+                "position_percent": null,
+                "open": true,
+                "locked": false,
+                "level": null,
+                "zone": "driver",
+                "zones": [
+                  "driver"
+                ],
+                "media_query": null,
+                "memory_key": null,
+                "memory_value": null,
+                "target_side": "left",
+                "target_row": "front",
+                "place_handle": null,
+                "choice_handle": null,
+                "reject_candidates": false,
+                "use_search_results": false,
+                "category": "charging",
+                "nearest": false,
+                "destination_scope": "place",
+                "trip_kind": "one_way",
+                "origin_query": null,
+                "plan_id": null,
+                "route_revision": null,
+                "requested_vehicle_model": "VF8",
+                "requested_model_year": 2023,
+                "question_kind": "charging_duration",
+                "charging_mode": null,
+                "temperature_delta_celsius": null
+              },
+              "excluded_zones": [
+                "driver"
+              ],
+              "exclusion_mode": "add",
+              "referenced_target": false
+            }
+          },
+          {
+            "step_index": 0,
+            "action": {
+              "capability": "door.set_open",
+              "arguments": {
+                "query": "mở cốp xe",
+                "destination": null,
+                "mode": "general",
+                "location": null,
+                "forecast_day": null,
+                "gear": null,
+                "value_celsius": null,
+                "position_percent": null,
+                "open": true,
+                "locked": false,
+                "level": null,
+                "zone": "driver",
+                "zones": [
+                  "driver"
+                ],
+                "media_query": null,
+                "memory_key": null,
+                "memory_value": null,
+                "target_side": "left",
+                "target_row": "front",
+                "place_handle": null,
+                "choice_handle": null,
+                "reject_candidates": false,
+                "use_search_results": false,
+                "category": "charging",
+                "nearest": false,
+                "destination_scope": "place",
+                "trip_kind": "one_way",
+                "origin_query": null,
+                "plan_id": null,
+                "route_revision": null,
+                "requested_vehicle_model": "VF8",
+                "requested_model_year": 2023,
+                "question_kind": "charging_duration",
+                "charging_mode": null,
+                "temperature_delta_celsius": null
+              },
+              "excluded_zones": [
+                "driver"
+              ],
+              "exclusion_mode": "add",
+              "referenced_target": false
+            }
+          }
+        ],
+        "append_actions": [
+          {
+            "capability": "door.set_open",
+            "arguments": {
+              "query": "mở cốp xe",
+              "destination": null,
+              "mode": "general",
+              "location": null,
+              "forecast_day": null,
+              "gear": null,
+              "value_celsius": null,
+              "position_percent": null,
+              "open": true,
+              "locked": false,
+              "level": null,
+              "zone": "driver",
+              "zones": [
+                "driver"
+              ],
+              "media_query": null,
+              "memory_key": null,
+              "memory_value": null,
+              "target_side": "left",
+              "target_row": "front",
+              "place_handle": null,
+              "choice_handle": null,
+              "reject_candidates": false,
+              "use_search_results": false,
+              "category": "charging",
+              "nearest": false,
+              "destination_scope": "place",
+              "trip_kind": "one_way",
+              "origin_query": null,
+              "plan_id": null,
+              "route_revision": null,
+              "requested_vehicle_model": "VF8",
+              "requested_model_year": 2023,
+              "question_kind": "charging_duration",
+              "charging_mode": null,
+              "temperature_delta_celsius": null
+            },
+            "excluded_zones": [
+              "driver"
+            ],
+            "exclusion_mode": "add",
+            "referenced_target": false
+          }
+        ],
+        "clarification_drafts": [
+          {
+            "capability": "door.set_open",
+            "arguments": {
+              "query": "mở cốp xe",
+              "destination": null,
+              "mode": "general",
+              "location": null,
+              "forecast_day": null,
+              "gear": null,
+              "value_celsius": null,
+              "position_percent": null,
+              "open": true,
+              "locked": false,
+              "level": null,
+              "zone": "driver",
+              "zones": [
+                "driver"
+              ],
+              "media_query": null,
+              "memory_key": null,
+              "memory_value": null,
+              "target_side": "left",
+              "target_row": "front",
+              "place_handle": null,
+              "choice_handle": null,
+              "reject_candidates": false,
+              "use_search_results": false,
+              "category": "charging",
+              "nearest": false,
+              "destination_scope": "place",
+              "trip_kind": "one_way",
+              "origin_query": null,
+              "plan_id": null,
+              "route_revision": null,
+              "requested_vehicle_model": "VF8",
+              "requested_model_year": 2023,
+              "question_kind": "charging_duration",
+              "charging_mode": null,
+              "temperature_delta_celsius": null
+            },
+            "excluded_zones": [
+              "driver"
+            ],
+            "exclusion_mode": "add",
+            "referenced_target": false
+          }
+        ],
+        "text": "Mở cốp xe",
+        "negated": false,
+        "conditional": false,
+        "scheduled": false,
+        "conflicting": false,
+        "unresolved": [
+          "mở cốp xe"
+        ]
+      }
+    },
+    {
+      "wall_ms": 19382.17,
+      "usage": {
+        "completion_tokens": 576,
+        "prompt_tokens": 10637,
+        "total_tokens": 11213,
+        "prompt_tokens_details": {
+          "cached_tokens": 10378
+        }
+      },
+      "tool": "interpret_turn",
+      "output": {
+        "act": "modify",
+        "task_ref": "active",
+        "step_index": 0,
+        "actions": [
+          {
+            "capability": "door.set_open",
+            "arguments": {
+              "query": "mở cốp xe",
+              "destination": null,
+              "mode": "general",
+              "location": null,
+              "forecast_day": null,
+              "gear": null,
+              "value_celsius": null,
+              "position_percent": null,
+              "open": true,
+              "locked": false,
+              "level": null,
+              "zone": null,
+              "zones": null,
+              "media_query": null,
+              "memory_key": null,
+              "memory_value": null,
+              "target_side": null,
+              "target_row": null,
+              "place_handle": null,
+              "choice_handle": null,
+              "reject_candidates": false,
+              "use_search_results": false,
+              "category": null,
+              "nearest": false,
+              "destination_scope": null,
+              "trip_kind": null,
+              "origin_query": null,
+              "plan_id": null,
+              "route_revision": null,
+              "requested_vehicle_model": null,
+              "requested_model_year": null,
+              "question_kind": null,
+              "charging_mode": null,
+              "temperature_delta_celsius": null
+            },
+            "excluded_zones": null,
+            "exclusion_mode": "add",
+            "referenced_target": false
+          }
+        ],
+        "step_updates": [
+          {
+            "step_index": 0,
+            "action": {
+              "capability": "door.set_open",
+              "arguments": {
+                "query": "mở cốp xe",
+                "destination": null,
+                "mode": "general",
+                "location": null,
+                "forecast_day": null,
+                "gear": null,
+                "value_celsius": null,
+                "position_percent": null,
+                "open": true,
+                "locked": false,
+                "level": null,
+                "zone": null,
+                "zones": null,
+                "media_query": null,
+                "memory_key": null,
+                "memory_value": null,
+                "target_side": null,
+                "target_row": null,
+                "place_handle": null,
+                "choice_handle": null,
+                "reject_candidates": false,
+                "use_search_results": false,
+                "category": null,
+                "nearest": false,
+                "destination_scope": null,
+                "trip_kind": null,
+                "origin_query": null,
+                "plan_id": null,
+                "route_revision": null,
+                "requested_vehicle_model": null,
+                "requested_model_year": null,
+                "question_kind": null,
+                "charging_mode": null,
+                "temperature_delta_celsius": null
+              },
+              "excluded_zones": null,
+              "exclusion_mode": "add",
+              "referenced_target": false
+            }
+          }
+        ],
+        "append_actions": [],
+        "clarification_drafts": [],
+        "text": "Mở cốp xe",
+        "negated": false,
+        "conditional": false,
+        "scheduled": false,
+        "conflicting": false,
+        "unresolved": []
+      }
+    }
+  ],
+  "served": "rules",
+  "attempts": [
+    {
+      "provider": "local",
+      "outcome": "fallback",
+      "reason": "ValidationError",
+      "http_status": null,
+      "latency_ms": 82950.03,
+      "schema_errors": [
+        {
+          "field": [
+            "actions",
+            0
+          ],
+          "code": "value_error"
+        },
+        {
+          "field": [
+            "step_updates",
+            0,
+            "action"
+          ],
+          "code": "value_error"
+        }
+      ]
+    },
+    {
+      "provider": "rules",
+      "outcome": "served",
+      "latency_ms": 9.35
+    }
+  ],
+  "final": {
+    "act": "request",
+    "actions": [
+      {
+        "capability": "trunk.set_open",
+        "arguments": {
+          "open": true
+        },
+        "excluded_zones": []
+      }
+    ]
+  }
+}

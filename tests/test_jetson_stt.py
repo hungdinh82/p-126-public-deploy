@@ -103,9 +103,10 @@ def test_cpu_stt_selection_preserves_cuda_device_for_other_models(monkeypatch, t
 
 
 def test_warmup_uses_real_prompt_and_tools_without_executing():
-    from src.vivi.agents.prompts import VOICE_PERSONA
+    from src.vivi.capabilities.registry import catalog
     from src.vivi.conversation.guardrails import TOPIC_INSTRUCTION
-    from src.vivi.dialogue.planner import SEMANTIC_INSTRUCTION, semantic_tools, warmup_local_client
+    from src.vivi.dialogue.local_tools import LOCAL_TOOL_INSTRUCTION, native_proposal_tools
+    from src.vivi.dialogue.planner import warmup_local_client
     from src.vivi.structured_llm import StructuredChatClient
 
     class Client(StructuredChatClient):
@@ -115,8 +116,8 @@ def test_warmup_uses_real_prompt_and_tools_without_executing():
 
     client = Client(base_url='http://jetson/v1', api_key='', model='qwen', timeout_seconds=60)
     asyncio.run(warmup_local_client(client))
-    assert client.payload['messages'][0]['content'].startswith(VOICE_PERSONA + SEMANTIC_INSTRUCTION + TOPIC_INSTRUCTION)
-    assert client.payload['tools'] == semantic_tools()
+    assert client.payload['messages'][0]['content'] == LOCAL_TOOL_INSTRUCTION + TOPIC_INSTRUCTION
+    assert client.payload['tools'] == native_proposal_tools(catalog(False, conversation=True, information=True))
     assert client.payload['max_tokens'] == 1
     assert client.payload['cache_prompt'] is True
 

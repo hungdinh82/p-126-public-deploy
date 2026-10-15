@@ -1,5 +1,7 @@
 # Giữ hợp đồng main, chỉ mở rộng runtime local
 
+> Ảnh chụp tại `8ff1b7a`. Sau khi người dùng chấp thuận sửa hợp đồng local, xem [tool pipeline mới](local_tool_pipeline.md). Các mô tả local dùng nguyên prompt/schema main bên dưới không còn là hành vi mới. Cloud và UI vẫn được giữ.
+
 Baseline đối chiếu: `origin/main` tại `9c76585d1d899e647ff8e0772931ccdf9989e814`.
 Tài liệu này thay thế mô tả hành vi đang chạy trong báo cáo audit chốt ở `94c9223`.
 Báo cáo audit cũ vẫn là ảnh chụp lịch sử của commit đó.

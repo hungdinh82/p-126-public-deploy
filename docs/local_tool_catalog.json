@@ -1,0 +1,1708 @@
+{
+  "tools": [
+    {
+      "name": "conversation_respond",
+      "description": "Trò chuyện, kiến thức phổ thông ổn định hoặc truyện ngắn giải trí. Không báo dữ liệu live hoặc thực thi xe. ",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "minLength": 2,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "chat",
+                  "general",
+                  "creative"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "_meta": {
+        "capability": "conversation.respond",
+        "proposalOnly": true,
+        "discoveryTerms": [
+          "nói chuyện",
+          "tâm sự",
+          "kể chuyện",
+          "kể một",
+          "viết bài",
+          "sốt",
+          "bệnh",
+          "đau"
+        ]
+      }
+    },
+    {
+      "name": "web_search",
+      "description": "Tìm thông tin internet có nguồn: du lịch, địa điểm tham quan, tin mới, giá vàng. Không lập tuyến hay bắt đầu dẫn đường. ",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "minLength": 2,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "_meta": {
+        "capability": "web.search",
+        "proposalOnly": true,
+        "discoveryTerms": [
+          "trên mạng",
+          "internet",
+          "hiện nay",
+          "hiện tại",
+          "giá vàng",
+          "tin tức"
+        ]
+      }
+    },
+    {
+      "name": "weather_get_forecast",
+      "description": "Thời tiết hôm nay/ngày mai tại địa điểm hoặc vị trí hiện tại. Không lấy nhiệt độ điều hoà xe. ",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "minLength": 2,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "location": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "maxLength": 200,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "forecast_day": {
+            "anyOf": [
+              {
+                "enum": [
+                  "today",
+                  "tomorrow",
+                  "day_after_tomorrow"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "_meta": {
+        "capability": "weather.get_forecast",
+        "proposalOnly": true,
+        "discoveryTerms": [
+          "thời tiết",
+          "trời mưa",
+          "dự báo",
+          "nắng không"
+        ]
+      }
+    },
+    {
+      "name": "knowledge_lookup",
+      "description": "Tra Wikipedia cho thông tin nền: địa danh, lịch sử, văn hóa. Không tra giá hoặc thời tiết mới nhất. ",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "minLength": 2,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "_meta": {
+        "capability": "knowledge.lookup",
+        "proposalOnly": true,
+        "discoveryTerms": [
+          "là gì",
+          "giải thích",
+          "tại sao",
+          "lịch sử"
+        ]
+      }
+    },
+    {
+      "name": "memory_recall",
+      "description": "Đọc thông tin người dùng đã yêu cầu lưu. Không suy diễn từ lịch sử. ",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "memory_key": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Khoá đã lưu; preferences để chỉ đọc sở thích; bỏ trống để đọc tất cả."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "_meta": {
+        "capability": "memory.recall",
+        "proposalOnly": true,
+        "discoveryTerms": [
+          "nhớ gì",
+          "đã nhớ",
+          "tên tôi"
+        ]
+      }
+    },
+    {
+      "name": "memory_remember",
+      "description": "Lưu khi người dùng yêu cầu ghi nhớ rõ ràng; key display_name, preferred_music, preferred_temperature, response_style hoặc note.*. ",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "memory_key": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "memory_value": {
+            "anyOf": [
+              {
+                "maxLength": 700,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "_meta": {
+        "capability": "memory.remember",
+        "proposalOnly": true,
+        "discoveryTerms": [
+          "ghi nhớ",
+          "hãy nhớ",
+          "nhớ rằng",
+          "tôi tên",
+          "gọi tôi"
+        ]
+      }
+    },
+    {
+      "name": "memory_forget",
+      "description": "Xoá một mục đã lưu theo đúng memory_key có trong bộ nhớ. ",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "memory_key": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "_meta": {
+        "capability": "memory.forget",
+        "proposalOnly": true,
+        "discoveryTerms": [
+          "quên",
+          "xóa ghi nhớ"
+        ]
+      }
+    },
+    {
+      "name": "memory_reset",
+      "description": "Đề nghị xoá mọi thông tin cá nhân đã nhớ; hệ thống sẽ hỏi xác nhận trước khi xoá. ",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "_meta": {
+        "capability": "memory.reset",
+        "proposalOnly": true,
+        "discoveryTerms": [
+          "quên hết",
+          "xóa hết"
+        ]
+      }
+    },
+    {
+      "name": "manual_search",
+      "description": "Giải thích tính năng, cách dùng, thông số và xử lý sự cố VF8 từ cẩm nang. Không đọc trạng thái hiện tại, không thực hiện thao tác. ",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "minLength": 2,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "requested_vehicle_model": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "pattern": "^VF[0-9]+$",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "requested_model_year": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "maximum": 2100,
+                    "minimum": 2000,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "question_kind": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "const": "charging_duration",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "charging_mode": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "AC",
+                      "DC"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "_meta": {
+        "capability": "manual.search",
+        "proposalOnly": true,
+        "discoveryTerms": [
+          "cẩm nang",
+          "hướng dẫn",
+          "thông số",
+          "sạc bao lâu",
+          "cách dùng"
+        ]
+      }
+    },
+    {
+      "name": "vehicle_get_status",
+      "description": "Đọc số đo và trạng thái xe hiện tại. Không dùng thông số cẩm nang làm số đo; chỉ trả những trường được adapter thực sự cung cấp. Chỉ dùng khi hỏi/kiểm tra trạng thái hoặc số đo. Không tự thêm summary khi yêu cầu mở cốp, cửa kính hoặc điều chỉnh nhiệt độ.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "pattern": "^(?:summary|temperature|battery|tires|range|range_time|body|diagnostics)(?:,(?:temperature|battery|tires|range|range_time|body|diagnostics))*$",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "_meta": {
+        "capability": "vehicle.get_status",
+        "proposalOnly": true,
+        "discoveryTerms": [
+          "trạng thái",
+          "kiểm tra",
+          "pin còn",
+          "bao nhiêu độ",
+          "đang mở",
+          "đang đóng"
+        ]
+      }
+    },
+    {
+      "name": "climate_set_temperature",
+      "description": "ĐẶT nhiệt độ tuyệt đối khi nêu nhiệt độ đích, ví dụ đặt 23 độ: value_celsius=23. Không dùng cho than nóng/lạnh hoặc tăng/giảm tương đối.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "value_celsius": {
+            "anyOf": [
+              {
+                "description": "Nhiệt độ đích, không phải số độ tăng/giảm.",
+                "maximum": 30,
+                "minimum": 16,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "_meta": {
+        "capability": "climate.set_temperature",
+        "proposalOnly": true,
+        "discoveryTerms": [
+          "nhiệt độ",
+          "điều hòa",
+          "điều hoà",
+          "lạnh",
+          "nóng"
+        ]
+      }
+    },
+    {
+      "name": "climate_warm_cabin",
+      "description": "Làm ẤM cabin bằng TĂNG nhiệt độ. Dùng khi người dùng than LẠNH hoặc yêu cầu tăng nhiệt độ. amount là số độ tăng; không nói số thì bỏ amount, backend mặc định 2 độ.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 30
+          }
+        },
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "_meta": {
+        "capability": "climate.set_temperature",
+        "temperatureSign": 1,
+        "proposalOnly": true
+      }
+    },
+    {
+      "name": "climate_cool_cabin",
+      "description": "Làm MÁT cabin bằng GIẢM nhiệt độ. Dùng khi người dùng than NÓNG hoặc yêu cầu giảm nhiệt độ. amount là số độ giảm; không nói số thì bỏ amount, backend mặc định 2 độ.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "maximum": 30
+          }
+        },
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "_meta": {
+        "capability": "climate.set_temperature",
+        "temperatureSign": -1,
+        "proposalOnly": true
+      }
+    },
+    {
+      "name": "window_set_position",
+      "description": "Điều chỉnh độ mở cửa sổ tại vị trí được yêu cầu. Hạ kính xuống là mở (100%); nâng kính lên là đóng (0%). Khi có phần trăm dùng đúng mức đó. Không mở cửa xe. Dùng cho cửa kính/cửa sổ. Bên tài=driver; bên phụ=front_passenger; sau trái=rear_left; sau phải=rear_right. Mở/hạ=100, đóng/nâng=0. Giữ phần trăm được nói. Không mở cửa cabin.",
+      "inputSchema": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "zone": {
+                "anyOf": [
+                  {
+                    "anyOf": [
+                      {
+                        "enum": [
+                          "driver",
+                          "front_passenger",
+                          "rear_left",
+                          "rear_right",
+                          "all"
+                        ],
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "position_percent": {
+                "anyOf": [
+                  {
+                    "description": "Độ mở, không phải chiều cao kính: 0 = nâng kính lên/đóng; 100 = hạ kính xuống/mở. Hạ kính không nói mức nghĩa là 100, không phải 0.",
+                    "maximum": 100,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "zones": {
+                "anyOf": [
+                  {
+                    "anyOf": [
+                      {
+                        "items": {
+                          "enum": [
+                            "driver",
+                            "front_passenger",
+                            "rear_left",
+                            "rear_right"
+                          ],
+                          "type": "string"
+                        },
+                        "maxItems": 4,
+                        "minItems": 1,
+                        "type": "array"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "position_percent": {
+                "anyOf": [
+                  {
+                    "description": "Độ mở, không phải chiều cao kính: 0 = nâng kính lên/đóng; 100 = hạ kính xuống/mở. Hạ kính không nói mức nghĩa là 100, không phải 0.",
+                    "maximum": 100,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "zones"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "position_percent": {
+                "anyOf": [
+                  {
+                    "description": "Độ mở, không phải chiều cao kính: 0 = nâng kính lên/đóng; 100 = hạ kính xuống/mở. Hạ kính không nói mức nghĩa là 100, không phải 0.",
+                    "maximum": 100,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "target_side": {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "left",
+                      "right"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "target_row": {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "front",
+                      "rear"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "target_side"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "position_percent": {
+                "anyOf": [
+                  {
+                    "description": "Độ mở, không phải chiều cao kính: 0 = nâng kính lên/đóng; 100 = hạ kính xuống/mở. Hạ kính không nói mức nghĩa là 100, không phải 0.",
+                    "maximum": 100,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "target_row": {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "front",
+                      "rear"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "target_row"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "_meta": {
+        "capability": "window.set_position",
+        "proposalOnly": true,
+        "discoveryTerms": [
+          "cửa sổ",
+          "cửa kính",
+          "kính"
+        ]
+      }
+    },
+    {
+      "name": "door_set_open",
+      "description": "Mở hoặc đóng cánh cửa xe tại vị trí được yêu cầu. Không thay đổi khoá cửa. Chỉ mở/đóng cánh cửa cabin. Không dùng cho cửa sổ/cửa kính, cốp, capo hoặc mở khóa.",
+      "inputSchema": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "zone": {
+                "anyOf": [
+                  {
+                    "anyOf": [
+                      {
+                        "enum": [
+                          "driver",
+                          "front_passenger",
+                          "rear_left",
+                          "rear_right",
+                          "all"
+                        ],
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "open": {
+                "anyOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "zones": {
+                "anyOf": [
+                  {
+                    "anyOf": [
+                      {
+                        "items": {
+                          "enum": [
+                            "driver",
+                            "front_passenger",
+                            "rear_left",
+                            "rear_right"
+                          ],
+                          "type": "string"
+                        },
+                        "maxItems": 4,
+                        "minItems": 1,
+                        "type": "array"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "open": {
+                "anyOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "zones"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "open": {
+                "anyOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "target_side": {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "left",
+                      "right"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "target_row": {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "front",
+                      "rear"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "target_side"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "open": {
+                "anyOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "target_row": {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "front",
+                      "rear"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "target_row"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "_meta": {
+        "capability": "door.set_open",
+        "proposalOnly": true,
+        "discoveryTerms": [
+          "cửa",
+          "cánh cửa"
+        ]
+      }
+    },
+    {
+      "name": "door_set_lock",
+      "description": "Khoá hoặc mở khoá cửa tại vị trí được yêu cầu. Mở khoá không có nghĩa mở cánh cửa. Chỉ khóa/mở khóa cửa cabin; không mở cánh cửa hoặc kính.",
+      "inputSchema": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "zone": {
+                "anyOf": [
+                  {
+                    "anyOf": [
+                      {
+                        "enum": [
+                          "driver",
+                          "front_passenger",
+                          "rear_left",
+                          "rear_right",
+                          "all"
+                        ],
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "locked": {
+                "anyOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "zones": {
+                "anyOf": [
+                  {
+                    "anyOf": [
+                      {
+                        "items": {
+                          "enum": [
+                            "driver",
+                            "front_passenger",
+                            "rear_left",
+                            "rear_right"
+                          ],
+                          "type": "string"
+                        },
+                        "maxItems": 4,
+                        "minItems": 1,
+                        "type": "array"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "locked": {
+                "anyOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "zones"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "locked": {
+                "anyOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "target_side": {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "left",
+                      "right"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "target_row": {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "front",
+                      "rear"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "target_side"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "locked": {
+                "anyOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "target_row": {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "front",
+                      "rear"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "target_row"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "_meta": {
+        "capability": "door.set_lock",
+        "proposalOnly": true,
+        "discoveryTerms": [
+          "khóa",
+          "khoá"
+        ]
+      }
+    },
+    {
+      "name": "hood_set_open",
+      "description": "Mở hoặc đóng nắp capo (khoang phía trước). Chỉ khi xe đang đỗ. Dùng cho nắp capo/khoang phía trước. Không phải cốp sau hoặc cửa cabin.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "open": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "_meta": {
+        "capability": "hood.set_open",
+        "proposalOnly": true,
+        "discoveryTerms": [
+          "capo",
+          "ca pô",
+          "ca-pô"
+        ]
+      }
+    },
+    {
+      "name": "trunk_set_open",
+      "description": "Mở hoặc đóng cốp sau (cửa hậu). Chỉ khi xe đang đỗ. Dùng cho cốp xe/cốp sau/cửa hậu. Không phải cửa ghế sau, cửa kính hay nắp capo. Chỉ open=true (mở) hoặc false (đóng).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "open": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "_meta": {
+        "capability": "trunk.set_open",
+        "proposalOnly": true,
+        "discoveryTerms": [
+          "cốp",
+          "cửa hậu"
+        ]
+      }
+    },
+    {
+      "name": "body_set_open",
+      "description": "Mở hoặc đóng cùng lúc cả bốn cửa, nắp capo và cốp sau, chỉ khi người dùng yêu cầu tất cả. Chỉ mở khi xe đang đỗ. ",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "open": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "_meta": {
+        "capability": "body.set_open",
+        "proposalOnly": true,
+        "discoveryTerms": [
+          "tất cả cửa",
+          "toàn bộ cửa"
+        ]
+      }
+    },
+    {
+      "name": "seat_set_heat_level",
+      "description": "Chỉnh mức sưởi ghế tại vị trí được yêu cầu. Không điều chỉnh vị trí ghế. ",
+      "inputSchema": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "zone": {
+                "anyOf": [
+                  {
+                    "anyOf": [
+                      {
+                        "enum": [
+                          "driver",
+                          "front_passenger",
+                          "rear_left",
+                          "rear_right",
+                          "all"
+                        ],
+                        "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "level": {
+                "anyOf": [
+                  {
+                    "description": "0 tắt sưởi, 1–3 mức sưởi.",
+                    "maximum": 3,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "zones": {
+                "anyOf": [
+                  {
+                    "anyOf": [
+                      {
+                        "items": {
+                          "enum": [
+                            "driver",
+                            "front_passenger",
+                            "rear_left",
+                            "rear_right"
+                          ],
+                          "type": "string"
+                        },
+                        "maxItems": 4,
+                        "minItems": 1,
+                        "type": "array"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "level": {
+                "anyOf": [
+                  {
+                    "description": "0 tắt sưởi, 1–3 mức sưởi.",
+                    "maximum": 3,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "zones"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "level": {
+                "anyOf": [
+                  {
+                    "description": "0 tắt sưởi, 1–3 mức sưởi.",
+                    "maximum": 3,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "target_side": {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "left",
+                      "right"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "target_row": {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "front",
+                      "rear"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "target_side"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "level": {
+                "anyOf": [
+                  {
+                    "description": "0 tắt sưởi, 1–3 mức sưởi.",
+                    "maximum": 3,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "target_row": {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "front",
+                      "rear"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "target_row"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "_meta": {
+        "capability": "seat.set_heat_level",
+        "proposalOnly": true,
+        "discoveryTerms": [
+          "sưởi ghế"
+        ]
+      }
+    },
+    {
+      "name": "media_play",
+      "description": "Phát nhạc hoặc nội dung âm thanh được yêu cầu. ",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "media_query": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "maxLength": 200,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "description": "Requested song, artist or genre only. Omit for generic music; đi/nhé/nhạc are not search terms."
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "_meta": {
+        "capability": "media.play",
+        "proposalOnly": true,
+        "discoveryTerms": [
+          "nhạc",
+          "bài hát",
+          "nghe bài",
+          "âm thanh"
+        ]
+      }
+    },
+    {
+      "name": "media_pause",
+      "description": "Dừng phát âm thanh. ",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "_meta": {
+        "capability": "media.pause",
+        "proposalOnly": true,
+        "discoveryTerms": [
+          "dừng nhạc",
+          "tắt nhạc",
+          "tạm dừng"
+        ]
+      }
+    },
+    {
+      "name": "navigation_set_gear",
+      "description": "Chuyển P để đỗ/tạm dừng hoặc D để tiếp tục tuyến đã chấp nhận; không nhận bản nháp. ",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "gear": {
+            "anyOf": [
+              {
+                "enum": [
+                  "P",
+                  "D"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "_meta": {
+        "capability": "navigation.set_gear",
+        "proposalOnly": true,
+        "discoveryTerms": [
+          "số p",
+          "số d",
+          "chuyển số",
+          "vào số"
+        ]
+      }
+    },
+    {
+      "name": "dialogue_clarify",
+      "description": "Hỏi lại khi yêu cầu nghe không rõ, không hiểu, thiếu nghĩa, hoặc chưa thể đề xuất an toàn. Không tự đoán.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "_meta": {
+        "act": "clarify",
+        "proposalOnly": true
+      }
+    },
+    {
+      "name": "dialogue_reply",
+      "description": "Trả lời ngắn cho lời chào/cảm ơn, không dùng để trả lời thay tool kiến thức hoặc thực hiện thao tác.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "_meta": {
+        "act": "reply",
+        "proposalOnly": true
+      }
+    },
+    {
+      "name": "dialogue_unsupported",
+      "description": "Giải thích thao tác không được hỗ trợ; không đề xuất thao tác thay thế không được yêu cầu.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "_meta": {
+        "act": "unsupported",
+        "proposalOnly": true
+      }
+    },
+    {
+      "name": "dialogue_suggest_unrequested_action",
+      "description": "UNSOLICITED suggestion only: người dùng CHƯA yêu cầu thao tác nào, AI tự gợi ý và hỏi có muốn không. KHÔNG dùng cho lệnh mở/đóng/đặt/tăng/giảm của người dùng. Không kết hợp với tool khác.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "actions": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 5,
+            "items": {
+              "type": "object",
+              "properties": {
+                "capability": {
+                  "type": "string",
+                  "enum": [
+                    "conversation.respond",
+                    "web.search",
+                    "weather.get_forecast",
+                    "knowledge.lookup",
+                    "memory.recall",
+                    "memory.remember",
+                    "memory.forget",
+                    "memory.reset",
+                    "manual.search",
+                    "vehicle.get_status",
+                    "climate.set_temperature",
+                    "window.set_position",
+                    "door.set_open",
+                    "door.set_lock",
+                    "hood.set_open",
+                    "trunk.set_open",
+                    "body.set_open",
+                    "seat.set_heat_level",
+                    "media.play",
+                    "media.pause",
+                    "navigation.set_gear"
+                  ]
+                },
+                "arguments": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              },
+              "required": [
+                "capability"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "text",
+          "actions"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "_meta": {
+        "act": "offer",
+        "proposalOnly": true
+      }
+    },
+    {
+      "name": "dialogue_find_tools",
+      "description": "Lấy thêm tài liệu tool khi danh sách hiện tại thiếu công cụ phù hợp với yêu cầu. Không thực hiện thao tác.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "_meta": {
+        "discoveryOnly": true,
+        "proposalOnly": true
+      }
+    }
+  ],
+  "_meta": {
+    "contract": "local-proposals-v1",
+    "proposalOnly": true,
+    "mcpTransport": false
+  }
+}

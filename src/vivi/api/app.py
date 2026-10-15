@@ -51,18 +51,10 @@ async def lifespan(app: FastAPI):
             await runtime.stt.preload()
         if config.stt_fallback_preload and hasattr(runtime.stt, "preload_fallback"):
             background.append(asyncio.create_task(_preload_stt_fallback()))
-        client = getattr(runtime.orchestrator, "local_semantic_client", None)
-        if client is not None and config.jetson_ai_url and config.jetson_ai_policy != "disabled":
-            from src.vivi.dialogue.planner import warmup_local_client
-
-            async def warmup():
-                try:
-                    await warmup_local_client(client, runtime.orchestrator.local_semantic_catalog)
-                    logger.info("Đã warmup prompt cố định của SLM từ xa")
-                except Exception:
-                    logger.exception("Warmup SLM từ xa chưa thành công; app vẫn nhận request")
-
-            background.append(asyncio.create_task(warmup()))
+        # Local tool documentation is selected per input. A full-catalog warmup
+        # primes a different prefix and can delay an actual turn or its repair.
+        # The AI server already loads the model; let the first real request
+        # prime its own documentation prefix instead of scheduling extra work.
         yield
     finally:
         metrics.stop_gpu_sampler()

@@ -1,4 +1,4 @@
-"""Main owns semantic meaning; only local runtime budgets and intake differ."""
+"""Cloud retains main's contract; local has a compact native contract."""
 
 import asyncio
 import json
@@ -13,6 +13,7 @@ from scripts.benchmark_jetson_planner import correct_frame
 from src.vivi.api.routes.voice_inputs import TranscriptInput
 from src.vivi.config import Settings
 from src.vivi.dialogue.contracts import SessionState
+from src.vivi.dialogue.local_semantics import local_system_instruction
 from src.vivi.dialogue.planner import ModelProvider, SemanticResolver, semantic_tools
 from src.vivi.domain.models import TurnRequest
 from src.vivi.orchestration import LangGraphOrchestrator
@@ -40,14 +41,18 @@ async def test_main_prompt_and_complete_history_reach_both_providers(provider):
     resolver = SemanticResolver({provider: ModelProvider(provider, Model(), 1)})
     _, served, _ = await resolver.resolve('Xin chào', SessionState(), requested=provider, history=history)
     assert served == provider
-    assert captured[0]['system'] == MAIN['system']
     prompt = json.loads(captured[0]['user'])
-    assert list(prompt) == ['utterance', 'tasks', 'conversation_context', 'recent_turns',
-                            'explicit_user_memory', 'capabilities']
-    assert prompt['recent_turns'] == history
     assert prompt['utterance'] == 'Xin chào'
     if provider == 'local':
-        assert captured[0]['tools'] == MAIN['semantic_tools']
+        assert captured[0]['system'] == local_system_instruction()
+        assert captured[0]['tools'] != MAIN['semantic_tools']
+        assert len(prompt['recent_turns']) == 3
+        assert len(prompt['recent_turns'][0]['query']) == 500
+    else:
+        assert captured[0]['system'] == MAIN['system']
+        assert list(prompt) == ['utterance', 'tasks', 'conversation_context', 'recent_turns',
+                                'explicit_user_memory', 'capabilities']
+        assert prompt['recent_turns'] == history
     assert semantic_tools() == MAIN['semantic_tools']
 
 
@@ -96,3 +101,28 @@ def test_benchmark_does_not_count_guard_repair_as_model_correctness():
     assert correct_frame('temperature', raw) is False
     assert correct_frame('temperature', final) is True
     assert correct_frame('temperature', None) is False
+
+
+@pytest.mark.parametrize('provider', ['local', 'google'])
+@pytest.mark.asyncio
+async def test_answer_history_is_compact_only_for_actual_local_provider(provider):
+    from src.vivi.conversation.service import ConversationService
+
+    captured = []
+    class Client:
+        async def agenerate_json(self, **kwargs):
+            captured.append(kwargs)
+            return json.dumps({'text': 'Lá cây có màu xanh nhờ diệp lục.', 'supports': []})
+
+    history = [{'query': 'q' * 800, 'answer': 'a' * 1000} for _ in range(6)]
+    service = ConversationService({provider: ModelProvider(provider, Client(), 1)})
+    result = await service.respond('Vì sao lá cây có màu xanh?', provider=provider, history=history)
+    assert result['status'] == 'completed'
+    payload = json.loads(captured[0]['user'])
+    assert payload['question'] == 'Vì sao lá cây có màu xanh?'
+    if provider == 'local':
+        assert list(payload)[-1] == 'question'
+        assert len(payload['recent_turns']) == 3
+    else:
+        assert list(payload)[0] == 'question'
+        assert payload['recent_turns'] == history

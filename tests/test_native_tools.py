@@ -17,30 +17,56 @@ def client_for(handler):
 
 
 def response(frame, name="interpret_turn", calls=1):
+    if name == 'interpret_turn':
+        act = frame['act']
+        if act in {'reply', 'clarify', 'unsupported'}:
+            name, frame = 'dialogue_' + act, {'text': frame.get('text') or 'Mình giữ nguyên.'}
+        elif act == 'offer':
+            name, frame = 'dialogue_suggest_unrequested_action', {key: value for key, value in frame.items() if key != 'act'}
+        else:
+            action = frame['actions'][0]
+            name, frame = action['capability'].replace('.', '_'), action.get('arguments', {})
     return httpx.Response(200, json={"choices": [{"message": {"tool_calls": [
         {"function": {"name": name, "arguments": json.dumps(frame)}}] * calls}}]})
 
 
-async def resolve(handler, text="bật nhạc"):
-    return await SemanticResolver({"local": ModelProvider("local", client_for(handler), 1)}).resolve(text, SessionState(), requested="local")
+async def resolve(handler, text="bật nhạc", catalog=None):
+    return await SemanticResolver({"local": ModelProvider("local", client_for(handler), 1)}).resolve(
+        text, SessionState(), requested="local", catalog=catalog)
 
 
 @pytest.mark.asyncio
-async def test_local_uses_one_native_semantic_function():
+async def test_local_uses_documented_native_proposals():
     def handler(request):
         body = json.loads(request.content)
         assert "response_format" not in body
-        assert body["tool_choice"] == "required" and body["parallel_tool_calls"] is False
+        assert body["tool_choice"] == "required" and body["parallel_tool_calls"] is True
         assert body["chat_template_kwargs"]["enable_thinking"] is False
-        assert [t["function"]["name"] for t in body["tools"]] == ["interpret_turn"]
+        names = [t['function']['name'] for t in body['tools']]
+        assert 'media_play' in names and 'trunk_set_open' not in names
+        assert 'interpret_turn' not in names
         return response({"act":"request", "actions":[{"capability":"media.play"}]})
     frame, tier, _ = await resolve(handler)
     assert tier == "local" and frame.actions[0].capability == "media.play"
 
 
 @pytest.mark.asyncio
+async def test_explicitly_empty_catalog_does_not_enable_default_actions():
+    def handler(request):
+        assert all(item['function']['name'].startswith('dialogue_') for item in json.loads(request.content)['tools'])
+        return response({'act': 'reply', 'text': 'Mình nghe bạn.'})
+    frame, tier, _ = await resolve(handler, 'Xin chào', catalog=[])
+    assert tier == 'local' and not frame.actions
+
+
+@pytest.mark.asyncio
 async def test_native_offer_keeps_proposal_for_reducer():
-    frame, tier, _ = await resolve(lambda _: response({"act":"offer", "text":"Bạn muốn nghe nhạc không?", "actions":[{"capability":"media.play"}]}), "Hôm nay thật chán")
+    def handler(request):
+        names = [item['function']['name'] for item in json.loads(request.content)['tools']]
+        if 'dialogue_suggest_unrequested_action' not in names:
+            return response({'query': 'gợi ý phát nhạc'}, name='dialogue_find_tools')
+        return response({"act":"offer", "text":"Bạn muốn nghe nhạc không?", "actions":[{"capability":"media.play"}]})
+    frame, tier, _ = await resolve(handler, "Hôm nay thật chán")
     assert tier == "local" and frame.act == "offer" and frame.actions[0].capability == "media.play"
 
 
@@ -56,11 +82,11 @@ def test_semantic_boundary_rejects_invalid_parameters_and_contradictory_act(fram
 
 
 @pytest.mark.asyncio
-async def test_multiple_native_calls_repair_once_then_fall_back():
+async def test_unoffered_native_calls_repair_once_then_fall_back():
     attempts = []
     def handler(request):
         attempts.append(request)
-        return response({"act":"request"}, calls=2)
+        return response({}, name='not_an_offered_tool')
     frame, tier, trace = await resolve(handler, "bật nhạc và mở cửa")
     assert len(attempts) == 2 and tier == "rules" and trace[0]["reason"] == "ValueError"
     assert len(frame.actions) == 2  # Parser still requires a door slot, so no free execution.

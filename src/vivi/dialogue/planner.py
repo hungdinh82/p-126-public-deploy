@@ -13,8 +13,17 @@ from src.vivi.agents.prompts import VOICE_PERSONA
 from src.vivi.conversation.context import conversation_view
 from src.vivi.conversation.guardrails import TOPIC_INSTRUCTION
 from src.vivi.dialogue.contracts import NavigationState, SemanticTurn, SessionState, semantic_schema
+from src.vivi.dialogue.local_semantics import local_semantic_tools, local_system_instruction, native_semantic_prompt
+from src.vivi.dialogue.local_tools import (
+    LOCAL_TOOL_INSTRUCTION,
+    native_proposal_prompt,
+    native_proposal_tools,
+    proposals_to_turn,
+)
 from src.vivi.dialogue.parser import OfflineParser
-from src.vivi.structured_llm import strict_schema
+from src.vivi.dialogue.revisions import coalesce_explicit_revisions
+from src.vivi.dialogue.tool_discovery import MAX_TOOL_DOCUMENTS, discover_capabilities, initial_tool_documents
+from src.vivi.structured_llm import compact_history, strict_schema
 
 PROMPT_VERSION = "semantic-unified-22"
 SEMANTIC_INSTRUCTION = """
@@ -227,13 +236,15 @@ def semantic_tools():
 
 
 async def warmup_local_client(client, capabilities=None):
-    # Use exactly the real system/tools prefix; one output token primes KV cache
-    # without interpreting or executing the generated proposal.
-    instruction = VOICE_PERSONA + SEMANTIC_INSTRUCTION + TOPIC_INSTRUCTION + "\nFor a disallowed intent return unsupported with a brief safe alternative, no drafts. For emergencies return reply with immediate safe support, no drafts. Return compact JSON: omit null argument slots and unused optional fields; include only the operations and slots needed for this turn."
-    prompt = json.dumps({"utterance": "Xin chào", "tasks": SemanticResolver.context(SessionState()),
-                         "conversation_context": conversation_view(SessionState()), "recent_turns": [],
-                         "explicit_user_memory": [], "capabilities": capabilities or []}, ensure_ascii=False)
-    payload = client._tool_payload(instruction, prompt, semantic_tools())
+    # Optional manual diagnostic for an explicitly chosen documentation subset.
+    # Production does not enqueue a competing full-catalog startup warmup.
+    from src.vivi.capabilities.registry import catalog
+    capabilities = capabilities if capabilities is not None else catalog(False, conversation=True, information=True)
+    prompt = native_proposal_prompt({"utterance": "Xin chào", "tasks": local_context(SessionState()),
+                                    "conversation_context": {}, "recent_turns": [],
+                                    "explicit_user_memory": [], "capabilities": capabilities})
+    payload = client._tool_payload(LOCAL_TOOL_INSTRUCTION + TOPIC_INSTRUCTION, prompt, native_proposal_tools(capabilities))
+    payload['parallel_tool_calls'] = True
     payload.update(max_tokens=1, cache_prompt=True)
     await client._acomplete(payload)
 
@@ -380,10 +391,20 @@ class SemanticResolver:
             try:
                 reserve = min(.5, remaining / 2) if index < len(chain) - 1 else 0
                 async with asyncio.timeout(min(provider.budget_seconds, remaining - reserve)):
-                    value = await self.interpret(provider, prompt)
+                    provider_prompt = prompt
+                    if name == "local":
+                        value = json.loads(prompt)
+                        if catalog is None:
+                            from src.vivi.capabilities.registry import catalog as default_catalog
+                            value['capabilities'] = default_catalog(False, conversation=True, information=True)
+                        value["tasks"] = local_context(session)
+                        value["recent_turns"] = compact_history(history or [])
+                        provider_prompt = json.dumps(value, ensure_ascii=False)
+                    value = await self.interpret(provider, provider_prompt)
                     value = self.destination_slots(value, text, session)
             except (Exception,) as exc:
-                provider.unavailable_until = time.monotonic() + self.breaker_seconds
+                if name != "local" or not isinstance(exc, (ValidationError, ValueError)):
+                    provider.unavailable_until = time.monotonic() + self.breaker_seconds
                 attempts.append(
                     {
                         "provider": name,
@@ -516,14 +537,57 @@ class SemanticResolver:
     @staticmethod
     async def interpret(provider, prompt):
         instruction = VOICE_PERSONA + SEMANTIC_INSTRUCTION + TOPIC_INSTRUCTION + "\nFor a disallowed intent return unsupported with a brief safe alternative, no drafts. For emergencies return reply with immediate safe support, no drafts. Return compact JSON: omit null argument slots and unused optional fields; include only the operations and slots needed for this turn."
-        for attempt in range(2):
+        if provider.name == "local":
+            from src.vivi.capabilities.registry import catalog
+            value = json.loads(prompt)
+            capabilities = value.get("capabilities")
+            if capabilities is None:
+                capabilities = catalog(False, conversation=True, information=True)
+            instruction = local_system_instruction()
+            value["capabilities"] = capabilities
+            prompt = native_semantic_prompt(value)
+            tasks = value.get('tasks', {})
+            direct = hasattr(provider.client, 'agenerate_tools') and not any(
+                tasks.get(key) for key in ('active', 'clarification', 'pending_navigation_question'))
+            if direct:
+                instruction = LOCAL_TOOL_INSTRUCTION + TOPIC_INSTRUCTION
+                value['utterance'] = coalesce_explicit_revisions(value.get('utterance', ''))
+                visible_capabilities, index = initial_tool_documents(value.get('utterance', ''), capabilities)
+                if index is not None:
+                    value['available_tool_index'] = index
+                prompt = native_proposal_prompt(value)
+        expanded = False
+        repaired = False
+        limit = 3 if provider.name == 'local' and direct else 2
+        for attempt in range(limit):
             try:
                 client = provider.client
+                if provider.name == 'local' and direct:
+                    calls = await client.agenerate_tools(system=instruction, user=prompt,
+                                                         tools=native_proposal_tools(visible_capabilities, include_suggestions=expanded,
+                                                                                    utterance=value.get('utterance', '')))
+                    if any(name == 'dialogue_find_tools' for name, _ in calls):
+                        if expanded or len(calls) != 1:
+                            raise ValueError('Tool discovery must be a single call, at most once')
+                        query = calls[0][1].get('query')
+                        if not isinstance(query, str) or not query.strip() or len(query) > 500:
+                            raise ValueError('Expected a short tool discovery query')
+                        extra = discover_capabilities(query, capabilities)
+                        if len(extra) > MAX_TOOL_DOCUMENTS:
+                            raise ValueError('Tool discovery query is too broad; name a tool from available_tool_index')
+                        names = {item['name'] for item in [*visible_capabilities, *extra]}
+                        expanded_caps = [item for item in capabilities if item['name'] in names]
+                        if len(expanded_caps) > MAX_TOOL_DOCUMENTS:
+                            raise ValueError('Too many tool documents requested in one turn')
+                        visible_capabilities = expanded_caps
+                        expanded = True
+                        continue
+                    return proposals_to_turn(calls, visible_capabilities, include_suggestions=expanded)
                 if provider.name == "local" and hasattr(client, "agenerate_tool"):
                     name, payload = await client.agenerate_tool(
                         system=instruction,
                         user=prompt,
-                        tools=semantic_tools(),
+                        tools=local_semantic_tools(capabilities),
                     )
                     if name != "interpret_turn":
                         raise ValueError("Unexpected semantic function")
@@ -542,6 +606,15 @@ class SemanticResolver:
                 )
                 return SemanticTurn.model_validate_json(payload)
             except (ValidationError, ValueError) as exc:
-                if attempt:
+                if repaired or attempt == limit - 1:
                     raise
+                repaired = True
                 prompt += "\nRepair the JSON schema once, returning the complete semantic turn: " + str(exc)[:1000]
+
+
+def local_context(session):
+    """Expose live task state; completed tasks remain in history, never as active work."""
+    context = SemanticResolver.context(session)
+    if session.active and session.active.current_index() is None:
+        context["active"] = None
+    return context

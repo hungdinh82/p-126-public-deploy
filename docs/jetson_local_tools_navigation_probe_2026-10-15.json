@@ -1,0 +1,1670 @@
+{
+  "url": "http://100.123.27.125:8795",
+  "rounds_per_case": 1,
+  "output_limit": 512,
+  "navigation_catalog": true,
+  "token_usage_scope": "last backend response per turn; may follow a validation repair",
+  "cases": {
+    "open_trunk": {
+      "median_ms": 617.57,
+      "p95_ms": 617.57,
+      "raw_evaluated_runs": 1,
+      "raw_correct_runs": 1,
+      "local_served_runs": 1,
+      "final_correct_runs": 1,
+      "cold_run": {
+        "wall_ms": 2270.28,
+        "prompt_tokens": 1561,
+        "completion_tokens": 21,
+        "guarded": false,
+        "backend_calls": 1,
+        "response_usage": [
+          {
+            "completion_tokens": 21,
+            "prompt_tokens": 1561,
+            "total_tokens": 1582,
+            "prompt_tokens_details": {
+              "cached_tokens": 5
+            }
+          }
+        ],
+        "total_completion_tokens": 21,
+        "served": "local",
+        "model_called": true,
+        "raw_correct": true,
+        "final_correct": true,
+        "raw_outputs": [
+          {
+            "act": "request",
+            "actions": [
+              {
+                "capability": "trunk.set_open",
+                "arguments": {
+                  "open": true
+                }
+              }
+            ]
+          }
+        ],
+        "raw_tool_calls": [
+          [
+            [
+              "trunk_set_open",
+              {
+                "open": true
+              }
+            ]
+          ]
+        ],
+        "attempts": [
+          {
+            "provider": "local",
+            "outcome": "served",
+            "latency_ms": 2253.96,
+            "model_semantic": {
+              "act": "request",
+              "actions": [
+                {
+                  "capability": "trunk.set_open",
+                  "arguments": {
+                    "open": true
+                  },
+                  "exclusion_mode": "add",
+                  "referenced_target": false
+                }
+              ],
+              "step_updates": [],
+              "append_actions": [],
+              "clarification_drafts": [],
+              "negated": false,
+              "conditional": false,
+              "scheduled": false,
+              "conflicting": false,
+              "unresolved": []
+            }
+          }
+        ]
+      },
+      "runs": [
+        {
+          "wall_ms": 617.57,
+          "prompt_tokens": 1561,
+          "completion_tokens": 21,
+          "guarded": false,
+          "backend_calls": 1,
+          "response_usage": [
+            {
+              "completion_tokens": 21,
+              "prompt_tokens": 1561,
+              "total_tokens": 1582,
+              "prompt_tokens_details": {
+                "cached_tokens": 1560
+              }
+            }
+          ],
+          "total_completion_tokens": 21,
+          "served": "local",
+          "model_called": true,
+          "raw_correct": true,
+          "final_correct": true,
+          "raw_outputs": [
+            {
+              "act": "request",
+              "actions": [
+                {
+                  "capability": "trunk.set_open",
+                  "arguments": {
+                    "open": true
+                  }
+                }
+              ]
+            }
+          ],
+          "raw_tool_calls": [
+            [
+              [
+                "trunk_set_open",
+                {
+                  "open": true
+                }
+              ]
+            ]
+          ],
+          "attempts": [
+            {
+              "provider": "local",
+              "outcome": "served",
+              "latency_ms": 615.86,
+              "model_semantic": {
+                "act": "request",
+                "actions": [
+                  {
+                    "capability": "trunk.set_open",
+                    "arguments": {
+                      "open": true
+                    },
+                    "exclusion_mode": "add",
+                    "referenced_target": false
+                  }
+                ],
+                "step_updates": [],
+                "append_actions": [],
+                "clarification_drafts": [],
+                "negated": false,
+                "conditional": false,
+                "scheduled": false,
+                "conflicting": false,
+                "unresolved": []
+              }
+            }
+          ]
+        }
+      ],
+      "memory_after": {
+        "total_bytes": 15609851904,
+        "available_bytes": 7152611328,
+        "swap_used_bytes": 1125908480
+      }
+    },
+    "temperature": {
+      "median_ms": 739.38,
+      "p95_ms": 739.38,
+      "raw_evaluated_runs": 1,
+      "raw_correct_runs": 1,
+      "local_served_runs": 1,
+      "final_correct_runs": 1,
+      "cold_run": {
+        "wall_ms": 1541.1,
+        "prompt_tokens": 1812,
+        "completion_tokens": 24,
+        "guarded": false,
+        "backend_calls": 1,
+        "response_usage": [
+          {
+            "completion_tokens": 24,
+            "prompt_tokens": 1812,
+            "total_tokens": 1836,
+            "prompt_tokens_details": {
+              "cached_tokens": 1052
+            }
+          }
+        ],
+        "total_completion_tokens": 24,
+        "served": "local",
+        "model_called": true,
+        "raw_correct": true,
+        "final_correct": true,
+        "raw_outputs": [
+          {
+            "act": "request",
+            "actions": [
+              {
+                "capability": "climate.set_temperature",
+                "arguments": {
+                  "value_celsius": 24.0
+                }
+              }
+            ]
+          }
+        ],
+        "raw_tool_calls": [
+          [
+            [
+              "climate_set_temperature",
+              {
+                "value_celsius": 24
+              }
+            ]
+          ]
+        ],
+        "attempts": [
+          {
+            "provider": "local",
+            "outcome": "served",
+            "latency_ms": 1538.62,
+            "model_semantic": {
+              "act": "request",
+              "actions": [
+                {
+                  "capability": "climate.set_temperature",
+                  "arguments": {
+                    "value_celsius": 24.0
+                  },
+                  "exclusion_mode": "add",
+                  "referenced_target": false
+                }
+              ],
+              "step_updates": [],
+              "append_actions": [],
+              "clarification_drafts": [],
+              "negated": false,
+              "conditional": false,
+              "scheduled": false,
+              "conflicting": false,
+              "unresolved": []
+            }
+          }
+        ]
+      },
+      "runs": [
+        {
+          "wall_ms": 739.38,
+          "prompt_tokens": 1812,
+          "completion_tokens": 24,
+          "guarded": false,
+          "backend_calls": 1,
+          "response_usage": [
+            {
+              "completion_tokens": 24,
+              "prompt_tokens": 1812,
+              "total_tokens": 1836,
+              "prompt_tokens_details": {
+                "cached_tokens": 1811
+              }
+            }
+          ],
+          "total_completion_tokens": 24,
+          "served": "local",
+          "model_called": true,
+          "raw_correct": true,
+          "final_correct": true,
+          "raw_outputs": [
+            {
+              "act": "request",
+              "actions": [
+                {
+                  "capability": "climate.set_temperature",
+                  "arguments": {
+                    "value_celsius": 24.0
+                  }
+                }
+              ]
+            }
+          ],
+          "raw_tool_calls": [
+            [
+              [
+                "climate_set_temperature",
+                {
+                  "value_celsius": 24
+                }
+              ]
+            ]
+          ],
+          "attempts": [
+            {
+              "provider": "local",
+              "outcome": "served",
+              "latency_ms": 737.48,
+              "model_semantic": {
+                "act": "request",
+                "actions": [
+                  {
+                    "capability": "climate.set_temperature",
+                    "arguments": {
+                      "value_celsius": 24.0
+                    },
+                    "exclusion_mode": "add",
+                    "referenced_target": false
+                  }
+                ],
+                "step_updates": [],
+                "append_actions": [],
+                "clarification_drafts": [],
+                "negated": false,
+                "conditional": false,
+                "scheduled": false,
+                "conflicting": false,
+                "unresolved": []
+              }
+            }
+          ]
+        }
+      ],
+      "memory_after": {
+        "total_bytes": 15609851904,
+        "available_bytes": 7152615424,
+        "swap_used_bytes": 1125908480
+      }
+    },
+    "window": {
+      "median_ms": 831.69,
+      "p95_ms": 831.69,
+      "raw_evaluated_runs": 1,
+      "raw_correct_runs": 1,
+      "local_served_runs": 1,
+      "final_correct_runs": 1,
+      "cold_run": {
+        "wall_ms": 1588.28,
+        "prompt_tokens": 1699,
+        "completion_tokens": 30,
+        "guarded": false,
+        "backend_calls": 1,
+        "response_usage": [
+          {
+            "completion_tokens": 30,
+            "prompt_tokens": 1699,
+            "total_tokens": 1729,
+            "prompt_tokens_details": {
+              "cached_tokens": 1052
+            }
+          }
+        ],
+        "total_completion_tokens": 30,
+        "served": "local",
+        "model_called": true,
+        "raw_correct": true,
+        "final_correct": true,
+        "raw_outputs": [
+          {
+            "act": "request",
+            "actions": [
+              {
+                "capability": "window.set_position",
+                "arguments": {
+                  "position_percent": 100,
+                  "zone": "driver"
+                }
+              }
+            ]
+          }
+        ],
+        "raw_tool_calls": [
+          [
+            [
+              "window_set_position",
+              {
+                "zone": "driver",
+                "position_percent": 100
+              }
+            ]
+          ]
+        ],
+        "attempts": [
+          {
+            "provider": "local",
+            "outcome": "served",
+            "latency_ms": 1586.31,
+            "model_semantic": {
+              "act": "request",
+              "actions": [
+                {
+                  "capability": "window.set_position",
+                  "arguments": {
+                    "position_percent": 100,
+                    "zone": "driver"
+                  },
+                  "exclusion_mode": "add",
+                  "referenced_target": false
+                }
+              ],
+              "step_updates": [],
+              "append_actions": [],
+              "clarification_drafts": [],
+              "negated": false,
+              "conditional": false,
+              "scheduled": false,
+              "conflicting": false,
+              "unresolved": []
+            }
+          }
+        ]
+      },
+      "runs": [
+        {
+          "wall_ms": 831.69,
+          "prompt_tokens": 1699,
+          "completion_tokens": 30,
+          "guarded": false,
+          "backend_calls": 1,
+          "response_usage": [
+            {
+              "completion_tokens": 30,
+              "prompt_tokens": 1699,
+              "total_tokens": 1729,
+              "prompt_tokens_details": {
+                "cached_tokens": 1698
+              }
+            }
+          ],
+          "total_completion_tokens": 30,
+          "served": "local",
+          "model_called": true,
+          "raw_correct": true,
+          "final_correct": true,
+          "raw_outputs": [
+            {
+              "act": "request",
+              "actions": [
+                {
+                  "capability": "window.set_position",
+                  "arguments": {
+                    "position_percent": 100,
+                    "zone": "driver"
+                  }
+                }
+              ]
+            }
+          ],
+          "raw_tool_calls": [
+            [
+              [
+                "window_set_position",
+                {
+                  "zone": "driver",
+                  "position_percent": 100
+                }
+              ]
+            ]
+          ],
+          "attempts": [
+            {
+              "provider": "local",
+              "outcome": "served",
+              "latency_ms": 829.92,
+              "model_semantic": {
+                "act": "request",
+                "actions": [
+                  {
+                    "capability": "window.set_position",
+                    "arguments": {
+                      "position_percent": 100,
+                      "zone": "driver"
+                    },
+                    "exclusion_mode": "add",
+                    "referenced_target": false
+                  }
+                ],
+                "step_updates": [],
+                "append_actions": [],
+                "clarification_drafts": [],
+                "negated": false,
+                "conditional": false,
+                "scheduled": false,
+                "conflicting": false,
+                "unresolved": []
+              }
+            }
+          ]
+        }
+      ],
+      "memory_after": {
+        "total_bytes": 15609851904,
+        "available_bytes": 7152971776,
+        "swap_used_bytes": 1125908480
+      }
+    },
+    "merged_correction": {
+      "median_ms": 1373.22,
+      "p95_ms": 1373.22,
+      "raw_evaluated_runs": 1,
+      "raw_correct_runs": 1,
+      "local_served_runs": 1,
+      "final_correct_runs": 1,
+      "cold_run": {
+        "wall_ms": 2509.53,
+        "prompt_tokens": 2081,
+        "completion_tokens": 56,
+        "guarded": false,
+        "backend_calls": 1,
+        "response_usage": [
+          {
+            "completion_tokens": 56,
+            "prompt_tokens": 2081,
+            "total_tokens": 2137,
+            "prompt_tokens_details": {
+              "cached_tokens": 1052
+            }
+          }
+        ],
+        "total_completion_tokens": 56,
+        "served": "local",
+        "model_called": true,
+        "raw_correct": true,
+        "final_correct": true,
+        "raw_outputs": [
+          {
+            "act": "request",
+            "actions": [
+              {
+                "capability": "climate.set_temperature",
+                "arguments": {
+                  "value_celsius": 26.0
+                }
+              },
+              {
+                "capability": "window.set_position",
+                "arguments": {
+                  "position_percent": 100,
+                  "zone": "front_passenger"
+                }
+              }
+            ]
+          }
+        ],
+        "raw_tool_calls": [
+          [
+            [
+              "climate_set_temperature",
+              {
+                "value_celsius": 26
+              }
+            ],
+            [
+              "window_set_position",
+              {
+                "zone": "front_passenger",
+                "position_percent": 100
+              }
+            ]
+          ]
+        ],
+        "attempts": [
+          {
+            "provider": "local",
+            "outcome": "served",
+            "latency_ms": 2504.6,
+            "model_semantic": {
+              "act": "request",
+              "actions": [
+                {
+                  "capability": "climate.set_temperature",
+                  "arguments": {
+                    "value_celsius": 26.0
+                  },
+                  "exclusion_mode": "add",
+                  "referenced_target": false
+                },
+                {
+                  "capability": "window.set_position",
+                  "arguments": {
+                    "position_percent": 100,
+                    "zone": "front_passenger"
+                  },
+                  "exclusion_mode": "add",
+                  "referenced_target": false
+                }
+              ],
+              "step_updates": [],
+              "append_actions": [],
+              "clarification_drafts": [],
+              "negated": false,
+              "conditional": false,
+              "scheduled": false,
+              "conflicting": false,
+              "unresolved": []
+            }
+          }
+        ]
+      },
+      "runs": [
+        {
+          "wall_ms": 1373.22,
+          "prompt_tokens": 2081,
+          "completion_tokens": 56,
+          "guarded": false,
+          "backend_calls": 1,
+          "response_usage": [
+            {
+              "completion_tokens": 56,
+              "prompt_tokens": 2081,
+              "total_tokens": 2137,
+              "prompt_tokens_details": {
+                "cached_tokens": 2080
+              }
+            }
+          ],
+          "total_completion_tokens": 56,
+          "served": "local",
+          "model_called": true,
+          "raw_correct": true,
+          "final_correct": true,
+          "raw_outputs": [
+            {
+              "act": "request",
+              "actions": [
+                {
+                  "capability": "climate.set_temperature",
+                  "arguments": {
+                    "value_celsius": 26.0
+                  }
+                },
+                {
+                  "capability": "window.set_position",
+                  "arguments": {
+                    "position_percent": 100,
+                    "zone": "front_passenger"
+                  }
+                }
+              ]
+            }
+          ],
+          "raw_tool_calls": [
+            [
+              [
+                "climate_set_temperature",
+                {
+                  "value_celsius": 26
+                }
+              ],
+              [
+                "window_set_position",
+                {
+                  "zone": "front_passenger",
+                  "position_percent": 100
+                }
+              ]
+            ]
+          ],
+          "attempts": [
+            {
+              "provider": "local",
+              "outcome": "served",
+              "latency_ms": 1370.45,
+              "model_semantic": {
+                "act": "request",
+                "actions": [
+                  {
+                    "capability": "climate.set_temperature",
+                    "arguments": {
+                      "value_celsius": 26.0
+                    },
+                    "exclusion_mode": "add",
+                    "referenced_target": false
+                  },
+                  {
+                    "capability": "window.set_position",
+                    "arguments": {
+                      "position_percent": 100,
+                      "zone": "front_passenger"
+                    },
+                    "exclusion_mode": "add",
+                    "referenced_target": false
+                  }
+                ],
+                "step_updates": [],
+                "append_actions": [],
+                "clarification_drafts": [],
+                "negated": false,
+                "conditional": false,
+                "scheduled": false,
+                "conflicting": false,
+                "unresolved": []
+              }
+            }
+          ]
+        }
+      ],
+      "memory_after": {
+        "total_bytes": 15609851904,
+        "available_bytes": 7152709632,
+        "swap_used_bytes": 1125908480
+      }
+    },
+    "unclear_repetition": {
+      "median_ms": 890.28,
+      "p95_ms": 890.28,
+      "raw_evaluated_runs": 1,
+      "raw_correct_runs": 1,
+      "local_served_runs": 1,
+      "final_correct_runs": 1,
+      "cold_run": {
+        "wall_ms": 3188.42,
+        "prompt_tokens": 3033,
+        "completion_tokens": 29,
+        "guarded": false,
+        "backend_calls": 1,
+        "response_usage": [
+          {
+            "completion_tokens": 29,
+            "prompt_tokens": 3033,
+            "total_tokens": 3062,
+            "prompt_tokens_details": {
+              "cached_tokens": 1052
+            }
+          }
+        ],
+        "total_completion_tokens": 29,
+        "served": "local",
+        "model_called": true,
+        "raw_correct": true,
+        "final_correct": true,
+        "raw_outputs": [
+          {
+            "act": "clarify",
+            "text": "Bạn nói rõ lại yêu cầu nhé."
+          }
+        ],
+        "raw_tool_calls": [
+          [
+            [
+              "dialogue_clarify",
+              {
+                "text": "Mở gửi xe xa cho tôi"
+              }
+            ]
+          ]
+        ],
+        "attempts": [
+          {
+            "provider": "local",
+            "outcome": "served",
+            "latency_ms": 3185.64,
+            "model_semantic": {
+              "act": "clarify",
+              "actions": [],
+              "step_updates": [],
+              "append_actions": [],
+              "clarification_drafts": [],
+              "negated": false,
+              "conditional": false,
+              "scheduled": false,
+              "conflicting": false,
+              "unresolved": []
+            }
+          }
+        ]
+      },
+      "runs": [
+        {
+          "wall_ms": 890.28,
+          "prompt_tokens": 3033,
+          "completion_tokens": 29,
+          "guarded": false,
+          "backend_calls": 1,
+          "response_usage": [
+            {
+              "completion_tokens": 29,
+              "prompt_tokens": 3033,
+              "total_tokens": 3062,
+              "prompt_tokens_details": {
+                "cached_tokens": 3032
+              }
+            }
+          ],
+          "total_completion_tokens": 29,
+          "served": "local",
+          "model_called": true,
+          "raw_correct": true,
+          "final_correct": true,
+          "raw_outputs": [
+            {
+              "act": "clarify",
+              "text": "Bạn nói rõ lại yêu cầu nhé."
+            }
+          ],
+          "raw_tool_calls": [
+            [
+              [
+                "dialogue_clarify",
+                {
+                  "text": "Mở gửi xe xa cho tôi"
+                }
+              ]
+            ]
+          ],
+          "attempts": [
+            {
+              "provider": "local",
+              "outcome": "served",
+              "latency_ms": 887.93,
+              "model_semantic": {
+                "act": "clarify",
+                "actions": [],
+                "step_updates": [],
+                "append_actions": [],
+                "clarification_drafts": [],
+                "negated": false,
+                "conditional": false,
+                "scheduled": false,
+                "conflicting": false,
+                "unresolved": []
+              }
+            }
+          ]
+        }
+      ],
+      "memory_after": {
+        "total_bytes": 15609851904,
+        "available_bytes": 7152381952,
+        "swap_used_bytes": 1125908480
+      }
+    },
+    "cold_after_old_topic": {
+      "median_ms": 676.18,
+      "p95_ms": 676.18,
+      "raw_evaluated_runs": 1,
+      "raw_correct_runs": 1,
+      "local_served_runs": 1,
+      "final_correct_runs": 1,
+      "cold_run": {
+        "wall_ms": 1602.78,
+        "prompt_tokens": 1904,
+        "completion_tokens": 23,
+        "guarded": false,
+        "backend_calls": 1,
+        "response_usage": [
+          {
+            "completion_tokens": 23,
+            "prompt_tokens": 1904,
+            "total_tokens": 1927,
+            "prompt_tokens_details": {
+              "cached_tokens": 1052
+            }
+          }
+        ],
+        "total_completion_tokens": 23,
+        "served": "local",
+        "model_called": true,
+        "raw_correct": true,
+        "final_correct": true,
+        "raw_outputs": [
+          {
+            "act": "request",
+            "actions": [
+              {
+                "capability": "climate.set_temperature",
+                "arguments": {
+                  "temperature_delta_celsius": 2.0
+                }
+              }
+            ]
+          }
+        ],
+        "raw_tool_calls": [
+          [
+            [
+              "climate_warm_cabin",
+              {
+                "amount": 2
+              }
+            ]
+          ]
+        ],
+        "attempts": [
+          {
+            "provider": "local",
+            "outcome": "served",
+            "latency_ms": 1600.73,
+            "model_semantic": {
+              "act": "request",
+              "actions": [
+                {
+                  "capability": "climate.set_temperature",
+                  "arguments": {
+                    "temperature_delta_celsius": 2.0
+                  },
+                  "exclusion_mode": "add",
+                  "referenced_target": false
+                }
+              ],
+              "step_updates": [],
+              "append_actions": [],
+              "clarification_drafts": [],
+              "negated": false,
+              "conditional": false,
+              "scheduled": false,
+              "conflicting": false,
+              "unresolved": []
+            }
+          }
+        ]
+      },
+      "runs": [
+        {
+          "wall_ms": 676.18,
+          "prompt_tokens": 1904,
+          "completion_tokens": 23,
+          "guarded": false,
+          "backend_calls": 1,
+          "response_usage": [
+            {
+              "completion_tokens": 23,
+              "prompt_tokens": 1904,
+              "total_tokens": 1927,
+              "prompt_tokens_details": {
+                "cached_tokens": 1903
+              }
+            }
+          ],
+          "total_completion_tokens": 23,
+          "served": "local",
+          "model_called": true,
+          "raw_correct": true,
+          "final_correct": true,
+          "raw_outputs": [
+            {
+              "act": "request",
+              "actions": [
+                {
+                  "capability": "climate.set_temperature",
+                  "arguments": {
+                    "temperature_delta_celsius": 2.0
+                  }
+                }
+              ]
+            }
+          ],
+          "raw_tool_calls": [
+            [
+              [
+                "climate_warm_cabin",
+                {
+                  "amount": 2
+                }
+              ]
+            ]
+          ],
+          "attempts": [
+            {
+              "provider": "local",
+              "outcome": "served",
+              "latency_ms": 673.96,
+              "model_semantic": {
+                "act": "request",
+                "actions": [
+                  {
+                    "capability": "climate.set_temperature",
+                    "arguments": {
+                      "temperature_delta_celsius": 2.0
+                    },
+                    "exclusion_mode": "add",
+                    "referenced_target": false
+                  }
+                ],
+                "step_updates": [],
+                "append_actions": [],
+                "clarification_drafts": [],
+                "negated": false,
+                "conditional": false,
+                "scheduled": false,
+                "conflicting": false,
+                "unresolved": []
+              }
+            }
+          ]
+        }
+      ],
+      "memory_after": {
+        "total_bytes": 15609851904,
+        "available_bytes": 7152693248,
+        "swap_used_bytes": 1125908480
+      }
+    },
+    "cold_after_trunk": {
+      "median_ms": 672.71,
+      "p95_ms": 672.71,
+      "raw_evaluated_runs": 1,
+      "raw_correct_runs": 1,
+      "local_served_runs": 1,
+      "final_correct_runs": 1,
+      "cold_run": {
+        "wall_ms": 769.83,
+        "prompt_tokens": 1876,
+        "completion_tokens": 23,
+        "guarded": false,
+        "backend_calls": 1,
+        "response_usage": [
+          {
+            "completion_tokens": 23,
+            "prompt_tokens": 1876,
+            "total_tokens": 1899,
+            "prompt_tokens_details": {
+              "cached_tokens": 1813
+            }
+          }
+        ],
+        "total_completion_tokens": 23,
+        "served": "local",
+        "model_called": true,
+        "raw_correct": true,
+        "final_correct": true,
+        "raw_outputs": [
+          {
+            "act": "request",
+            "actions": [
+              {
+                "capability": "climate.set_temperature",
+                "arguments": {
+                  "temperature_delta_celsius": 2.0
+                }
+              }
+            ]
+          }
+        ],
+        "raw_tool_calls": [
+          [
+            [
+              "climate_warm_cabin",
+              {
+                "amount": 2
+              }
+            ]
+          ]
+        ],
+        "attempts": [
+          {
+            "provider": "local",
+            "outcome": "served",
+            "latency_ms": 767.62,
+            "model_semantic": {
+              "act": "request",
+              "actions": [
+                {
+                  "capability": "climate.set_temperature",
+                  "arguments": {
+                    "temperature_delta_celsius": 2.0
+                  },
+                  "exclusion_mode": "add",
+                  "referenced_target": false
+                }
+              ],
+              "step_updates": [],
+              "append_actions": [],
+              "clarification_drafts": [],
+              "negated": false,
+              "conditional": false,
+              "scheduled": false,
+              "conflicting": false,
+              "unresolved": []
+            }
+          }
+        ]
+      },
+      "runs": [
+        {
+          "wall_ms": 672.71,
+          "prompt_tokens": 1876,
+          "completion_tokens": 23,
+          "guarded": false,
+          "backend_calls": 1,
+          "response_usage": [
+            {
+              "completion_tokens": 23,
+              "prompt_tokens": 1876,
+              "total_tokens": 1899,
+              "prompt_tokens_details": {
+                "cached_tokens": 1875
+              }
+            }
+          ],
+          "total_completion_tokens": 23,
+          "served": "local",
+          "model_called": true,
+          "raw_correct": true,
+          "final_correct": true,
+          "raw_outputs": [
+            {
+              "act": "request",
+              "actions": [
+                {
+                  "capability": "climate.set_temperature",
+                  "arguments": {
+                    "temperature_delta_celsius": 2.0
+                  }
+                }
+              ]
+            }
+          ],
+          "raw_tool_calls": [
+            [
+              [
+                "climate_warm_cabin",
+                {
+                  "amount": 2
+                }
+              ]
+            ]
+          ],
+          "attempts": [
+            {
+              "provider": "local",
+              "outcome": "served",
+              "latency_ms": 670.67,
+              "model_semantic": {
+                "act": "request",
+                "actions": [
+                  {
+                    "capability": "climate.set_temperature",
+                    "arguments": {
+                      "temperature_delta_celsius": 2.0
+                    },
+                    "exclusion_mode": "add",
+                    "referenced_target": false
+                  }
+                ],
+                "step_updates": [],
+                "append_actions": [],
+                "clarification_drafts": [],
+                "negated": false,
+                "conditional": false,
+                "scheduled": false,
+                "conflicting": false,
+                "unresolved": []
+              }
+            }
+          ]
+        }
+      ],
+      "memory_after": {
+        "total_bytes": 15609851904,
+        "available_bytes": 7152693248,
+        "swap_used_bytes": 1125908480
+      }
+    },
+    "relative_increase": {
+      "median_ms": 1151.85,
+      "p95_ms": 1151.85,
+      "raw_evaluated_runs": 1,
+      "raw_correct_runs": 1,
+      "local_served_runs": 1,
+      "final_correct_runs": 1,
+      "cold_run": {
+        "wall_ms": 1201.56,
+        "prompt_tokens": 1811,
+        "completion_tokens": 44,
+        "guarded": false,
+        "backend_calls": 1,
+        "response_usage": [
+          {
+            "completion_tokens": 44,
+            "prompt_tokens": 1811,
+            "total_tokens": 1855,
+            "prompt_tokens_details": {
+              "cached_tokens": 1795
+            }
+          }
+        ],
+        "total_completion_tokens": 44,
+        "served": "local",
+        "model_called": true,
+        "raw_correct": true,
+        "final_correct": true,
+        "raw_outputs": [
+          {
+            "act": "request",
+            "actions": [
+              {
+                "capability": "climate.set_temperature",
+                "arguments": {
+                  "temperature_delta_celsius": 2.0
+                }
+              }
+            ]
+          }
+        ],
+        "raw_tool_calls": [
+          [
+            [
+              "climate_warm_cabin",
+              {
+                "amount": 2
+              }
+            ]
+          ]
+        ],
+        "attempts": [
+          {
+            "provider": "local",
+            "outcome": "served",
+            "latency_ms": 1199.08,
+            "model_semantic": {
+              "act": "request",
+              "actions": [
+                {
+                  "capability": "climate.set_temperature",
+                  "arguments": {
+                    "temperature_delta_celsius": 2.0
+                  },
+                  "exclusion_mode": "add",
+                  "referenced_target": false
+                }
+              ],
+              "step_updates": [],
+              "append_actions": [],
+              "clarification_drafts": [],
+              "negated": false,
+              "conditional": false,
+              "scheduled": false,
+              "conflicting": false,
+              "unresolved": []
+            }
+          }
+        ]
+      },
+      "runs": [
+        {
+          "wall_ms": 1151.85,
+          "prompt_tokens": 1811,
+          "completion_tokens": 44,
+          "guarded": false,
+          "backend_calls": 1,
+          "response_usage": [
+            {
+              "completion_tokens": 44,
+              "prompt_tokens": 1811,
+              "total_tokens": 1855,
+              "prompt_tokens_details": {
+                "cached_tokens": 1810
+              }
+            }
+          ],
+          "total_completion_tokens": 44,
+          "served": "local",
+          "model_called": true,
+          "raw_correct": true,
+          "final_correct": true,
+          "raw_outputs": [
+            {
+              "act": "request",
+              "actions": [
+                {
+                  "capability": "climate.set_temperature",
+                  "arguments": {
+                    "temperature_delta_celsius": 2.0
+                  }
+                }
+              ]
+            }
+          ],
+          "raw_tool_calls": [
+            [
+              [
+                "climate_warm_cabin",
+                {
+                  "amount": 2
+                }
+              ]
+            ]
+          ],
+          "attempts": [
+            {
+              "provider": "local",
+              "outcome": "served",
+              "latency_ms": 1149.8,
+              "model_semantic": {
+                "act": "request",
+                "actions": [
+                  {
+                    "capability": "climate.set_temperature",
+                    "arguments": {
+                      "temperature_delta_celsius": 2.0
+                    },
+                    "exclusion_mode": "add",
+                    "referenced_target": false
+                  }
+                ],
+                "step_updates": [],
+                "append_actions": [],
+                "clarification_drafts": [],
+                "negated": false,
+                "conditional": false,
+                "scheduled": false,
+                "conflicting": false,
+                "unresolved": []
+              }
+            }
+          ]
+        }
+      ],
+      "memory_after": {
+        "total_bytes": 15609851904,
+        "available_bytes": 7152705536,
+        "swap_used_bytes": 1125908480
+      }
+    },
+    "trunk_and_window": {
+      "median_ms": 1266.38,
+      "p95_ms": 1266.38,
+      "raw_evaluated_runs": 1,
+      "raw_correct_runs": 1,
+      "local_served_runs": 1,
+      "final_correct_runs": 1,
+      "cold_run": {
+        "wall_ms": 2177.19,
+        "prompt_tokens": 1828,
+        "completion_tokens": 51,
+        "guarded": false,
+        "backend_calls": 1,
+        "response_usage": [
+          {
+            "completion_tokens": 51,
+            "prompt_tokens": 1828,
+            "total_tokens": 1879,
+            "prompt_tokens_details": {
+              "cached_tokens": 1052
+            }
+          }
+        ],
+        "total_completion_tokens": 51,
+        "served": "local",
+        "model_called": true,
+        "raw_correct": true,
+        "final_correct": true,
+        "raw_outputs": [
+          {
+            "act": "request",
+            "actions": [
+              {
+                "capability": "trunk.set_open",
+                "arguments": {
+                  "open": true
+                }
+              },
+              {
+                "capability": "window.set_position",
+                "arguments": {
+                  "position_percent": 100,
+                  "zone": "driver"
+                }
+              }
+            ]
+          }
+        ],
+        "raw_tool_calls": [
+          [
+            [
+              "trunk_set_open",
+              {
+                "open": true
+              }
+            ],
+            [
+              "window_set_position",
+              {
+                "zone": "driver",
+                "position_percent": 100
+              }
+            ]
+          ]
+        ],
+        "attempts": [
+          {
+            "provider": "local",
+            "outcome": "served",
+            "latency_ms": 2173.93,
+            "model_semantic": {
+              "act": "request",
+              "actions": [
+                {
+                  "capability": "trunk.set_open",
+                  "arguments": {
+                    "open": true
+                  },
+                  "exclusion_mode": "add",
+                  "referenced_target": false
+                },
+                {
+                  "capability": "window.set_position",
+                  "arguments": {
+                    "position_percent": 100,
+                    "zone": "driver"
+                  },
+                  "exclusion_mode": "add",
+                  "referenced_target": false
+                }
+              ],
+              "step_updates": [],
+              "append_actions": [],
+              "clarification_drafts": [],
+              "negated": false,
+              "conditional": false,
+              "scheduled": false,
+              "conflicting": false,
+              "unresolved": []
+            }
+          }
+        ]
+      },
+      "runs": [
+        {
+          "wall_ms": 1266.38,
+          "prompt_tokens": 1828,
+          "completion_tokens": 51,
+          "guarded": false,
+          "backend_calls": 1,
+          "response_usage": [
+            {
+              "completion_tokens": 51,
+              "prompt_tokens": 1828,
+              "total_tokens": 1879,
+              "prompt_tokens_details": {
+                "cached_tokens": 1827
+              }
+            }
+          ],
+          "total_completion_tokens": 51,
+          "served": "local",
+          "model_called": true,
+          "raw_correct": true,
+          "final_correct": true,
+          "raw_outputs": [
+            {
+              "act": "request",
+              "actions": [
+                {
+                  "capability": "trunk.set_open",
+                  "arguments": {
+                    "open": true
+                  }
+                },
+                {
+                  "capability": "window.set_position",
+                  "arguments": {
+                    "position_percent": 100,
+                    "zone": "driver"
+                  }
+                }
+              ]
+            }
+          ],
+          "raw_tool_calls": [
+            [
+              [
+                "trunk_set_open",
+                {
+                  "open": true
+                }
+              ],
+              [
+                "window_set_position",
+                {
+                  "zone": "driver",
+                  "position_percent": 100
+                }
+              ]
+            ]
+          ],
+          "attempts": [
+            {
+              "provider": "local",
+              "outcome": "served",
+              "latency_ms": 1264.47,
+              "model_semantic": {
+                "act": "request",
+                "actions": [
+                  {
+                    "capability": "trunk.set_open",
+                    "arguments": {
+                      "open": true
+                    },
+                    "exclusion_mode": "add",
+                    "referenced_target": false
+                  },
+                  {
+                    "capability": "window.set_position",
+                    "arguments": {
+                      "position_percent": 100,
+                      "zone": "driver"
+                    },
+                    "exclusion_mode": "add",
+                    "referenced_target": false
+                  }
+                ],
+                "step_updates": [],
+                "append_actions": [],
+                "clarification_drafts": [],
+                "negated": false,
+                "conditional": false,
+                "scheduled": false,
+                "conflicting": false,
+                "unresolved": []
+              }
+            }
+          ]
+        }
+      ],
+      "memory_after": {
+        "total_bytes": 15609851904,
+        "available_bytes": 7151190016,
+        "swap_used_bytes": 1125908480
+      }
+    },
+    "negated_trunk": {
+      "median_ms": 761.93,
+      "p95_ms": 761.93,
+      "raw_evaluated_runs": 1,
+      "raw_correct_runs": 1,
+      "local_served_runs": 1,
+      "final_correct_runs": 1,
+      "cold_run": {
+        "wall_ms": 1275.64,
+        "prompt_tokens": 1562,
+        "completion_tokens": 28,
+        "guarded": true,
+        "backend_calls": 1,
+        "response_usage": [
+          {
+            "completion_tokens": 28,
+            "prompt_tokens": 1562,
+            "total_tokens": 1590,
+            "prompt_tokens_details": {
+              "cached_tokens": 1052
+            }
+          }
+        ],
+        "total_completion_tokens": 28,
+        "served": "local",
+        "model_called": true,
+        "raw_correct": true,
+        "final_correct": true,
+        "raw_outputs": [
+          {
+            "act": "clarify",
+            "text": "Bạn nói rõ lại yêu cầu nhé."
+          }
+        ],
+        "raw_tool_calls": [
+          [
+            [
+              "dialogue_clarify",
+              {
+                "text": "đừng mở cốp xe"
+              }
+            ]
+          ]
+        ],
+        "attempts": [
+          {
+            "provider": "local",
+            "outcome": "served",
+            "latency_ms": 1273.97,
+            "model_semantic": {
+              "act": "clarify",
+              "actions": [],
+              "step_updates": [],
+              "append_actions": [],
+              "clarification_drafts": [],
+              "negated": false,
+              "conditional": false,
+              "scheduled": false,
+              "conflicting": false,
+              "unresolved": []
+            },
+            "semantic_guard": true,
+            "semantic_guard_fields": [
+              "act",
+              "text",
+              "negated"
+            ]
+          }
+        ]
+      },
+      "runs": [
+        {
+          "wall_ms": 761.93,
+          "prompt_tokens": 1562,
+          "completion_tokens": 28,
+          "guarded": true,
+          "backend_calls": 1,
+          "response_usage": [
+            {
+              "completion_tokens": 28,
+              "prompt_tokens": 1562,
+              "total_tokens": 1590,
+              "prompt_tokens_details": {
+                "cached_tokens": 1561
+              }
+            }
+          ],
+          "total_completion_tokens": 28,
+          "served": "local",
+          "model_called": true,
+          "raw_correct": true,
+          "final_correct": true,
+          "raw_outputs": [
+            {
+              "act": "clarify",
+              "text": "Bạn nói rõ lại yêu cầu nhé."
+            }
+          ],
+          "raw_tool_calls": [
+            [
+              [
+                "dialogue_clarify",
+                {
+                  "text": "đừng mở cốp xe"
+                }
+              ]
+            ]
+          ],
+          "attempts": [
+            {
+              "provider": "local",
+              "outcome": "served",
+              "latency_ms": 760.42,
+              "model_semantic": {
+                "act": "clarify",
+                "actions": [],
+                "step_updates": [],
+                "append_actions": [],
+                "clarification_drafts": [],
+                "negated": false,
+                "conditional": false,
+                "scheduled": false,
+                "conflicting": false,
+                "unresolved": []
+              },
+              "semantic_guard": true,
+              "semantic_guard_fields": [
+                "act",
+                "text",
+                "negated"
+              ]
+            }
+          ]
+        }
+      ],
+      "memory_after": {
+        "total_bytes": 15609851904,
+        "available_bytes": 7151939584,
+        "swap_used_bytes": 1125908480
+      }
+    }
+  },
+  "initial_memory": {
+    "total_bytes": 15609851904,
+    "available_bytes": 7152218112,
+    "swap_used_bytes": 1125908480
+  }
+}

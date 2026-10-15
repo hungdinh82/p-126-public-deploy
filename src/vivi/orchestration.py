@@ -590,7 +590,7 @@ def create_langgraph_orchestrator(
         try:
             candidate = create_services(config, provider=name)
             client = candidate.semantic_client
-            client.max_tokens = config.planner_max_tokens
+            client.max_tokens = min(config.planner_max_tokens, config.local_llm_max_tokens) if name == "local" else config.planner_max_tokens
             client.max_attempts = 1
             budget = config.local_request_budget_seconds if name == "local" else config.cloud_budget_seconds
             providers[name] = ModelProvider(name, client, budget)
