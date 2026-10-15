@@ -1166,7 +1166,7 @@ async function startRecording(options) {
     };
     currentRecorder.start(250); $('#demo-mic').classList.add('recording'); $('#demo-mic').setAttribute('aria-label', 'Dừng thu âm');
     setPhase('listening', followUp ? 'Mình vẫn đang nghe… cứ nói tiếp nếu bạn cần.' : state.sttStreaming ? 'Mình đang nghe… lời bạn nói sẽ hiện ở đây.' : 'Mình đang nghe… Nhấn mic lần nữa để dừng.');
-    capture.context = new AudioContext(); audioContext = capture.context;
+    capture.context = new AudioContext();
     const source = capture.context.createMediaStreamSource(capture.stream), analyser = capture.context.createAnalyser(), samples = new Uint8Array(512);
     analyser.fftSize = 1024; source.connect(analyser);
     let heardSpeech = false, silentSince = 0, startedAt = performance.now();

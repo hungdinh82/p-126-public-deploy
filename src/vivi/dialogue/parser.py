@@ -1532,6 +1532,18 @@ class OfflineParser:
         value = self.lexer.normalize(text)
         result = semantic.model_copy(deep=True)
         bounded = self.interpret(text, session, memory, history)
+        if result.act in {"reply", "offer"}:
+            # A model must not turn a recognizable request into a generic
+            # greeting/offer. Keep the bounded interpretation whenever it has
+            # grounded meaning; if it cannot parse a command-shaped utterance,
+            # ask for clarification instead of silently discarding the command.
+            if bounded.act in {"request", "question", "modify"} and bounded.actions:
+                return bounded
+            if bounded.act == "clarify" and re.match(
+                r"^(?:mo|dong|ha|nang|len|khoa|mo khoa|bat|tat|phat|dung|dat|chinh|tang|giam|tim|dan|chi duong|gui|goi|xoa|quen|ghi|nho)\b",
+                value,
+            ):
+                return bounded
         if session.active and session.active.current_index() is not None and re.fullmatch(r"(?:xin )?chao(?: vivi| ban)?|vivi|hello|hi", value):
             return bounded
         # Explicit internet/weather/story requests cannot be answered as stale

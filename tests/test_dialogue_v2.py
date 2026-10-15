@@ -194,6 +194,24 @@ async def test_local_tool_semantic_contract():
 
 
 @pytest.mark.asyncio
+async def test_model_cannot_replace_unparsed_vehicle_command_with_generic_greeting():
+    greeting_offer = {
+        "act": "offer",
+        "text": "Mình đây, bạn cần gì thế?",
+        "actions": [{"capability": "conversation.respond", "arguments": {
+            "query": "Mình đây, bạn cần gì thế?", "mode": "general",
+        }}],
+    }
+    resolver = SemanticResolver({"local": ModelProvider("local", ScriptedModel([greeting_offer]), .1)})
+    value, served, _ = await resolver.resolve(
+        "Mở gửi xe xa cho tôi Mở gửi xe xa cho tôi", SessionState(), requested="local"
+    )
+    assert served == "local"
+    assert value.act == "clarify"
+    assert value.text == "Mình chưa hiểu đủ thao tác này. Bạn nói rõ yêu cầu nhé."
+
+
+@pytest.mark.asyncio
 async def test_timeout_moves_to_parser():
     class Slow:
         async def agenerate_json(self, **kwargs):
