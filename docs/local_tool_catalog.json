@@ -562,7 +562,7 @@
     },
     {
       "name": "window_set_position",
-      "description": "Điều chỉnh độ mở cửa sổ tại vị trí được yêu cầu. Hạ kính xuống là mở (100%); nâng kính lên là đóng (0%). Khi có phần trăm dùng đúng mức đó. Không mở cửa xe. Dùng cho cửa kính/cửa sổ. Bên tài=driver; bên phụ=front_passenger; sau trái=rear_left; sau phải=rear_right. Mở/hạ=100, đóng/nâng=0. Giữ phần trăm được nói. Không mở cửa cabin.",
+      "description": "Điều chỉnh độ mở cửa sổ tại vị trí được yêu cầu. Hạ kính xuống là mở (100%); nâng kính lên là đóng (0%). Khi có phần trăm dùng đúng mức đó. Không mở cửa xe. Dùng cho cửa kính/cửa sổ. Bên tài=driver; bên phụ=front_passenger; sau trái=rear_left; sau phải=rear_right. Xuống/hạ/mở kính dùng window_open=100% mở; lên/nâng/đóng kính dùng window_close=0% mở. Không nói vị trí: zone=null, hỏi vị trí, không tự chọn bên tài. Giữ phần trăm được nói. Không mở cửa cabin.",
       "inputSchema": {
         "oneOf": [
           {
@@ -1428,7 +1428,7 @@
     },
     {
       "name": "media_play",
-      "description": "Phát nhạc hoặc nội dung âm thanh được yêu cầu. Phát/bật/mở nhạc hoặc tiếp tục nghe nhạc. Nhạc chung gọi với {}. Chỉ điền media_query khi có tên bài, ca sĩ, thể loại hoặc tâm trạng được nói rõ; ví dụ nhạc thư giãn -> {\"media_query\":\"thư giãn\"}. Không tự đổi bài hoặc âm lượng. Demo UI phát nhạc mô phỏng, không khẳng định đã tìm được bản thu của ca sĩ.",
+      "description": "Phát nhạc hoặc nội dung âm thanh được yêu cầu. Phát/bật/mở nhạc hoặc tiếp tục nghe nhạc. Nhạc chung gọi với {}. Chỉ điền media_query khi có tên bài, ca sĩ, thể loại hoặc tâm trạng được nói rõ. Không tự đổi bài hoặc âm lượng. Demo UI phát nhạc mô phỏng, không khẳng định đã tìm được bản thu của ca sĩ.",
       "inputSchema": {
         "type": "object",
         "properties": {

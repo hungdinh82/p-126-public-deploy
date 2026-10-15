@@ -127,3 +127,21 @@ async def test_known_missing_zone_is_retained_for_reducer():
 async def test_casual_personal_statement_is_reply_without_memory_write():
     frame, tier, _ = await resolve(lambda _: response({"act":"reply", "text":"Mình nghe bạn rồi."}), "Tôi thích jazz")
     assert tier == "local" and frame.act == "reply" and not frame.actions
+
+
+@pytest.mark.asyncio
+async def test_local_window_examples_precede_current_input_and_preserve_unknown_location():
+    def handler(request):
+        body = json.loads(request.content)
+        messages = body['messages']
+        assert messages[-1]['role'] == 'user' and messages[-1]['content'].endswith('lên kính')
+        assert any(message['role'] == 'tool' for message in messages[:-1])
+        assert body['chat_template_kwargs']['enable_thinking'] is False
+        return response({'location_text': None, 'zone': None}, name='form_create_raise_window')
+
+    from src.vivi.capabilities.registry import catalog
+    frame, provider, attempts = await resolve(handler, text='lên kính', catalog=catalog(False))
+    assert provider == 'local'
+    assert frame.actions[0].arguments.position_percent == 0
+    assert frame.actions[0].arguments.zone is None
+    assert not any(attempt.get('semantic_guard') for attempt in attempts)

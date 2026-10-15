@@ -11,18 +11,18 @@ from src.vivi.dialogue.local_semantics import local_semantic_tools
 from src.vivi.dialogue.parser import Lexer
 from src.vivi.dialogue.tool_discovery import DISCOVERY_TERMS
 
-LOCAL_TOOL_INSTRUCTION = """Phân tích yêu cầu hiện tại của người dùng và gọi công cụ đúng. Với thao tác xe: form_create tạo form; khi có form, đọc values và field_schema rồi dùng form_update để điền hoặc sửa values. Không hỏi lặp lại khi người dùng đã bổ sung vị trí, hiểu không dấu và lỗi gõ nhẹ. Khi form đủ và người dùng đồng ý, gọi form_submit với toàn bộ values đã được hỏi xác nhận. Không tự chọn vị trí bị thiếu. MỞ cửa/cốp/capo dùng open=true, ĐÓNG dùng open=false. Luôn giữ đúng chiều thao tác của câu hiện tại, kể cả khi câu trước là mở. Chỉ trả lời người dùng bằng tiếng Việt. Khi người dùng lạnh cần làm ấm bằng tăng nhiệt độ; khi nóng cần làm mát bằng giảm nhiệt độ. Đề xuất thao tác, không tự thực hiện. Tăng/giảm hoặc than nóng/lạnh dùng climate_adjust_temperature(direction, amount); không tự bịa nhiệt độ đích, amount mặc định 2 độ. Câu nghe không hiểu dùng dialogue_clarify để hỏi lại, không dùng reply. Với lệnh cấm/phủ định, điều kiện hoặc hẹn giờ: hỏi lại, không đề xuất thao tác.
+LOCAL_TOOL_INSTRUCTION = """Phân tích yêu cầu hiện tại của người dùng và gọi công cụ đúng. Với thao tác xe: form_create tạo form; khi có form, đọc values và field_schema rồi dùng form_update để điền hoặc sửa values. Không hỏi lặp lại khi người dùng đã bổ sung vị trí, hiểu không dấu và lỗi gõ nhẹ. Khi form đủ và người dùng đồng ý, gọi form_submit với toàn bộ values đã được hỏi xác nhận. Không tự chọn vị trí bị thiếu. Quy tắc cửa kính: LÊN/NÂNG/ĐÓNG gọi form_create_raise_window (0% mở), XUỐNG/HẠ/MỞ gọi form_create_lower_window (100% mở). "lên kính" => form_create_raise_window(zone=null); "xuống kính" hoặc "mở cửa kính" => form_create_lower_window(zone=null); "đóng cửa kính bên phụ" => form_create_raise_window(zone=front_passenger). Không nói vị trí thì zone=null; KHÔNG tự chọn driver/front_passenger/all/zones. Chỉ khi nói tất cả mới zone=all. Có con số phần trăm cụ thể mới dùng form_create_window_position. MỞ cửa/cốp/capo dùng open=true, ĐÓNG dùng open=false. Luôn giữ đúng chiều thao tác của câu hiện tại, kể cả khi câu trước là mở. Chỉ trả lời người dùng bằng tiếng Việt. Khi người dùng lạnh cần làm ấm bằng tăng nhiệt độ; khi nóng cần làm mát bằng giảm nhiệt độ. Đề xuất thao tác, không tự thực hiện. Tăng/giảm hoặc than nóng/lạnh dùng climate_adjust_temperature(direction, amount); không tự bịa nhiệt độ đích, amount mặc định 2 độ. Câu nghe không hiểu dùng dialogue_clarify để hỏi lại, không dùng reply. Với lệnh cấm/phủ định, điều kiện hoặc hẹn giờ: hỏi lại, không đề xuất thao tác.
 """
 
 
 GUIDANCE = {
     'trunk.set_open': 'Dùng cho cốp xe/cốp sau/cửa hậu. Không phải cửa ghế sau, cửa kính hay nắp capo. Chỉ open=true (mở) hoặc false (đóng).',
     'hood.set_open': 'Dùng cho nắp capo/khoang phía trước. Không phải cốp sau hoặc cửa cabin.',
-    'window.set_position': 'Dùng cho cửa kính/cửa sổ. Bên tài=driver; bên phụ=front_passenger; sau trái=rear_left; sau phải=rear_right. Mở/hạ=100, đóng/nâng=0. Giữ phần trăm được nói. Không mở cửa cabin.',
+    'window.set_position': 'Dùng cho cửa kính/cửa sổ. Bên tài=driver; bên phụ=front_passenger; sau trái=rear_left; sau phải=rear_right. Xuống/hạ/mở kính dùng window_open=100% mở; lên/nâng/đóng kính dùng window_close=0% mở. Không nói vị trí: zone=null, hỏi vị trí, không tự chọn bên tài. Giữ phần trăm được nói. Không mở cửa cabin.',
     'door.set_open': 'Mở cửa: open=true. Đóng cửa: open=false. Bên tài/cửa lái/tài xế là driver. Cửa còn lại phải căn cứ trạng thái cửa đang được cung cấp; không đoán vị trí. Chỉ mở/đóng cánh cửa cabin. Không dùng cho cửa sổ/cửa kính, cốp, capo hoặc mở khóa.',
     'door.set_lock': 'Chỉ khóa/mở khóa cửa cabin; không mở cánh cửa hoặc kính.',
     'climate.set_temperature': 'Đặt nhiệt độ dùng value_celsius. Tăng/giảm dùng temperature_delta_celsius, chỉ chọn một loại. Than nóng: delta=-2. Than lạnh: delta=2. Ví dụ "tôi lạnh quá" -> {"temperature_delta_celsius":2}.',
-    'media.play': 'Phát/bật/mở nhạc hoặc tiếp tục nghe nhạc. Nhạc chung gọi với {}. Chỉ điền media_query khi có tên bài, ca sĩ, thể loại hoặc tâm trạng được nói rõ; ví dụ nhạc thư giãn -> {"media_query":"thư giãn"}. Không tự đổi bài hoặc âm lượng. Demo UI phát nhạc mô phỏng, không khẳng định đã tìm được bản thu của ca sĩ.',
+    'media.play': 'Phát/bật/mở nhạc hoặc tiếp tục nghe nhạc. Nhạc chung gọi với {}. Chỉ điền media_query khi có tên bài, ca sĩ, thể loại hoặc tâm trạng được nói rõ. Không tự đổi bài hoặc âm lượng. Demo UI phát nhạc mô phỏng, không khẳng định đã tìm được bản thu của ca sĩ.',
     'media.pause': 'Dừng/tắt/tạm dừng nhạc, arguments={}. Không tắt loa trả lời của trợ lý; bật/tắt loa là cài đặt UI.',
     'body.set_open': 'Chỉ dùng khi người dùng yêu cầu cùng lúc TẤT CẢ cửa cabin, capo VÀ cốp. Nếu chỉ nói tất cả cửa cabin: door_set_open(zone=all); tất cả cửa kính: window_set_position(zone=all).',
     'seat.set_heat_level': 'Sưởi ghế với level 0=tắt, 1–3=mức sưởi. Giữ vị trí ghế được nói, thiếu vị trí thì để backend hỏi. Không chỉnh nhiệt độ điều hòa, vị trí ghế hay bật làm mát ghế.',
@@ -197,7 +197,7 @@ def native_proposal_tools(capabilities, *, include_suggestions=False, utterance=
     if tasks is None:
         return legacy
     documents = list(by_name.values())
-    forms = lifecycle_tools(documents, tasks)
+    forms = lifecycle_tools(documents, tasks, utterance=utterance)
     if tasks.get('confirmation_allowed') and any(t['function']['name'] == 'form_submit' for t in forms):
         return [t for t in forms if t['function']['name'] == 'form_submit']
     managed = {item['name'] for item in documents
@@ -216,6 +216,54 @@ def _editable_tasks(tasks):
 
 def _update_name(handle, index, name):
     return f"update_{handle.replace(':', '_')}_step_{index}__{name}"
+
+
+def native_proposal_examples(tools, form=None):
+    """Gold tool-call demonstrations, never runtime answers or slot overrides.
+
+    End with missing-location examples so a small model does not carry the last
+    example's passenger/driver into an unspecified request.
+    """
+    names = {tool['function']['name'] for tool in tools}
+    if form:
+        if form['capability'] != 'window.set_position' or 'form_update' not in names:
+            return []
+        examples = []
+        for index, (text, zone) in enumerate([('sau phải', 'rear_right'), ('bên phụ', 'front_passenger'), ('bên tài', 'driver')]):
+            call_id = f'slot_example_{index}'
+            arguments = {'form_id': form['form_id'], 'revision': form['revision'], 'values': {'zone': zone}}
+            examples.extend([
+                {'role': 'user', 'content': native_proposal_prompt({'utterance': text, 'form': form})},
+                {'role': 'assistant', 'content': None, 'tool_calls': [{'id': call_id, 'type': 'function',
+                    'function': {'name': 'form_update', 'arguments': json.dumps(arguments, ensure_ascii=False)}}]},
+                {'role': 'tool', 'tool_call_id': call_id, 'content': 'Updated location only; original operation retained. No effect executed.'},
+            ])
+        return examples
+    cases = [
+        ('hạ kính sau phải 30 phần trăm', 'form_create_window_position', 'sau phải', 'rear_right'),
+        ('lên kính bên tài', 'form_create_raise_window', 'bên tài', 'driver'),
+        ('mở cửa kính bên phụ', 'form_create_lower_window', 'bên phụ', 'front_passenger'),
+        ('lên kính', 'form_create_raise_window', None, None),
+        ('xuống kính', 'form_create_lower_window', None, None),
+        ('mở cửa kính', 'form_create_lower_window', None, None),
+        ('đóng cửa kính', 'form_create_raise_window', None, None),
+    ]
+    examples = []
+    for index, (text, name, evidence, zone) in enumerate(cases):
+        if name not in names:
+            continue
+        call_id = f'example_{index}'
+        arguments = {'location_text': evidence, 'zone': zone}
+        if name == 'form_create_window_position':
+            arguments['position_percent'] = 30
+        examples.extend([
+            {'role': 'user', 'content': 'YÊU CẦU HIỆN TẠI:\n' + text},
+            {'role': 'assistant', 'content': None, 'tool_calls': [{
+                'id': call_id, 'type': 'function', 'function': {
+                    'name': name, 'arguments': json.dumps(arguments, ensure_ascii=False)}}]},
+            {'role': 'tool', 'tool_call_id': call_id, 'content': 'Form draft only. No effect executed.'},
+        ])
+    return examples
 
 
 def native_proposal_prompt(value):
@@ -259,7 +307,7 @@ def proposals_to_turn(calls, capabilities, *, include_suggestions=False, utteran
 
     docs = {item['name']: item for item in local_tool_documents(capabilities)
             if include_suggestions or item['_meta'].get('act') != 'offer'}
-    decoded = decode_form_call(calls, list(docs.values()), tasks,
+    decoded = decode_form_call(calls, list(docs.values()), tasks, utterance=utterance,
                                allow_submit=bool((tasks or {}).get('confirmation_allowed')))
     if isinstance(decoded, SemanticTurn):
         return decoded

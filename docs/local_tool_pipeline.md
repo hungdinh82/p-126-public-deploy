@@ -202,3 +202,50 @@ real-Qwen memory-vehicle run completed seven turns: open all cabin doors, OK,
 request closing, specify driver, OK, close the remaining three, OK. The final
 state had all four cabin doors closed; create/update/submit were model calls with
 no parser repair. Raw per-run measurements remain outside Git.
+
+
+## Window direction, location grounding and music
+
+The Qwen check reproduced `lên kính` as 100% openness and invented a driver or
+passenger location for unspecified requests. Local window forms now expose
+`form_create_raise_window` (0% openness), `form_create_lower_window` (100%), and
+`form_create_window_position` (an explicitly supplied percentage). These are
+proposal tools using the same reducer, capability and policy as other forms.
+They do not execute effects themselves or change inference models/backends.
+
+Window create parameters are flat; the canonical capability schema still
+validates the resulting arguments. The model supplies `location_text` from the
+current utterance along with the interpreted location. For short commands,
+location evidence is restricted to literal input spans, without interpreting
+those spans or forcing a zone. Evidence is removed before action execution.
+A missing location remains a slot question. Typed coordinates that redundantly
+name the same concrete zone collapse to that zone; conflicting coordinates are
+rejected. Location updates cannot silently flip an already selected percentage.
+
+The local native client receives gold tool-call examples, including unspecified
+locations and updates to the current form identity/revision. Examples end with
+unspecified locations to reduce copying a passenger/driver from a preceding
+example. All runtime decisions still come from the model. A failed call is now
+included with its validation error in the one repair attempt. Cloud semantic
+prompts and calls, model weights, inference backend, and token limits are unchanged.
+
+Generic music guidance no longer seeds a specific genre example that Qwen could
+copy into a plain play request. Existing media.play/media.pause capabilities and
+execution verification are retained. Existing risk policy is authoritative:
+R1 operations execute when complete; window opening and other operations
+requiring consent continue through form_submit with exact reviewed arguments.
+
+Connectivity selections remain in memory and reset on process restart. No
+preference persistence was introduced.
+
+Validation on the unchanged Jetson Qwen3-1.7B Q4_K_M backend: the original
+14-command baseline passed 6/14 strict checks (direction, explicit/unknown location,
+and no invented genre). The final expanded set passed 17/17, including unseen
+40% and 70% window positions; per-command resolver latency was 0.80–3.86 seconds.
+A separate 11-turn real-Qwen workflow verified music playback state, location
+collection, raising/lowering glass, model-driven OK submissions, and final
+window positions. Its location-fill turn took 7.78 seconds; no parser repair
+was used. The related regression suite passed 200 tests, and the subsequently
+added native transport check passed with its 34-test focused suite. These are
+command/graph measurements, not microphone-to-speaker timings. Raw run logs are
+kept outside Git.

@@ -101,7 +101,7 @@ from tests.test_long_term_memory import services as services  # noqa: E402
 def test_compound_form_creation_is_ordered_and_all_or_nothing():
     docs = local_tool_documents(catalog(False))
     calls = [('form_create', {'operation': 'trunk_open', 'values': {}}),
-             ('form_create', {'operation': 'window_set_position', 'values': {'zone': 'driver', 'position_percent': 100}})]
+             ('form_create_window_position', {'zone': 'driver', 'position_percent': 100, 'location_text': 'bên tài'})]
     result = decode_form_call(calls, docs, {})
     assert [name for _, name, _ in result] == ['trunk_set_open', 'window_set_position']
     with pytest.raises(ValueError):
@@ -130,7 +130,7 @@ def test_model_close_operation_maps_to_false_without_parsing_utterance():
 def test_location_patch_cannot_mix_conflicting_representations():
     _, docs, tasks, payload = prepared('waiting_slot')
     conflicting = {**payload, 'values': {'zone': 'driver', 'target_side': 'right', 'target_row': 'rear'}}
-    with pytest.raises(ValueError, match='never both'):
+    with pytest.raises(ValueError, match='Conflicting'):
         decode_form_call([('form_update', conflicting)], docs, tasks)
 
 
@@ -169,3 +169,49 @@ async def test_remaining_door_request_receives_fresh_state_and_closes_only_remai
         assert all(not door['open'] for door in gateway.vehicle.state_for('driver').door_states.model_dump().values())
     finally:
         graph.close()
+
+
+@pytest.mark.parametrize(('operation', 'expected'), [('window_close', 0), ('window_open', 100)])
+def test_window_direction_is_model_selected_and_missing_location_stays_missing(operation, expected):
+    docs = local_tool_documents(catalog(False))
+    result = decode_form_call([('form_create_raise_window' if operation == 'window_close' else 'form_create_lower_window', {'zone': None, 'location_text': None})], docs, {})
+    assert result == [('create', 'window_set_position', {'zone': None, 'position_percent': expected})]
+    with pytest.raises(ValueError):
+        decode_form_call([('form_create_raise_window' if operation == 'window_close' else 'form_create_lower_window', {'zone': None, 'position_percent': 100 - expected, 'location_text': None})], docs, {})
+
+
+def test_window_location_requires_model_evidence_from_current_input():
+    docs = local_tool_documents(catalog(False))
+    with pytest.raises(ValueError, match='No location_text evidence'):
+        decode_form_call([('form_create_raise_window', {'zone': 'driver', 'location_text': None})], docs, {}, utterance='lên kính')
+    with pytest.raises(ValueError):
+        decode_form_call([('form_create_raise_window', {'zone': 'driver', 'location_text': 'bên tài'})], docs, {}, utterance='lên kính')
+    result = decode_form_call([('form_create_raise_window', {'zone': 'driver', 'location_text': 'bên tài'})], docs, {}, utterance='lên kính bên tài')
+    assert result == [('create', 'window_set_position', {'zone': 'driver', 'position_percent': 0})]
+
+
+def test_window_grounding_schema_contains_only_current_input_spans():
+    docs = local_tool_documents(catalog(False))
+    tool = next(t['function'] for t in lifecycle_tools(docs, {}, utterance='lên kính')
+                if t['function']['name'] == 'form_create_raise_window')
+    assert tool['parameters']['properties']['location_text']['enum'] == [None, 'lên', 'lên kính', 'kính']
+    Draft202012Validator(tool['parameters']['properties']['zone']).validate('driver')
+
+
+def test_window_examples_are_model_demonstrations_with_missing_location_last():
+    from src.vivi.dialogue.local_tools import native_proposal_examples
+    tools = lifecycle_tools(local_tool_documents(catalog(False)), {})
+    examples = native_proposal_examples(tools)
+    import json
+    assistant = [m for m in examples if m['role'] == 'assistant']
+    assert json.loads(assistant[0]['tool_calls'][0]['function']['arguments'])['zone'] == 'rear_right'
+    assert json.loads(assistant[-1]['tool_calls'][0]['function']['arguments'])['zone'] is None
+
+
+def test_consistent_redundant_model_coordinates_do_not_lose_slot_answer():
+    _, docs, tasks, payload = prepared('waiting_slot')
+    result = decode_form_call([('form_update', {**payload, 'values': {
+        'zone': 'driver', 'target_side': 'left', 'target_row': 'front'}})], docs, tasks)
+    assert result.step_updates[0].action.arguments.zone == 'driver'
+    assert result.step_updates[0].action.arguments.target_side is None
+    assert result.step_updates[0].action.arguments.target_row is None

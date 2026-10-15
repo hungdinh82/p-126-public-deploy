@@ -181,6 +181,13 @@ class StructuredChatClient:
         payload["parallel_tool_calls"] = True
         return self._tool_results(await self._acomplete(payload))
 
+    async def agenerate_tools_with_examples(self, *, system: str, user: str,
+                                           tools: list[dict], examples: list[dict]) -> list[tuple[str, dict]]:
+        payload = self._tool_payload(system, user, tools)
+        payload['messages'] = [payload['messages'][0], *examples, payload['messages'][1]]
+        payload['parallel_tool_calls'] = True
+        return self._tool_results(await self._acomplete(payload))
+
     def generate_tool(self, *, system: str, user: str, tools: list[dict]) -> tuple[str, dict]:
         return self._tool_result(self._complete(self._tool_payload(system, user, tools)))
 

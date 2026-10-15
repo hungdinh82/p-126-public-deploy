@@ -16,6 +16,7 @@ from src.vivi.dialogue.contracts import NavigationState, SemanticTurn, SessionSt
 from src.vivi.dialogue.local_semantics import local_semantic_tools, local_system_instruction, native_semantic_prompt
 from src.vivi.dialogue.local_tools import (
     LOCAL_TOOL_INSTRUCTION,
+    native_proposal_examples,
     native_proposal_prompt,
     native_proposal_tools,
     proposals_to_turn,
@@ -645,13 +646,19 @@ class SemanticResolver:
         expanded = False
         repaired = False
         limit = 3 if provider.name == 'local' and direct else 2
+        calls = []
         for attempt in range(limit):
             try:
                 client = provider.client
                 if provider.name == 'local' and direct:
-                    calls = await client.agenerate_tools(system=instruction, user=prompt,
-                                                         tools=native_proposal_tools(visible_capabilities, include_suggestions=expanded,
-                                                                                    utterance=value.get('utterance', ''), tasks=tasks))
+                    tools = native_proposal_tools(visible_capabilities, include_suggestions=expanded,
+                                                  utterance=value.get('utterance', ''), tasks=tasks)
+                    examples = native_proposal_examples(tools, value.get('form'))
+                    with_examples = getattr(client, 'agenerate_tools_with_examples', None)
+                    if examples and callable(with_examples):
+                        calls = await with_examples(system=instruction, user=prompt, tools=tools, examples=examples)
+                    else:
+                        calls = await client.agenerate_tools(system=instruction, user=prompt, tools=tools)
                     if tool_audit is not None:
                         tool_audit.extend({'name': name, 'arguments': args} for name, args in calls if name.startswith('form_'))
                     if any(name == 'dialogue_find_tools' for name, _ in calls):
@@ -698,7 +705,13 @@ class SemanticResolver:
                 if repaired or attempt == limit - 1:
                     raise
                 repaired = True
-                prompt += "\nRepair the JSON schema once, returning the complete semantic turn: " + str(exc)[:1000]
+                if provider.name == 'local' and direct:
+                    prompt += ("\nINVALID PREVIOUS TOOL CALLS (correct these; do not repeat): "
+                               + json.dumps(calls, ensure_ascii=False)
+                               + "\nVALIDATION ERROR: " + str(exc)[:1000]
+                               + "\nReturn corrected tool calls for the CURRENT user input only.")
+                else:
+                    prompt += "\nRepair the JSON schema once, returning the complete semantic turn: " + str(exc)[:1000]
 
 
 def local_context(session):
