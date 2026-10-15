@@ -12,13 +12,16 @@ from src.vivi.turn_control import current_control
 
 
 class CapabilityRuntime:
-    def __init__(self, services, ledger=None, generators=None, budgets=None, breaker_seconds=30, provider_chains=None):
+    def __init__(self, services, ledger=None, generators=None, budgets=None, breaker_seconds=30,
+                 provider_chains=None, chain_provider=None):
         self.services, self.ledger = services, ledger
         self.generators = generators or {"rules" if services.generation_provider == "unknown" else services.generation_provider: services.generator}
         self.provider_chains = provider_chains or {}
         self.budgets = budgets or {}
         self.generation_breakers = {}
+        self.generation_failures = {}
         self.breaker_seconds = breaker_seconds
+        self.chain_provider = chain_provider
 
     async def vehicle(self, event, step, arguments, command_id):
         gateway = self.services.action_gateway
@@ -114,7 +117,9 @@ class CapabilityRuntime:
                     "grounding_status": "insufficient_evidence", "citations": []}
         attempts = []
         chain = [effective_provider, "local", "rules"] if effective_provider not in {"local", "rules"} else [effective_provider, "rules"]
-        if effective_provider in self.provider_chains:
+        if self.chain_provider is not None:
+            chain = [*self.chain_provider(effective_provider), "rules"]
+        elif effective_provider in self.provider_chains:
             chain = list(dict.fromkeys([*self.provider_chains[effective_provider], "rules"]))
         answer = None
         served = "rules"
@@ -130,9 +135,14 @@ class CapabilityRuntime:
                     answer = await generator.agenerate(query, chunks, history) if hasattr(generator, "agenerate") else await asyncio.to_thread(generator.generate, query, chunks, history)
                 served = provider
                 attempts.append({"provider": provider, "outcome": "served"})
+                self.generation_failures[provider] = 0
+                self.generation_breakers[provider] = 0
                 break
             except Exception as exc:
-                self.generation_breakers[provider] = time.monotonic() + self.breaker_seconds
+                failures = self.generation_failures.get(provider, 0) + 1
+                self.generation_failures[provider] = failures
+                cooldown = min(300, self.breaker_seconds * (2 ** (failures - 1)))
+                self.generation_breakers[provider] = time.monotonic() + cooldown
                 attempts.append({"provider": provider, "outcome": "fallback", "reason": type(exc).__name__})
         answer = normalize_answer(answer, chunks)
         grounded, reason = validate_grounding(answer, chunks)

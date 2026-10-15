@@ -231,10 +231,11 @@ VALIDATION_ERRORS = {
 
 
 class ConversationService:
-    def __init__(self, providers=None, *, fallback_chains=None, enabled=True):
+    def __init__(self, providers=None, *, fallback_chains=None, enabled=True, chain_provider=None):
         self.providers = providers or {}
         self.fallback_chains = fallback_chains or {}
         self.enabled = enabled
+        self.chain_provider = chain_provider
         self.unavailable_until = {}
 
     async def respond(
@@ -276,7 +277,8 @@ class ConversationService:
         schema = strict_schema((GroundedResponse if evidence else Response).model_json_schema())
         if passages:
             schema["properties"]["evidence_ids"]["items"]["enum"] = list(passages)
-        chain = self.fallback_chains.get(provider, [provider] if provider == "local" else [provider, "local"])
+        chain = (self.chain_provider(provider) if self.chain_provider is not None else
+                 self.fallback_chains.get(provider, [provider] if provider == "local" else [provider, "local"]))
         attempts = []
         chain = list(dict.fromkeys(chain))
         deadline = time.monotonic() + budget_seconds if budget_seconds is not None else None

@@ -15,7 +15,7 @@ const API_BASE = '';
 const makeId = () => globalThis.crypto?.randomUUID?.() || `vivi-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 const sessionId = localStorage.getItem('vivi-session-id') || makeId();
 localStorage.setItem('vivi-session-id', sessionId);
-const state = { phase: 'idle', temp: 23, window: false, music: false, driving: false, powerState: 'off', battery: 82, range: 328, powertrainTemp: 45, tirePressures: {}, windows: {}, doors: {}, seatHeatLevels: {}, doorLocked: false, doorOpen: false, hoodOpen: false, trunkOpen: false, seatHeat: 0, alerts: [], alertSequence: 0, reduced: motionPreference.matches, sound: true, busy: false, backendAvailable: false, vehicleProvider: '', sttAvailable: false, sttProvider: '', sttStreaming: false, sttDevice: '', ttsAvailable: false, ttsProvider: '', ttsVoice: '', ttsDevice: '', ttsOptions: [], storeAudio: false, storeTranscripts: false, llmProvider: '', llmOptions: [], lastCommand: '', manualAnswer: '', manualEvidence: [], progress: 0 };
+const state = { phase: 'idle', temp: 23, window: false, music: false, driving: false, powerState: 'off', battery: 82, range: 328, powertrainTemp: 45, tirePressures: {}, windows: {}, doors: {}, seatHeatLevels: {}, doorLocked: false, doorOpen: false, hoodOpen: false, trunkOpen: false, seatHeat: 0, alerts: [], alertSequence: 0, reduced: motionPreference.matches, sound: true, busy: false, backendAvailable: false, connectivityMode: '', connectivityOverride: 'actual', vehicleProvider: '', sttAvailable: false, sttProvider: '', sttStreaming: false, sttDevice: '', ttsAvailable: false, ttsProvider: '', ttsVoice: '', ttsDevice: '', ttsOptions: [], storeAudio: false, storeTranscripts: false, llmProvider: '', llmOptions: [], lastCommand: '', manualAnswer: '', manualEvidence: [], progress: 0 };
 const navigationStore = new NavigationStore();
 const snapshotOrder = navigationStore.order;
 let syncRequest = null;
@@ -351,16 +351,16 @@ function announceNewAlerts(alerts) {
     const key = `${alert.code}:${alert.source}`;
     const now = Date.now();
     const inCooldown = now - (alertLastSpoken.get(key) || 0) < ALERT_TTS_COOLDOWN_MS;
-    if (!state.sound || (alert.severity !== 'critical' && inCooldown)) continue;
+    if (alert.severity !== 'critical' && (!state.sound || inCooldown)) continue;
     alertLastSpoken.set(key, now);
-    queueAnnouncement(alert.message, alert.severity === 'critical' ? 2 : 1, `alert-${alert.alert_id}`);
+    queueAnnouncement(alert.message, alert.severity === 'critical' ? 2 : 1, `alert-${alert.alert_id}`, alert.severity === 'critical');
   }
 }
 const announcementQueue = [];
 let announcementRunning = false;
-function queueAnnouncement(text, priority = 0, id = makeId()) {
-  if (!state.sound) return;
-  announcementQueue.push({text,priority,id});
+function queueAnnouncement(text, priority = 0, id = makeId(), force = false) {
+  if (!state.sound && !force) return;
+  announcementQueue.push({text,priority,id,force});
   announcementQueue.sort((a,b)=>b.priority-a.priority);
   if(priority === 2) { state.audioEpoch=(state.audioEpoch || 0)+1; stopPlayback(); if('speechSynthesis' in window) speechSynthesis.cancel(); }
   void drainAnnouncements();
@@ -373,7 +373,8 @@ async function drainAnnouncements() {
   announcementRunning=true;
   try {
     const item=announcementQueue.shift();
-    if(state.sound) await speak(item.text,item.id,null,true).catch(()=>say(item.text));
+    if(state.sound) await speak(item.text,item.id,null,true).catch(()=>say(item.text,item.force));
+    else if(item.force) await say(item.text,true);
   } finally { announcementRunning=false; void drainAnnouncements(); }
 }
 async function pollVehicleAlerts() {
@@ -393,8 +394,8 @@ const DOCK_BY_INTENT = { climate: '#climate-button', window: '#window-button', d
 // microphone) does not start over ViVi's own words. The timer covers browsers that
 // never fire onend; speechSynthesis.speaking is not trusted, it can stay true.
 let browserSpeaking = false, lastUtterance = null;
-function say(text) {
-  if (!state.sound || !('speechSynthesis' in window)) return Promise.resolve();
+function say(text, force = false) {
+  if ((!state.sound && !force) || !('speechSynthesis' in window)) return Promise.resolve();
   speechSynthesis.cancel();
   // Browser voices read "OK" as "ô ka"; say it the Vietnamese way, as the server TTS does.
   const utterance = new SpeechSynthesisUtterance(text.replace(/\b(?:ok|okay|oke)\b/gi, 'ô kê')); utterance.lang = 'vi-VN'; utterance.rate = .93;
@@ -541,7 +542,9 @@ async function speak(text, turnId = makeId(), sequencePlayback = null, announcem
       if (playback.cancelled) return;
       console.warn('ZeroTTS streaming:', error);
       if (currentPlayback === playback) stopPlayback();
-      if (playback.played) return;
+      // The current sentence is the retry unit. Never rerun the LLM, RAG or
+      // vehicle action; restart this sentence through the browser voice.
+      if (playback.played) { await say(text); return; }
     }
   }
   await say(text);
@@ -1046,7 +1049,7 @@ function resolveLlmProvider(options, backendDefault, savedProvider, savedDefault
 async function checkBackend() {
   try {
     const response = await fetch(`${API_BASE}/api/v1/health`); if (!response.ok) throw new Error();
-    const health = await response.json(); state.backendAvailable = true; state.vehicleProvider = health.vehicle.provider; state.sttAvailable = health.stt.available; state.sttProvider = health.stt.provider; state.sttStreaming = Boolean(health.stt.streaming); state.sttDevice = health.stt.device; state.ttsOptions = health.tts.options || []; applyTtsProvider(resolveTtsProvider(health.tts)); state.storeAudio = health.storage.audio; state.storeTranscripts = health.storage.transcripts;
+    const health = await response.json(); state.backendAvailable = true; applyConnectivity(health.connectivity, true); state.vehicleProvider = health.vehicle.provider; state.sttAvailable = health.stt.available; state.sttProvider = health.stt.provider; state.sttStreaming = Boolean(health.stt.streaming); state.sttDevice = health.stt.device; state.ttsOptions = health.tts.options || []; applyTtsProvider(resolveTtsProvider(health.tts)); state.storeAudio = health.storage.audio; state.storeTranscripts = health.storage.transcripts;
     edgeCommandHistory = state.storeTranscripts ? readEdgeCommandHistory() : [];
     if (!state.storeTranscripts) localStorage.removeItem(edgeCommandHistoryKey);
     state.llmOptions = health.llm.options || [];
@@ -1069,6 +1072,33 @@ async function checkBackend() {
     state.backendAvailable = false; $('#backend-status').classList.add('offline'); $('#backend-status').innerHTML = '<i></i> Backend offline';
     $('#backend-status').title = 'Chế độ prototype · hãy chạy python run.py';
   }
+}
+
+function applyConnectivity(connectivity, startup = false) {
+  if (!connectivity?.effective) return;
+  const previous = state.connectivityMode;
+  const mode = connectivity.effective.mode;
+  state.connectivityMode = mode;
+  state.connectivityOverride = connectivity.override;
+  const messages = {
+    cloud: 'Có Internet. Chế độ tự động có thể dùng dịch vụ Cloud.',
+    jetson: 'Không có Cloud khả dụng. Jetson đang sẵn sàng xử lý cục bộ.',
+    rules: 'Chế độ tự động hiện chỉ có chức năng cơ bản.'
+  };
+  if ((previous && previous !== mode) || (startup && mode !== 'cloud')) {
+    queueAnnouncement(messages[mode], 1, `connectivity-${mode}-${Date.now()}`);
+  }
+  if ($('#backend-status')) {
+    $('#backend-status').title = `${messages[mode]}${connectivity.simulated ? ` Đang giả lập ${connectivity.override}.` : ''}`;
+  }
+}
+
+async function pollConnectivity() {
+  if (!state.backendAvailable) return;
+  try {
+    const response = await fetch(`${API_BASE}/api/v1/health`);
+    if (response.ok) applyConnectivity((await response.json()).connectivity);
+  } catch { /* giữ trạng thái cuối cùng trong lúc backend chập chờn */ }
 }
 
 function updateModelStatus() {
@@ -1169,9 +1199,9 @@ function handleSpeakerCommand(command) {
 $('#sound-toggle').addEventListener('click', () => setSound(!state.sound));
 
 const dialog = $('#info-dialog');
-const modelLabels = { rules: 'Kịch bản', openai: 'OpenAI', google: 'Google Gemini', local: 'Local API', openrouter: 'OpenRouter' };
-const ttsLabels = { zerotts: 'ViVi', vieneu: 'VieNeu' };
-const ttsModes = { zerotts: 'On-device · ZeroTTS', vieneu: 'Cloud · cần Internet' };
+const modelLabels = { auto: 'Tự động', rules: 'Kịch bản', openai: 'OpenAI', google: 'Google Gemini', local: 'Local API', openrouter: 'OpenRouter' };
+const ttsLabels = { auto: 'Tự động', zerotts: 'ViVi', vieneu: 'VieNeu' };
+const ttsModes = { auto: 'Cloud → Jetson → trình duyệt', zerotts: 'On-device · ZeroTTS', vieneu: 'Cloud · cần Internet' };
 const ttsVoiceLabel = voice => voice === 'VIVI' ? 'ViVi' : voice;
 function resolveTtsProvider(tts) {
   // The saved choice wins while it is usable; otherwise the backend default.
@@ -1208,7 +1238,7 @@ function selectTtsProvider(provider) {
   const activeVoice = $('#active-voice');
   if (activeVoice) activeVoice.textContent = `${ttsLabels[provider] || provider} · ${ttsVoiceLabel(state.ttsVoice)}`;
 }
-const modelModes = { rules: 'Phản hồi định sẵn', openai: 'Cloud · cần Internet', google: 'Cloud · cần Internet', local: 'On-device · riêng tư', openrouter: 'Cloud · cần Internet' };
+const modelModes = { auto: 'Cloud → Jetson → Rules', rules: 'Phản hồi định sẵn', openai: 'Cloud · cần Internet', google: 'Cloud · cần Internet', local: 'On-device · riêng tư', openrouter: 'Cloud · cần Internet' };
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>'"]/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character]);
 }
@@ -1383,7 +1413,7 @@ document.addEventListener('keydown', event => {
 });
 function updateClock() { $('#clock').textContent = new Intl.DateTimeFormat('vi-VN', { hour: '2-digit', minute: '2-digit' }).format(new Date()); }
 if (location.hash === '#journey') openPanel('journey');
-updateClock(); setInterval(updateClock, 60000); updateVehicle(); checkBackend().then(pollVehicleAlerts); setInterval(pollVehicleAlerts, 1500);
+updateClock(); setInterval(updateClock, 60000); updateVehicle(); checkBackend().then(pollVehicleAlerts); setInterval(pollVehicleAlerts, 1500); setInterval(pollConnectivity, 2000);
 
 window.addEventListener('storage', event => {
   if (event.key !== 'vivi-history-reset') return;

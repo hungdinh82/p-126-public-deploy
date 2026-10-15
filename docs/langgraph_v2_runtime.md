@@ -148,7 +148,7 @@ Runner hiện tại dùng graph chung, SQLite/ledger thật và các dependency 
 `eval/workflow_cases.jsonl` thay thế các dataset chia theo từng đợt sửa. Các scenario
 kiểm tra receipt, trạng thái xe, draft/journey, restart, replay, provider timeout,
 cancel và P khi model/map còn chờ. Profile model fixture kiểm tra contract và fallback,
-không đo chất lượng model thật. Xem [report](../eval/results/report.md) và
+không đo chất lượng model thật. Xem report (file sinh tại máy chạy: `../eval/results/report.md`; không lưu trong Git) và
 [hướng dẫn](../eval/README.md) để biết kết quả revision hiện tại và giới hạn đo.
 
 Phần v1/v2 còn lại trong tài liệu mô tả lịch sử migration; không dùng số pass cũ

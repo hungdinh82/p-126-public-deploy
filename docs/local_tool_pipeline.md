@@ -68,7 +68,7 @@ Các số dưới đây đo contract cũ tại commit đó, không phải benchm
 
 Cùng Qwen3-1.7B Q4_K_M, llama.cpp/CUDA hiện có, MAXN mode 0. AI server vẫn giữ STT/TTS đang chạy; TTS profile FP16 không đổi.
 
-Baseline main được đo lại **không warmup**, không chủ động gửi request khác chen vào: “mở cốp xe” mất **82.970 ms**, hai response sinh **1.382 + 576 token**. Model sai tool/validation; kết quả cuối do rules. Dữ liệu: [baseline độc lập](jetson_main_planner_isolated_2026-10-15.json).
+Baseline main được đo lại **không warmup**, không chủ động gửi request khác chen vào: “mở cốp xe” mất **82.970 ms**, hai response sinh **1.382 + 576 token**. Model sai tool/validation; kết quả cuối do rules. Dữ liệu: baseline độc lập (file sinh tại máy chạy: `jetson_main_planner_isolated_2026-10-15.json`; không lưu trong Git).
 
 Bản mới: 30 warm mỗi ca, loại lượt đầu khỏi median/p95:
 
@@ -83,9 +83,9 @@ Bản mới: 30 warm mỗi ca, loại lượt đầu khỏi median/p95:
 
 Tổng 180/180 proposal trước guard đúng; không ca nào cần guard sửa trong bộ này. Tất cả là provider local, không tính rules thành model. Mỗi warm request dùng một backend call, 21–56 output tokens. Input 1.561–2.572 tokens. Lượt đầu từng ca khoảng 1,37–2,74 giây. Riêng mở cốp: input từ 10.388 token ở baseline xuống 1.561, output lần đầu từ 1.382 xuống 21.
 
-Đây là độ trễ **semantic planner**, chưa cộng thu âm/STT/TTS/playback. Không lấy baseline một lượt so với median warm để tuyên bố hệ số tăng tốc thống kê. [Report 30 lượt](jetson_local_tools_benchmark_2026-10-15.json) ghi từng tool call, usage và phạm vi đo.
+Đây là độ trễ **semantic planner**, chưa cộng thu âm/STT/TTS/playback. Không lấy baseline một lượt so với median warm để tuyên bố hệ số tăng tốc thống kê. Report 30 lượt (file sinh tại máy chạy: `jetson_local_tools_benchmark_2026-10-15.json`; không lưu trong Git) ghi từng tool call, usage và phạm vi đo.
 
-Đã probe thêm với catalog gồm cả bản đồ: mười ca, mỗi ca một lượt đầu và một lượt kế tiếp; gồm mở cốp rồi than lạnh, tăng nhiệt độ không nêu số, cốp+kính, và lệnh “đừng mở cốp”. Cả 20 lượt đúng trước guard. Đây là probe bổ sung, chưa phải 30 warm mỗi ca: [report catalog đầy đủ](jetson_local_tools_navigation_probe_2026-10-15.json).
+Đã probe thêm với catalog gồm cả bản đồ: mười ca, mỗi ca một lượt đầu và một lượt kế tiếp; gồm mở cốp rồi than lạnh, tăng nhiệt độ không nêu số, cốp+kính, và lệnh “đừng mở cốp”. Cả 20 lượt đúng trước guard. Đây là probe bổ sung, chưa phải 30 warm mỗi ca: report catalog đầy đủ (file sinh tại máy chạy: `jetson_local_tools_navigation_probe_2026-10-15.json`; không lưu trong Git).
 
 238 mẫu tegrastats trong phiên benchmark: RAM 7.877–7.883 MB / 14.887 MB, swap đang dùng giữ ở 1.074 MB, GPU utilization tối đa 99%, nhiệt GPU 51,5–78,5°C. Đây là mẫu trong phiên, có khoảng nghỉ; không đo toàn bộ startup/model loading. Xung GPU đọc lúc idle là 114,75 MHz; không dùng số đó làm xung khi inference. Mode MAXN/0 đọc được; đọc EMC cap bằng nvpmodel báo thiếu quyền.
 
@@ -115,7 +115,7 @@ VIVI_TEST_FORM_REPORT=/tmp/jetson-forms.json \
 
 ### Đo lại sau sửa biểu mẫu
 
-[Báo cáo trước/sau](jetson_forms_benchmark_2026-10-15.json) dùng cùng Qwen và endpoint 8795. Trước sửa (717a549), hai lượt `tôi lạnh quá` khi có clarification đều chuyển sai thành conversation với query là câu hỏi của trợ lý; lần đầu 15.352 ms, lần kế tiếp 1.830 ms. Đây là hai mẫu với trạng thái cache khác nhau, không dùng để suy tỷ lệ tăng tốc thống kê.
+Báo cáo trước/sau (file sinh tại máy chạy: `jetson_forms_benchmark_2026-10-15.json`; không lưu trong Git) dùng cùng Qwen và endpoint 8795. Trước sửa (717a549), hai lượt `tôi lạnh quá` khi có clarification đều chuyển sai thành conversation với query là câu hỏi của trợ lý; lần đầu 15.352 ms, lần kế tiếp 1.830 ms. Đây là hai mẫu với trạng thái cache khác nhau, không dùng để suy tỷ lệ tăng tốc thống kê.
 
 Sau sửa: 21 lượt graph thật trên xe giả lập (ba lần hai chuỗi), gồm mở biểu mẫu cửa, bổ sung hàng ghế, OK, hoàn thành rồi chuyển điều hoà, và chuyển điều hoà khi còn chờ xác nhận cửa. Tất cả assertion pass; không lượt nào guard sửa semantic. `phía sau` không gọi Qwen, tổng graph khoảng 54–81 ms; lượt cold tổng graph khoảng 1,53–1,61 giây. Xác nhận cửa cũ bị từ chối sau đổi chủ đề. Không lưu công việc trên Jetson.
 

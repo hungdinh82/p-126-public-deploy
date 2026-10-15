@@ -542,6 +542,7 @@ def create_langgraph_orchestrator(
     vehicle: VehicleSimulator,
     store: EventStore,
     config=None,
+    *, connectivity=None,
 ) -> LangGraphOrchestrator:
     config = config or get_settings()
     from src.vivi.dialogue.planner import ModelProvider, SemanticResolver
@@ -558,6 +559,9 @@ def create_langgraph_orchestrator(
     )
     repair_logged_name(config.memory_path)
     services = create_services(config, provider="rules")
+    if connectivity is not None and services.navigation is not None:
+        from src.vivi.navigation.connectivity import ConnectivityMapClient
+        services.navigation = ConnectivityMapClient(services.navigation, connectivity)
     services.action_gateway = gateway
     import json
 
@@ -605,17 +609,25 @@ def create_langgraph_orchestrator(
             else [name for name in ("google", "openai", "openrouter") if name in providers]
         )
         fallback_chains["local"] = ["local", *cloud]
+    chain_provider = None
+    if connectivity is not None:
+        def chain_provider(requested):
+            if not connectivity.routing_active:
+                return fallback_chains.get(requested, [requested] if requested == 'local' else [requested, 'local'])
+            return connectivity.llm_chain(requested, {"rules", *providers})
     resolver = SemanticResolver(
         providers, breaker_seconds=config.provider_breaker_seconds,
         budget_seconds=config.semantic_budget_seconds, fallback_chains=fallback_chains,
+        chain_provider=chain_provider,
+        result_recorder=connectivity.record_provider_result if connectivity is not None else None,
         requested_budgets={"local": config.local_request_budget_seconds}
         if config.jetson_ai_policy != "disabled" and config.jetson_ai_url else {}
     )
     from src.vivi.conversation.service import ConversationService
     from src.vivi.information.service import InformationService
 
-    services.conversation = ConversationService(providers, fallback_chains=fallback_chains, enabled=config.conversation_enabled)
-    services.information = InformationService(config, services.conversation)
+    services.conversation = ConversationService(providers, fallback_chains=fallback_chains, enabled=config.conversation_enabled, chain_provider=chain_provider)
+    services.information = InformationService(config, services.conversation, connectivity=connectivity)
     saver = ThreadedSqliteSaver(config.data_dir / "runtime" / "conversation-v3.sqlite3")
     graph = build_assistant_graph(
         services,
@@ -636,7 +648,7 @@ def create_langgraph_orchestrator(
         default_provider=config.llm_provider,
         provider_errors=errors,
         ledger=ledger,
-        timeout_seconds=config.turn_timeout_seconds,
+        timeout_seconds=config.effective_turn_timeout_seconds if chain_provider is not None else config.turn_timeout_seconds,
         local_timeout_seconds=config.effective_turn_timeout_seconds
         if config.jetson_ai_policy != "disabled" and config.jetson_ai_url else None,
         profile_id=config.memory_profile_id,

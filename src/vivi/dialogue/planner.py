@@ -255,6 +255,7 @@ class ModelProvider:
     client: object
     budget_seconds: float
     unavailable_until: float = 0
+    consecutive_failures: int = 0
 
 
 def semantic_navigation_context(navigation):
@@ -306,17 +307,21 @@ def semantic_workspace_context(workspace):
 
 
 class SemanticResolver:
-    def __init__(self, providers=None, *, parser=None, breaker_seconds=30, fallback_chains=None, budget_seconds=2.5, requested_budgets=None):
+    def __init__(self, providers=None, *, parser=None, breaker_seconds=30, fallback_chains=None, budget_seconds=2.5, requested_budgets=None, chain_provider=None, result_recorder=None):
         self.providers = providers or {}
         self.parser = parser or OfflineParser()
         self.breaker_seconds = breaker_seconds
         self.fallback_chains = fallback_chains or {}
         self.budget_seconds = budget_seconds
         self.requested_budgets = requested_budgets or {}
+        self.chain_provider = chain_provider
+        self.result_recorder = result_recorder
 
     def chain(self, requested):
         if requested == "rules":
             return []
+        if self.chain_provider is not None:
+            return list(self.chain_provider(requested))
         if requested in self.fallback_chains:
             return list(self.fallback_chains[requested])
         return [requested] if requested == "local" else [requested, "local"]
@@ -324,13 +329,12 @@ class SemanticResolver:
     async def resolve(self, text, session, *, requested="rules", history=None, memory=None, catalog=None):
         attempts = []
         from src.vivi.dialogue.answers import AnswerResolver
+        from src.vivi.dialogue.local_answers import resolve_location_component
         from src.vivi.dialogue.questions import current_question
 
-        answer = None
-        if requested == 'local':
-            from src.vivi.dialogue.local_answers import resolve_location_component
-            answer = resolve_location_component(text, session)
-        answer = answer or AnswerResolver().resolve(text, session)
+        # A typed form answer keeps its meaning even when connectivity changes
+        # the next model provider. This only binds a short location component.
+        answer = resolve_location_component(text, session) or AnswerResolver().resolve(text, session)
         if answer:
             question = current_question(session)
             return answer, "rules", [{"provider": "rules", "outcome": "served", "latency_ms": 0,
@@ -379,6 +383,12 @@ class SemanticResolver:
         )
         deadline = time.monotonic() + self.requested_budgets.get(requested, self.budget_seconds)
         chain = self.chain(requested)
+        if self.chain_provider is not None:
+            # A cloud outage must not consume the time reserved for slow local
+            # inference. Individual attempts retain their own provider budget.
+            deadline = time.monotonic() + sum(
+                self.providers[name].budget_seconds
+                for name in chain if name in self.providers)
         for index, name in enumerate(chain):
             provider = self.providers.get(name)
             if provider is None:
@@ -394,7 +404,8 @@ class SemanticResolver:
                 continue
             try:
                 reserve = min(.5, remaining / 2) if index < len(chain) - 1 else 0
-                async with asyncio.timeout(min(provider.budget_seconds, remaining - reserve)):
+                attempt_budget = provider.budget_seconds
+                async with asyncio.timeout(min(attempt_budget, remaining - reserve)):
                     provider_prompt = prompt
                     if name == "local":
                         value = json.loads(prompt)
@@ -408,7 +419,11 @@ class SemanticResolver:
                     value = self.destination_slots(value, text, session)
             except (Exception,) as exc:
                 if name != "local" or not isinstance(exc, (ValidationError, ValueError)):
-                    provider.unavailable_until = time.monotonic() + self.breaker_seconds
+                    provider.consecutive_failures += 1
+                    status = getattr(getattr(exc, 'response', None), 'status_code', None)
+                    cooldown = (min(1., self.breaker_seconds) if name == 'local' and status in {429, 503}
+                                else min(300., self.breaker_seconds * 2 ** min(provider.consecutive_failures - 1, 4)))
+                    provider.unavailable_until = time.monotonic() + cooldown
                 attempts.append(
                     {
                         "provider": name,
@@ -418,6 +433,8 @@ class SemanticResolver:
                         "latency_ms": round((time.perf_counter() - started) * 1000, 2),
                     }
                 )
+                if self.result_recorder:
+                    self.result_recorder(name, "fallback", attempts[-1]["latency_ms"], type(exc).__name__)
                 if isinstance(exc, ValidationError):
                     # Field paths/codes help diagnose repair failures without
                     # persisting model input, prompt text or arbitrary output.
@@ -428,6 +445,10 @@ class SemanticResolver:
             attempts.append(
                 {"provider": name, "outcome": "served", "latency_ms": round((time.perf_counter() - started) * 1000, 2)}
             )
+            provider.consecutive_failures = 0
+            provider.unavailable_until = 0
+            if self.result_recorder:
+                self.result_recorder(name, "served", attempts[-1]["latency_ms"], None)
             if name == "local" and hasattr(provider.client, "agenerate_tools"):
                 attempts[-1]["semantic_contract"] = "local-proposals-v2"
             guarded = self.parser.guard(text, value, session, memory, history)

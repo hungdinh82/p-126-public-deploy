@@ -57,25 +57,23 @@ Log nằm trong `data/ai-server/`. Dừng bằng Ctrl+C; một engine dừng s�
 service thay vì để app tiếp tục gọi process hỏng. Các model speech nạp ở nền;
 xem trạng thái tại gateway `/test`. Nếu thiếu model/runtime, chạy `setup` trước.
 Trên Xavier, cùng launcher gọi script Jetson native, dùng lại môi trường đã setup.
-Remote STT/TTS chưa được ghép vào app chính; app vẫn giữ adapter speech hiện có.
+Remote STT/TTS đã được ghép vào app Laptop. Soniox/VieNeu là tầng Cloud;
+Whisper/ZeroTTS trên Jetson là tầng offline; browser voice là TTS cuối cùng.
 
 Gateway AI có thể chạy trên Jetson, PC hoặc máy khác có runtime phù hợp.
 Laptop chỉ cần địa chỉ truy cập được; không phụ thuộc SSH alias hay loại máy.
 Trong `config.toml`:
 
 ```toml
-llm_provider = "local"
+llm_provider = "google"
 local_llm_model = "vivi-qwen3-1.7b"
-ai_server_url = "http://<IP-hoặc-hostname-server>:8789"
-jetson_ai_policy = "prefer_local"
+ai_server_url = "http://192.168.55.1:8789"
+ai_server_auth_required = true
+jetson_ai_policy = "allow_cloud"
 ```
 
-Để test cá nhân không cần token, đặt `ai_server_auth_required = false` trong
-`config.toml` của cả backend và AI server (mặc định của nhánh này). Restart cả
-hai process; không cần setup/build lại model. Gateway `/test` tự ẩn ô token.
-Chế độ này cho phép mọi client truy cập được địa chỉ server gọi model.
-Muốn bật lại xác thực, đặt `ai_server_auth_required = true` ở cả hai máy và
-trong `.env` của backend đặt `AI_SERVER_TOKEN=<token từ service.env trên AI server>`.
+Trong xe luôn giữ `ai_server_auth_required = true`. Trong `.env` của Laptop đặt
+`AI_SERVER_TOKEN=<token từ /mnt/jetson-data/vivi-ai/service.env trên Jetson>`.
 Backend tự dùng cùng URL và token cho capability probe và SLM; tự nối `/v1`.
 Biến môi trường ưu tiên hơn TOML. Xóa/cập nhật các override `LLM_PROVIDER`,
 `AI_SERVER_URL` hoặc `JETSON_AI_URL` cũ nếu muốn dùng cấu hình trong file.
@@ -93,9 +91,9 @@ Thay URL cần restart backend; dùng Docker thì chạy
 Các endpoint capability của gateway ViVi vẫn cần thiết khi policy được bật.
 Với LM Studio/llama.cpp độc lập, đặt `jetson_ai_policy = "disabled"` và cấu hình
 `local_llm_base_url`, model, API key trực tiếp như trước.
-Phần cấu hình này nối SLM; remote STT/TTS chưa được nối vào public Laptop API.
+Phần cấu hình này dùng chung capability probe và adapter LLM/STT/TTS.
 
-Sau khi bạn tự commit/push bản merge, cập nhật checkout Laptop/Jetson bằng nhánh
+Sau khi commit/push bản merge, cập nhật checkout Laptop/Jetson bằng nhánh
 feature. Nếu có local edits, sao lưu/ghép trước; không reset chúng để pull.
 
 Jetson, từ repo:
@@ -110,20 +108,15 @@ Laptop cần dependency mới của main, trong venv hiện có:
 
 ```bash
 uv pip install --python .venv/bin/python -r requirements.txt
-export LLM_PROVIDER=local
-export LOCAL_LLM_MODEL=vivi-qwen3-1.7b
-export LOCAL_LLM_BASE_URL=http://<jetson-private-ip>:8789/v1
-export LOCAL_LLM_API_KEY='<token trong service.env>'
-export JETSON_AI_URL=http://<jetson-private-ip>:8789
-export JETSON_AI_TOKEN="$LOCAL_LLM_API_KEY"
-export JETSON_AI_POLICY=prefer_local
+export AI_SERVER_URL=http://192.168.55.1:8789
+export AI_SERVER_TOKEN='<token trong service.env>'
+export AI_SERVER_AUTH_REQUIRED=true
 .venv/bin/python -m uvicorn src.vivi.api.app:app --host 127.0.0.1 --port 8787
 ```
 
-Cloud fallback dùng API key/provider đã cấu hình trên Laptop. Dùng
-`JETSON_AI_POLICY=offline_only` nếu không cho phép cloud. Không commit token.
-STT/TTS trên public Laptop API vẫn dùng adapter/config hiện có; remote speech
-adapter chưa thuộc bản ghép này. Jetson `/test` kiểm thử trực tiếp cả ba model.
+Cloud dùng API key/provider đã cấu hình trên Laptop. Connectivity Supervisor tự
+chuyển Cloud → Jetson → Rules và không bao giờ tự dùng IP Tailscale. Không commit
+token. Jetson `/test` vẫn kiểm thử trực tiếp cả ba model.
 
 Smoke text, history và xe mô phỏng riêng, không sửa config cá nhân:
 
@@ -133,16 +126,46 @@ Smoke text, history và xe mô phỏng riêng, không sửa config cá nhân:
   --jetson-url http://<jetson-private-ip>:8789
 ```
 
+## Merge adaptive gateway vào realtime voice pipeline — 2026-10-15
+
+Merge giữ nguyên model, inference backend, GPU scheduler, script khởi động Jetson,
+Dockerfile và workflow deploy của nhánh realtime. Jetson chỉ phục vụ inference;
+connectivity audit, lịch sử, audio buffering và conversation state ở ứng dụng Laptop.
+
+- Auto chọn Cloud → Jetson → Rules dựa trên probe nền, profile và override trong
+  Engineer. Chọn provider thủ công vẫn giữ ưu tiên hiện có; không tự đổi mặc định
+  sang Auto. Gateway đang busy nhưng nhận thêm việc vẫn là available.
+- Prompt Cloud và hợp đồng local `local-proposals-v2`, tool discovery, giới hạn
+  output local, pending forms và revision grounding giữ từ nhánh realtime.
+  Câu bổ sung vị trí ngắn vẫn điền đúng form khi provider đổi giữa hai lượt.
+- Mỗi provider có budget riêng: Cloud dùng budget Cloud đã cấu hình, local giữ
+  budget dài cho Qwen. Không để deadline mặc định 2,5 giây cắt lượt Cloud hoặc
+  tiêu hết thời gian fallback local. Local trả JSON sai không bị khóa bởi breaker;
+  429/503 chỉ có cooldown ngắn.
+- STT dùng lại adapter Jetson hiện có, giữ nguyên audio khi fallback, báo đúng
+  engine đã transcribe. TTS stream thử lấy chunk đầu trước HTTP 200; lỗi trước
+  chunk đầu được fallback. Sau khi phát PCM không chạy lại model hay hành động xe.
+- Mic vẫn cho ngắt lượt theo UI main. Thông báo mạng không chen ngang câu trả lời.
+  TTS đã tắt và provider cấu hình thủ công vẫn được tôn trọng.
+- Không phụ thuộc token khi gateway cấu hình không yêu cầu auth. Probe Internet
+  có đường kiểm tra API root phụ, không gửi credential và không coi một provider
+  lỗi là toàn bộ Internet mất kết nối.
+
 ## Kiểm tra và giới hạn
 
-- Toàn bộ suite Python đã qua 434 tests. Sau đó bổ sung test tool-call mới và chạy
-  riêng 5 test integration: gateway có auth/schema, local → cloud, offline,
-  generation fallback và tool một lần đều qua.
-- Ruff qua toàn bộ src/vehicle_simulator/tests; 5 test frontend qua; app.js syntax qua.
-- Smoke CLI với handbook thật: đặt 25 độ verified; mở kính driver yêu cầu xác nhận;
-  approve verified; hỏi kết nối sạc AC trả handbook answer có nguồn.
-- Test cloud/Jetson của lần merge dùng doubles. Chưa xác nhận accuracy của SLM thật
-  với semantic schema mới trên Xavier hoặc wheel native sau CPU-ID bounds fix.
-  Kết quả STT Whisper-base trước đó còn sai nhiều từ tiếng Việt.
+- Regression liên quan: **418 test Python**, **9 test frontend** qua; Ruff và
+  `git diff --check` qua. Có test local đang bận, giữ budget fallback, tiếp tục
+  nói/revision, thay provider khi đang điền form, STT giữ audio và TTS first-chunk.
+- Smoke HTTP với session và xe memory riêng, qua Jetson thật ở cổng 8795:
+  local hỏi thêm vị trí cửa, bổ sung “phía sau”, đổi chủ đề sang “tôi lạnh quá”;
+  mất cả hai đường thì rules; Jetson mất thì Gemini trả đúng tool mở cốp.
+  Gemini semantic khoảng **3,74 giây**, local khoảng **1,81 giây** cho hai lượt
+  có gọi model trong smoke. Đây là mẫu riêng lẻ, không phải phân vị benchmark.
+- Qua ứng dụng merge, ZeroTTS trả 69.120 byte PCM, first audio khoảng **1,12 giây**;
+  STT trả HTTP 200 trong khoảng **0,79 giây**. Audio mẫu vẫn bị nhận sai một số từ:
+  kiểm tra này xác nhận đường truyền/fallback, không chứng minh accuracy STT.
+- Báo cáo từng lần chạy và WAV không còn được track trong Git. Script benchmark,
+  test, fixture regression và tài liệu tổng hợp vẫn giữ; chạy lại sẽ sinh output
+  tại máy chạy. Dọn file không viết lại lịch sử commit cũ.
 
 Hướng dẫn native setup và lỗi ORT ở [jetson_ai.md](jetson_ai.md).

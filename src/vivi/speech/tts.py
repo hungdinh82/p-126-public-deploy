@@ -297,12 +297,67 @@ class VieNeuTTSAdapter:
         raise RuntimeError("VieNeu ngắt stream trước khi gửi hết audio")
 
 
-def create_tts_engines(config: Settings, default) -> dict:
+class JetsonTTSAdapter:
+    """ZeroTTS VIVI served by the private Jetson gateway."""
+
+    name = "zerotts"
+    device = "jetson"
+    voice = "VIVI"
+    execution_providers = ["JetsonGateway"]
+
+    def __init__(self, config: Settings):
+        self.config = config
+        self.sample_rate = 24000
+        self.transport = None
+
+    def availability(self) -> tuple[bool, str]:
+        if not self.config.jetson_ai_url:
+            return False, "AI_SERVER_URL chưa cấu hình"
+        if self.config.ai_server_auth_required and not self.config.jetson_ai_token:
+            return False, "Thiếu AI_SERVER_TOKEN"
+        return True, "ready-via-gateway"
+
+    async def preload(self) -> None:
+        return None
+
+    async def ensure_loaded(self) -> None:
+        return None
+
+    def _headers(self) -> dict[str, str]:
+        return (
+            {"Authorization": f"Bearer {self.config.jetson_ai_token}"}
+            if self.config.ai_server_auth_required else {}
+        )
+
+    async def stream(self, text: str):
+        import httpx
+
+        async with httpx.AsyncClient(timeout=self.config.local_request_budget_seconds, transport=self.transport) as client:
+            async with client.stream(
+                "POST", self.config.jetson_ai_url.rstrip("/") + "/v1/tts/stream",
+                headers=self._headers(), json={"input": {"text": text}, "stream": True, "format": "pcm_s16le"},
+            ) as response:
+                response.raise_for_status()
+                self.sample_rate = int(response.headers.get("X-Audio-Sample-Rate", "24000"))
+                async for chunk in response.aiter_bytes():
+                    if chunk:
+                        yield chunk
+
+    async def synthesize(self, text: str) -> bytes:
+        pcm = b"".join([chunk async for chunk in self.stream(text)])
+        return _wav(pcm, self.sample_rate)
+
+
+def create_tts_engines(config: Settings, default, connectivity=None) -> dict:
     """Every selectable voice engine, so the UI can switch per request.
 
     The configured default is reused so ZeroTTS is never loaded twice.
     """
-    engines = {"zerotts": ZeroTTSAdapter, "vieneu": VieNeuTTSAdapter}
+    local_factory = JetsonTTSAdapter if (
+        connectivity is not None and config.jetson_ai_url and (not config.ai_server_auth_required or config.jetson_ai_token)
+        and config.jetson_ai_policy != "disabled"
+    ) else ZeroTTSAdapter
+    engines = {"zerotts": local_factory, "vieneu": VieNeuTTSAdapter}
     if config.jetson_ai_policy == "offline_only":
         engines.pop("vieneu")
     return {
@@ -317,7 +372,8 @@ def create_tts(config: Settings):
     if config.tts_provider == "off":
         return DisabledTTSAdapter()
     if config.tts_provider == "zerotts":
-        return ZeroTTSAdapter(config)
+        remote = config.jetson_ai_url and config.jetson_ai_policy != 'disabled'
+        return JetsonTTSAdapter(config) if remote else ZeroTTSAdapter(config)
     if config.tts_provider == "vieneu":
         return VieNeuTTSAdapter(config)
     raise ValueError(f"TTS_PROVIDER không hợp lệ: {config.tts_provider}")

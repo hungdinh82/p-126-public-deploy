@@ -91,7 +91,7 @@ Giữ nguyên prompt main là khôi phục một hợp đồng, không phải b�
 
 ## Probe trên Jetson sau khôi phục prompt main
 
-Dữ liệu: [jetson_planner_main_contract_probe_2026-10-15.json](jetson_planner_main_contract_probe_2026-10-15.json).
+Dữ liệu: jetson_planner_main_contract_probe_2026-10-15.json (file sinh tại máy chạy: `jetson_planner_main_contract_probe_2026-10-15.json`; không lưu trong Git).
 Chỉ một cold run và một request kế tiếp, không phải benchmark 30 warm.
 
 - Câu: “mở cốp xe”; model và backend hiện có, đúng system/tools main, output limit 2048.

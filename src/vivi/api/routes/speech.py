@@ -8,6 +8,7 @@ from urllib.parse import quote
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile, WebSocket
 from fastapi.responses import Response, StreamingResponse
+from starlette.background import BackgroundTask
 
 from src.vivi.api.runtime import runtime
 from src.vivi.domain.models import STTResponse, TTSRequest
@@ -161,69 +162,110 @@ async def transcribe_stream(socket: WebSocket, session_id: str, turn_id: str):
     await socket.close()
 
 
+def _tts_candidates(request: TTSRequest):
+    if request.tts_provider is None and runtime.tts.name == 'off':
+        raise HTTPException(status_code=503, detail='TTS đang tắt')
+    preference = runtime.tts.name if request.tts_provider is None else (None if request.tts_provider == 'auto' else request.tts_provider)
+    if preference is not None and preference not in runtime.tts_engines:
+        raise HTTPException(status_code=400, detail='TTS provider không khả dụng trong profile này')
+    cloud_ok = not runtime.connectivity.routing_active or runtime.connectivity.capability_available("tts", "cloud")
+    jetson_ok = not runtime.connectivity.routing_active or runtime.connectivity.capability_available("tts", "jetson")
+    order = ["vieneu", "zerotts"] if preference is None else [preference, "zerotts" if preference == "vieneu" else "vieneu"]
+    candidates = []
+    for name in order:
+        if name == "vieneu" and not cloud_ok:
+            continue
+        engine = runtime.tts if request.tts_provider is None and name == runtime.tts.name else runtime.tts_engines.get(name)
+        if name == "zerotts" and getattr(engine, 'device', '') == 'jetson' and not jetson_ok:
+            continue
+        if engine is not None and engine.availability()[0]:
+            runtime.connectivity.store.append(
+                "selection", "tts", "selected", provider=name,
+                reason=f"preference={preference or 'auto'}",
+            )
+            candidates.append(engine)
+    if candidates:
+        return candidates
+    raise HTTPException(status_code=503, detail="Không có TTS Cloud hoặc Jetson khả dụng; dùng giọng trình duyệt")
+
+
 def _tts(request: TTSRequest):
-    if request.tts_provider is None:
-        return runtime.tts
-    engine = runtime.tts_engines.get(request.tts_provider)
-    if engine is None:
-        raise HTTPException(status_code=400, detail="TTS provider không khả dụng trong profile này")
-    return engine
+    return _tts_candidates(request)[0]
 
 
 @router.post("/tts")
 async def synthesize(request: TTSRequest):
-    tts = _tts(request)
-    try:
-        audio = await tts.synthesize(spoken_text(request.text))
-    except Exception as exc:
-        raise HTTPException(status_code=503, detail=f"TTS chưa sẵn sàng: {exc}") from exc
-    return Response(
-        audio,
-        media_type="audio/wav",
-        headers={"X-ViVi-Voice": quote(tts.voice)},
-    )
+    for tts in _tts_candidates(request):
+        try:
+            audio = await tts.synthesize(spoken_text(request.text))
+            if not audio:
+                raise ValueError('Empty TTS audio')
+            return Response(audio, media_type='audio/wav', headers={'X-ViVi-Voice': quote(tts.voice)})
+        except Exception as exc:
+            runtime.connectivity.store.append('provider_result', 'tts', 'fallback', provider=tts.name, reason=type(exc).__name__)
+    raise HTTPException(status_code=503, detail='TTS chưa sẵn sàng; dùng giọng trình duyệt')
+
+
+async def _close_audio(iterator):
+    close = getattr(iterator, 'aclose', None)
+    if close is not None:
+        await close()
 
 
 @router.post("/tts/stream")
 async def synthesize_stream(request: TTSRequest):
-    tts = _tts(request)
-    available, reason = tts.availability()
-    if not available:
-        raise HTTPException(status_code=503, detail=f"TTS chưa sẵn sàng: {reason}")
-    try:
-        ensure_loaded = getattr(tts, "ensure_loaded", None)
-        if ensure_loaded is not None:
-            await ensure_loaded()
-    except Exception as exc:
-        raise HTTPException(status_code=503, detail=f"TTS chưa sẵn sàng: {exc}") from exc
-    async def timed_stream():
-        started = time.perf_counter()
-        received_at = time.time()
-        first_chunk = None
-        audio_duration_ms = 0.0
-        async for chunk in tts.stream(spoken_text(request.text)):
-            if first_chunk is None:
-                first_chunk = round((time.perf_counter() - started) * 1000, 2)
-            audio_duration_ms += len(chunk) / 2 / tts.sample_rate * 1000
-            yield chunk
-        runtime.store.record_tts(request.session_id, request.turn_id, {
-            "session_id": request.session_id,
-            "turn_id": request.turn_id,
-            "received_at": received_at,
-            "text": request.text,
-            "time_to_first_chunk_ms": first_chunk,
-            "synthesis_ms": round((time.perf_counter() - started) * 1000, 2),
-            "audio_duration_ms": round(audio_duration_ms, 2),
-        })
+    started, received_at = time.perf_counter(), time.time()
+    iterator = None
+    for tts in _tts_candidates(request):
+        try:
+            ensure_loaded = getattr(tts, 'ensure_loaded', None)
+            if ensure_loaded is not None:
+                await ensure_loaded()
+            iterator = tts.stream(spoken_text(request.text)).__aiter__()
+            async with asyncio.timeout(runtime.settings.local_request_budget_seconds if tts.device == 'jetson'
+                                       else runtime.settings.vieneu_timeout_seconds):
+                first = await anext(iterator)
+                while not first:
+                    first = await anext(iterator)
+            break
+        except BaseException as exc:
+            if iterator is not None:
+                await _close_audio(iterator)
+                iterator = None
+            if not isinstance(exc, Exception):
+                raise
+            runtime.connectivity.store.append('provider_result', 'tts', 'fallback', provider=tts.name, reason=type(exc).__name__)
+    else:
+        raise HTTPException(status_code=503, detail='TTS chưa sẵn sàng; dùng giọng trình duyệt')
+    first_chunk = round((time.perf_counter() - started) * 1000, 2)
+    closed = False
 
-    return StreamingResponse(
-        timed_stream(),
-        media_type="application/octet-stream",
-        headers={
-            # Voice names are Vietnamese; headers only carry latin-1.
-            "X-ViVi-Voice": quote(tts.voice),
-            "X-ViVi-Audio-Format": "pcm_s16le",
-            "X-ViVi-Sample-Rate": str(tts.sample_rate),
-            "Cache-Control": "no-store",
-        },
-    )
+    async def cleanup():
+        nonlocal closed
+        if not closed:
+            closed = True
+            await _close_audio(iterator)
+
+    async def timed_stream():
+        audio_duration_ms = len(first) / 2 / tts.sample_rate * 1000
+        try:
+            yield first
+            async for chunk in iterator:
+                audio_duration_ms += len(chunk) / 2 / tts.sample_rate * 1000
+                yield chunk
+            runtime.store.record_tts(request.session_id, request.turn_id, {
+                'session_id': request.session_id, 'turn_id': request.turn_id,
+                'received_at': received_at, 'text': request.text,
+                'time_to_first_chunk_ms': first_chunk,
+                'synthesis_ms': round((time.perf_counter() - started) * 1000, 2),
+                'audio_duration_ms': round(audio_duration_ms, 2),
+            })
+        finally:
+            await cleanup()
+
+    # No server failover after PCM is emitted. The browser may retry this
+    # sentence only; inference, retrieval and vehicle effects are never replayed.
+    return StreamingResponse(timed_stream(), media_type='application/octet-stream', headers={
+        'X-ViVi-Voice': quote(tts.voice), 'X-ViVi-Audio-Format': 'pcm_s16le',
+        'X-ViVi-Sample-Rate': str(tts.sample_rate), 'Cache-Control': 'no-store',
+    }, background=BackgroundTask(cleanup))

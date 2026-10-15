@@ -28,11 +28,18 @@ async def _local_llm_available() -> tuple[bool, str | None]:
 
 
 async def _llm_options() -> list[dict]:
-    options = []
+    options = [
+        {"provider": "auto", "model": "Adaptive gateway", "available": True,
+         "fallback_available": True, "detail": "Tự chọn Cloud → Jetson → Rules"}
+    ]
     for provider, model in runtime.llm_models.items():
         available = provider in getattr(runtime.orchestrator, "semantic_providers", runtime.orchestrator.graph_providers)
         detail = runtime.orchestrator.provider_errors.get(provider)
-        if provider == "local" and available:
+        location = ("device" if runtime.settings.jetson_ai_policy == "disabled" else "jetson") if provider == "local" else "cloud"
+        if provider != "rules" and runtime.connectivity.routing_active and not runtime.connectivity.capability_available("llm", location):
+            available = False
+            detail = "Không khả dụng theo trạng thái kết nối/profile hiện tại"
+        elif provider == "local" and available:
             available, detail = await _local_llm_available()
         options.append(
             {"provider": provider, "model": model, "available": available, "fallback_available": True, "detail": detail}
@@ -52,20 +59,27 @@ def _fallback_chain(config):
 @router.get("/api/v1/health")
 async def health():
     config = runtime.settings
+    connectivity = runtime.connectivity.snapshot()
     stt_ok, stt_detail = runtime.stt.availability()
     tts_ok, tts_detail = runtime.tts.availability()
     llm_options = await _llm_options()
-    active_provider = next(
-        (
-            item["provider"]
-            for item in llm_options
-            if item["provider"] == runtime.orchestrator.default_provider
-            and item["available"]
-        ),
-        "rules",
-    )
+    active_provider = runtime.orchestrator.default_provider
+    tts_options = []
+    for name, engine in runtime.tts_engines.items():
+        ok, detail = engine.availability()
+        location = "cloud" if name == "vieneu" else "jetson" if engine.device == "jetson" else "device"
+        if runtime.connectivity.routing_active and not runtime.connectivity.capability_available("tts", location):
+            ok, detail = False, "Không khả dụng theo trạng thái kết nối/profile hiện tại"
+        tts_options.append({
+            "provider": name, "voice": engine.voice, "device": engine.device,
+            "available": ok, "detail": detail,
+        })
+    selected_tts = next((item for item in tts_options if item['provider'] == runtime.tts.name), None)
+    if selected_tts is not None:
+        tts_ok, tts_detail = selected_tts['available'], selected_tts['detail']
     return {
         "status": "ok",
+        "connectivity": connectivity,
         "runtime": "local",
         "orchestration": {
             "engine": "langgraph",
@@ -110,15 +124,9 @@ async def health():
             "device": runtime.tts.device,
             "execution_providers": runtime.tts.execution_providers,
             "options": [
-                {
-                    "provider": name,
-                    "voice": engine.voice,
-                    "device": engine.device,
-                    "available": ok,
-                    "detail": detail,
-                }
-                for name, engine in runtime.tts_engines.items()
-                for ok, detail in [engine.availability()]
+                {"provider": "auto", "voice": "Tự động", "device": "adaptive",
+                 "available": any(item["available"] for item in tts_options),
+                 "detail": "Tự chọn VieNeu → ZeroTTS → giọng trình duyệt"}, *tts_options
             ],
         },
         "storage": {

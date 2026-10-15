@@ -383,9 +383,10 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
     if services.conversation is None:
         from src.vivi.conversation.service import ConversationService
 
-        services.conversation = ConversationService(resolver.providers, fallback_chains=resolver.fallback_chains)
+        services.conversation = ConversationService(resolver.providers, fallback_chains=resolver.fallback_chains, chain_provider=resolver.chain_provider)
     runtime = CapabilityRuntime(
-        services, store, generators, budgets, resolver.breaker_seconds, provider_chains=resolver.fallback_chains
+        services, store, generators, budgets, resolver.breaker_seconds,
+        provider_chains=resolver.fallback_chains, chain_provider=resolver.chain_provider,
     )
     if store is None:
         from pathlib import Path
@@ -613,7 +614,7 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
             reducer_input.navigation_workspace.history = []
         if update.get("clear_journey"):
             reducer_input = clear_journey(reducer_input)
-        if state["event"]["provider"] == "local" and state["event"]["kind"] == "utterance":
+        if (state["event"]["provider"] == "local" or state["turn"].get("effective_provider") == "local") and state["event"]["kind"] == "utterance":
             from src.vivi.dialogue.local_forms import close_obsolete_forms
             reducer_input = close_obsolete_forms(reducer_input, semantic)
         session, message = reduce_turn(
