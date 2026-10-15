@@ -122,8 +122,8 @@ class SpeechModels:
         # TensorRT INT8. Keep STT/SLM on their independently requested device.
         device = "cpu" if precision == "int8-dynamic-mixed" else self.requested_device
         trt = precision == "int8-qdq-mixed"
-        if trt and device != "cuda":
-            raise ValueError("int8-gpu requires --device cuda; no CPU replacement is permitted")
+        if (trt or precision == "float16-mixed") and device != "cuda":
+            raise ValueError(f"{precision} requires --device cuda; no CPU replacement is permitted")
         self.info["tts"].update(model_path=str(path), precision=precision)
         if device == "cuda":
             from jetson_ai.tensorrt_tts import CUDA_OPTIONS

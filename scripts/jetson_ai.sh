@@ -165,8 +165,8 @@ setup() {
   # Keep GPU TTS as the default on Jetson; native INT8 is an explicit CPU trial.
   local tts_precision=fp32
   if [[ $# -gt 0 ]]; then
-    [[ $# == 2 && "$1" == --tts-precision && ( "$2" == int8 || "$2" == fp32 || "$2" == int8-gpu ) ]] \
-      || fail "Usage: setup --profile agx [--tts-precision int8-gpu|int8|fp32]"
+    [[ $# == 2 && "$1" == --tts-precision && ( "$2" == int8 || "$2" == fp32 || "$2" == fp16 || "$2" == int8-gpu ) ]] \
+      || fail "Usage: setup --profile agx [--tts-precision int8-gpu|int8|fp16|fp32]"
     tts_precision="$2"
   fi
   export JETSON_AI_TTS_PRECISION="$tts_precision"
@@ -230,7 +230,7 @@ setup() {
     || fail "Gateway import check failed"
   "$VIVI_VENV/bin/python" scripts/check_jetson_runtime.py --write-manifest "$VIVI_MANIFEST"
   touch "$VIVI_COMPLETE"
-  echo "Setup complete: SLM + STT CUDA; ZeroTTS $tts_precision (int8-gpu TensorRT / int8 CPU / fp32 CUDA)."
+  echo "Setup complete: SLM + STT CUDA; ZeroTTS $tts_precision (int8-gpu TensorRT / int8 CPU / fp16 or fp32 CUDA)."
   echo "Service token: $VIVI_DATA/service.env (copy securely to Laptop)"
   if command -v tailscale >/dev/null 2>&1; then
     echo "Tailscale URL: http://$(tailscale ip -4 2>/dev/null | head -n 1):$VIVI_PORT"
@@ -329,8 +329,8 @@ case "${1:-}" in
   setup) shift; setup "$@" ;;
   run) shift
     if [[ $# -gt 0 ]]; then
-      [[ $# == 2 && "$1" == --tts-precision && ( "$2" == int8 || "$2" == fp32 || "$2" == int8-gpu ) ]] \
-        || fail "Usage: bash scripts/jetson_ai.sh run [--tts-precision int8-gpu|int8|fp32]"
+      [[ $# == 2 && "$1" == --tts-precision && ( "$2" == int8 || "$2" == fp32 || "$2" == fp16 || "$2" == int8-gpu ) ]] \
+        || fail "Usage: bash scripts/jetson_ai.sh run [--tts-precision int8-gpu|int8|fp16|fp32]"
       export JETSON_AI_TTS_PRECISION="$2"
     else
       # Do not inherit an old model-selection file from a prior experiment.
