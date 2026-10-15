@@ -13,8 +13,18 @@ from src.vivi.agents.prompts import VOICE_PERSONA
 from src.vivi.conversation.context import conversation_view
 from src.vivi.conversation.guardrails import TOPIC_INSTRUCTION
 from src.vivi.dialogue.contracts import NavigationState, SemanticTurn, SessionState, semantic_schema
+from src.vivi.dialogue.local_semantics import local_semantic_tools, local_system_instruction, native_semantic_prompt
+from src.vivi.dialogue.local_tools import (
+    LOCAL_TOOL_INSTRUCTION,
+    native_proposal_examples,
+    native_proposal_prompt,
+    native_proposal_tools,
+    proposals_to_turn,
+)
 from src.vivi.dialogue.parser import OfflineParser
-from src.vivi.structured_llm import strict_schema
+from src.vivi.dialogue.revisions import coalesce_explicit_revisions
+from src.vivi.dialogue.tool_discovery import MAX_TOOL_DOCUMENTS, discover_capabilities, initial_tool_documents
+from src.vivi.structured_llm import compact_history, strict_schema
 
 PROMPT_VERSION = "semantic-unified-22"
 SEMANTIC_INSTRUCTION = """
@@ -226,12 +236,16 @@ def semantic_tools():
     }}]
 
 
-async def warmup_local_client(client):
-    # Use exactly the real system/tools prefix; one output token primes KV cache
-    # without interpreting or executing the generated proposal.
-    payload = client._tool_payload(VOICE_PERSONA + SEMANTIC_INSTRUCTION,
-                                   '{"utterance":"Xin chào","tasks":{},"recent_turns":[],"explicit_user_memory":[],"capabilities":[]}',
-                                   semantic_tools())
+async def warmup_local_client(client, capabilities=None):
+    # Optional manual diagnostic for an explicitly chosen documentation subset.
+    # Production does not enqueue a competing full-catalog startup warmup.
+    from src.vivi.capabilities.registry import catalog
+    capabilities = capabilities if capabilities is not None else catalog(False, conversation=True, information=True)
+    prompt = native_proposal_prompt({"utterance": "Xin chào", "tasks": local_context(SessionState()),
+                                    "conversation_context": {}, "recent_turns": [],
+                                    "explicit_user_memory": [], "capabilities": capabilities})
+    payload = client._tool_payload(LOCAL_TOOL_INSTRUCTION + TOPIC_INSTRUCTION, prompt, native_proposal_tools(capabilities))
+    payload['parallel_tool_calls'] = True
     payload.update(max_tokens=1, cache_prompt=True)
     await client._acomplete(payload)
 
@@ -242,6 +256,7 @@ class ModelProvider:
     client: object
     budget_seconds: float
     unavailable_until: float = 0
+    consecutive_failures: int = 0
 
 
 def semantic_navigation_context(navigation):
@@ -293,26 +308,47 @@ def semantic_workspace_context(workspace):
 
 
 class SemanticResolver:
-    def __init__(self, providers=None, *, parser=None, breaker_seconds=30, fallback_chains=None, budget_seconds=2.5):
+    def __init__(self, providers=None, *, parser=None, breaker_seconds=30, fallback_chains=None, budget_seconds=2.5, requested_budgets=None, chain_provider=None, result_recorder=None):
         self.providers = providers or {}
         self.parser = parser or OfflineParser()
         self.breaker_seconds = breaker_seconds
         self.fallback_chains = fallback_chains or {}
         self.budget_seconds = budget_seconds
+        self.requested_budgets = requested_budgets or {}
+        self.chain_provider = chain_provider
+        self.result_recorder = result_recorder
 
     def chain(self, requested):
         if requested == "rules":
             return []
+        if self.chain_provider is not None:
+            return list(self.chain_provider(requested))
         if requested in self.fallback_chains:
             return list(self.fallback_chains[requested])
         return [requested] if requested == "local" else [requested, "local"]
 
-    async def resolve(self, text, session, *, requested="rules", history=None, memory=None, catalog=None):
+    async def resolve(self, text, session, *, requested="rules", history=None, memory=None, catalog=None, observation=None):
         attempts = []
         from src.vivi.dialogue.answers import AnswerResolver
+        from src.vivi.dialogue.local_answers import resolve_location_component
         from src.vivi.dialogue.questions import current_question
 
-        answer = AnswerResolver().resolve(text, session)
+        question = current_question(session)
+        current_index = session.active.current_index() if session.active else None
+        current_draft = session.active.steps[current_index].draft if current_index is not None else None
+        model_form_answer = bool(
+            requested == 'local' and 'local' in self.providers
+            and hasattr(self.providers['local'].client, 'agenerate_tools')
+            and question and question.purpose in {'collect_slot', 'approve_execution'}
+            and current_draft and current_draft.capability in {
+                'door.set_open', 'door.set_lock', 'window.set_position', 'seat.set_heat_level',
+                'hood.set_open', 'trunk.set_open', 'body.set_open', 'climate.set_temperature', 'media.play', 'media.pause'}
+        )
+        # Location language, including misspellings, belongs to the model.
+        # Explicit confirmation remains a host-owned consent boundary.
+        answer = None if model_form_answer else (
+            resolve_location_component(text, session)
+            or AnswerResolver().resolve(text, session))
         if answer:
             question = current_question(session)
             return answer, "rules", [{"provider": "rules", "outcome": "served", "latency_ms": 0,
@@ -333,7 +369,7 @@ class SemanticResolver:
             return cancellation, "rules", [{"provider": "rules", "outcome": "served", "latency_ms": 0,
                                              "reference": "task_cancellation"}]
         consent = self.parser.confirmation_reference(text, session)
-        if consent:
+        if consent and not model_form_answer:
             return consent, "rules", [{"provider": "rules", "outcome": "served", "latency_ms": 0,
                                        "source": "pending_confirmation"}]
         reference = self.parser.place_reference(text, session)
@@ -348,10 +384,14 @@ class SemanticResolver:
                 "provider": "rules", "outcome": "served", "latency_ms": 0,
                 "source": "explicit_navigation",
             }]
+        task_context = self.context(session)
+        if model_form_answer and question.purpose == 'approve_execution':
+            consent_answer = AnswerResolver().resolve(text, session)
+            task_context['confirmation_allowed'] = bool(consent_answer and consent_answer.act == 'confirm')
         prompt = json.dumps(
             {
                 "utterance": text,
-                "tasks": self.context(session),
+                "tasks": task_context,
                 "conversation_context": conversation_view(session),
                 "recent_turns": [{k: t.get(k) for k in ("query", "answer")} for t in (history or [])[-6:]],
                 "explicit_user_memory": memory or [],
@@ -359,8 +399,14 @@ class SemanticResolver:
             },
             ensure_ascii=False,
         )
-        deadline = time.monotonic() + self.budget_seconds
+        deadline = time.monotonic() + self.requested_budgets.get(requested, self.budget_seconds)
         chain = self.chain(requested)
+        if self.chain_provider is not None:
+            # A cloud outage must not consume the time reserved for slow local
+            # inference. Individual attempts retain their own provider budget.
+            deadline = time.monotonic() + sum(
+                self.providers[name].budget_seconds
+                for name in chain if name in self.providers)
         for index, name in enumerate(chain):
             provider = self.providers.get(name)
             if provider is None:
@@ -376,11 +422,31 @@ class SemanticResolver:
                 continue
             try:
                 reserve = min(.5, remaining / 2) if index < len(chain) - 1 else 0
-                async with asyncio.timeout(min(provider.budget_seconds, remaining - reserve)):
-                    value = await self.interpret(provider, prompt)
+                attempt_budget = provider.budget_seconds
+                async with asyncio.timeout(min(attempt_budget, remaining - reserve)):
+                    provider_prompt = prompt
+                    if name == "local":
+                        value = json.loads(prompt)
+                        if catalog is None:
+                            from src.vivi.capabilities.registry import catalog as default_catalog
+                            value['capabilities'] = default_catalog(False, conversation=True, information=True)
+                        if observation is not None:
+                            value["vehicle_observation"] = observation
+                        value["tasks"] = local_context(session)
+                        if "confirmation_allowed" in task_context:
+                            value["tasks"]["confirmation_allowed"] = task_context["confirmation_allowed"]
+                        value["recent_turns"] = compact_history(history or [])
+                        provider_prompt = json.dumps(value, ensure_ascii=False)
+                    tool_audit = []
+                    value = await self.interpret(provider, provider_prompt, tool_audit=tool_audit)
                     value = self.destination_slots(value, text, session)
             except (Exception,) as exc:
-                provider.unavailable_until = time.monotonic() + self.breaker_seconds
+                if name != "local" or not isinstance(exc, (ValidationError, ValueError)):
+                    provider.consecutive_failures += 1
+                    status = getattr(getattr(exc, 'response', None), 'status_code', None)
+                    cooldown = (min(1., self.breaker_seconds) if name == 'local' and status in {429, 503}
+                                else min(300., self.breaker_seconds * 2 ** min(provider.consecutive_failures - 1, 4)))
+                    provider.unavailable_until = time.monotonic() + cooldown
                 attempts.append(
                     {
                         "provider": name,
@@ -390,6 +456,8 @@ class SemanticResolver:
                         "latency_ms": round((time.perf_counter() - started) * 1000, 2),
                     }
                 )
+                if self.result_recorder:
+                    self.result_recorder(name, "fallback", attempts[-1]["latency_ms"], type(exc).__name__)
                 if isinstance(exc, ValidationError):
                     # Field paths/codes help diagnose repair failures without
                     # persisting model input, prompt text or arbitrary output.
@@ -400,7 +468,15 @@ class SemanticResolver:
             attempts.append(
                 {"provider": name, "outcome": "served", "latency_ms": round((time.perf_counter() - started) * 1000, 2)}
             )
-            guarded = self.parser.guard(text, value, session, memory, history)
+            if tool_audit:
+                attempts[-1]["model_form_calls"] = tool_audit
+            provider.consecutive_failures = 0
+            provider.unavailable_until = 0
+            if self.result_recorder:
+                self.result_recorder(name, "served", attempts[-1]["latency_ms"], None)
+            if name == "local" and hasattr(provider.client, "agenerate_tools"):
+                attempts[-1]["semantic_contract"] = "local-proposals-v2"
+            guarded = value if model_form_answer or tool_audit else self.parser.guard(text, value, session, memory, history)
             # Keep the model's proposed operations for audit, not free-form
             # model text that could contain leaked prompt or false claims.
             attempts[-1]["model_semantic"] = value.model_dump(mode="json", exclude_none=True, exclude={"text"})
@@ -409,6 +485,13 @@ class SemanticResolver:
                 before, after = value.model_dump(), guarded.model_dump()
                 attempts[-1]["semantic_guard_fields"] = [key for key in before if before[key] != after[key]]
             return guarded, name, attempts
+        if model_form_answer:
+            # Failed model filling/submission must not silently pass through a
+            # regex answer or execute via the offline confirmation shortcut.
+            attempts.append({"provider": "rules", "outcome": "served", "latency_ms": 0,
+                             "source": "model_form_unavailable",
+                             "preserve_form": bool(task_context.get("confirmation_allowed"))})
+            return SemanticTurn(act='clarify', text=question.text), 'rules', attempts
         started = time.perf_counter()
         value = self.parser.interpret(text, session, memory, history)
         attempts.append(
@@ -511,16 +594,96 @@ class SemanticResolver:
         }
 
     @staticmethod
-    async def interpret(provider, prompt):
+    async def interpret(provider, prompt, *, tool_audit=None):
         instruction = VOICE_PERSONA + SEMANTIC_INSTRUCTION + TOPIC_INSTRUCTION + "\nFor a disallowed intent return unsupported with a brief safe alternative, no drafts. For emergencies return reply with immediate safe support, no drafts. Return compact JSON: omit null argument slots and unused optional fields; include only the operations and slots needed for this turn."
-        for attempt in range(2):
+        if provider.name == "local":
+            from src.vivi.capabilities.registry import catalog
+            value = json.loads(prompt)
+            capabilities = value.get("capabilities")
+            if capabilities is None:
+                capabilities = catalog(False, conversation=True, information=True)
+            instruction = local_system_instruction()
+            value["capabilities"] = capabilities
+            prompt = native_semantic_prompt(value)
+            tasks = value.get('tasks', {})
+            direct = hasattr(provider.client, 'agenerate_tools')
+            if direct:
+                instruction = LOCAL_TOOL_INSTRUCTION + TOPIC_INSTRUCTION
+                value['utterance'] = coalesce_explicit_revisions(value.get('utterance', ''))
+                visible_capabilities, index = initial_tool_documents(value.get('utterance', ''), capabilities)
+                active = tasks.get('active')
+                waiting = [step for step in (active or {}).get('steps', []) if step.get('status') in {'waiting_slot', 'waiting_confirmation'}]
+                if waiting:
+                    # A short answer may have no catalog keywords. Keep the
+                    # pending operation's docs and bound patch tool available.
+                    names = ({item['name'] for item in visible_capabilities} if index is None else set()) | {step['capability'] for step in waiting}
+                    # Discovery remains callable for a genuinely new topic;
+                    # a keyword-free slot reply does not need the whole index.
+                    index = None
+                    visible_capabilities = [item for item in capabilities if item['name'] in names]
+                    from src.vivi.dialogue.form_tools import current_form
+                    from src.vivi.dialogue.local_tools import local_tool_documents
+                    value['form'] = current_form(tasks, local_tool_documents(visible_capabilities))
+
+                # Operational tools consume the current utterance and typed task
+                # forms. Old free-text assistant questions are not pending slots.
+                operational = {'climate', 'window', 'door', 'hood', 'trunk', 'body', 'seat', 'media'}
+                if visible_capabilities and all(item['name'].split('.')[0] in operational for item in visible_capabilities):
+                    value.pop('recent_turns', None)
+                    selected = {item['name'] for item in visible_capabilities}
+                    active = tasks.get('active')
+                    if active and not any(step['capability'] in selected for step in active.get('steps', [])):
+                        # A form for a different operation is not context for the
+                        # current one. Close it only after a valid new proposal.
+                        tasks.pop('active', None)
+                        tasks.pop('pending_navigation_question', None)
+                    tasks['suspended'] = [task for task in tasks.get('suspended', [])
+                                          if any(step['capability'] in selected for step in task.get('steps', []))]
+                    value.pop('conversation_context', None)
+                if index is not None:
+                    value['available_tool_index'] = index
+                prompt = native_proposal_prompt(value)
+        expanded = False
+        repaired = False
+        limit = 3 if provider.name == 'local' and direct else 2
+        calls = []
+        for attempt in range(limit):
             try:
                 client = provider.client
+                if provider.name == 'local' and direct:
+                    tools = native_proposal_tools(visible_capabilities, include_suggestions=expanded,
+                                                  utterance=value.get('utterance', ''), tasks=tasks)
+                    examples = native_proposal_examples(tools, value.get('form'))
+                    with_examples = getattr(client, 'agenerate_tools_with_examples', None)
+                    if examples and callable(with_examples):
+                        calls = await with_examples(system=instruction, user=prompt, tools=tools, examples=examples)
+                    else:
+                        calls = await client.agenerate_tools(system=instruction, user=prompt, tools=tools)
+                    if tool_audit is not None:
+                        tool_audit.extend({'name': name, 'arguments': args} for name, args in calls if name.startswith('form_'))
+                    if any(name == 'dialogue_find_tools' for name, _ in calls):
+                        if expanded or len(calls) != 1:
+                            raise ValueError('Tool discovery must be a single call, at most once')
+                        query = calls[0][1].get('query')
+                        if not isinstance(query, str) or not query.strip() or len(query) > 500:
+                            raise ValueError('Expected a short tool discovery query')
+                        extra = discover_capabilities(query, capabilities)
+                        if len(extra) > MAX_TOOL_DOCUMENTS:
+                            raise ValueError('Tool discovery query is too broad; name a tool from available_tool_index')
+                        names = {item['name'] for item in [*visible_capabilities, *extra]}
+                        expanded_caps = [item for item in capabilities if item['name'] in names]
+                        if len(expanded_caps) > MAX_TOOL_DOCUMENTS:
+                            raise ValueError('Too many tool documents requested in one turn')
+                        visible_capabilities = expanded_caps
+                        expanded = True
+                        continue
+                    return proposals_to_turn(calls, visible_capabilities, include_suggestions=expanded,
+                                             utterance=value.get('utterance', ''), tasks=tasks)
                 if provider.name == "local" and hasattr(client, "agenerate_tool"):
                     name, payload = await client.agenerate_tool(
                         system=instruction,
                         user=prompt,
-                        tools=semantic_tools(),
+                        tools=local_semantic_tools(capabilities),
                     )
                     if name != "interpret_turn":
                         raise ValueError("Unexpected semantic function")
@@ -539,6 +702,23 @@ class SemanticResolver:
                 )
                 return SemanticTurn.model_validate_json(payload)
             except (ValidationError, ValueError) as exc:
-                if attempt:
+                if repaired or attempt == limit - 1:
                     raise
-                prompt += "\nRepair the JSON schema once, returning the complete semantic turn: " + str(exc)[:1000]
+                repaired = True
+                if provider.name == 'local' and direct:
+                    prompt += ("\nINVALID PREVIOUS TOOL CALLS (correct these; do not repeat): "
+                               + json.dumps(calls, ensure_ascii=False)
+                               + "\nVALIDATION ERROR: " + str(exc)[:1000]
+                               + "\nReturn corrected tool calls for the CURRENT user input only.")
+                else:
+                    prompt += "\nRepair the JSON schema once, returning the complete semantic turn: " + str(exc)[:1000]
+
+
+def local_context(session):
+    """Expose live task state; completed tasks remain in history, never as active work."""
+    context = SemanticResolver.context(session)
+    if session.active and context.get("active"):
+        context["active"]["form_identity"] = session.active.id
+    if session.active and session.active.current_index() is None:
+        context["active"] = None
+    return context

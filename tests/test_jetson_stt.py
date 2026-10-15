@@ -52,9 +52,61 @@ def test_remote_error_is_not_hidden(monkeypatch, tmp_path):
         asyncio.run(adapter.transcribe(tmp_path / 'audio.wav'))
 
 
+def test_native_whisper_utterances_do_not_reuse_previous_decoder_context(monkeypatch):
+    from email.parser import BytesParser
+    from email.policy import default
+
+    from jetson_ai.speech import SpeechModels
+
+    models = SpeechModels()
+    models.stt_engine = 'whisper_cpp'
+    seen = []
+
+    def respond(request):
+        message = BytesParser(policy=default).parsebytes(
+            ('Content-Type: ' + request.headers['content-type'] + '\r\n\r\n').encode()
+            + request.content)
+        fields = {part.get_param('name', header='content-disposition'):
+                  part.get_payload(decode=True) for part in message.iter_parts()}
+        assert fields['no_context'] == b'true'
+        assert fields['language'] == b'vi'
+        seen.append(fields['file'])
+        return httpx.Response(200, json={'text': ' Xin chào '})
+
+    client = httpx.Client
+    monkeypatch.setattr(httpx, 'Client', lambda **kwargs: client(
+        transport=httpx.MockTransport(respond), **kwargs))
+    assert models.transcribe(b'first-utterance') == 'Xin chào'
+    assert models.transcribe(b'second-utterance') == 'Xin chào'
+    assert seen == [b'first-utterance', b'second-utterance']
+
+
+def test_cpu_stt_selection_preserves_cuda_device_for_other_models(monkeypatch, tmp_path):
+    from jetson_ai.speech import SpeechModels
+
+    model = tmp_path / 'ggml-base.bin'
+    model.write_bytes(b'model-path-fixture')
+    log = tmp_path / 'whisper-server.log'
+    log.write_text('using CPU backend\n')
+    monkeypatch.setenv('JETSON_AI_DEVICE', 'cuda')
+    monkeypatch.setenv('JETSON_AI_STT_DEVICE', 'cpu')
+    monkeypatch.setenv('JETSON_AI_STT_ENGINE', 'whisper_cpp')
+    monkeypatch.setenv('JETSON_AI_STT_MODEL', str(model))
+    monkeypatch.setenv('JETSON_AI_STT_LOG', str(log))
+    client = httpx.Client
+    monkeypatch.setattr(httpx, 'Client', lambda **kwargs: client(
+        transport=httpx.MockTransport(lambda _:httpx.Response(200)), **kwargs))
+    speech = SpeechModels()
+    speech._load_stt()
+    assert speech.info['stt']['device'] == 'cpu'
+    assert speech.requested_device == 'cuda'
+
+
 def test_warmup_uses_real_prompt_and_tools_without_executing():
-    from src.vivi.agents.prompts import VOICE_PERSONA
-    from src.vivi.dialogue.planner import SEMANTIC_INSTRUCTION, semantic_tools, warmup_local_client
+    from src.vivi.capabilities.registry import catalog
+    from src.vivi.conversation.guardrails import TOPIC_INSTRUCTION
+    from src.vivi.dialogue.local_tools import LOCAL_TOOL_INSTRUCTION, native_proposal_tools
+    from src.vivi.dialogue.planner import warmup_local_client
     from src.vivi.structured_llm import StructuredChatClient
 
     class Client(StructuredChatClient):
@@ -64,8 +116,8 @@ def test_warmup_uses_real_prompt_and_tools_without_executing():
 
     client = Client(base_url='http://jetson/v1', api_key='', model='qwen', timeout_seconds=60)
     asyncio.run(warmup_local_client(client))
-    assert client.payload['messages'][0]['content'] == VOICE_PERSONA + SEMANTIC_INSTRUCTION
-    assert client.payload['tools'] == semantic_tools()
+    assert client.payload['messages'][0]['content'] == LOCAL_TOOL_INSTRUCTION + TOPIC_INSTRUCTION
+    assert client.payload['tools'] == native_proposal_tools(catalog(False, conversation=True, information=True))
     assert client.payload['max_tokens'] == 1
     assert client.payload['cache_prompt'] is True
 

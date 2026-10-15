@@ -5,6 +5,7 @@ import asyncio
 import shutil
 import subprocess
 import tempfile
+import time
 import wave
 from pathlib import Path
 
@@ -21,6 +22,8 @@ class JetsonSTTAdapter:
 
     def __init__(self, config: Settings):
         self.config = config
+        self._availability_cache = None
+        self._availability_until = 0.
 
     def _headers(self):
         return {"Authorization": f"Bearer {self.config.jetson_ai_token}"} if self.config.ai_server_auth_required else {}
@@ -32,12 +35,16 @@ class JetsonSTTAdapter:
             return False, "Thiếu AI_SERVER_TOKEN cho STT Jetson"
         if shutil.which(self.config.ffmpeg_binary) is None:
             return False, "Thiếu ffmpeg để chuyển audio thành WAV"
+        if self._availability_cache is not None and time.monotonic() < self._availability_until:
+            return self._availability_cache
         try:
             with httpx.Client(timeout=2, trust_env=False) as client:
                 reply = client.get(self.config.jetson_ai_url.rstrip('/') + '/v1/capabilities', headers=self._headers())
                 reply.raise_for_status()
                 state = reply.json()['capabilities']['stt']
-            return state['status'] == 'ready', state.get('error') or state['status']
+            result = state['status'] in {'ready', 'busy'}, state.get('error') or state['status']
+            self._availability_cache, self._availability_until = result, time.monotonic() + 1
+            return result
         except (httpx.HTTPError, ValueError, KeyError, TypeError) as exc:
             return False, f"STT Jetson chưa kết nối: {exc}"
 

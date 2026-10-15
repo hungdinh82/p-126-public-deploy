@@ -34,11 +34,13 @@ async def test_unified_semantic_tool_contract_through_authenticated_jetson_gatew
         payload = json.loads(request.content)
         assert payload["model"] == "vivi-qwen3-1.7b"
         assert payload["tool_choice"] == "required"
-        assert payload["tools"][0]["function"]["name"] == "interpret_turn"
+        names = [item['function']['name'] for item in payload['tools']]
+        assert 'interpret_turn' not in names
+        name, arguments = ('climate_set_temperature', {'value_celsius': 24}) if 'climate_set_temperature' in names else (
+            'dialogue_find_tools', {'query': 'climate.set_temperature'})
         return httpx.Response(200, json={"choices": [{"message": {"content": None, "tool_calls": [{
-            "id": "proposal", "type": "function", "function": {"name": "interpret_turn",
-            "arguments": json.dumps({"act": "request", "actions": [{"capability": "climate.set_temperature",
-                                                                        "arguments": {"value_celsius": 24}}]})},
+            "id": "proposal", "type": "function", "function": {"name": name,
+            "arguments": json.dumps(arguments)},
         }]}}]})
 
     gateway = create_app(ServiceConfig(token="s" * 32), transport=httpx.MockTransport(engine))

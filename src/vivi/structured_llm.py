@@ -155,16 +155,38 @@ class StructuredChatClient:
         }
 
     @staticmethod
-    def _tool_result(response: httpx.Response) -> tuple[str, dict]:
+    def _tool_results(response: httpx.Response) -> list[tuple[str, dict]]:
         message = response.json()["choices"][0]["message"]
         calls = message.get("tool_calls") or []
-        if len(calls) != 1:
+        if not 1 <= len(calls) <= 5:
+            raise ValueError("Planner must return between one and five proposals")
+        result = []
+        for item in calls:
+            call = item["function"]
+            arguments = json.loads(call["arguments"])
+            if not isinstance(arguments, dict):
+                raise ValueError("Tool arguments must be an object")
+            result.append((call["name"], arguments))
+        return result
+
+    @staticmethod
+    def _tool_result(response: httpx.Response) -> tuple[str, dict]:
+        results = StructuredChatClient._tool_results(response)
+        if len(results) != 1:
             raise ValueError("Planner must return exactly one tool call")
-        call = calls[0]["function"]
-        arguments = json.loads(call["arguments"])
-        if not isinstance(arguments, dict):
-            raise ValueError("Tool arguments must be an object")
-        return call["name"], arguments
+        return results[0]
+
+    async def agenerate_tools(self, *, system: str, user: str, tools: list[dict]) -> list[tuple[str, dict]]:
+        payload = self._tool_payload(system, user, tools)
+        payload["parallel_tool_calls"] = True
+        return self._tool_results(await self._acomplete(payload))
+
+    async def agenerate_tools_with_examples(self, *, system: str, user: str,
+                                           tools: list[dict], examples: list[dict]) -> list[tuple[str, dict]]:
+        payload = self._tool_payload(system, user, tools)
+        payload['messages'] = [payload['messages'][0], *examples, payload['messages'][1]]
+        payload['parallel_tool_calls'] = True
+        return self._tool_results(await self._acomplete(payload))
 
     def generate_tool(self, *, system: str, user: str, tools: list[dict]) -> tuple[str, dict]:
         return self._tool_result(self._complete(self._tool_payload(system, user, tools)))

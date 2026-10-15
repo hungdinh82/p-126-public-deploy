@@ -11,7 +11,7 @@ async function readSSE(response,onEvent){
 }
 async function generateStream(text){
  const start=performance.now();let answer='',finished=false,first=null;
- const response=await api('/v1/llm/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contract_version:'1.0',capability:'llm',request_id:callId(),call_id:callId(),attempt:1,stream:true,timeout_ms:60000,input:{messages:[{role:'system',content:'Trả lời bằng tiếng Việt, ngắn gọn. /no_think'},{role:'user',content:text}],max_tokens:128,chat_template_kwargs:{enable_thinking:false}}})});
+ const response=await api('/v1/llm/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contract_version:'1.0',capability:'llm',request_id:callId(),call_id:callId(),attempt:1,stream:true,timeout_ms:180000,input:{messages:[{role:'system',content:'Trả lời bằng tiếng Việt, ngắn gọn. /no_think'},{role:'user',content:text}],max_tokens:128,chat_template_kwargs:{enable_thinking:false}}})});
  await readSSE(response,(event,data)=>{const result=JSON.parse(data);if(event==='error'||result.error)throw new Error(result.error?.message||'SLM stream lỗi');if(event==='delta'){answer+=result.text||'';if(result.text&&first==null){first=performance.now()-start;$('progress').textContent='SLM đang streaming · phần đầu '+seconds(first)}$('answer').textContent=answer}else if(event==='done'){finished=true;answer=result.result.text;$('answer').textContent=answer;stage('llm',result.latency_ms);streamTrace('POST /v1/llm/generate · SSE',{first_chunk_ms:first,result})}});
  if(!finished)throw new Error('SLM stream kết thúc thiếu done');return answer;
 }

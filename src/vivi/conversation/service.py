@@ -15,7 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from src.vivi.agents.prompts import VOICE_PERSONA
 from src.vivi.conversation.guardrails import TOPIC_INSTRUCTION, assess_topic, output_violation
 from src.vivi.information.policy import clock_question, information_decision
-from src.vivi.structured_llm import strict_schema
+from src.vivi.structured_llm import compact_history, strict_schema
 from src.vivi.text import normalize_text
 
 
@@ -231,10 +231,11 @@ VALIDATION_ERRORS = {
 
 
 class ConversationService:
-    def __init__(self, providers=None, *, fallback_chains=None, enabled=True):
+    def __init__(self, providers=None, *, fallback_chains=None, enabled=True, chain_provider=None):
         self.providers = providers or {}
         self.fallback_chains = fallback_chains or {}
         self.enabled = enabled
+        self.chain_provider = chain_provider
         self.unavailable_until = {}
 
     async def respond(
@@ -276,7 +277,8 @@ class ConversationService:
         schema = strict_schema((GroundedResponse if evidence else Response).model_json_schema())
         if passages:
             schema["properties"]["evidence_ids"]["items"]["enum"] = list(passages)
-        chain = self.fallback_chains.get(provider, [provider] if provider == "local" else [provider, "local"])
+        chain = (self.chain_provider(provider) if self.chain_provider is not None else
+                 self.fallback_chains.get(provider, [provider] if provider == "local" else [provider, "local"]))
         attempts = []
         chain = list(dict.fromkeys(chain))
         deadline = time.monotonic() + budget_seconds if budget_seconds is not None else None
@@ -314,6 +316,14 @@ class ConversationService:
                     },
                     ensure_ascii=False,
                 )
+                if name == 'local':
+                    current = json.loads(payload)
+                    current['recent_turns'] = [] if evidence else compact_history(history or [])
+                    # Keep the current question closest to generation; cloud
+                    # retains main's complete history and original ordering.
+                    question = current.pop('question')
+                    current['question'] = question
+                    payload = json.dumps(current, ensure_ascii=False, separators=(',', ':'))
                 attempt_budget = min(candidate.budget_seconds, remaining - reserve)
                 request_limit = asyncio.timeout(attempt_budget)
                 async with request_limit:
