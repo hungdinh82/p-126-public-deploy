@@ -570,6 +570,17 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
         elif event.kind == "action" and event.action:
             semantic, served, attempts = SemanticTurn(act="request", actions=[event.action]), "event", []
         else:
+            observation = None
+            if event.provider == "local":
+                try:
+                    vehicle = await services.action_gateway.vehicle.get_state(event.session_id)
+                    observation = {"state_version": vehicle.state_version,
+                        "door_open": {zone: state.open for zone, state in vehicle.door_states},
+                        "hood_open": vehicle.hood_open, "trunk_open": vehicle.trunk_open}
+                except Exception:
+                    # Model chat remains usable if telemetry is unavailable;
+                    # execution still requires the vehicle gateway's validation.
+                    observation = {"available": False}
             semantic, served, attempts = await external_read(
                 resolver.resolve(
                     event.text,
@@ -577,6 +588,7 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
                     requested=event.provider,
                     history=turn["history"],
                     memory=turn["memory"],
+                    observation=observation,
                     catalog=catalog(services.navigation is not None, conversation=services.conversation.enabled,
                                     information=services.information is not None and services.information.online),
                 ),

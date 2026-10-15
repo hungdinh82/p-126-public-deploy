@@ -11,7 +11,7 @@ from src.vivi.dialogue.local_semantics import local_semantic_tools
 from src.vivi.dialogue.parser import Lexer
 from src.vivi.dialogue.tool_discovery import DISCOVERY_TERMS
 
-LOCAL_TOOL_INSTRUCTION = """Phân tích yêu cầu hiện tại của người dùng và gọi công cụ đúng. Với thao tác xe: form_create tạo form; khi có form, đọc values và field_schema rồi dùng form_update để điền hoặc sửa values. Không hỏi lặp lại khi người dùng đã bổ sung vị trí, hiểu không dấu và lỗi gõ nhẹ. Khi form đủ và người dùng đồng ý, gọi form_submit với toàn bộ values đã được hỏi xác nhận. Không tự chọn vị trí bị thiếu. Chỉ trả lời người dùng bằng tiếng Việt. Khi người dùng lạnh cần làm ấm bằng tăng nhiệt độ; khi nóng cần làm mát bằng giảm nhiệt độ. Đề xuất thao tác, không tự thực hiện. Tăng/giảm hoặc than nóng/lạnh dùng climate_adjust_temperature(direction, amount); không tự bịa nhiệt độ đích, amount mặc định 2 độ. Câu nghe không hiểu dùng dialogue_clarify để hỏi lại, không dùng reply. Với lệnh cấm/phủ định, điều kiện hoặc hẹn giờ: hỏi lại, không đề xuất thao tác.
+LOCAL_TOOL_INSTRUCTION = """Phân tích yêu cầu hiện tại của người dùng và gọi công cụ đúng. Với thao tác xe: form_create tạo form; khi có form, đọc values và field_schema rồi dùng form_update để điền hoặc sửa values. Không hỏi lặp lại khi người dùng đã bổ sung vị trí, hiểu không dấu và lỗi gõ nhẹ. Khi form đủ và người dùng đồng ý, gọi form_submit với toàn bộ values đã được hỏi xác nhận. Không tự chọn vị trí bị thiếu. MỞ cửa/cốp/capo dùng open=true, ĐÓNG dùng open=false. Luôn giữ đúng chiều thao tác của câu hiện tại, kể cả khi câu trước là mở. Chỉ trả lời người dùng bằng tiếng Việt. Khi người dùng lạnh cần làm ấm bằng tăng nhiệt độ; khi nóng cần làm mát bằng giảm nhiệt độ. Đề xuất thao tác, không tự thực hiện. Tăng/giảm hoặc than nóng/lạnh dùng climate_adjust_temperature(direction, amount); không tự bịa nhiệt độ đích, amount mặc định 2 độ. Câu nghe không hiểu dùng dialogue_clarify để hỏi lại, không dùng reply. Với lệnh cấm/phủ định, điều kiện hoặc hẹn giờ: hỏi lại, không đề xuất thao tác.
 """
 
 
@@ -19,7 +19,7 @@ GUIDANCE = {
     'trunk.set_open': 'Dùng cho cốp xe/cốp sau/cửa hậu. Không phải cửa ghế sau, cửa kính hay nắp capo. Chỉ open=true (mở) hoặc false (đóng).',
     'hood.set_open': 'Dùng cho nắp capo/khoang phía trước. Không phải cốp sau hoặc cửa cabin.',
     'window.set_position': 'Dùng cho cửa kính/cửa sổ. Bên tài=driver; bên phụ=front_passenger; sau trái=rear_left; sau phải=rear_right. Mở/hạ=100, đóng/nâng=0. Giữ phần trăm được nói. Không mở cửa cabin.',
-    'door.set_open': 'Chỉ mở/đóng cánh cửa cabin. Không dùng cho cửa sổ/cửa kính, cốp, capo hoặc mở khóa.',
+    'door.set_open': 'Mở cửa: open=true. Đóng cửa: open=false. Bên tài/cửa lái/tài xế là driver. Cửa còn lại phải căn cứ trạng thái cửa đang được cung cấp; không đoán vị trí. Chỉ mở/đóng cánh cửa cabin. Không dùng cho cửa sổ/cửa kính, cốp, capo hoặc mở khóa.',
     'door.set_lock': 'Chỉ khóa/mở khóa cửa cabin; không mở cánh cửa hoặc kính.',
     'climate.set_temperature': 'Đặt nhiệt độ dùng value_celsius. Tăng/giảm dùng temperature_delta_celsius, chỉ chọn một loại. Than nóng: delta=-2. Than lạnh: delta=2. Ví dụ "tôi lạnh quá" -> {"temperature_delta_celsius":2}.',
     'media.play': 'Phát/bật/mở nhạc hoặc tiếp tục nghe nhạc. Nhạc chung gọi với {}. Chỉ điền media_query khi có tên bài, ca sĩ, thể loại hoặc tâm trạng được nói rõ; ví dụ nhạc thư giãn -> {"media_query":"thư giãn"}. Không tự đổi bài hoặc âm lượng. Demo UI phát nhạc mô phỏng, không khẳng định đã tìm được bản thu của ca sĩ.',

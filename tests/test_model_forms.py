@@ -59,7 +59,7 @@ def test_incomplete_or_closed_form_cannot_submit_and_update_is_atomic():
 
 def test_update_must_add_or_change_information():
     _, docs, tasks, payload = prepared('waiting_slot')
-    unchanged = {**payload, 'values': {'open': True}}
+    unchanged = {**payload, 'values': {'zone': 'rear_right'}}
     with pytest.raises(ValueError, match='No form values changed'):
         decode_form_call([('form_update', unchanged)], docs, tasks)
 
@@ -80,7 +80,7 @@ async def test_bad_model_submit_cannot_execute_through_rules_fallback(services, 
             if update:
                 return [('form_update', {'form_id': update['form_id']['enum'][0],
                     'revision': update['revision']['enum'][0], 'values': {'zone': 'rear_right'}})]
-            return [('form_create', {'operation': 'door_set_open', 'values': {'open': True}})]
+            return [('form_create', {'operation': 'door_open', 'values': {'zone': None}})]
 
     graph, _, gateway = build(services, tmp_path, local=Model())
     graph.default_provider = 'local'
@@ -100,9 +100,72 @@ from tests.test_long_term_memory import services as services  # noqa: E402
 
 def test_compound_form_creation_is_ordered_and_all_or_nothing():
     docs = local_tool_documents(catalog(False))
-    calls = [('form_create', {'operation': 'trunk_set_open', 'values': {'open': True}}),
+    calls = [('form_create', {'operation': 'trunk_open', 'values': {}}),
              ('form_create', {'operation': 'window_set_position', 'values': {'zone': 'driver', 'position_percent': 100}})]
     result = decode_form_call(calls, docs, {})
     assert [name for _, name, _ in result] == ['trunk_set_open', 'window_set_position']
     with pytest.raises(ValueError):
         decode_form_call([*calls, ('form_create', {'operation': 'unknown', 'values': {}})], docs, {})
+
+
+@pytest.mark.parametrize('opening', [True, False])
+def test_location_collection_cannot_flip_reviewed_operation(opening):
+    session, docs, _, _ = prepared('waiting_slot')
+    session.active.steps[0].draft.arguments.open = opening
+    session.active.steps[0].resolved_arguments = {'open': opening, 'zone': 'rear_right'}
+    tasks = local_context(session)
+    form = current_form(tasks, docs)
+    assert form['operation'] == ('door_open' if opening else 'door_close')
+    payload = {'form_id': form['form_id'], 'revision': form['revision'], 'values': {'open': not opening}}
+    with pytest.raises(ValueError):
+        decode_form_call([('form_update', payload)], docs, tasks)
+
+
+def test_model_close_operation_maps_to_false_without_parsing_utterance():
+    docs = local_tool_documents(catalog(False))
+    decoded = decode_form_call([('form_create', {'operation': 'door_close', 'values': {'zone': 'all'}})], docs, {})
+    assert decoded == [('create', 'door_set_open', {'zone': 'all', 'open': False})]
+
+
+def test_location_patch_cannot_mix_conflicting_representations():
+    _, docs, tasks, payload = prepared('waiting_slot')
+    conflicting = {**payload, 'values': {'zone': 'driver', 'target_side': 'right', 'target_row': 'rear'}}
+    with pytest.raises(ValueError, match='never both'):
+        decode_form_call([('form_update', conflicting)], docs, tasks)
+
+
+@pytest.mark.asyncio
+async def test_remaining_door_request_receives_fresh_state_and_closes_only_remaining(services, tmp_path):
+    import json
+
+    from tests.test_dialogue_v2 import build, invoke
+
+    class Model:
+        async def agenerate_tools(self, **kwargs):
+            context = json.loads(kwargs['user'].splitlines()[1])
+            form = context.get('form')
+            if kwargs['user'].endswith('ok'):
+                return [('form_submit', {k: form[k] for k in ('form_id', 'revision', 'values')})]
+            observation = context['vehicle_observation']['door_open']
+            if kwargs['user'].endswith('mở tất cả cửa'):
+                assert not any(observation.values())
+                return [('form_create', {'operation': 'door_open', 'values': {'zone': 'all'}})]
+            if kwargs['user'].endswith('đóng cửa bên tài'):
+                assert all(observation.values())
+                return [('form_create', {'operation': 'door_close', 'values': {'zone': 'driver'}})]
+            assert kwargs['user'].endswith('đóng hết 3 cửa còn lại')
+            assert observation == {'driver': False, 'front_passenger': True, 'rear_left': True, 'rear_right': True}
+            return [('form_create', {'operation': 'door_close',
+                'values': {'zones': ['front_passenger', 'rear_left', 'rear_right']}})]
+
+    graph, _, gateway = build(services, tmp_path, local=Model())
+    graph.default_provider = 'local'
+    try:
+        for i, text in enumerate(['mở tất cả cửa', 'ok', 'đóng cửa bên tài', 'ok', 'đóng hết 3 cửa còn lại', 'ok']):
+            result = await invoke(graph, text, f'door-{i}')
+            if text.startswith('đóng'):
+                assert result['output']['action_proposal']['arguments']['open'] is False
+        assert result['output']['status'] == 'action_verified'
+        assert all(not door['open'] for door in gateway.vehicle.state_for('driver').door_states.model_dump().values())
+    finally:
+        graph.close()

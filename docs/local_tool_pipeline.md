@@ -170,3 +170,35 @@ step from repeated AnyIO cancellation before closing its generator. The Jetson
 launcher writes gateway output to `logs/gateway-run.log`, so a stalled terminal
 cannot block its HTTP event loop. No model weights, inference backend or GPU
 scheduler were changed.
+
+### Close/open polarity and remaining cabin doors
+
+The 2026-10-15 log contained a confirmed wrong proposal: `đóng hết 3 cửa còn lại`
+created `door_set_open(open=true)`; submit correctly echoed that wrong form.
+This was a model interpretation error, not a reversed vehicle actuator.
+
+The model-facing create operations now distinguish `door_open` and `door_close`
+(and equivalent hood/trunk/body operations). These typed operation names map to
+canonical `set_open(bool)` at the tool boundary. No utterance regex chooses the
+polarity. While a form collects location, `form_update` cannot flip its known
+`open` value; changing operation requires a new create request. Submit still
+carries every reviewed canonical parameter, including the boolean.
+
+Create schemas require an explicit nullable single-zone value: unknown is null,
+not an invented driver default or an omitted explicit location. Multi-zone and
+partial-coordinate branches remain supported. Updates cannot mix concrete zones
+with conflicting partial coordinates. The cabin-only phrase `tất cả cửa` no
+longer shortlists the body tool that also opens the hood and trunk.
+
+Local inference receives a compact fresh vehicle observation (state version,
+cabin door openness, hood and trunk state). This lets the model resolve `còn lại`
+against current facts after a completed form has closed. The host does not select
+the requested doors from language. Cloud prompt/contract are unchanged. Missing
+telemetry is represented as unavailable and does not prevent ordinary model chat.
+
+Regression checks cover immutable form polarity, nullable/multi-zone schemas,
+cabin versus body discovery, and fresh state after closing the driver door. A
+real-Qwen memory-vehicle run completed seven turns: open all cabin doors, OK,
+request closing, specify driver, OK, close the remaining three, OK. The final
+state had all four cabin doors closed; create/update/submit were model calls with
+no parser repair. Raw per-run measurements remain outside Git.

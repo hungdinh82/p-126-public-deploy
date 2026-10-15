@@ -326,7 +326,7 @@ class SemanticResolver:
             return list(self.fallback_chains[requested])
         return [requested] if requested == "local" else [requested, "local"]
 
-    async def resolve(self, text, session, *, requested="rules", history=None, memory=None, catalog=None):
+    async def resolve(self, text, session, *, requested="rules", history=None, memory=None, catalog=None, observation=None):
         attempts = []
         from src.vivi.dialogue.answers import AnswerResolver
         from src.vivi.dialogue.local_answers import resolve_location_component
@@ -429,6 +429,8 @@ class SemanticResolver:
                         if catalog is None:
                             from src.vivi.capabilities.registry import catalog as default_catalog
                             value['capabilities'] = default_catalog(False, conversation=True, information=True)
+                        if observation is not None:
+                            value["vehicle_observation"] = observation
                         value["tasks"] = local_context(session)
                         if "confirmation_allowed" in task_context:
                             value["tasks"]["confirmation_allowed"] = task_context["confirmation_allowed"]

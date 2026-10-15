@@ -151,3 +151,8 @@ def test_missing_absolute_target_rejects_fabrication_instead_of_correcting_the_a
         proposals_to_turn([('climate_set_temperature', {'value_celsius': 23})], catalog(False), utterance='tăng nhiệt độ điều hòa lên')
     frame = proposals_to_turn([('climate_set_temperature', {'value_celsius': 24})], catalog(False), utterance='đặt nhiệt độ 24 độ')
     assert frame.actions[0].arguments.value_celsius == 24
+
+
+def test_all_cabin_doors_do_not_select_hood_and_trunk_body_tool():
+    for text in ['mở tất cả cửa', 'đóng toàn bộ cửa']:
+        assert {c['name'] for c in discover_capabilities(text, catalog(False))} == {'door.set_open'}

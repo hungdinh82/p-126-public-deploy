@@ -156,7 +156,7 @@ async def test_model_fills_location_form_without_lexical_override(services, tmp_
         async def agenerate_tools(self, **kwargs):
             self.calls += 1
             if self.calls == 1:
-                return [('form_create', {'operation': 'door_set_open', 'values': {'open': True}})]
+                return [('form_create', {'operation': 'door_open', 'values': {'zone': None}})]
             if self.calls == 3:
                 assert kwargs['user'].endswith('ok')
                 tool = next(t['function'] for t in kwargs['tools'] if t['function']['name'] == 'form_submit')

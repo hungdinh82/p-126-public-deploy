@@ -25,7 +25,7 @@ DISCOVERY_TERMS = {
     'door.set_lock': ('khóa', 'khoá'),
     'hood.set_open': ('capo', 'ca pô', 'ca-pô'),
     'trunk.set_open': ('cốp', 'cửa hậu'),
-    'body.set_open': ('tất cả cửa', 'toàn bộ cửa'),
+    'body.set_open': ('tất cả cửa nắp capo và cốp', 'toàn bộ cửa nắp capo và cốp'),
     'seat.set_heat_level': ('sưởi ghế',),
     'media.play': ('nhạc', 'bài hát', 'nghe bài', 'âm thanh', 'play music', 'phát lại nhạc', 'tiếp tục nhạc'),
     'media.pause': ('dừng nhạc', 'tắt nhạc', 'tạm dừng nhạc', 'ngừng nhạc', 'pause music'),
