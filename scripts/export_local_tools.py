@@ -12,6 +12,6 @@ if __name__ == '__main__':
     parser.add_argument('--output', type=Path, required=True)
     args = parser.parse_args()
     result = {'tools': local_tool_documents(catalog(args.navigation)),
-              '_meta': {'contract': 'local-proposals-v1', 'proposalOnly': True, 'mcpTransport': False}}
+              '_meta': {'contract': 'local-proposals-v2', 'proposalOnly': True, 'mcpTransport': False}}
     args.output.write_text(json.dumps(result, ensure_ascii=False, indent=2) + '\n')
     print(f'{len(result["tools"])} tools written to {args.output}')

@@ -10,19 +10,9 @@ from src.vivi.dialogue.local_semantics import local_semantic_tools
 from src.vivi.dialogue.parser import Lexer
 from src.vivi.dialogue.tool_discovery import DISCOVERY_TERMS
 
-LOCAL_TOOL_INSTRUCTION = '''Bạn là bộ phân tích yêu cầu tiếng Việt trên xe. Gọi tool để biểu diễn chính xác điều NGƯỜI DÙNG YÊU CẦU; backend sẽ kiểm tra, xác nhận và thực thi sau. Không nói đã làm xong.
-Chỉ phân tích utterance hiện tại. tasks và history là ngữ cảnh, không phải yêu cầu mới. Không lặp việc đã xong. Không thêm thao tác không được yêu cầu.
-Tool được đưa vào theo tài liệu liên quan. Nếu thiếu tool phù hợp, gọi dialogue_find_tools để lấy thêm tài liệu; không dùng một tool gần giống để thay thế.
-Cốp xe/cốp sau là trunk_set_open; nắp capo là hood_set_open; cửa kính/cửa sổ là window_set_position; cửa xe là door_set_open. Mở: open=true; đóng: open=false. Kính mở/hạ: position_percent=100; kính đóng/nâng: position_percent=0.
-Bên tài/ghế lái là driver; bên phụ là front_passenger. Không nói vị trí thì bỏ zone. Chọn một trong zone, zones, hoặc target_side/target_row; không điền trùng.
-Đặt nhiệt độ dùng value_celsius; tăng/giảm dùng temperature_delta_celsius. Nóng thì giảm 2 độ; lạnh thì tăng 2 độ.
-Các đoạn nói nối tiếp là CHUNG một yêu cầu: giữ mọi thao tác độc lập, chỉ sửa giá trị được đính chính bằng giá trị cuối. Không lặp thao tác khi người dùng nhắc lại. Ví dụ đặt 20 độ, à không 22 độ, mở cốp: đề xuất đặt 22 độ VÀ mở cốp, không đặt 20 độ.
-"à không", "ý tôi là", "sửa thành" là ĐÍNH CHÍNH giá trị trước đó, không phải lệnh cấm hay câu không hiểu. "đặt 20 độ, à không 22 độ" nghĩa là đặt 22 độ. Vẫn gọi các tool cho yêu cầu đã sửa và mọi thao tác bổ sung.
-Chỉ hỏi trạng thái mới dùng vehicle_get_status, không tự thêm báo cáo trạng thái trước thao tác.
-Yêu cầu rõ ràng như "mở...", "đặt..." phải gọi tool thao tác trực tiếp. Nếu muốn tự gợi ý một việc chưa được yêu cầu, lấy tài liệu về công cụ gợi ý qua dialogue_find_tools trước. Không gọi tool gợi ý cùng với tool thao tác.
-Không hiểu thì dùng dialogue_clarify và hỏi lại ngắn gọn. Chào hỏi dùng dialogue_reply. Không đoán thao tác từ câu nghe không rõ. Lệnh cấm rõ ràng (đừng mở cửa), điều kiện hoặc hẹn giờ thì hỏi lại bằng dialogue_clarify. Đính chính "à không" vẫn được thực hiện với giá trị đã sửa.
-Không điền null hoặc tham số không liên quan. Một lượt chỉ đề xuất tối đa năm thao tác, theo thứ tự người dùng nói. Các tool call là đề xuất có thứ tự, không phải lệnh chạy đồng thời.
-'''
+LOCAL_TOOL_INSTRUCTION = """Phân tích yêu cầu hiện tại của người dùng và gọi công cụ đúng. Khi người dùng lạnh cần làm ấm bằng tăng nhiệt độ; khi nóng cần làm mát bằng giảm nhiệt độ. Đề xuất thao tác, không tự thực hiện. Tăng/giảm hoặc than nóng/lạnh dùng climate_adjust_temperature(direction, amount); không tự bịa nhiệt độ đích, amount mặc định 2 độ. Câu nghe không hiểu dùng dialogue_clarify để hỏi lại, không dùng reply. Với lệnh cấm/phủ định, điều kiện hoặc hẹn giờ: hỏi lại, không đề xuất thao tác.
+"""
+
 
 GUIDANCE = {
     'trunk.set_open': 'Dùng cho cốp xe/cốp sau/cửa hậu. Không phải cửa ghế sau, cửa kính hay nắp capo. Chỉ open=true (mở) hoặc false (đóng).',
@@ -31,6 +21,28 @@ GUIDANCE = {
     'door.set_open': 'Chỉ mở/đóng cánh cửa cabin. Không dùng cho cửa sổ/cửa kính, cốp, capo hoặc mở khóa.',
     'door.set_lock': 'Chỉ khóa/mở khóa cửa cabin; không mở cánh cửa hoặc kính.',
     'climate.set_temperature': 'Đặt nhiệt độ dùng value_celsius. Tăng/giảm dùng temperature_delta_celsius, chỉ chọn một loại. Than nóng: delta=-2. Than lạnh: delta=2. Ví dụ "tôi lạnh quá" -> {"temperature_delta_celsius":2}.',
+    'media.play': 'Phát/bật/mở nhạc hoặc tiếp tục nghe nhạc. Nhạc chung gọi với {}. Chỉ điền media_query khi có tên bài, ca sĩ, thể loại hoặc tâm trạng được nói rõ; ví dụ nhạc thư giãn -> {"media_query":"thư giãn"}. Không tự đổi bài hoặc âm lượng. Demo UI phát nhạc mô phỏng, không khẳng định đã tìm được bản thu của ca sĩ.',
+    'media.pause': 'Dừng/tắt/tạm dừng nhạc, arguments={}. Không tắt loa trả lời của trợ lý; bật/tắt loa là cài đặt UI.',
+    'body.set_open': 'Chỉ dùng khi người dùng yêu cầu cùng lúc TẤT CẢ cửa cabin, capo VÀ cốp. Nếu chỉ nói tất cả cửa cabin: door_set_open(zone=all); tất cả cửa kính: window_set_position(zone=all).',
+    'seat.set_heat_level': 'Sưởi ghế với level 0=tắt, 1–3=mức sưởi. Giữ vị trí ghế được nói, thiếu vị trí thì để backend hỏi. Không chỉnh nhiệt độ điều hòa, vị trí ghế hay bật làm mát ghế.',
+    'manual.search': 'Tra hướng dẫn/thông số/cách dùng từ cẩm nang; không đọc số đo live hay điều khiển xe. Giữ query hiện tại. Chỉ điền model/năm/AC/DC khi có căn cứ.',
+    'conversation.respond': 'Chỉ dùng khi hiểu được yêu cầu trò chuyện/kiến thức/truyện. Không dùng cho câu STT không hiểu hoặc câu hỏi trợ lý cũ; câu nghe không rõ dùng dialogue_clarify. Backend tự gắn query hiện tại, model chỉ chọn mode nếu cần.',
+    'navigation.set_gear': 'Chỉ đề xuất số P hoặc D được yêu cầu. Chuyển D không chấp thuận tuyến mới; backend kiểm tra cửa/capo/cốp và tuyến trước khi đổi số.',
+    'navigation.search': 'Tìm địa điểm và chờ người dùng chọn, không tự khởi hành. Không tạo place_handle hoặc tọa độ. pharmacy/charging là bộ lọc; tìm thông tin chung trên mạng dùng web_search.',
+    'navigation.plan': 'Lập tuyến xem trước tới điểm đến và nơi xuất phát nếu được nói. Không tự bắt đầu dẫn đường hoặc đoán route_revision.',
+    'navigation.select': 'Chỉ dùng place_handle có trong các kết quả của biểu mẫu hiện tại; không tự tạo ID hoặc chọn hộ khi người dùng chưa chọn.',
+    'navigation.refine': 'Bổ sung/chỉnh điểm đến của biểu mẫu hiện tại: một trong query/destination, choice_handle được cấp hoặc reject_candidates=true. Không lấy điểm đến từ chủ đề đã đóng.',
+    'navigation.start': 'Chỉ bắt đầu tuyến người dùng đang xác nhận với route_revision do backend cung cấp. Không suy quyền xác nhận từ một yêu cầu mới.',
+    'navigation.cancel': 'Đóng bản nháp tìm/chọn tuyến đang chờ theo route_revision; giữ hành trình đã bắt đầu.',
+    'navigation.decline': 'Từ chối bắt đầu tuyến đang được hỏi; dùng đúng route_revision, không tự huỷ hành trình khác.',
+    'navigation.stop': 'Dừng hành trình đang chạy. Không phải dừng nhạc hoặc đóng một biểu mẫu xe.',
+    'navigation.end': 'Kết thúc hành trình theo yêu cầu; khác tạm dừng để tiếp tục sau.',
+    'trip.plan': 'Lập kế hoạch chuyến đi hoặc khứ hồi, độc lập tuyến đang chạy; query là đích, origin_query là xuất phát, trip_kind=round_trip khi quay về.',
+    'trip.select': 'Chọn place_handle từ kết quả trip_plan hiện tại; giữ đúng plan_id và route_revision được cấp.',
+    'trip.refine': 'Bổ sung kế hoạch hiện tại bằng query hoặc choice_handle; giữ đúng plan_id/route_revision, không dùng dữ liệu của kế hoạch đã đóng.',
+    'trip.start': 'Bắt đầu kế hoạch đang được xác nhận với plan_id/route_revision hiện tại; không tự khởi hành ngay sau khi chỉ hỏi đường.',
+    'trip.decline': 'Từ chối kế hoạch đang được hỏi, dùng plan_id/route_revision hiện tại.',
+    'trip.cancel': 'Huỷ kế hoạch được chỉ rõ bằng plan_id/route_revision hiện tại, không tự suy ID từ lịch sử.',
     'vehicle.get_status': 'Chỉ dùng khi hỏi/kiểm tra trạng thái hoặc số đo. Không tự thêm summary khi yêu cầu mở cốp, cửa kính hoặc điều chỉnh nhiệt độ.',
 }
 
@@ -89,21 +101,20 @@ def local_tool_documents(capabilities):
                      '_meta': {'capability': name, 'proposalOnly': True,
                                'discoveryTerms': list(DISCOVERY_TERMS.get(name, ()))}})
         if name == 'climate.set_temperature':
-            docs[-1]['description'] = 'ĐẶT nhiệt độ tuyệt đối khi nêu nhiệt độ đích, ví dụ đặt 23 độ: value_celsius=23. Không dùng cho than nóng/lạnh hoặc tăng/giảm tương đối.'
-            for tool_name, description, sign in (
-                ('climate_warm_cabin', 'Làm ẤM cabin bằng TĂNG nhiệt độ. Dùng khi người dùng than LẠNH hoặc yêu cầu tăng nhiệt độ. amount là số độ tăng; không nói số thì bỏ amount, backend mặc định 2 độ.', 1),
-                ('climate_cool_cabin', 'Làm MÁT cabin bằng GIẢM nhiệt độ. Dùng khi người dùng than NÓNG hoặc yêu cầu giảm nhiệt độ. amount là số độ giảm; không nói số thì bỏ amount, backend mặc định 2 độ.', -1),
-            ):
-                docs.append({'name': tool_name, 'description': description,
-                             'inputSchema': {'type': 'object', 'properties': {'amount': {
-                                 'type': 'number', 'exclusiveMinimum': 0, 'maximum': 30}}, 'additionalProperties': False},
-                             'annotations': {'readOnlyHint': False},
-                             '_meta': {'capability': name, 'temperatureSign': sign, 'proposalOnly': True}})
+            docs[-1]['description'] = 'Chỉ ĐẶT nhiệt độ tuyệt đối khi người dùng nêu nhiệt độ đích: value_celsius là đúng số đó. Không dùng cho than nóng/lạnh hoặc tăng/giảm tương đối; không tự chọn nhiệt độ mặc định.'
+            docs.append({'name': 'climate_adjust_temperature',
+                         'description': 'Điều chỉnh tương đối nhiệt độ. Người dùng lạnh: tăng nhiệt độ (increase). Người dùng nóng: giảm nhiệt độ (decrease). amount là số độ dương; không nói số thì bỏ amount, mặc định 2 độ.',
+                         'inputSchema': {'type': 'object', 'properties': {
+                             'direction': {'type': 'string', 'enum': ['increase', 'decrease']},
+                             'amount': {'type': 'number', 'exclusiveMinimum': 0, 'maximum': 30}},
+                             'required': ['direction'], 'additionalProperties': False},
+                         'annotations': {'readOnlyHint': False},
+                         '_meta': {'capability': name, 'relativeTemperature': True, 'proposalOnly': True}})
     for act in ('clarify', 'reply', 'unsupported'):
         docs.append({'name': f'dialogue_{act}', 'description': {
-            'clarify': 'Hỏi lại khi yêu cầu nghe không rõ, không hiểu, thiếu nghĩa, hoặc chưa thể đề xuất an toàn. Không tự đoán.',
+            'clarify': 'CHỌN TOOL NÀY khi nghe không rõ hoặc chưa hiểu nghĩa câu nói. Hỏi lại bằng một câu hỏi ngắn, không nhại input. Không chọn unsupported cho câu nghe không rõ.',
             'reply': 'Trả lời ngắn cho lời chào/cảm ơn, không dùng để trả lời thay tool kiến thức hoặc thực hiện thao tác.',
-            'unsupported': 'Giải thích thao tác không được hỗ trợ; không đề xuất thao tác thay thế không được yêu cầu.',
+            'unsupported': 'Chỉ dùng khi HIỂU RÕ thao tác nhưng hệ thống chưa có executor hỗ trợ. Câu nghe sai/không hiểu phải dùng dialogue_clarify. Không tự đề xuất thao tác thay thế.',
         }[act], 'inputSchema': {'type': 'object', 'properties': {'text': {'type': 'string'}},
                                'required': ['text'], 'additionalProperties': False},
                      'annotations': {'readOnlyHint': True}, '_meta': {'act': act, 'proposalOnly': True}})
@@ -124,27 +135,82 @@ def local_tool_documents(capabilities):
     return docs
 
 
-def native_proposal_tools(capabilities, *, include_suggestions=False, utterance=''):
+def native_proposal_tools(capabilities, *, include_suggestions=False, utterance='', tasks=None):
     tools = [{'type': 'function', 'function': {'name': item['name'], 'description': item['description'],
                                             'parameters': item['inputSchema']}}
             for item in local_tool_documents(capabilities)
             if include_suggestions or item['_meta'].get('act') != 'offer']
-    # Bind an explicitly named, unambiguous target into the generation schema.
-    # No target is guessed. Multiple targets/tools, negation and exclusions stay
-    # unconstrained so they can be resolved by the existing dialogue machinery.
+    # The host owns the current question; do not let the model substitute a
+    # previous assistant question as the query sent to the answer generator.
+    for tool in tools:
+        if tool['function']['name'] == 'conversation_respond':
+            schema = tool['function']['parameters']
+            schema['properties'].pop('query', None)
+            schema['required'] = [key for key in schema.get('required', []) if key != 'query']
+    # Partial locations must remain partial: "right" is not "rear right".
     zoned = {'window.set_position', 'door.set_open', 'door.set_lock', 'seat.set_heat_level'}
     candidates = [item['name'] for item in capabilities if item['name'] in zoned]
     normalized = Lexer().normalize(utterance)
     locations = set(re.findall(r'\b(?:driver|front_passenger|rear_left|rear_right|all)\b', normalized))
-    if len(candidates) == len(locations) == 1 and not re.search(r'\b(?:khong|dung|tru|ngoai)\b', normalized):
-        name, location = candidates[0].replace('.', '_'), next(iter(locations))
-        for tool in tools:
-            if tool['function']['name'] == name:
-                properties = tool['function']['parameters']['oneOf'][0]['properties']
-                properties['zone'] = {'type': 'string', 'const': location}
-                tool['function']['parameters'] = {'type': 'object', 'properties': properties,
-                                                   'required': ['zone'], 'additionalProperties': False}
-    return tools
+    ambiguous = re.search(r'\b(?:khong|dung|tru|ngoai|do|ay)\b', normalized)
+    if len(candidates) == 1 and len(locations) <= 1 and not ambiguous:
+        bindings = {}
+        if locations:
+            bindings['zone'] = next(iter(locations))
+        else:
+            for field, words in (('target_side', {'trai': 'left', 'phai': 'right'}),
+                                 ('target_row', {'truoc': 'front', 'sau': 'rear'})):
+                values = {value for word, value in words.items() if re.search(r'\b' + word + r'\b', normalized)}
+                if len(values) > 1:
+                    ambiguous = True
+                    break
+                if values:
+                    bindings[field] = next(iter(values))
+        if not ambiguous:
+            for tool in tools:
+                if tool['function']['name'] == candidates[0].replace('.', '_'):
+                    old = tool['function']['parameters']
+                    props = {key: value for key, value in old['oneOf'][0]['properties'].items()
+                             if key not in {'zone', 'zones', 'target_side', 'target_row'}}
+                    props.update({key: {'type': 'string', 'const': value} for key, value in bindings.items()})
+                    tool['function']['parameters'] = {'type': 'object', 'properties': props,
+                        'required': list(bindings), 'additionalProperties': False,
+                        **({'$defs': old['$defs']} if '$defs' in old else {})}
+    # Each editable step has its own small, typed patch tools. No arbitrary task
+    # IDs, completed steps or capabilities can be invented in a patch proposal.
+    by_name = {item['name']: item for item in local_tool_documents(capabilities)}
+    updates = []
+    for handle, task in _editable_tasks(tasks):
+        for index in task.get('editable_steps', []):
+            step = next((step for step in task.get('steps', []) if step['step_index'] == index), None)
+            if not step:
+                continue
+            for name, document in by_name.items():
+                if document['_meta'].get('capability') != step['capability']:
+                    continue
+                updates.append({'type': 'function', 'function': {
+                    'name': _update_name(handle, index, name),
+                    'description': f"Chỉ sửa/bổ sung bước {index} của {handle}: {document['description']}. Không dùng cho yêu cầu mới không liên quan.",
+                    'parameters': document['inputSchema']}})
+    # Location is a form slot; the requested operation itself is mandatory.
+    for tool in tools:
+        if tool['function']['name'] == 'door_set_open':
+            schema = tool['function']['parameters']
+            for branch in schema.get('oneOf', [schema]):
+                branch['required'] = list(dict.fromkeys([*branch.get('required', []), 'open']))
+    return [*tools, *updates]
+
+
+def _editable_tasks(tasks):
+    tasks = tasks or {}
+    for handle, task in [('active', tasks.get('active')),
+                         *[(f'suspended:{i}', task) for i, task in enumerate(tasks.get('suspended', [])[:3])]]:
+        if task:
+            yield task.get('handle', handle), task
+
+
+def _update_name(handle, index, name):
+    return f"update_{handle.replace(':', '_')}_step_{index}__{name}"
 
 
 def native_proposal_prompt(value):
@@ -158,6 +224,14 @@ def native_proposal_prompt(value):
 
     context = {key: item for key, item in value.items() if key not in {'capabilities', 'utterance'}}
     context = copy.deepcopy(context)
+    clarification = context.get('tasks', {}).get('clarification')
+    if clarification:
+        # A free-text clarification is not a slot form. It contains no typed
+        # pending operation and must not become the next user's command.
+        if not clarification.get('drafts'):
+            context['tasks'].pop('clarification', None)
+        else:
+            clarification.pop('question', None)
     navigation = context.get('tasks', {}).get('navigation') or {}
     if navigation.get('status') == 'idle' and not any(navigation.get(key) for key in (
             'request_id', 'destination', 'route_id', 'candidates', 'selected', 'origin')):
@@ -168,18 +242,45 @@ def native_proposal_prompt(value):
     prefix = ('NGỮ CẢNH (chỉ tham khảo, không thực hiện lại):\n'
               + json.dumps(context, ensure_ascii=False, separators=(',', ':'))
               + '\nLỜI NGƯỜI DÙNG HIỆN TẠI (đọc tất cả các dòng theo thứ tự):\n') if context else ''
-    return prefix + value.get('utterance', '')
+    return (prefix or 'YÊU CẦU HIỆN TẠI:\n') + value.get('utterance', '')
 
 
-def proposals_to_turn(calls, capabilities, *, include_suggestions=False):
+def proposals_to_turn(calls, capabilities, *, include_suggestions=False, utterance=None, tasks=None):
     """Translate wire proposals atomically, retaining order; never execute them."""
+    from jsonschema import Draft202012Validator
+
     docs = {item['name']: item for item in local_tool_documents(capabilities)
             if include_suggestions or item['_meta'].get('act') != 'offer'}
+    updates = {}
+    for handle, task in _editable_tasks(tasks):
+        for step in task.get('steps', []):
+            index = step['step_index']
+            if index not in task.get('editable_steps', []):
+                continue
+            for name, document in list(docs.items()):
+                if document['_meta'].get('capability') == step['capability']:
+                    updates[_update_name(handle, index, name)] = (handle, index, name)
+    offered = {tool['function']['name']: tool['function']['parameters'] for tool in native_proposal_tools(
+        capabilities, include_suggestions=include_suggestions, utterance=utterance or '', tasks=tasks)}
     actions = []
+    patches = []
+    patch_handle = None
     read_only = True
     if not 1 <= len(calls) <= 5:
         raise ValueError('Expected one to five proposals')
-    for name, args in calls:
+    for wire_name, args in calls:
+        if wire_name not in offered:
+            raise ValueError('Tool not offered for this context')
+        if utterance is not None or wire_name in updates:
+            errors = list(Draft202012Validator(offered[wire_name]).iter_errors(args))
+            if errors:
+                raise ValueError(f'Invalid tool arguments: {errors[0].message}')
+        patch = updates.get(wire_name)
+        name = patch[2] if patch else wire_name
+        if patch:
+            if patch_handle and patch_handle != patch[0]:
+                raise ValueError('A turn may only modify one task')
+            patch_handle = patch[0]
         if name not in docs:
             raise ValueError('Tool not offered for this context')
         meta = docs[name]['_meta']
@@ -199,26 +300,48 @@ def proposals_to_turn(calls, capabilities, *, include_suggestions=False):
             if set(args) != {'text'} or not isinstance(args['text'], str) or not args['text'].strip():
                 raise ValueError('Expected a nonempty dialogue text')
             text = args['text']
-            if meta['act'] == 'clarify' and '?' not in text:
+            if meta['act'] == 'clarify' and ('?' not in text or (utterance is not None and
+                    Lexer().normalize(text).strip(' ?.!') == Lexer().normalize(utterance).strip(' ?.!'))):
                 text = 'Bạn nói rõ lại yêu cầu nhé.'
             return SemanticTurn(act=meta['act'], text=text)
         # Normalize equivalent location representations, never invent a target.
         args = dict(args)
-        if 'temperatureSign' in meta:
-            if set(args) - {'amount'}:
-                raise ValueError('Relative temperature proposal only accepts amount')
+        if meta.get('relativeTemperature'):
+            if set(args) - {'amount', 'direction'} or args.get('direction') not in {'increase', 'decrease'}:
+                raise ValueError('Relative temperature requires direction and optional amount')
             amount = args.get('amount', 2)
             if isinstance(amount, bool) or not isinstance(amount, (int, float)) or not 0 < amount <= 30:
                 raise ValueError('Temperature amount must be positive and at most 30')
-            args = {'temperature_delta_celsius': meta['temperatureSign'] * amount}
+            args = {'temperature_delta_celsius': (1 if args['direction'] == 'increase' else -1) * amount}
         if isinstance(args.get('zones'), list) and len(args['zones']) == 1 and not args.get('zone'):
             args['zone'] = args.pop('zones')[0]
         if args.get('zone'):
             args.pop('target_side', None)
             args.pop('target_row', None)
+        if (meta['capability'] == 'media.play' and utterance is not None
+            and Lexer().normalize(utterance) in {'bat nhac', 'mo nhac', 'phat nhac', 'nghe nhac'}
+            and Lexer().normalize(args.get('media_query') or '') in {'nhac', 'am nhac', 'music'}):
+            args.pop('media_query', None)  # Generic music noun is not a song title.
+        if meta['capability'] == 'conversation.respond' and utterance is not None:
+            args['query'] = utterance
         action = ActionDraft(capability=meta['capability'], arguments=args)
+        if (utterance is not None and action.capability == 'climate.set_temperature'
+            and action.arguments.value_celsius is not None and not _has_temperature_target(utterance)):
+            raise ValueError('No absolute temperature was supplied in the CURRENT input. Do not invent value_celsius. '
+                             'For increase/decrease or feeling hot/cold, use climate_adjust_temperature with direction and optional amount.')
         if action.arguments.value_celsius is not None and action.arguments.temperature_delta_celsius is not None:
             raise ValueError('Temperature target and delta are mutually exclusive')
-        actions.append(action)
+        if patch:
+            patches.append({'step_index': patch[1], 'action': action})
+        else:
+            actions.append(action)
         read_only &= docs[name]['annotations']['readOnlyHint']
+    if patches:
+        return SemanticTurn(act='modify', task_ref=patch_handle, step_updates=patches, append_actions=actions)
     return SemanticTurn(act='question' if read_only else 'request', actions=actions)
+
+
+def _has_temperature_target(utterance):
+    text = Lexer().normalize(utterance)
+    return bool(re.search(r"\d|\b(?:muoi|hai muoi|ba muoi)\b", text)
+                or re.search(r"\b(?:nhu cu|nhu da luu|yeu thich|thuong dung)\b", text))

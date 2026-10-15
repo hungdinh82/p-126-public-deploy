@@ -17,8 +17,8 @@ Tài liệu đầy đủ: [local_tool_catalog.json](local_tool_catalog.json). Đ
 Xuất lại từ code:
 
 ```bash
-PYTHONPATH=. .venv/bin/python scripts/export_local_tools.py --output docs/local_tool_catalog.json
-# Thêm --navigation để xuất cả công cụ bản đồ/hành trình.
+PYTHONPATH=. .venv/bin/python scripts/export_local_tools.py --navigation --output docs/local_tool_catalog.json
+# Bỏ --navigation nếu cần catalog không có bản đồ/hành trình.
 ```
 
 Tham khảo: [MCP Tools](https://github.com/modelcontextprotocol/modelcontextprotocol/blob/main/docs/specification/2026-07-28/server/tools.mdx), [Qwen Function Calling](https://qwen.readthedocs.io/en/stable/framework/function_call.html).
@@ -28,24 +28,23 @@ Tham khảo: [MCP Tools](https://github.com/modelcontextprotocol/modelcontextpro
 1. Giữ nguyên transcript gốc ở đầu vào/lịch sử. Projection cho inference chỉ gộp đính chính rõ ràng của hai đoạn kề nhau, cùng một thao tác và cùng tập slot. Đoạn độc lập, đoạn chưa hiểu, phủ định và đính chính khác chế độ số được giữ nguyên. Dạng “đặt 26 độ” có thể kế thừa danh từ từ yêu cầu nhiệt độ tuyệt đối ngay trước nó; chỉ khi giá trị hợp lệ 16–30°C.
 2. Discovery chọn tài liệu qua các cụm từ dương trong toàn bộ input. Đây không phải bộ quyết định action, giá trị hoặc quyền thực thi. Tool không khớp từ khóa không bị coi là không hỗ trợ.
 3. Tối đa tám capability đầy đủ được đưa vào. Nếu danh sách ban đầu quá rộng, model nhận tool cơ bản và index tên/mô tả của toàn bộ catalog. `dialogue_find_tools` cho phép lấy thêm tài liệu, tối đa một lần. Query quá rộng được yêu cầu cụ thể lại; không tự dùng một tool gần nghĩa để thay thế.
-4. Với yêu cầu mới, Qwen gọi từng native function trực tiếp. Ví dụ `trunk_set_open({"open":true})`; không phải tự dựng toàn bộ `SemanticTurn`, task IDs, patches, flags và các slot không liên quan.
-5. Vị trí cabin chỉ được ràng buộc vào schema khi input nói rõ đúng một vị trí và chỉ có một capability dùng vị trí. Không áp dụng với nhiều vị trí/tool hoặc phủ định/loại trừ. Thiếu vị trí vẫn được giữ là thiếu; không mặc định ghế lái.
+4. Cả yêu cầu mới và lượt đang chờ bổ sung, Qwen gọi từng native function trực tiếp. Ví dụ `trunk_set_open({"open":true})`; không phải tự dựng toàn bộ `SemanticTurn`, task IDs, patches, flags và các slot không liên quan.
+5. Với một capability dùng vị trí, schema giữ đúng vị trí được nói: không có vị trí thì không cho tự thêm zone; chỉ nói bên phải thì giữ target_side=right và để thiếu hàng ghế. Không áp dụng với nhiều vị trí/tool hoặc phủ định/loại trừ. Thiếu vị trí vẫn được giữ là thiếu; không mặc định ghế lái.
 6. Adapter chuyển toàn bộ tool calls thành một `SemanticTurn` theo thứ tự, kiểm tra cả lô trước khi chuyển sang reducer. Đổi `zones:[một vị trí]` thành `zone` là chuẩn hóa tương đương. Không tự bỏ một action lặp hoặc thay action sai bằng action khác.
 7. Backend vẫn sở hữu kiểm tra tham số, task/revision, consent, policy, execution ledger và TTS. `parallel_tool_calls=true` chỉ cho phép model đề xuất nhiều thao tác trong một response; không làm GPU chạy nhiều Qwen hay xe thực hiện song song.
 
-Khi đã có task/câu hỏi đang chờ, local giữ planner compact theo act/step để sửa task và tiếp tục thu thập slot. Cloud luôn đi đường JSON/prompt/history main, không kế thừa projection hoặc discovery của local.
+Khi đã có task/câu hỏi đang chờ, local vẫn dùng native tools. Mỗi bước còn sửa được có tool update riêng, gắn handle/index và schema của capability đó; không quay về DTO `interpret_turn`. Cloud luôn đi đường JSON/prompt/history main, không kế thừa projection hoặc discovery của local.
 
 ## Các tool nhiệt độ
 
-Một capability backend `climate.set_temperature` có ba cách biểu đạt cho model:
+Một capability backend `climate.set_temperature` có hai cách biểu đạt cho model:
 
 | Native tool | Đầu vào | Chuyển về backend |
 |---|---|---|
 | `climate_set_temperature` | `value_celsius` | Đặt nhiệt độ đích |
-| `climate_warm_cabin` | `amount` dương, có thể bỏ | Delta dương; mặc định +2 |
-| `climate_cool_cabin` | `amount` dương, có thể bỏ | Delta âm; mặc định −2 |
+| `climate_adjust_temperature` | `direction`: increase/decrease; `amount` dương tùy chọn | Delta theo chiều; mặc định 2 độ |
 
-Không thay executor hoặc model. Việc tách tool giúp tránh xuất đồng thời nhiệt độ đích và delta, hoặc để model tự đảo dấu cho câu than nóng/lạnh. Giá trị mặc định là chính sách backend đã có, được ghi rõ trong tài liệu tool.
+Không thay executor hoặc model. Tool tương đối tách chiều điều chỉnh khỏi độ lớn; adapter mới chuyển thành delta có dấu. Không dùng hai tên warm/cool mà Qwen đã nhầm trong kiểm tra hội thoại. Giá trị mặc định là chính sách backend đã có, được ghi rõ trong tài liệu tool.
 
 ## Runtime và chống lỗi dây chuyền
 
@@ -63,7 +62,9 @@ Mỗi row lưu số backend calls, usage từng response, tổng output tokens v
 
 Không suy từ các regression case sang bảo đảm model luôn đúng với mọi câu nói. History của answer generator chỉ được rút gọn và đặt câu hỏi hiện tại ở cuối khi provider thực tế là local; cloud giữ thứ tự và sáu lượt đầy đủ của main.
 
-## Kết quả đo trên Xavier, 2026-10-15
+## Kết quả lịch sử ở 717a549, 2026-10-15
+
+Các số dưới đây đo contract cũ tại commit đó, không phải benchmark của bản sửa biểu mẫu bên dưới. Bộ 180 lượt chưa bao phủ trạng thái đang chờ bổ sung.
 
 Cùng Qwen3-1.7B Q4_K_M, llama.cpp/CUDA hiện có, MAXN mode 0. AI server vẫn giữ STT/TTS đang chạy; TTS profile FP16 không đổi.
 
@@ -89,3 +90,35 @@ Tổng 180/180 proposal trước guard đúng; không ca nào cần guard sửa 
 238 mẫu tegrastats trong phiên benchmark: RAM 7.877–7.883 MB / 14.887 MB, swap đang dùng giữ ở 1.074 MB, GPU utilization tối đa 99%, nhiệt GPU 51,5–78,5°C. Đây là mẫu trong phiên, có khoảng nghỉ; không đo toàn bộ startup/model loading. Xung GPU đọc lúc idle là 114,75 MHz; không dùng số đó làm xung khi inference. Mode MAXN/0 đọc được; đọc EMC cap bằng nvpmodel báo thiếu quyền.
 
 Kiểm thử: bộ regression Python 287 test pass; thêm regression catalog trống đã pass cùng bộ native/cloud/gateway (tổng 288 test khác nhau). Có test người dùng tiếp tục nói khi inference đang chạy, atomic proposals, discovery qua gateway có xác thực, cloud giữ main và history local riêng. UI không đổi; lỗi regex confirmation có sẵn trên main vẫn là giới hạn đã ghi ở tài liệu tương thích.
+
+
+## Sửa lỗi biểu mẫu đang chờ và tool public
+
+Contract `local-proposals-v2` dùng native tools cả khi có active task/clarification, thay nhánh cũ quay về `interpret_turn` khi đang chờ. Local không đưa câu hỏi trợ lý cũ vào prompt thao tác xe. Biểu mẫu khác capability không được dùng làm ngữ cảnh cho yêu cầu mới. Transcript/lịch sử gốc không bị xoá.
+
+- `phía sau` bổ sung vào `target_side=right` của biểu mẫu cửa hiện tại. Runtime có lúc chỉ ghi status=waiting_slot mà không ghi missing_slots; local vẫn nhận thành phần vị trí từ câu trả lời ngắn, không gọi Qwen để đoán lại intent.
+- Patch chỉ nhắm bước còn sửa được, đúng handle/index; không sửa bước completed/running/unknown. Khi lọc ngữ cảnh, giữ handle suspended gốc.
+- Yêu cầu độc lập/đổi chủ đề đóng các biểu mẫu local chưa thực hiện và thu hồi xác nhận cũ. `OK` cũ không được mở lại cửa sau khi đã chuyển sang điều hoà. Completed effects và ledger giữ nguyên; cloud/UI giữ luồng main.
+- Tool conversation không nhận `query` do model tự viết: host gắn utterance hiện tại. Clarification không được chỉ nhại lại câu STT.
+- Một nhiệt độ tuyệt đối không có số hoặc tham chiếu giá trị trong input bị từ chối và yêu cầu model sửa một lần; không thay âm thầm thành action do parser viết. Các câu tăng/giảm/than nóng/lạnh có tool direction/amount riêng.
+
+Đã đối chiếu các nút trong `app.js`, `journey.js` với registry: nhạc play/pause, điều hoà, kính, cửa/khoá, capo/cốp, cả thân xe và bản đồ đều có capability executor và tài liệu. Bổ sung hướng dẫn chi tiết media, sưởi ghế, body, cẩm nang, navigation và trip. Catalog JSON hiện xuất **cả navigation/trip**. Bật/tắt loa TTS là cài đặt trình duyệt (`handleSpeakerCommand`), không phải capability xe; nhạc trong demo là Web Audio mô phỏng, không phải dịch vụ phát bản thu theo tên bài.
+
+Regression opt-in trên phần cứng, với xe giả lập và checkpoint tạm, không tác động phiên người dùng:
+
+```bash
+VIVI_TEST_JETSON_URL=http://100.123.27.125:8795 \
+VIVI_TEST_FORM_REPORT=/tmp/jetson-forms.json \
+.venv/bin/pytest -q -s tests/test_jetson_live_forms.py
+```
+
+
+### Đo lại sau sửa biểu mẫu
+
+[Báo cáo trước/sau](jetson_forms_benchmark_2026-10-15.json) dùng cùng Qwen và endpoint 8795. Trước sửa (717a549), hai lượt `tôi lạnh quá` khi có clarification đều chuyển sai thành conversation với query là câu hỏi của trợ lý; lần đầu 15.352 ms, lần kế tiếp 1.830 ms. Đây là hai mẫu với trạng thái cache khác nhau, không dùng để suy tỷ lệ tăng tốc thống kê.
+
+Sau sửa: 21 lượt graph thật trên xe giả lập (ba lần hai chuỗi), gồm mở biểu mẫu cửa, bổ sung hàng ghế, OK, hoàn thành rồi chuyển điều hoà, và chuyển điều hoà khi còn chờ xác nhận cửa. Tất cả assertion pass; không lượt nào guard sửa semantic. `phía sau` không gọi Qwen, tổng graph khoảng 54–81 ms; lượt cold tổng graph khoảng 1,53–1,61 giây. Xác nhận cửa cũ bị từ chối sau đổi chủ đề. Không lưu công việc trên Jetson.
+
+Probe thêm 13 ca × hai lần (một lần đầu, một lần kế tiếp), gồm nhạc chung/nhạc thư giãn/dừng nhạc và các ca cũ: **24/26 proposal đúng trước guard, 26/26 kết quả cuối đúng**. Hai proposal sai là câu `đừng mở cốp`, được guard kế thừa main chặn; model chưa hiểu phủ định ổn định. Các ca nhạc warm khoảng 533–691 ms, tăng nhiệt độ không nêu số 774 ms. Không coi bộ nhỏ này là bảo đảm chất lượng mọi câu nói. Adapter chuẩn hoá danh từ `nhạc` thừa thành không có search query chỉ với lệnh nhạc chung; không đổi tên bài cụ thể.
+
+223 test Python liên quan pass, cộng hardware regression nêu trên. Runtime khai báo jsonschema trong requirements và lock; cloud không import validator này trước khi cần adapter local. Không đổi model, inference backend hoặc UI.

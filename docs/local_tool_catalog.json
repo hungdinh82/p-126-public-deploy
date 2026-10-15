@@ -2,7 +2,7 @@
   "tools": [
     {
       "name": "conversation_respond",
-      "description": "Trò chuyện, kiến thức phổ thông ổn định hoặc truyện ngắn giải trí. Không báo dữ liệu live hoặc thực thi xe. ",
+      "description": "Trò chuyện, kiến thức phổ thông ổn định hoặc truyện ngắn giải trí. Không báo dữ liệu live hoặc thực thi xe. Chỉ dùng khi hiểu được yêu cầu trò chuyện/kiến thức/truyện. Không dùng cho câu STT không hiểu hoặc câu hỏi trợ lý cũ; câu nghe không rõ dùng dialogue_clarify. Backend tự gắn query hiện tại, model chỉ chọn mode nếu cần.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -337,7 +337,7 @@
     },
     {
       "name": "manual_search",
-      "description": "Giải thích tính năng, cách dùng, thông số và xử lý sự cố VF8 từ cẩm nang. Không đọc trạng thái hiện tại, không thực hiện thao tác. ",
+      "description": "Giải thích tính năng, cách dùng, thông số và xử lý sự cố VF8 từ cẩm nang. Không đọc trạng thái hiện tại, không thực hiện thao tác. Tra hướng dẫn/thông số/cách dùng từ cẩm nang; không đọc số đo live hay điều khiển xe. Giữ query hiện tại. Chỉ điền model/năm/AC/DC khi có căn cứ.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -492,7 +492,7 @@
     },
     {
       "name": "climate_set_temperature",
-      "description": "ĐẶT nhiệt độ tuyệt đối khi nêu nhiệt độ đích, ví dụ đặt 23 độ: value_celsius=23. Không dùng cho than nóng/lạnh hoặc tăng/giảm tương đối.",
+      "description": "Chỉ ĐẶT nhiệt độ tuyệt đối khi người dùng nêu nhiệt độ đích: value_celsius là đúng số đó. Không dùng cho than nóng/lạnh hoặc tăng/giảm tương đối; không tự chọn nhiệt độ mặc định.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -528,17 +528,27 @@
       }
     },
     {
-      "name": "climate_warm_cabin",
-      "description": "Làm ẤM cabin bằng TĂNG nhiệt độ. Dùng khi người dùng than LẠNH hoặc yêu cầu tăng nhiệt độ. amount là số độ tăng; không nói số thì bỏ amount, backend mặc định 2 độ.",
+      "name": "climate_adjust_temperature",
+      "description": "Điều chỉnh tương đối nhiệt độ. Người dùng lạnh: tăng nhiệt độ (increase). Người dùng nóng: giảm nhiệt độ (decrease). amount là số độ dương; không nói số thì bỏ amount, mặc định 2 độ.",
       "inputSchema": {
         "type": "object",
         "properties": {
+          "direction": {
+            "type": "string",
+            "enum": [
+              "increase",
+              "decrease"
+            ]
+          },
           "amount": {
             "type": "number",
             "exclusiveMinimum": 0,
             "maximum": 30
           }
         },
+        "required": [
+          "direction"
+        ],
         "additionalProperties": false
       },
       "annotations": {
@@ -546,30 +556,7 @@
       },
       "_meta": {
         "capability": "climate.set_temperature",
-        "temperatureSign": 1,
-        "proposalOnly": true
-      }
-    },
-    {
-      "name": "climate_cool_cabin",
-      "description": "Làm MÁT cabin bằng GIẢM nhiệt độ. Dùng khi người dùng than NÓNG hoặc yêu cầu giảm nhiệt độ. amount là số độ giảm; không nói số thì bỏ amount, backend mặc định 2 độ.",
-      "inputSchema": {
-        "type": "object",
-        "properties": {
-          "amount": {
-            "type": "number",
-            "exclusiveMinimum": 0,
-            "maximum": 30
-          }
-        },
-        "additionalProperties": false
-      },
-      "annotations": {
-        "readOnlyHint": false
-      },
-      "_meta": {
-        "capability": "climate.set_temperature",
-        "temperatureSign": -1,
+        "relativeTemperature": true,
         "proposalOnly": true
       }
     },
@@ -1212,7 +1199,7 @@
     },
     {
       "name": "body_set_open",
-      "description": "Mở hoặc đóng cùng lúc cả bốn cửa, nắp capo và cốp sau, chỉ khi người dùng yêu cầu tất cả. Chỉ mở khi xe đang đỗ. ",
+      "description": "Mở hoặc đóng cùng lúc cả bốn cửa, nắp capo và cốp sau, chỉ khi người dùng yêu cầu tất cả. Chỉ mở khi xe đang đỗ. Chỉ dùng khi người dùng yêu cầu cùng lúc TẤT CẢ cửa cabin, capo VÀ cốp. Nếu chỉ nói tất cả cửa cabin: door_set_open(zone=all); tất cả cửa kính: window_set_position(zone=all).",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -1243,7 +1230,7 @@
     },
     {
       "name": "seat_set_heat_level",
-      "description": "Chỉnh mức sưởi ghế tại vị trí được yêu cầu. Không điều chỉnh vị trí ghế. ",
+      "description": "Chỉnh mức sưởi ghế tại vị trí được yêu cầu. Không điều chỉnh vị trí ghế. Sưởi ghế với level 0=tắt, 1–3=mức sưởi. Giữ vị trí ghế được nói, thiếu vị trí thì để backend hỏi. Không chỉnh nhiệt độ điều hòa, vị trí ghế hay bật làm mát ghế.",
       "inputSchema": {
         "oneOf": [
           {
@@ -1441,7 +1428,7 @@
     },
     {
       "name": "media_play",
-      "description": "Phát nhạc hoặc nội dung âm thanh được yêu cầu. ",
+      "description": "Phát nhạc hoặc nội dung âm thanh được yêu cầu. Phát/bật/mở nhạc hoặc tiếp tục nghe nhạc. Nhạc chung gọi với {}. Chỉ điền media_query khi có tên bài, ca sĩ, thể loại hoặc tâm trạng được nói rõ; ví dụ nhạc thư giãn -> {\"media_query\":\"thư giãn\"}. Không tự đổi bài hoặc âm lượng. Demo UI phát nhạc mô phỏng, không khẳng định đã tìm được bản thu của ca sĩ.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -1477,13 +1464,16 @@
           "nhạc",
           "bài hát",
           "nghe bài",
-          "âm thanh"
+          "âm thanh",
+          "play music",
+          "phát lại nhạc",
+          "tiếp tục nhạc"
         ]
       }
     },
     {
       "name": "media_pause",
-      "description": "Dừng phát âm thanh. ",
+      "description": "Dừng phát âm thanh. Dừng/tắt/tạm dừng nhạc, arguments={}. Không tắt loa trả lời của trợ lý; bật/tắt loa là cài đặt UI.",
       "inputSchema": {
         "type": "object",
         "properties": {},
@@ -1498,13 +1488,933 @@
         "discoveryTerms": [
           "dừng nhạc",
           "tắt nhạc",
-          "tạm dừng"
+          "tạm dừng nhạc",
+          "ngừng nhạc",
+          "pause music"
+        ]
+      }
+    },
+    {
+      "name": "navigation_search",
+      "description": "Tìm địa điểm. pharmacy/charging là loại địa điểm, nearest cần vị trí và khoảng cách lái xe. Luôn chờ chọn kết quả. Tìm địa điểm và chờ người dùng chọn, không tự khởi hành. Không tạo place_handle hoặc tọa độ. pharmacy/charging là bộ lọc; tìm thông tin chung trên mạng dùng web_search.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "destination": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/DestinationSpec"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "query": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 2,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "category": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "pharmacy",
+                      "charging"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "nearest": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "destination_scope": {
+            "anyOf": [
+              {
+                "enum": [
+                  "place",
+                  "region"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "$defs": {
+          "DestinationSpec": {
+            "additionalProperties": false,
+            "properties": {
+              "version": {
+                "const": 1,
+                "type": "integer"
+              },
+              "raw_text": {
+                "maxLength": 500,
+                "type": "string"
+              },
+              "name": {
+                "anyOf": [
+                  {
+                    "maxLength": 200,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "entity_type": {
+                "anyOf": [
+                  {
+                    "maxLength": 50,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "area": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/AreaConstraint"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "selection": {
+                "enum": [
+                  "named_place",
+                  "category",
+                  "region",
+                  "reference"
+                ],
+                "type": "string"
+              },
+              "qualifiers": {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 10,
+                "type": "array"
+              },
+              "search_hypotheses": {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 2,
+                "type": "array"
+              },
+              "reference": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "nearest": {
+                "type": "boolean"
+              }
+            },
+            "type": "object"
+          },
+          "AreaConstraint": {
+            "additionalProperties": false,
+            "properties": {
+              "text": {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              "source": {
+                "enum": [
+                  "user",
+                  "answer",
+                  "context",
+                  "position",
+                  "hypothesis"
+                ],
+                "type": "string"
+              },
+              "constraint": {
+                "enum": [
+                  "required",
+                  "preferred"
+                ],
+                "type": "string"
+              },
+              "question_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "text"
+            ],
+            "type": "object"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "_meta": {
+        "capability": "navigation.search",
+        "proposalOnly": true,
+        "discoveryTerms": [
+          "tìm",
+          "gần đây",
+          "ở đâu"
+        ]
+      }
+    },
+    {
+      "name": "navigation_plan",
+      "description": "Chờ chọn điểm đến trước khi lập tuyến xem trước. use_search_results dùng danh sách đã tìm ở bước trước. Không tự bắt đầu. Lập tuyến xem trước tới điểm đến và nơi xuất phát nếu được nói. Không tự bắt đầu dẫn đường hoặc đoán route_revision.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "destination": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/DestinationSpec"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "query": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "maxLength": 200,
+                    "minLength": 2,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "category": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "pharmacy",
+                      "charging"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "nearest": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "destination_scope": {
+            "anyOf": [
+              {
+                "enum": [
+                  "place",
+                  "region"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "trip_kind": {
+            "anyOf": [
+              {
+                "enum": [
+                  "one_way",
+                  "round_trip"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "origin_query": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "maxLength": 200,
+                    "minLength": 2,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "use_search_results": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "$defs": {
+          "DestinationSpec": {
+            "additionalProperties": false,
+            "properties": {
+              "version": {
+                "const": 1,
+                "type": "integer"
+              },
+              "raw_text": {
+                "maxLength": 500,
+                "type": "string"
+              },
+              "name": {
+                "anyOf": [
+                  {
+                    "maxLength": 200,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "entity_type": {
+                "anyOf": [
+                  {
+                    "maxLength": 50,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "area": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/AreaConstraint"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "selection": {
+                "enum": [
+                  "named_place",
+                  "category",
+                  "region",
+                  "reference"
+                ],
+                "type": "string"
+              },
+              "qualifiers": {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 10,
+                "type": "array"
+              },
+              "search_hypotheses": {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 2,
+                "type": "array"
+              },
+              "reference": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "nearest": {
+                "type": "boolean"
+              }
+            },
+            "type": "object"
+          },
+          "AreaConstraint": {
+            "additionalProperties": false,
+            "properties": {
+              "text": {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              "source": {
+                "enum": [
+                  "user",
+                  "answer",
+                  "context",
+                  "position",
+                  "hypothesis"
+                ],
+                "type": "string"
+              },
+              "constraint": {
+                "enum": [
+                  "required",
+                  "preferred"
+                ],
+                "type": "string"
+              },
+              "question_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "text"
+            ],
+            "type": "object"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "_meta": {
+        "capability": "navigation.plan",
+        "proposalOnly": true,
+        "discoveryTerms": [
+          "chỉ đường",
+          "dẫn đường",
+          "đường đến",
+          "đi tới",
+          "đến"
+        ]
+      }
+    },
+    {
+      "name": "navigation_select",
+      "description": "Chọn đúng handle từ các địa điểm đã tìm để lập tuyến xem trước. Chỉ dùng place_handle có trong các kết quả của biểu mẫu hiện tại; không tự tạo ID hoặc chọn hộ khi người dùng chưa chọn.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "place_handle": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "_meta": {
+        "capability": "navigation.select",
+        "proposalOnly": true,
+        "discoveryTerms": []
+      }
+    },
+    {
+      "name": "navigation_refine",
+      "description": "Làm rõ vùng đang chờ: choice_handle từ navigation.clarification.choices hoặc query là địa điểm cụ thể trong vùng. Không tự bắt đầu tuyến. Bổ sung/chỉnh điểm đến của biểu mẫu hiện tại: một trong query/destination, choice_handle được cấp hoặc reject_candidates=true. Không lấy điểm đến từ chủ đề đã đóng.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "destination": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/DestinationSpec"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reject_candidates": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "choice_handle": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "maxLength": 80,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "query": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "maxLength": 200,
+                    "minLength": 2,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "$defs": {
+          "DestinationSpec": {
+            "additionalProperties": false,
+            "properties": {
+              "version": {
+                "const": 1,
+                "type": "integer"
+              },
+              "raw_text": {
+                "maxLength": 500,
+                "type": "string"
+              },
+              "name": {
+                "anyOf": [
+                  {
+                    "maxLength": 200,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "entity_type": {
+                "anyOf": [
+                  {
+                    "maxLength": 50,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "area": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/AreaConstraint"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "selection": {
+                "enum": [
+                  "named_place",
+                  "category",
+                  "region",
+                  "reference"
+                ],
+                "type": "string"
+              },
+              "qualifiers": {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 10,
+                "type": "array"
+              },
+              "search_hypotheses": {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 2,
+                "type": "array"
+              },
+              "reference": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "nearest": {
+                "type": "boolean"
+              }
+            },
+            "type": "object"
+          },
+          "AreaConstraint": {
+            "additionalProperties": false,
+            "properties": {
+              "text": {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              "source": {
+                "enum": [
+                  "user",
+                  "answer",
+                  "context",
+                  "position",
+                  "hypothesis"
+                ],
+                "type": "string"
+              },
+              "constraint": {
+                "enum": [
+                  "required",
+                  "preferred"
+                ],
+                "type": "string"
+              },
+              "question_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "text"
+            ],
+            "type": "object"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "_meta": {
+        "capability": "navigation.refine",
+        "proposalOnly": true,
+        "discoveryTerms": []
+      }
+    },
+    {
+      "name": "navigation_start",
+      "description": "Bắt đầu tuyến xem trước sau xác nhận, bắt buộc route_revision hiện tại; không tự suy quyền xác nhận. Chỉ bắt đầu tuyến người dùng đang xác nhận với route_revision do backend cung cấp. Không suy quyền xác nhận từ một yêu cầu mới.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "route_revision": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "plan_id": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "_meta": {
+        "capability": "navigation.start",
+        "proposalOnly": true,
+        "discoveryTerms": [
+          "bắt đầu dẫn đường",
+          "bắt đầu đi"
+        ]
+      }
+    },
+    {
+      "name": "navigation_cancel",
+      "description": "Huỷ tìm/chọn điểm đang chờ theo revision; giữ hành trình đang chạy. Đóng bản nháp tìm/chọn tuyến đang chờ theo route_revision; giữ hành trình đã bắt đầu.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "route_revision": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "plan_id": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "_meta": {
+        "capability": "navigation.cancel",
+        "proposalOnly": true,
+        "discoveryTerms": []
+      }
+    },
+    {
+      "name": "navigation_end",
+      "description": "Kết thúc hành trình, về P; không tiếp tục tuyến này khi chuyển D. Kết thúc hành trình theo yêu cầu; khác tạm dừng để tiếp tục sau.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "_meta": {
+        "capability": "navigation.end",
+        "proposalOnly": true,
+        "discoveryTerms": [
+          "kết thúc dẫn đường"
+        ]
+      }
+    },
+    {
+      "name": "navigation_decline",
+      "description": "Từ chối bắt đầu, giữ tuyến để xem lại. Từ chối bắt đầu tuyến đang được hỏi; dùng đúng route_revision, không tự huỷ hành trình khác.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "route_revision": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "plan_id": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "_meta": {
+        "capability": "navigation.decline",
+        "proposalOnly": true,
+        "discoveryTerms": []
+      }
+    },
+    {
+      "name": "navigation_stop",
+      "description": "Dừng hành trình hiện tại. Dừng hành trình đang chạy. Không phải dừng nhạc hoặc đóng một biểu mẫu xe.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "_meta": {
+        "capability": "navigation.stop",
+        "proposalOnly": true,
+        "discoveryTerms": [
+          "dừng dẫn đường"
         ]
       }
     },
     {
       "name": "navigation_set_gear",
-      "description": "Chuyển P để đỗ/tạm dừng hoặc D để tiếp tục tuyến đã chấp nhận; không nhận bản nháp. ",
+      "description": "Chuyển P để đỗ/tạm dừng hoặc D để tiếp tục tuyến đã chấp nhận; không nhận bản nháp. Chỉ đề xuất số P hoặc D được yêu cầu. Chuyển D không chấp thuận tuyến mới; backend kiểm tra cửa/capo/cốp và tuyến trước khi đổi số.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -1540,8 +2450,688 @@
       }
     },
     {
+      "name": "trip_plan",
+      "description": "Lập kế hoạch chuyến đi/sạc, độc lập dẫn đường đang chạy. Tách điểm đến query, origin_query và trip_kind (round_trip nếu quay lại). Không tự chạy. Lập kế hoạch chuyến đi hoặc khứ hồi, độc lập tuyến đang chạy; query là đích, origin_query là xuất phát, trip_kind=round_trip khi quay về.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "destination": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/DestinationSpec"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "query": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "maxLength": 200,
+                    "minLength": 2,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "category": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "pharmacy",
+                      "charging"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "nearest": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "destination_scope": {
+            "anyOf": [
+              {
+                "enum": [
+                  "place",
+                  "region"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "trip_kind": {
+            "anyOf": [
+              {
+                "enum": [
+                  "one_way",
+                  "round_trip"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "origin_query": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "maxLength": 200,
+                    "minLength": 2,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "use_search_results": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "$defs": {
+          "DestinationSpec": {
+            "additionalProperties": false,
+            "properties": {
+              "version": {
+                "const": 1,
+                "type": "integer"
+              },
+              "raw_text": {
+                "maxLength": 500,
+                "type": "string"
+              },
+              "name": {
+                "anyOf": [
+                  {
+                    "maxLength": 200,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "entity_type": {
+                "anyOf": [
+                  {
+                    "maxLength": 50,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "area": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/AreaConstraint"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "selection": {
+                "enum": [
+                  "named_place",
+                  "category",
+                  "region",
+                  "reference"
+                ],
+                "type": "string"
+              },
+              "qualifiers": {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 10,
+                "type": "array"
+              },
+              "search_hypotheses": {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 2,
+                "type": "array"
+              },
+              "reference": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "nearest": {
+                "type": "boolean"
+              }
+            },
+            "type": "object"
+          },
+          "AreaConstraint": {
+            "additionalProperties": false,
+            "properties": {
+              "text": {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              "source": {
+                "enum": [
+                  "user",
+                  "answer",
+                  "context",
+                  "position",
+                  "hypothesis"
+                ],
+                "type": "string"
+              },
+              "constraint": {
+                "enum": [
+                  "required",
+                  "preferred"
+                ],
+                "type": "string"
+              },
+              "question_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "text"
+            ],
+            "type": "object"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "_meta": {
+        "capability": "trip.plan",
+        "proposalOnly": true,
+        "discoveryTerms": [
+          "hành trình",
+          "chuyến đi",
+          "khứ hồi",
+          "lập kế hoạch"
+        ]
+      }
+    },
+    {
+      "name": "trip_select",
+      "description": "Chọn handle địa điểm của trip_plan hiện tại; giữ đúng ID/revision. Chọn place_handle từ kết quả trip_plan hiện tại; giữ đúng plan_id và route_revision được cấp.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "place_handle": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "plan_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "route_revision": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "_meta": {
+        "capability": "trip.select",
+        "proposalOnly": true,
+        "discoveryTerms": []
+      }
+    },
+    {
+      "name": "trip_refine",
+      "description": "Đổi/giữ điểm mặc định theo câu hỏi trip_plan.clarification, dùng handle hoặc query và ID/revision. Bổ sung kế hoạch hiện tại bằng query hoặc choice_handle; giữ đúng plan_id/route_revision, không dùng dữ liệu của kế hoạch đã đóng.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "destination": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/DestinationSpec"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reject_candidates": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "choice_handle": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "maxLength": 80,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "query": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "maxLength": 200,
+                    "minLength": 2,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "plan_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "route_revision": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "$defs": {
+          "DestinationSpec": {
+            "additionalProperties": false,
+            "properties": {
+              "version": {
+                "const": 1,
+                "type": "integer"
+              },
+              "raw_text": {
+                "maxLength": 500,
+                "type": "string"
+              },
+              "name": {
+                "anyOf": [
+                  {
+                    "maxLength": 200,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "entity_type": {
+                "anyOf": [
+                  {
+                    "maxLength": 50,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "area": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/AreaConstraint"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "selection": {
+                "enum": [
+                  "named_place",
+                  "category",
+                  "region",
+                  "reference"
+                ],
+                "type": "string"
+              },
+              "qualifiers": {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 10,
+                "type": "array"
+              },
+              "search_hypotheses": {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 2,
+                "type": "array"
+              },
+              "reference": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "nearest": {
+                "type": "boolean"
+              }
+            },
+            "type": "object"
+          },
+          "AreaConstraint": {
+            "additionalProperties": false,
+            "properties": {
+              "text": {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              "source": {
+                "enum": [
+                  "user",
+                  "answer",
+                  "context",
+                  "position",
+                  "hypothesis"
+                ],
+                "type": "string"
+              },
+              "constraint": {
+                "enum": [
+                  "required",
+                  "preferred"
+                ],
+                "type": "string"
+              },
+              "question_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "text"
+            ],
+            "type": "object"
+          }
+        }
+      },
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "_meta": {
+        "capability": "trip.refine",
+        "proposalOnly": true,
+        "discoveryTerms": []
+      }
+    },
+    {
+      "name": "trip_start",
+      "description": "Chấp nhận đề nghị bắt đầu kế hoạch đã xem, với đúng ID/revision. Server kiểm tra lại pin/vị trí/policy trước khi chạy. Bắt đầu kế hoạch đang được xác nhận với plan_id/route_revision hiện tại; không tự khởi hành ngay sau khi chỉ hỏi đường.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "plan_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "route_revision": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": false
+      },
+      "_meta": {
+        "capability": "trip.start",
+        "proposalOnly": true,
+        "discoveryTerms": [
+          "bắt đầu hành trình"
+        ]
+      }
+    },
+    {
+      "name": "trip_decline",
+      "description": "Từ chối bắt đầu, vẫn giữ kế hoạch để xem lại. Từ chối kế hoạch đang được hỏi, dùng plan_id/route_revision hiện tại.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "plan_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "route_revision": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "_meta": {
+        "capability": "trip.decline",
+        "proposalOnly": true,
+        "discoveryTerms": []
+      }
+    },
+    {
+      "name": "trip_cancel",
+      "description": "Huỷ kế hoạch đang chờ; không dừng chuyến đang chạy. Huỷ kế hoạch được chỉ rõ bằng plan_id/route_revision hiện tại, không tự suy ID từ lịch sử.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "plan_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "route_revision": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false
+      },
+      "annotations": {
+        "readOnlyHint": true
+      },
+      "_meta": {
+        "capability": "trip.cancel",
+        "proposalOnly": true,
+        "discoveryTerms": [
+          "hủy hành trình"
+        ]
+      }
+    },
+    {
       "name": "dialogue_clarify",
-      "description": "Hỏi lại khi yêu cầu nghe không rõ, không hiểu, thiếu nghĩa, hoặc chưa thể đề xuất an toàn. Không tự đoán.",
+      "description": "CHỌN TOOL NÀY khi nghe không rõ hoặc chưa hiểu nghĩa câu nói. Hỏi lại bằng một câu hỏi ngắn, không nhại input. Không chọn unsupported cho câu nghe không rõ.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -1587,7 +3177,7 @@
     },
     {
       "name": "dialogue_unsupported",
-      "description": "Giải thích thao tác không được hỗ trợ; không đề xuất thao tác thay thế không được yêu cầu.",
+      "description": "Chỉ dùng khi HIỂU RÕ thao tác nhưng hệ thống chưa có executor hỗ trợ. Câu nghe sai/không hiểu phải dùng dialogue_clarify. Không tự đề xuất thao tác thay thế.",
       "inputSchema": {
         "type": "object",
         "properties": {
@@ -1647,7 +3237,22 @@
                     "seat.set_heat_level",
                     "media.play",
                     "media.pause",
-                    "navigation.set_gear"
+                    "navigation.search",
+                    "navigation.plan",
+                    "navigation.select",
+                    "navigation.refine",
+                    "navigation.start",
+                    "navigation.cancel",
+                    "navigation.end",
+                    "navigation.decline",
+                    "navigation.stop",
+                    "navigation.set_gear",
+                    "trip.plan",
+                    "trip.select",
+                    "trip.refine",
+                    "trip.start",
+                    "trip.decline",
+                    "trip.cancel"
                   ]
                 },
                 "arguments": {
@@ -1701,7 +3306,7 @@
     }
   ],
   "_meta": {
-    "contract": "local-proposals-v1",
+    "contract": "local-proposals-v2",
     "proposalOnly": true,
     "mcpTransport": false
   }

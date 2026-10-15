@@ -613,6 +613,9 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
             reducer_input.navigation_workspace.history = []
         if update.get("clear_journey"):
             reducer_input = clear_journey(reducer_input)
+        if state["event"]["provider"] == "local" and state["event"]["kind"] == "utterance":
+            from src.vivi.dialogue.local_forms import close_obsolete_forms
+            reducer_input = close_obsolete_forms(reducer_input, semantic)
         session, message = reduce_turn(
             reducer_input, semantic, revoke_consent_on_clarify=state["event"]["kind"] == "utterance"
         )

@@ -37,6 +37,9 @@ def correct_frame(case, frame):
     if case == 'negated_trunk':
         return not frame.drafts()
     expected = {
+        'music_play_generic': [('media.play', {})],
+        'music_play_query': [('media.play', {'media_query': 'thư giãn'})],
+        'music_pause': [('media.pause', {})],
         'open_trunk': [('trunk.set_open', {'open': True})],
         'temperature': [('climate.set_temperature', {'value_celsius': 24.0})],
         'window': [('window.set_position', {'zone': 'driver', 'position_percent': 100})],
@@ -76,7 +79,7 @@ async def benchmark(args):
             else:
                 include_suggestions = any(item['function']['name'] == 'dialogue_suggest_unrequested_action'
                                           for item in payload.get('tools', []))
-                raw = proposals_to_turn(calls, capabilities, include_suggestions=include_suggestions).model_dump(mode='json', exclude_defaults=True)
+                raw = proposals_to_turn(calls, capabilities, include_suggestions=include_suggestions, utterance=text).model_dump(mode='json', exclude_defaults=True)
         except (ValueError, KeyError, TypeError):
             raw = None
         raw_outputs.append(raw)
@@ -91,6 +94,9 @@ async def benchmark(args):
     completed_trunk = SessionState(active=DialogueTask(steps=[TaskStep(status='completed', draft=ActionDraft(
         capability='trunk.set_open', arguments={'open': True}))]))
     cases = [
+        ('music_play_generic', 'bật nhạc', SessionState()),
+        ('music_play_query', 'phát nhạc thư giãn', SessionState()),
+        ('music_pause', 'tạm dừng nhạc', SessionState()),
         ('open_trunk', 'mở cốp xe', SessionState()),
         ('temperature', 'đặt nhiệt độ 24 độ', SessionState()),
         ('window', 'mở cửa kính bên tài', SessionState()),
@@ -106,7 +112,7 @@ async def benchmark(args):
         cases = [case for case in cases if case[0] in args.cases]
     report = {'url':args.url, 'rounds_per_case':args.rounds, 'output_limit':client.max_tokens,
               'navigation_catalog':getattr(args, 'navigation_catalog', False),
-              'local_contract':'local-proposals-v1',
+              'local_contract':'local-proposals-v2',
               'token_usage_scope':'prompt_tokens/completion_tokens describe last response; response_usage and total_completion_tokens include all calls', 'cases':{}}
     async with httpx.AsyncClient(timeout=10, trust_env=False) as monitoring:
         initial = (await monitoring.get(args.url.rstrip('/') + '/v1/capabilities')).json()
@@ -161,7 +167,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--url', default='http://100.123.27.125:8795')
     parser.add_argument('--rounds', type=int, default=30)
-    parser.add_argument('--cases', nargs='+', choices=['open_trunk', 'temperature', 'window', 'merged_correction',
+    parser.add_argument('--cases', nargs='+', choices=['music_play_generic', 'music_play_query', 'music_pause', 'open_trunk', 'temperature', 'window', 'merged_correction',
                                                       'unclear_repetition', 'cold_after_old_topic', 'cold_after_trunk',
                                                       'relative_increase', 'trunk_and_window', 'negated_trunk'])
     parser.add_argument('--navigation-catalog', action='store_true', help='Include navigation tool documentation; no tools execute.')

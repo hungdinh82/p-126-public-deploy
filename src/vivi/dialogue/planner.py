@@ -326,7 +326,11 @@ class SemanticResolver:
         from src.vivi.dialogue.answers import AnswerResolver
         from src.vivi.dialogue.questions import current_question
 
-        answer = AnswerResolver().resolve(text, session)
+        answer = None
+        if requested == 'local':
+            from src.vivi.dialogue.local_answers import resolve_location_component
+            answer = resolve_location_component(text, session)
+        answer = answer or AnswerResolver().resolve(text, session)
         if answer:
             question = current_question(session)
             return answer, "rules", [{"provider": "rules", "outcome": "served", "latency_ms": 0,
@@ -424,6 +428,8 @@ class SemanticResolver:
             attempts.append(
                 {"provider": name, "outcome": "served", "latency_ms": round((time.perf_counter() - started) * 1000, 2)}
             )
+            if name == "local" and hasattr(provider.client, "agenerate_tools"):
+                attempts[-1]["semantic_contract"] = "local-proposals-v2"
             guarded = self.parser.guard(text, value, session, memory, history)
             # Keep the model's proposed operations for audit, not free-form
             # model text that could contain leaked prompt or false claims.
@@ -547,12 +553,26 @@ class SemanticResolver:
             value["capabilities"] = capabilities
             prompt = native_semantic_prompt(value)
             tasks = value.get('tasks', {})
-            direct = hasattr(provider.client, 'agenerate_tools') and not any(
-                tasks.get(key) for key in ('active', 'clarification', 'pending_navigation_question'))
+            direct = hasattr(provider.client, 'agenerate_tools')
             if direct:
                 instruction = LOCAL_TOOL_INSTRUCTION + TOPIC_INSTRUCTION
                 value['utterance'] = coalesce_explicit_revisions(value.get('utterance', ''))
                 visible_capabilities, index = initial_tool_documents(value.get('utterance', ''), capabilities)
+                # Operational tools consume the current utterance and typed task
+                # forms. Old free-text assistant questions are not pending slots.
+                operational = {'climate', 'window', 'door', 'hood', 'trunk', 'body', 'seat', 'media'}
+                if visible_capabilities and all(item['name'].split('.')[0] in operational for item in visible_capabilities):
+                    value.pop('recent_turns', None)
+                    selected = {item['name'] for item in visible_capabilities}
+                    active = tasks.get('active')
+                    if active and not any(step['capability'] in selected for step in active.get('steps', [])):
+                        # A form for a different operation is not context for the
+                        # current one. Close it only after a valid new proposal.
+                        tasks.pop('active', None)
+                        tasks.pop('pending_navigation_question', None)
+                    tasks['suspended'] = [task for task in tasks.get('suspended', [])
+                                          if any(step['capability'] in selected for step in task.get('steps', []))]
+                    value.pop('conversation_context', None)
                 if index is not None:
                     value['available_tool_index'] = index
                 prompt = native_proposal_prompt(value)
@@ -565,7 +585,7 @@ class SemanticResolver:
                 if provider.name == 'local' and direct:
                     calls = await client.agenerate_tools(system=instruction, user=prompt,
                                                          tools=native_proposal_tools(visible_capabilities, include_suggestions=expanded,
-                                                                                    utterance=value.get('utterance', '')))
+                                                                                    utterance=value.get('utterance', ''), tasks=tasks))
                     if any(name == 'dialogue_find_tools' for name, _ in calls):
                         if expanded or len(calls) != 1:
                             raise ValueError('Tool discovery must be a single call, at most once')
@@ -582,7 +602,8 @@ class SemanticResolver:
                         visible_capabilities = expanded_caps
                         expanded = True
                         continue
-                    return proposals_to_turn(calls, visible_capabilities, include_suggestions=expanded)
+                    return proposals_to_turn(calls, visible_capabilities, include_suggestions=expanded,
+                                             utterance=value.get('utterance', ''), tasks=tasks)
                 if provider.name == "local" and hasattr(client, "agenerate_tool"):
                     name, payload = await client.agenerate_tool(
                         system=instruction,
