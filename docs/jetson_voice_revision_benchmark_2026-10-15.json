@@ -1,0 +1,138 @@
+{
+  "device": "Jetson AGX Xavier 16 GB",
+  "power_mode": "MAXN (0)",
+  "models": {
+    "slm": "Qwen3-1.7B Q4_K_M, 29 CUDA layers",
+    "stt": "Whisper-base, whisper.cpp CUDA",
+    "tts": "ZeroTTS INT8 CPU (explicit staging profile)"
+  },
+  "planner": {
+    "temperature": {
+      "median_ms": 1455.76,
+      "p95_ms": 1462.65,
+      "warm_runs": 30,
+      "guarded_runs": 0,
+      "completion_tokens": [
+        45
+      ],
+      "prompt_tokens": [
+        8058
+      ]
+    },
+    "window": {
+      "median_ms": 2302.16,
+      "p95_ms": 2320.47,
+      "warm_runs": 30,
+      "guarded_runs": 30,
+      "completion_tokens": [
+        77
+      ],
+      "prompt_tokens": [
+        8056
+      ]
+    },
+    "merged_correction": {
+      "median_ms": 2623.17,
+      "p95_ms": 2636.27,
+      "warm_runs": 30,
+      "guarded_runs": 30,
+      "completion_tokens": [
+        92
+      ],
+      "prompt_tokens": [
+        8074
+      ]
+    },
+    "unclear_repetition": {
+      "median_ms": 2384.72,
+      "p95_ms": 2424.62,
+      "warm_runs": 30,
+      "guarded_runs": 30,
+      "completion_tokens": [
+        83
+      ],
+      "prompt_tokens": [
+        8065
+      ]
+    },
+    "cold_after_old_topic": {
+      "median_ms": 1543.82,
+      "p95_ms": 1554.88,
+      "warm_runs": 30,
+      "guarded_runs": 30,
+      "completion_tokens": [
+        49
+      ],
+      "prompt_tokens": [
+        8091
+      ]
+    }
+  },
+  "speech": {
+    "stt_alone": {
+      "median_ms": 232.36,
+      "p95_ms": 279.16,
+      "warm_runs": 30
+    },
+    "stt_during_qwen": {
+      "median_ms": 434.19,
+      "p95_ms": 446.15,
+      "warm_runs": 30,
+      "cancel_median_ms": 55.165
+    },
+    "tts_stream": {
+      "median_ms": 2463.73,
+      "p95_ms": 2722.8,
+      "warm_runs": 30,
+      "first_audio_median_ms": 315.08
+    }
+  },
+  "cpu_stt_exploratory": {
+    "warm_runs": 7,
+    "median_ms": 6748.69,
+    "decision": "rejected after initial measurements; CUDA retained; not a 30-run comparison"
+  },
+  "telemetry": {
+    "samples": 829,
+    "max_ram_mb": 8475,
+    "max_gpu_temperature_c": 79.5,
+    "minimum_available_bytes_observed": 6774669312
+  },
+  "integration": {
+    "all_transcripts": [
+      "đặt nhiệt độ 24 độ",
+      "à không, đặt 26 độ",
+      "mở cửa kính bên phụ"
+    ],
+    "revisions": [
+      1,
+      2,
+      3
+    ],
+    "response_revisions": [
+      3,
+      3,
+      3
+    ],
+    "message": "Mình đã đặt nhiệt độ ở 26 độ. Nói OK để mở cửa sổ bên phụ.",
+    "provider": "local",
+    "temperature_celsius": 26.0,
+    "actions": [
+      {
+        "capability": "climate.set_temperature",
+        "arguments": {
+          "value_celsius": 26.0
+        }
+      },
+      {
+        "capability": "window.set_position",
+        "arguments": {
+          "position_percent": 100,
+          "zone": "front_passenger"
+        }
+      }
+    ],
+    "after_correction_ms": 10241.4
+  },
+  "comparison_audio_sha256": "bb32a42aa4d7741938a5599b704d87e6047fb420906ce3d34e495d498a34ba5c"
+}

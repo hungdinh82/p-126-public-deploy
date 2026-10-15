@@ -189,13 +189,13 @@ class VoiceInbox:
                        (status,json.dumps(response,ensure_ascii=False) if response is not None else None,
                         error,response_revision,time.time(),*identities))
 
-    def requeue_conversation(self, identities):
+    def requeue_conversation(self, identities, *, error=None, retry_at=0, retry=False):
         if not identities:
             return
         with self.connect() as db:
             marks=','.join('?' for _ in identities)
-            db.execute(f"UPDATE inputs SET status='recognized',generation_turn_id=NULL,error=NULL,updated_at=? WHERE id IN ({marks}) AND status='processing'",
-                       (time.time(),*identities))
+            db.execute(f"UPDATE inputs SET status='recognized',generation_turn_id=NULL,error=?,retry_at=?,attempts=attempts+?,updated_at=? WHERE id IN ({marks}) AND status='processing'",
+                       (error,retry_at,int(retry),time.time(),*identities))
 
     def recover(self):
         with self.connect() as db:

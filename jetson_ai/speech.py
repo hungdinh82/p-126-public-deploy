@@ -30,6 +30,9 @@ class SpeechModels:
         self.stt_url = os.environ.get("JETSON_AI_STT_URL", "http://127.0.0.1:1236")
         self.tts_path = os.environ.get("JETSON_AI_TTS_MODEL", "")
         self.requested_device = os.environ.get("JETSON_AI_DEVICE", "cuda")
+        self.requested_stt_device = os.environ.get("JETSON_AI_STT_DEVICE", self.requested_device)
+        if self.requested_stt_device not in {"cuda", "cpu"}:
+            raise ValueError("JETSON_AI_STT_DEVICE must be cuda or cpu")
         self.models = {}
         self.info = {name: {
             "status": "unavailable", "model_id": "whisper-base" if name == "stt" else "ZeroTTS",
@@ -70,17 +73,19 @@ class SpeechModels:
             data = log.read_text(errors="replace") if log.is_file() else ""
             import re
             gpu = bool(re.search(r"using (?:CUDA|GPU)|CUDA\d*.*(?:buffer|compute)", data, re.I))
-            if self.requested_device == "cuda" and not gpu:
+            if self.requested_stt_device == "cuda" and not gpu:
                 raise RuntimeError("whisper-server has not confirmed a CUDA backend in its log")
+            if self.requested_stt_device == "cpu" and gpu:
+                raise RuntimeError("CPU STT requested but whisper-server loaded a CUDA backend")
             self.info["stt"].update(device="cuda" if gpu else "cpu", using_gpu=gpu,
                                     api_url=self.stt_url, pid=os.environ.get("JETSON_AI_STT_PID"))
             self.models["stt"] = True
             return
         import torch
         from transformers import WhisperForConditionalGeneration, WhisperProcessor
-        if self.requested_device == "cuda" and not torch.cuda.is_available():
+        if self.requested_stt_device == "cuda" and not torch.cuda.is_available():
             raise RuntimeError("PyTorch CUDA is unavailable")
-        device = "cuda" if self.requested_device == "cuda" else "cpu"
+        device = self.requested_stt_device
         dtype = torch.float16 if device == "cuda" else torch.float32
         processor = WhisperProcessor.from_pretrained(self.stt_path, local_files_only=True)
         model = WhisperForConditionalGeneration.from_pretrained(
@@ -170,7 +175,12 @@ class SpeechModels:
         if self.stt_engine == "whisper_cpp":
             with httpx.Client(timeout=120, trust_env=False) as client:
                 response = client.post(self.stt_url + "/inference", files={"file": ("input.wav", audio, "audio/wav")},
-                                       data={"language": "vi", "response_format": "json"})
+                                       # Native whisper-server reuses its decoder state.
+                                       # Each uploaded utterance (including rolling audio
+                                       # snapshots) must be decoded from its own audio,
+                                       # without tokens from another request or session.
+                                       data={"language": "vi", "response_format": "json",
+                                             "no_context": "true"})
             response.raise_for_status()
             return str(response.json().get("text", "")).strip()
         import numpy as np

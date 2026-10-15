@@ -262,11 +262,12 @@ run() {
   bind="${bind:-127.0.0.1}"
   [[ "$(cat "$VIVI_DATA/build/llama-mode-cu118-gcc10")" == cuda ]] || fail "Run setup again: a CUDA build is required"
   [[ "$VIVI_CONTEXT_SIZE" =~ ^[1-9][0-9]*$ ]] || fail "JETSON_AI_CONTEXT_SIZE must be a positive integer"
-  local gpu_layers=99 started=$SECONDS
+  local gpu_layers=99 started=$SECONDS prompt_cache_ram="${JETSON_AI_PROMPT_CACHE_RAM_MB:-0}"
+  [[ "$prompt_cache_ram" =~ ^[0-9]+$ ]] || fail "JETSON_AI_PROMPT_CACHE_RAM_MB must be a nonnegative integer"
   "$VIVI_DATA/build/llama.cpp/$VIVI_NATIVE_BUILD/bin/llama-server" \
     --model "$VIVI_MODEL" --alias vivi-qwen3-1.7b --host 127.0.0.1 \
     --port "$VIVI_BACKEND_PORT" --ctx-size "$VIVI_CONTEXT_SIZE" --parallel 1 \
-    --n-gpu-layers "$gpu_layers" --reasoning off --log-verbosity 4 \
+    --n-gpu-layers "$gpu_layers" --reasoning off --cache-ram "$prompt_cache_ram" --log-verbosity 4 \
     > "$VIVI_DATA/logs/llama-server.log" 2>&1 &
   local llm_pid=$!
   trap 'kill "$llm_pid" 2>/dev/null || true; wait "$llm_pid" 2>/dev/null || true' EXIT INT TERM
@@ -282,9 +283,17 @@ run() {
   (( ready == 1 )) || fail "llama-server did not become ready; see $VIVI_DATA/logs/llama-server.log"
   export JETSON_AI_LLM_LOAD_MS="$(((SECONDS-started)*1000))" JETSON_AI_LLM_PID="$llm_pid"
   started=$SECONDS
+  local stt_device="${JETSON_AI_STT_DEVICE:-cuda}"
+  local -a stt_device_args=()
+  case "$stt_device" in
+    cuda) ;;
+    cpu) stt_device_args+=(--no-gpu) ;;
+    *) fail "JETSON_AI_STT_DEVICE must be cuda or cpu" ;;
+  esac
+  export JETSON_AI_STT_DEVICE="$stt_device"
   "$VIVI_DATA/build/whisper.cpp/$VIVI_NATIVE_BUILD/bin/whisper-server" \
     --model "$VIVI_DATA/models/speech/whisper/ggml-base.bin" --host 127.0.0.1 \
-    --port "$VIVI_STT_PORT" --language vi > "$VIVI_DATA/logs/whisper-server.log" 2>&1 &
+    --port "$VIVI_STT_PORT" --language vi --no-context "${stt_device_args[@]}" > "$VIVI_DATA/logs/whisper-server.log" 2>&1 &
   local stt_pid=$!
   trap 'kill "$stt_pid" "$llm_pid" 2>/dev/null || true; wait "$stt_pid" "$llm_pid" 2>/dev/null || true' EXIT INT TERM
   ready=0

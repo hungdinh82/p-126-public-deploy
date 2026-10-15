@@ -9,7 +9,12 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from src.vivi.capabilities.registry import DEFAULT_CLIMATE_DELTA_CELSIUS, compatible_change
+from src.vivi.capabilities.registry import (
+    DEFAULT_CLIMATE_DELTA_CELSIUS,
+    compatible_change,
+    merge_arguments,
+    merge_exclusions,
+)
 from src.vivi.conversation.context import resolve_query, search_followup_query
 from src.vivi.dialogue.contracts import ActionDraft, NavigationState, SemanticTurn, SessionState
 from src.vivi.navigation.contracts import AreaConstraint, DestinationSpec
@@ -129,7 +134,7 @@ class Lexer:
     def clauses(self, text):
         # Splitting before parsing requires every conjunct to produce a frame.
         raw = re.split(
-            r"\s+(?:và|va|rồi|roi|sau đó|sau do)\s+(?=(?:mở|mo|đóng|dong|đặt|dat|chỉnh|chinh|tăng|tang|giảm|giam|hạ|ha|bật|bat|tắt|tat|phát|phat|dừng|dung|khoá|khóa|khoa|sưởi|suoi|đọc|doc|kiểm|kiem|gửi|gui|gọi|goi|xóa|xoá|xoa|quên|quen|ghi|nhớ|nho)\b)|[,;]\s*(?=(?:mở|mo|đóng|dong|đặt|dat|phát|phat|bật|bat|tắt|tat)\b)",
+            r"\s+(?:và|va|rồi|roi|sau đó|sau do)\s+(?=(?:mở|mo|đóng|dong|đặt|dat|chỉnh|chinh|tăng|tang|giảm|giam|hạ|ha|bật|bat|tắt|tat|phát|phat|dừng|dung|khoá|khóa|khoa|sưởi|suoi|đọc|doc|kiểm|kiem|gửi|gui|gọi|goi|xóa|xoá|xoa|quên|quen|ghi|nhớ|nho|tra)\b)|[,;]\s*(?=(?:mở|mo|đóng|dong|đặt|dat|phát|phat|bật|bat|tắt|tat|tra)\b)",
             text.strip(),
             flags=re.I,
         )
@@ -163,7 +168,15 @@ class OfflineParser:
     def __init__(self):
         self.lexer = Lexer()
 
+    def control_utterance(self, text):
+        return bool(re.match(
+            r"^(?:mo|dong|ha|nang|khoa|bat|tat|phat|dung|dat|chinh|tang|giam|gui|goi|xoa|quen|ghi|nho)\b",
+            self.lexer.normalize(text)))
+
     def interpret(self, text: str, session: SessionState, memory=None, history=None) -> SemanticTurn:
+        segments = [part.strip() for part in text.splitlines() if part.strip()]
+        if len(segments) > 1:
+            return self.interpret_segments(segments, session, memory, history)
         text = strip_fillers(text)
         gear = re.fullmatch(
             r"(?:chuyen|ve|sang|vao)(?: sang| ve)?(?: so| che do)? ([pd])(?: nhe| di)?",
@@ -709,11 +722,68 @@ class OfflineParser:
                 arguments["requested_model_year"] = int(year[1])
         return SemanticTurn(act=act, actions=[ActionDraft(capability=capability, arguments=arguments or {})])
 
+    def interpret_segments(self, segments, session, memory=None, history=None):
+        """Compose pending speech without executing or changing checkpoint state.
+
+        Explicit corrections amend the most recent compatible pending draft;
+        unrelated requests remain ordered. Unknown segments block the snapshot,
+        retaining recognized drafts for clarification rather than partial effects.
+        """
+        actions, unknown = [], []
+        last_text = None
+        for segment in segments:
+            normalized = self.lexer.normalize(segment)
+            if normalized == last_text:
+                continue
+            last_text = normalized
+            correction = re.match(
+                r"^(?:à\s+không|a\s+khong|ý\s+(?:tôi|mình)\s+là|y\s+(?:toi|minh)\s+la|"
+                r"đổi\s+(?:thành|sang)|doi\s+(?:thanh|sang))\b[\s,:;]*", segment, re.I)
+            if correction and actions:
+                replacement = segment[correction.end():].strip()
+                value = self.lexer.normalize(replacement)
+                # A context-dependent value may omit the previous slot's noun.
+                value = re.sub(r"^(?:dat|chinh)(?: (?:thanh|la|len|xuong))? (?=\d)", "", value)
+                for index in range(len(actions) - 1, -1, -1):
+                    previous = actions[index]
+                    patch = self.slot_patch(value, previous, replacement)
+                    if patch and compatible_change(previous, patch):
+                        actions[index] = ActionDraft(
+                            capability=patch.capability,
+                            arguments=merge_arguments(previous, patch),
+                            excluded_zones=merge_exclusions(previous, patch),
+                            exclusion_mode=patch.exclusion_mode,
+                            referenced_target=patch.referenced_target,
+                        )
+                        break
+                else:
+                    unknown.append(segment)
+                continue
+            frame = self.interpret(segment, session, memory, history)
+            if (frame.act not in {"request", "question"} or not frame.actions
+                or frame.negated or frame.conditional or frame.scheduled or frame.conflicting
+                or frame.unresolved):
+                unknown.append(segment)
+                continue
+            actions.extend(frame.actions)
+        if len(actions) > 5 or len(unknown) > 5:
+            return self.ask("Bạn chia yêu cầu thành tối đa năm thao tác mỗi lần nhé.")
+        if unknown:
+            return SemanticTurn(act="clarify", clarification_drafts=actions, unresolved=unknown,
+                                text="Mình chưa hiểu đủ toàn bộ yêu cầu. Bạn nói rõ phần chưa hiểu nhé.")
+        return SemanticTurn(act="request", actions=actions)
+
     def slot_patch(self, value, draft, raw=None):
         # Correction particles belong to this contextual grammar, not global
         # normalization (where they could be part of a place or memory value).
         value = re.sub(r" (?:co ma|ay)$", "", value)
         value = re.sub(r"^(?:a thoi|a|thoi) ", "", value)
+        if draft.capability == "weather.get_forecast":
+            day = re.fullmatch(r"(?:con |vao )?(hom nay|ngay mai|ngay kia)(?: thi sao)?", value)
+            if day:
+                return ActionDraft(capability=draft.capability, arguments={
+                    "forecast_day": {"hom nay": "today", "ngay mai": "tomorrow", "ngay kia": "day_after_tomorrow"}[day[1]],
+                })
         if draft.capability in {"window.set_position", "door.set_open", "door.set_lock"}:
             pair = re.fullmatch(r"(?:chi )?(?:2|hai) (?:cua |window |door |kinh )?(truoc|sau)", value)
             if pair:
@@ -947,6 +1017,10 @@ class OfflineParser:
                 if value.startswith(("tang", "giam", "ha"))
                 else {},
             )
+        target = re.fullmatch(r"(?:dat|chinh)(?: (?:thanh|ve|o))? (\d+(?:[.,]\d+)?) do(?: c)?", value)
+        if target:
+            return ActionDraft(capability="climate.set_temperature",
+                               arguments={"value_celsius": float(target[1].replace(",", "."))})
         match = re.fullmatch(r"(?:tang|giam|ha)(?: them| bot| len| xuong)?\s+(\d+(?:[.,]\d+)?) do(?: c)?", value)
         if match:
             return ActionDraft(
@@ -1531,7 +1605,44 @@ class OfflineParser:
             return self.ask("Mình chưa có thao tác đang chờ xác nhận.")
         value = self.lexer.normalize(text)
         result = semantic.model_copy(deep=True)
+        for action in result.drafts():
+            if action.capability == "conversation.respond":
+                # This is the user's current question, not a model-selected
+                # task/history query. Exact subclauses of compound inputs are
+                # allowed; otherwise the answer generator receives the input.
+                query = action.arguments.query or ""
+                if not query.strip() or normalize_text(query).strip() not in normalize_text(text):
+                    action.arguments.query = text
         bounded = self.interpret(text, session, memory, history)
+        if len([part for part in text.splitlines() if part.strip()]) > 1:
+            if bounded.act == "request" and bounded.actions:
+                return bounded
+            # Do not let a model drop an undecoded vehicle command from a
+            # multi-segment snapshot and execute only the parts it guessed.
+            if bounded.act == "clarify" and any(self.control_utterance(part) for part in bounded.unresolved):
+                return bounded
+        if (bounded.act == "clarify" and result.drafts()
+            and (any(self.control_utterance(part) for part in bounded.unresolved)
+                 or (self.control_utterance(text) and len(self.lexer.clauses(text)) == 1
+                     and not bounded.clarification_drafts))):
+            return bounded
+        literal = self.command(value)
+        if (literal and bounded.act == "request" and len(bounded.actions) == 1
+            and result.act in {"request", "question"} and result.actions
+            and [action.capability for action in result.actions] != [literal.capability]):
+            # A completely parsed literal command cannot authorize additional
+            # or unrelated effects suggested by the model.
+            return bounded
+        if (literal and bounded.act == "request" and len(bounded.actions) == 1
+            and result.act in {"request", "question"} and len(result.actions) == 1
+            and result.actions[0].capability == literal.capability):
+            result.act = "request"
+            if literal.capability in {"window.set_position", "door.set_open", "door.set_lock", "seat.set_heat_level"}:
+                # A named seat/side in a completely consumed literal command
+                # outranks a model's unrelated seat copied from prior context.
+                if literal.arguments.zone is not None or literal.arguments.zones is not None:
+                    result.actions[0].arguments = result.actions[0].arguments.model_copy(update={
+                        key: getattr(literal.arguments, key) for key in ("zone", "zones", "target_side", "target_row")})
         if result.act in {"reply", "offer"}:
             # A model must not turn a recognizable request into a generic
             # greeting/offer. Keep the bounded interpretation whenever it has

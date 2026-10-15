@@ -105,8 +105,7 @@ class InferenceScheduler:
         # A TTS request waiting 5 s outranks newly arriving STT work. Equal
         # priority requests retain FIFO order; running native work is not preempted.
         ordered = sorted(self._pending, key=lambda job:
-                         (0 if job.lease is not None else 1,
-                          (0 if job.model == "stt" else 1) - (now-job.created)/5,
+                         ((0 if job.model == "stt" else 1) - (now-job.created)/5,
                           job.created))
         for job in ordered:
             if job.future.cancelled():

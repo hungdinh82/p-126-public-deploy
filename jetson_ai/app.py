@@ -23,7 +23,7 @@ from jetson_ai.model_metrics import memory_snapshot
 from jetson_ai.scheduler import InferenceScheduler, SchedulingError
 from jetson_ai.speech import SpeechModels
 from jetson_ai.stream_routes import ModelStreams
-from jetson_ai.streaming import worker
+from jetson_ai.streaming import ClientDisconnectedError, while_connected, worker
 
 VERSION = "1.0"
 
@@ -245,7 +245,7 @@ def create_app(config: ServiceConfig, *, transport: httpx.AsyncBaseTransport | N
                          request=request, retryable=True)
         return {"object": "list", "data": [{"id": config.model_id, "object": "model", "owned_by": config.backend_id}]}
 
-    async def complete(payload: dict[str, Any], request: Request, timeout_ms: int | None = None):
+    async def _complete(payload: dict[str, Any], request: Request, timeout_ms: int | None = None):
         nonlocal last_llm_latency, last_llm_first_chunk
         state = await backend_status()
         if state != "ready":
@@ -277,6 +277,15 @@ def create_app(config: ServiceConfig, *, transport: httpx.AsyncBaseTransport | N
             finally:
                 last_llm_latency = round((time.monotonic() - started) * 1000)
                 last_llm_first_chunk = None
+
+    async def connected(operation, request: Request):
+        try:
+            return await while_connected(request, operation)
+        except ClientDisconnectedError:
+            return error("REQUEST_CANCELLED", "Inference caller disconnected", 499, request=request)
+
+    async def complete(payload: dict[str, Any], request: Request, timeout_ms: int | None = None):
+        return await connected(_complete(payload, request, timeout_ms), request)
 
     async def validate_json(request: Request) -> dict[str, Any] | JSONResponse:
         body = bytearray()
@@ -330,7 +339,7 @@ def create_app(config: ServiceConfig, *, transport: httpx.AsyncBaseTransport | N
         else:
             timeout_ms = None
         if payload.get("stream"):
-            return await streams.chat(payload, request, timeout_ms)
+            return await connected(streams.chat(payload, request, timeout_ms), request)
         return await complete(payload, request, timeout_ms)
 
     @app.post("/v1/llm/generate")
@@ -358,8 +367,8 @@ def create_app(config: ServiceConfig, *, transport: httpx.AsyncBaseTransport | N
             return invalid
         source = {**source, "model": config.model_id}
         if source.get("stream"):
-            return await streams.chat(source, request, timeout_ms, {
-                "request_id": payload["request_id"], "call_id": payload["call_id"], "attempt": payload["attempt"]})
+            return await connected(streams.chat(source, request, timeout_ms, {
+                "request_id": payload["request_id"], "call_id": payload["call_id"], "attempt": payload["attempt"]}), request)
         start = time.monotonic()
         result = await complete(source, request, timeout_ms)
         if isinstance(result, JSONResponse):
@@ -426,7 +435,7 @@ def create_app(config: ServiceConfig, *, transport: httpx.AsyncBaseTransport | N
         if stream:
             if payload.get("format", "pcm_s16le") != "pcm_s16le":
                 return error("INVALID_REQUEST", "TTS stream format is pcm_s16le", 400, request=request, capability="tts")
-            return await streams.tts(text.strip(), request)
+            return await connected(streams.tts(text.strip(), request), request)
         started = time.monotonic()
         async with await scheduler.acquire("tts", call_id=request.headers.get("x-vivi-call-id", "")) as lease:
             speech.info["tts"]["status"] = "busy"

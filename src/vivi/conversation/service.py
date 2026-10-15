@@ -15,7 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from src.vivi.agents.prompts import VOICE_PERSONA
 from src.vivi.conversation.guardrails import TOPIC_INSTRUCTION, assess_topic, output_violation
 from src.vivi.information.policy import clock_question, information_decision
-from src.vivi.structured_llm import strict_schema
+from src.vivi.structured_llm import compact_history, strict_schema
 from src.vivi.text import normalize_text
 
 
@@ -298,10 +298,9 @@ class ConversationService:
                 reserve = min(.5, remaining / 2) if deadline and any(n in self.providers for n in chain[index+1:]) else 0
                 payload = json.dumps(
                     {
-                        "question": query,
                         "mode": mode,
                         "topic_policy": topic.metadata(),
-                        "recent_turns": [] if evidence else [{k: t.get(k) for k in ("query", "answer")} for t in (history or [])[-6:]],
+                        "recent_turns": [] if evidence else compact_history(history or []),
                         "preferences": [
                             item
                             for item in memory or []
@@ -311,8 +310,10 @@ class ConversationService:
                         "evidence": [
                             {**passage, "evidence_id": identifier} for identifier, passage in passages.items()
                         ],
+                        "question": query,
                     },
                     ensure_ascii=False,
+                    separators=(",", ":"),
                 )
                 attempt_budget = min(candidate.budget_seconds, remaining - reserve)
                 request_limit = asyncio.timeout(attempt_budget)

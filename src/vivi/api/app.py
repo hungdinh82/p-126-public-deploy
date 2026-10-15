@@ -56,7 +56,7 @@ async def lifespan(app: FastAPI):
 
             async def warmup():
                 try:
-                    await warmup_local_client(client)
+                    await warmup_local_client(client, runtime.orchestrator.local_semantic_catalog)
                     logger.info("Đã warmup prompt cố định của SLM từ xa")
                 except Exception:
                     logger.exception("Warmup SLM từ xa chưa thành công; app vẫn nhận request")

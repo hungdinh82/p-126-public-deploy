@@ -588,6 +588,7 @@ function applyBackendState(vehicle) {
 
 let activeTurn = null;
 let recordingStartPending = false;
+let pendingVoiceUploads = 0;
 const spokenTurnQueue = [];
 let spokenTurnDraining = false;
 let latestVoiceRevision = 0;
@@ -595,6 +596,9 @@ const queuedVoiceResponses = new Set();
 const presentedVoiceResponses = (() => { try { return new Set(JSON.parse(localStorage.getItem('vivi-voice-presented-responses') || '[]')); } catch { return new Set(); } })();
 
 const voiceInputJobs = new Map();
+function awaitingVoiceTranscript() {
+  return pendingVoiceUploads > 0 || [...voiceInputJobs.values()].some(job => !job.transcript);
+}
 let presentedVoiceInputs;
 try { presentedVoiceInputs = new Set(JSON.parse(localStorage.getItem('vivi-voice-presented') || '[]')); }
 catch { presentedVoiceInputs = new Set(); }
@@ -613,7 +617,8 @@ async function speakVoiceResponse(payload, responseId) {
   const revision = payload.response_revision || payload.revision || 0;
   const playback = createTtsPlayback();
   playback.revision = revision;
-  playback.isCurrent = () => revision >= latestVoiceRevision;
+  playback.isCurrent = () => revision >= latestVoiceRevision && !awaitingVoiceTranscript()
+    && recorder?.state !== 'recording' && !recordingStartPending;
   for (const chunk of voiceResponseChunks(payload.message)) {
     if (!playback.isCurrent()) { stopPlayback(); return; }
     await speak(chunk, responseId, playback);
@@ -637,10 +642,11 @@ async function presentVoiceResponse(payload) {
 }
 
 async function drainSpokenTurns() {
-  if (spokenTurnDraining || state.busy || recorder?.state === 'recording' || recordingStartPending) return;
+  if (spokenTurnDraining || state.busy || recorder?.state === 'recording' || recordingStartPending || awaitingVoiceTranscript()) return;
   spokenTurnDraining = true;
   try {
-    while (spokenTurnQueue.length && !state.busy && recorder?.state !== 'recording') {
+    while (spokenTurnQueue.length && !state.busy && recorder?.state !== 'recording'
+           && !recordingStartPending && !awaitingVoiceTranscript()) {
       const next = spokenTurnQueue.shift();
       if (next.revision < latestVoiceRevision || presentedVoiceResponses.has(next.response.turn_id)) {
         queuedVoiceResponses.delete(next.response.turn_id);
@@ -665,7 +671,9 @@ function monitorVoiceInput(job) {
   void (async () => {
     try {
       while (voiceInputJobs.get(job.id) === owned) {
-        const response = await fetch(`${API_BASE}/api/v1/voice/inputs/${encodeURIComponent(job.id)}?session_id=${encodeURIComponent(sessionId)}`);
+        const response = await fetch(`${API_BASE}/api/v1/voice/inputs/${encodeURIComponent(job.id)}?session_id=${encodeURIComponent(sessionId)}`)
+          .catch(() => null);
+        if (!response) { await wait(2000); continue; }
         if (response.status === 404) return;
         if (!response.ok) { await wait(2000); continue; }
         const value = await response.json();
@@ -705,7 +713,10 @@ function monitorVoiceInput(job) {
       }
     } catch (error) {
       console.warn('Voice input remains saved on backend:', error.message);
-    } finally { if (voiceInputJobs.get(job.id) === owned) voiceInputJobs.delete(job.id); }
+    } finally {
+      if (voiceInputJobs.get(job.id) === owned) voiceInputJobs.delete(job.id);
+      void drainSpokenTurns();
+    }
   })();
 }
 
@@ -1127,7 +1138,7 @@ async function startRecording(options) {
   // Where a follow-up returns to if it only hears ViVi's own voice.
   const resume = followUp ? { phase: state.phase, text: $('#response-text')?.textContent || '', kind: followUpArmed } : null;
   try {
-    const capture = { stream: await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } }), chunks: [], socket: null, result: null, unanswered: false, context: null, frame: null };
+    const capture = { stream: await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } }), chunks: [], socket: null, result: null, unanswered: false, context: null, monitorTimer: null, limitTimer: null };
     captureSession = capture;
     const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : '';
     const currentRecorder = new MediaRecorder(capture.stream, mimeType ? { mimeType } : undefined);
@@ -1147,10 +1158,14 @@ async function startRecording(options) {
       if (capture.socket?.readyState === WebSocket.OPEN) capture.socket.send(event.data);
     };
     currentRecorder.onstop = async () => {
+      // Fence old queued speech before any await can let it start playing.
+      // The server revision advances only after STT finishes the new audio.
+      pendingVoiceUploads++;
+      try {
       if (recorder === currentRecorder) recorder = null;
       if (captureSession === capture) captureSession = null;
       $('#demo-mic').classList.remove('recording'); $('#demo-mic').setAttribute('aria-label', 'Bắt đầu thu âm');
-      cancelAnimationFrame(capture.frame); voiceLevel.mic = 0; capture.stream.getTracks().forEach(track => track.stop()); await capture.context?.close();
+      clearInterval(capture.monitorTimer); clearTimeout(capture.limitTimer); voiceLevel.mic = 0; capture.stream.getTracks().forEach(track => track.stop()); await capture.context?.close();
       const blob = new Blob(capture.chunks, { type: currentRecorder.mimeType || 'audio/webm' });
       await socketOpening;
       const socket = capture.socket, result = capture.result;
@@ -1163,10 +1178,13 @@ async function startRecording(options) {
       }
       if (socket) await finishStreaming(socket, result, blob, turnId, resume);
       else await submitRecording(blob, turnId, resume);
+      } finally { pendingVoiceUploads--; void drainSpokenTurns(); }
     };
     currentRecorder.start(250); $('#demo-mic').classList.add('recording'); $('#demo-mic').setAttribute('aria-label', 'Dừng thu âm');
     setPhase('listening', followUp ? 'Mình vẫn đang nghe… cứ nói tiếp nếu bạn cần.' : state.sttStreaming ? 'Mình đang nghe… lời bạn nói sẽ hiện ở đây.' : 'Mình đang nghe… Nhấn mic lần nữa để dừng.');
     capture.context = new AudioContext();
+    await capture.context.resume();
+    if (recorder !== currentRecorder || currentRecorder.state !== 'recording') return;
     const source = capture.context.createMediaStreamSource(capture.stream), analyser = capture.context.createAnalyser(), samples = new Uint8Array(512);
     analyser.fftSize = 1024; source.connect(analyser);
     let heardSpeech = false, silentSince = 0, startedAt = performance.now();
@@ -1176,13 +1194,17 @@ async function startRecording(options) {
       voiceLevel.mic = rms;
       if (rms > .035) { heardSpeech = true; silentSince = 0; }
       else if (heardSpeech && !silentSince) silentSince = performance.now();
-      if (quietLimit && !heardSpeech && performance.now() - startedAt > quietLimit) { unanswered = capture.unanswered = true; stopRecording(); }
+      if (quietLimit && !heardSpeech && performance.now() - startedAt > quietLimit) { capture.unanswered = true; stopRecording(); }
       else if ((silentSince && performance.now() - silentSince > 1400) || performance.now() - startedAt > 30000) stopRecording();
-      else capture.frame = requestAnimationFrame(monitor);
     };
+    // Capture/VAD cannot depend on animation frames: hidden tabs pause them
+    // while MediaRecorder continues accumulating audio and speaker echoes.
+    capture.monitorTimer = setInterval(monitor, 50);
+    capture.limitTimer = setTimeout(stopRecording, 30000);
     monitor();
   } catch (error) {
     const capture=captureSession; captureSession=null;
+    clearInterval(capture?.monitorTimer); clearTimeout(capture?.limitTimer);
     capture?.socket?.close(); capture?.stream?.getTracks().forEach(track=>track.stop());
     await capture?.context?.close().catch(()=>{});
     if (recorder && recorder.state !== 'recording') recorder=null;

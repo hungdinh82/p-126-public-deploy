@@ -15,7 +15,6 @@ from src.vivi.speech.inbox import VoiceInbox
 
 logger = logging.getLogger(__name__)
 MAX_SNAPSHOT_CHARS = 10000
-MAX_SNAPSHOT_CHARS = 10000
 
 
 class VoiceInputService:
@@ -97,6 +96,10 @@ class VoiceInputService:
         self._revision_event(session_id).set()
 
     async def _turn(self,job):
+        while await self._turn_snapshot(job):
+            pass
+
+    async def _turn_snapshot(self,job):
         session_id=job['session_id']
         changed=self._revision_event(session_id)
         # Coalesce short consecutive utterances, but start within a bounded
@@ -127,7 +130,7 @@ class VoiceInputService:
         newly_ready=self.inbox.recognized_for_session(session_id)
         if any(row['revision']>revision for row in newly_ready):
             self._revision_event(session_id).set()
-            return await self._turn(job)
+            return True
         generation_id='voice-'+uuid4().hex
         rows=self.inbox.claim_conversation(session_id,identities,generation_id)
         if not rows:
@@ -136,6 +139,7 @@ class VoiceInputService:
         context={**rows[0]['context'],**rows[-1]['context']}
         context['llm_provider']=rows[-1]['context'].get('llm_provider') or rows[0]['context'].get('llm_provider')
         request = TurnRequest(session_id=session_id,turn_id=generation_id,transcript=transcript,**context)
+        generation = None
         try:
             requested = context.get('llm_provider') or self.runtime.orchestrator.default_provider
             available = getattr(self.runtime.orchestrator,'semantic_providers',self.runtime.orchestrator.graph_providers)
@@ -146,13 +150,18 @@ class VoiceInputService:
                 done,_=await asyncio.wait({generation,revision_changed},return_when=asyncio.FIRST_COMPLETED)
                 if revision_changed in done and generation not in done:
                     cancellation=self.runtime.orchestrator.cancel(session_id,generation_id)
-                    if cancellation.get('cancelled') and not cancellation.get('dispatched'):
+                    if not cancellation.get('dispatched'):
+                        # The turn may still be awaiting its session lock or
+                        # ledger admission, before cancel() can find it. Stop
+                        # that queued coroutine as well as active inference.
+                        if not cancellation.get('cancelled'):
+                            generation.cancel()
                         try:
                             await generation
                         except asyncio.CancelledError:
                             pass
                         self.inbox.requeue_conversation(identities)
-                        return await self._turn(job)
+                        return True
                 response=await generation
             finally:
                 revision_changed.cancel()
@@ -166,7 +175,27 @@ class VoiceInputService:
             if stale:
                 self._revision_event(session_id).set()
         except asyncio.CancelledError:
+            if generation is not None and not generation.done():
+                cancellation = self.runtime.orchestrator.cancel(session_id, generation_id)
+                if cancellation.get('dispatched'):
+                    # Leave the processing binding for ledger reconciliation;
+                    # replaying a dispatched effect after restart is unsafe.
+                    raise
+                if not cancellation.get('cancelled'):
+                    generation.cancel()
+                await asyncio.gather(generation, return_exceptions=True)
             self.inbox.requeue_conversation(identities)
             raise
         except Exception as exc:
+            ledger = self.runtime.orchestrator.ledger
+            entry = await asyncio.to_thread(ledger.turn_status,
+                f'{self.runtime.orchestrator.profile_id}:{session_id}', generation_id, session_id) if ledger else None
+            # Retry only when the ledger proves no effect was dispatched.
+            # Keep every transcript pending; a fresh snapshot can include speech
+            # that arrived during an unavailable backend or failed generation.
+            if ledger and (entry is None or entry['command'] is None):
+                attempts = max(row['attempts'] for row in rows) + 1
+                self.inbox.requeue_conversation(identities, error=str(exc), retry=True,
+                    retry_at=time.time()+min(30,2**min(attempts,5)))
+                return
             self.inbox.settle_conversation(identities,status='failed',error=str(exc))

@@ -106,7 +106,8 @@ async def test_rapid_speech_is_batched_into_one_ordered_snapshot(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_new_speech_cancels_stale_qwen_revision_and_keeps_both_utterances(tmp_path):
+@pytest.mark.parametrize('registered', [True, False])
+async def test_two_new_utterances_replace_running_qwen_with_one_combined_input(tmp_path, registered):
     entered, never_release = asyncio.Event(), asyncio.Event()
     calls=[]
     active=maximum_active=0
@@ -134,8 +135,9 @@ async def test_new_speech_cancels_stale_qwen_revision_and_keeps_both_utterances(
                 active-=1
                 self.active_task=None
         def cancel(self,session_id,turn_id):
-            self.active_task.cancel()
-            return {'cancelled':True,'dispatched':False}
+            if registered:
+                self.active_task.cancel()
+            return {'cancelled':registered,'dispatched':False}
     config=SimpleNamespace(data_dir=tmp_path,store_audio=False,jetson_ai_policy='disabled',jetson_ai_url='')
     orchestrator=Orchestrator()
     runtime=SimpleNamespace(settings=config,stt=STT(),orchestrator=orchestrator,
@@ -146,11 +148,77 @@ async def test_new_speech_cancels_stale_qwen_revision_and_keeps_both_utterances(
     try:
         await asyncio.wait_for(entered.wait(),2)
         second=service.inbox.accept('driver','second',{},audio=b'second correction')
-        await wait_for(lambda:service.inbox.get(second['id'],'driver')['status']=='completed',3)
-        assert calls==['first utterance','first utterance\nsecond correction']
+        third=service.inbox.accept('driver','third',{},audio=b'third addition')
+        await wait_for(lambda:service.inbox.get(third['id'],'driver')['status']=='completed',3)
+        assert calls==['first utterance','first utterance\nsecond correction\nthird addition']
         assert maximum_active==1
         assert service.inbox.get(first['id'],'driver')['status']=='completed'
         assert service.inbox.get(second['id'],'driver')['status']=='completed'
+        assert service.inbox.get(third['id'],'driver')['status']=='completed'
+        assert len({service.inbox.get(job['id'],'driver')['generation_turn_id']
+                    for job in (first,second,third)}) == 1
     finally:
         never_release.set()
         await service.close()
+
+
+@pytest.mark.asyncio
+async def test_predispatch_failure_keeps_transcript_pending_and_retries(tmp_path):
+    attempts = []
+
+    class Ledger:
+        def turn_status(self, *args):
+            return {'status': 'interrupted', 'command': None}
+
+    class Orchestrator:
+        ledger = Ledger()
+        profile_id = 'test'
+        default_provider = 'rules'
+        graph_providers = semantic_providers = {'rules'}
+
+        async def run(self, request, provider):
+            attempts.append(request.transcript)
+            if len(attempts) == 1:
+                raise ConnectionError('backend unavailable before dispatch')
+            return SimpleNamespace(model_dump=lambda **_: {'turn_id':request.turn_id,'message':'recovered'})
+
+    settings = SimpleNamespace(data_dir=tmp_path, store_audio=False, jetson_ai_policy='disabled', jetson_ai_url='')
+    service = VoiceInputService(SimpleNamespace(settings=settings, stt=None, orchestrator=Orchestrator(),
+                                               store=SimpleNamespace(append_event=lambda _: None)))
+    job = service.inbox.accept('driver', 'first', {}, transcript='đặt nhiệt độ 26 độ')
+    await service.start()
+    try:
+        await wait_for(lambda:service.inbox.get(job['id'],'driver')['attempts'] == 1)
+        saved = service.inbox.get(job['id'],'driver')
+        assert saved['status'] == 'recognized' and saved['transcript'] == 'đặt nhiệt độ 26 độ'
+        await wait_for(lambda:service.inbox.get(job['id'],'driver')['status'] == 'completed', 5)
+        assert attempts == ['đặt nhiệt độ 26 độ'] * 2
+    finally:
+        await service.close()
+
+
+@pytest.mark.asyncio
+async def test_worker_shutdown_waits_for_inference_cleanup_and_keeps_pending_text(tmp_path):
+    entered, stopped = asyncio.Event(), asyncio.Event()
+
+    async def run(request, provider):
+        entered.set()
+        try:
+            await asyncio.Event().wait()
+        finally:
+            stopped.set()
+
+    settings = SimpleNamespace(data_dir=tmp_path, store_audio=False, jetson_ai_policy='disabled', jetson_ai_url='')
+    orchestrator = SimpleNamespace(ledger=None, default_provider='rules', graph_providers={'rules'},
+        semantic_providers={'rules'}, run=run, cancel=lambda *_:{'cancelled':False,'dispatched':False})
+    service = VoiceInputService(SimpleNamespace(settings=settings, stt=None, orchestrator=orchestrator,
+        store=SimpleNamespace(append_event=lambda _:None)))
+    job = service.inbox.accept('driver', 'first', {}, transcript='tôi vẫn đang nói')
+    await service.start()
+    try:
+        await asyncio.wait_for(entered.wait(), 2)
+    finally:
+        await service.close()
+    assert stopped.is_set()
+    assert service.inbox.get(job['id'],'driver')['status'] == 'recognized'
+    assert service.inbox.get(job['id'],'driver')['transcript'] == 'tôi vẫn đang nói'

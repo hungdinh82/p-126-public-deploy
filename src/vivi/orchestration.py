@@ -10,6 +10,7 @@ from typing import Any
 from uuid import uuid4
 
 from src.vivi.agents.contracts import AssistantOutput
+from src.vivi.capabilities.registry import catalog
 from src.vivi.config import get_settings
 from src.vivi.graphs.assistant import CONTROL_EVENTS
 from src.vivi.history.erasure import clear_backups
@@ -586,7 +587,9 @@ def create_langgraph_orchestrator(
         try:
             candidate = create_services(config, provider=name)
             client = candidate.semantic_client
-            client.max_tokens, client.max_attempts = config.planner_max_tokens, 1
+            client.max_tokens = (min(config.planner_max_tokens, config.local_llm_max_tokens)
+                                 if name == "local" else config.planner_max_tokens)
+            client.max_attempts = 1
             budget = config.local_request_budget_seconds if name == "local" else config.cloud_budget_seconds
             providers[name] = ModelProvider(name, client, budget)
             generators[name] = candidate.generator
@@ -635,6 +638,9 @@ def create_langgraph_orchestrator(
         profile_id=config.memory_profile_id,
     )
     result.local_semantic_client = providers["local"].client if "local" in providers else None
+    result.local_semantic_catalog = catalog(services.navigation is not None,
+                                           conversation=services.conversation.enabled,
+                                           information=services.information.online)
     result.semantic_providers = {"rules", *providers}
     result.provider_fallbacks = fallback_chains
     return result

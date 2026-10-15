@@ -27,3 +27,36 @@ test('barge-in aborts the old request, cancels backend turn, and unlocks microph
   assert.equal(requests[0].url, 'http://test/api/v1/turns/turn%2Fone/cancel');
   assert.deepEqual(requests[0].body, {session_id: 'driver'});
 });
+
+test('old speech waits during upload and STT, then only the newest revision plays', async () => {
+  const played = [];
+  const sandbox = {
+    state: {busy: false}, recorder: null,
+    localStorage: {getItem: () => null, setItem: () => {}}, played,
+  };
+  vm.createContext(sandbox);
+  vm.runInContext(source.slice(source.indexOf('let activeTurn = null;'),
+                              source.indexOf('let currentNavigationRevision')), sandbox);
+  vm.runInContext(`
+    presentVoiceResponse = async payload => played.push(payload.turn_id);
+    spokenTurnQueue.push({id:'old-input', ids:['old-input'], revision:1,
+                          response:{turn_id:'old', response_revision:1}});
+    pendingVoiceUploads = 1;
+  `, sandbox);
+  await vm.runInContext('drainSpokenTurns()', sandbox);
+  assert.deepEqual(played, []);
+  vm.runInContext(`
+    pendingVoiceUploads = 0;
+    voiceInputJobs.set('new-input', {transcript:false});
+  `, sandbox);
+  await vm.runInContext('drainSpokenTurns()', sandbox);
+  assert.deepEqual(played, []);
+  vm.runInContext(`
+    voiceInputJobs.get('new-input').transcript = true;
+    latestVoiceRevision = 2;
+    spokenTurnQueue.push({id:'new-input', ids:['new-input'], revision:2,
+                          response:{turn_id:'new', response_revision:2}});
+  `, sandbox);
+  await vm.runInContext('drainSpokenTurns()', sandbox);
+  assert.deepEqual(played, ['new']);
+});
