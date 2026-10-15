@@ -13,6 +13,7 @@ from fastapi import WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
 from starlette.background import BackgroundTask
 
+from jetson_ai.scheduler import SchedulingError
 from jetson_ai.streaming import close_iterator, next_or_none, sse, worker
 
 STREAM_HEADERS = {"Cache-Control": "no-cache", "X-Accel-Buffering": "no"}
@@ -23,8 +24,8 @@ class BackendBusyError(RuntimeError):
 
 
 class ModelStreams:
-    def __init__(self, config, speech, slots, backend_status, error, record_llm, transport=None):
-        self.config, self.speech, self.slots = config, speech, slots
+    def __init__(self, config, speech, scheduler, backend_status, error, record_llm, transport=None):
+        self.config, self.speech, self.scheduler = config, speech, scheduler
         self.backend_status, self.error, self.record_llm = backend_status, error, record_llm
         self.transport = transport
 
@@ -33,11 +34,11 @@ class ModelStreams:
         if state != "ready":
             return self.error("MODEL_LOADING" if state == "loading" else "CAPABILITY_UNAVAILABLE",
                               "LLM backend is not ready", 503, request=request, retryable=True)
-        if self.slots.locked():
-            return self.error("BACKEND_BUSY", "GPU stage is busy", 429, request=request, retryable=True)
-        await self.slots.acquire()
+        deadline = time.monotonic() + timeout_ms / 1000 if timeout_ms else None
+        lease = await self.scheduler.acquire("llm", timeout=timeout_ms / 1000 if timeout_ms else None,
+                                                 call_id=request.headers.get("x-vivi-call-id", ""))
         started = time.monotonic()
-        timeout = min(self.config.timeout_seconds, timeout_ms / 1000) if timeout_ms else self.config.timeout_seconds
+        timeout = min(self.config.timeout_seconds, max(.001, deadline-time.monotonic())) if deadline else self.config.timeout_seconds
         client = httpx.AsyncClient(transport=self.transport, timeout=timeout)
         upstream = None
         closed = False
@@ -55,12 +56,13 @@ class ModelStreams:
                     await client.aclose()
                 finally:
                     self.record_llm(round((time.monotonic() - started) * 1000), first_ms)
-                    self.slots.release()
+                    lease.release()
 
         try:
             outgoing = client.build_request("POST", self.config.backend_url.rstrip("/") + "/v1/chat/completions",
                                             json={**payload, "stream": True})
-            upstream = await client.send(outgoing, stream=True)
+            async with asyncio.timeout(timeout):
+                upstream = await client.send(outgoing, stream=True)
             if upstream.status_code >= 400:
                 status = 429 if upstream.status_code == 429 else 502
                 await cleanup()
@@ -70,7 +72,7 @@ class ModelStreams:
             if "text/event-stream" not in upstream.headers.get("content-type", ""):
                 await cleanup()
                 return self.error("MODEL_ERROR", "LLM backend did not return SSE", 502, request=request)
-        except httpx.TimeoutException:
+        except (httpx.TimeoutException, TimeoutError):
             await cleanup()
             return self.error("SERVICE_TIMEOUT", "LLM backend timed out", 504, request=request, retryable=True)
         except httpx.HTTPError:
@@ -81,7 +83,7 @@ class ModelStreams:
             raise
 
         base = {"contract_version": "1.0", "backend_id": self.config.backend_id,
-                "model_id": self.config.model_id, **(envelope or {})}
+                "model_id": self.config.model_id, "queue_ms": lease.queue_ms, **(envelope or {})}
 
         async def events():
             nonlocal first_ms
@@ -143,9 +145,7 @@ class ModelStreams:
                                  background=BackgroundTask(cleanup))
 
     async def tts(self, text, request):
-        if self.slots.locked():
-            return self.error("BACKEND_BUSY", "GPU stage is busy", 429, request=request, capability="tts", retryable=True)
-        await self.slots.acquire()
+        lease = await self.scheduler.acquire("tts", call_id=request.headers.get("x-vivi-call-id", ""))
         started = time.monotonic()
         state = self.speech.info["tts"]
         state["status"] = "busy"
@@ -162,7 +162,7 @@ class ModelStreams:
                 finally:
                     state.update(status="ready", last_latency_ms=round((time.monotonic() - started) * 1000),
                                  first_chunk_ms=first_ms)
-                    self.slots.release()
+                    lease.release()
 
         # Detect first-step errors before committing an HTTP 200 audio stream.
         try:
@@ -170,6 +170,7 @@ class ModelStreams:
             if not first:
                 raise ValueError("No audio generated")
             first_ms = round((time.monotonic() - started) * 1000)
+            lease.pause()
         except BaseException as exc:
             await cleanup()
             if isinstance(exc, Exception):
@@ -185,7 +186,8 @@ class ModelStreams:
                     remaining = self.config.timeout_seconds - (time.monotonic() - started)
                     if remaining <= 0:
                         raise TimeoutError("TTS stream deadline exceeded")
-                    chunk = await asyncio.wait_for(worker(next_or_none, chunks), remaining)
+                    async with lease.step(timeout=remaining):
+                        chunk = await asyncio.wait_for(worker(next_or_none, chunks), remaining)
                     if chunk is None:
                         break
                     yield chunk
@@ -212,9 +214,7 @@ class ModelStreams:
                 await socket.close(code=1008)
 
             async def decode():
-                if self.slots.locked():
-                    raise BackendBusyError("GPU stage is busy")
-                async with self.slots:
+                async with await self.scheduler.acquire("stt"):
                     state["status"] = "busy"
                     output = io.BytesIO()
                     with wave.open(output, "wb") as wav:
@@ -234,7 +234,7 @@ class ModelStreams:
                             or isinstance(token, str) and hmac.compare_digest(token.encode(), self.config.token.encode())):
                         await fail("UNAUTHORIZED", "Invalid service token")
                         return
-                    if state["status"] != "ready":
+                    if state["status"] not in {"ready", "busy"}:
                         await fail("BACKEND_BUSY" if state["status"] == "busy" else "CAPABILITY_UNAVAILABLE", "STT not ready")
                         return
                     if not isinstance(setup, dict) or setup.get("type") != "start" or setup.get("sample_rate") != 16000 or setup.get("format") != "pcm_s16le" or setup.get("channels", 1) != 1:
@@ -283,7 +283,7 @@ class ModelStreams:
                 pass
             except Exception as exc:
                 try:
-                    code = "SERVICE_TIMEOUT" if isinstance(exc, TimeoutError) else "BACKEND_BUSY" if isinstance(exc, BackendBusyError) else "MODEL_ERROR"
+                    code = exc.code if isinstance(exc, SchedulingError) else "SERVICE_TIMEOUT" if isinstance(exc, TimeoutError) else "MODEL_ERROR"
                     await fail(code, "STT stream failed")
                 except (RuntimeError, WebSocketDisconnect):
                     pass

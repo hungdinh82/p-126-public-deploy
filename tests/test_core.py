@@ -221,6 +221,8 @@ class TTSTests(unittest.TestCase):
 
     def test_stream_route_returns_pcm_chunks_and_format(self):
         class FakeTTS:
+            name = 'vieneu'
+            device = 'cloud'
             sample_rate = 48000
             voice = "Mai Bé Phương"
 
@@ -297,7 +299,7 @@ class APITests(unittest.TestCase):
         options = response.json()["llm"]["options"]
         # The catalog follows config (cloud entries appear when rag_local_only is off);
         # without credentials only the scripted provider can run.
-        self.assertEqual({item["provider"] for item in options}, set(runtime.llm_models))
+        self.assertEqual({item["provider"] for item in options}, {"auto", *runtime.llm_models})
         self.assertIn("rules", {item["provider"] for item in options if item["available"]})
 
     def test_turn_uses_selected_provider_without_changing_default(self):

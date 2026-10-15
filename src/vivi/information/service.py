@@ -94,9 +94,10 @@ class TavilyQuota:
 
 
 class InformationService:
-    def __init__(self, settings, conversation, *, transport=None):
+    def __init__(self, settings, conversation, *, transport=None, connectivity=None):
         self.settings, self.conversation, self.transport = settings, conversation, transport
         self.quota = TavilyQuota(settings.data_dir / "runtime" / "information-usage.sqlite3", settings.tavily_monthly_limit)
+        self.connectivity = connectivity
         self.cache = {}
         self.search_unavailable_until = 0
 
@@ -104,9 +105,14 @@ class InformationService:
     def online(self):
         return self.settings.information_enabled and self.settings.jetson_ai_policy != "offline_only" and not self.settings.rag_local_only
 
+    @property
+    def network_allowed(self):
+        return self.online and (self.connectivity is None or not self.connectivity.routing_active
+                                or self.connectivity.capability_available('rag', 'cloud'))
+
     async def request(self, method, url, **kwargs):
         # Enforce policy immediately before each outbound HTTP operation.
-        if not self.online:
+        if not self.network_allowed:
             raise InformationError("internet_disabled", "Mình đang không truy cập internet nên chưa lấy được thông tin mới.")
         async with httpx.AsyncClient(timeout=self.settings.information_http_timeout_seconds, transport=self.transport,
                                      follow_redirects=False, headers={"User-Agent": "ViVi-CabinCopilot/1.0"}) as client:
@@ -281,7 +287,7 @@ class InformationService:
             topic = assess_topic(text or "")
             if topic.terminal:
                 return topic.result()
-        if not self.online:
+        if not self.network_allowed:
             return {"status": "blocked", "message": "Mình đang không truy cập internet nên chưa lấy được thông tin mới.", "error_code": "internet_disabled"}
         query = resolve_query(arguments["query"], session, topic_reference=capability != "weather.get_forecast")
         question = resolve_query(event.text, session, topic_reference=capability != "weather.get_forecast") if event.kind == "utterance" and event.text else query

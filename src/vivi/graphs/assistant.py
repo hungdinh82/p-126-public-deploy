@@ -383,9 +383,10 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
     if services.conversation is None:
         from src.vivi.conversation.service import ConversationService
 
-        services.conversation = ConversationService(resolver.providers, fallback_chains=resolver.fallback_chains)
+        services.conversation = ConversationService(resolver.providers, fallback_chains=resolver.fallback_chains, chain_provider=resolver.chain_provider)
     runtime = CapabilityRuntime(
-        services, store, generators, budgets, resolver.breaker_seconds, provider_chains=resolver.fallback_chains
+        services, store, generators, budgets, resolver.breaker_seconds,
+        provider_chains=resolver.fallback_chains, chain_provider=resolver.chain_provider,
     )
     if store is None:
         from pathlib import Path
@@ -569,6 +570,17 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
         elif event.kind == "action" and event.action:
             semantic, served, attempts = SemanticTurn(act="request", actions=[event.action]), "event", []
         else:
+            observation = None
+            if event.provider == "local":
+                try:
+                    vehicle = await services.action_gateway.vehicle.get_state(event.session_id)
+                    observation = {"state_version": vehicle.state_version,
+                        "door_open": {zone: state.open for zone, state in vehicle.door_states},
+                        "hood_open": vehicle.hood_open, "trunk_open": vehicle.trunk_open}
+                except Exception:
+                    # Model chat remains usable if telemetry is unavailable;
+                    # execution still requires the vehicle gateway's validation.
+                    observation = {"available": False}
             semantic, served, attempts = await external_read(
                 resolver.resolve(
                     event.text,
@@ -576,6 +588,7 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
                     requested=event.provider,
                     history=turn["history"],
                     memory=turn["memory"],
+                    observation=observation,
                     catalog=catalog(services.navigation is not None, conversation=services.conversation.enabled,
                                     information=services.information is not None and services.information.online),
                 ),
@@ -613,8 +626,16 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
             reducer_input.navigation_workspace.history = []
         if update.get("clear_journey"):
             reducer_input = clear_journey(reducer_input)
+        if (state["event"]["provider"] == "local" or state["turn"].get("effective_provider") == "local") and state["event"]["kind"] == "utterance":
+            from src.vivi.dialogue.local_forms import close_obsolete_forms
+            reducer_input = close_obsolete_forms(reducer_input, semantic)
         session, message = reduce_turn(
-            reducer_input, semantic, revoke_consent_on_clarify=state["event"]["kind"] == "utterance"
+            reducer_input, semantic, revoke_consent_on_clarify=(
+                state["event"]["kind"] == "utterance" and not any(
+                    attempt.get("source") == "model_form_unavailable" and attempt.get("preserve_form")
+                    for attempt in state["turn"].get("provider_attempts", [])
+                )
+            )
         )
         if semantic.act == "clarify" and session.clarification:
             session.clarification.source_text = (

@@ -38,7 +38,8 @@ class JetsonProviderRouter:
                 llm = payload.get("capabilities", {}).get("llm", {})
                 self._cached_ready = (
                     payload.get("contract_version") == "1.0"
-                    and llm.get("status") == "ready"
+                    and llm.get("status") in {"ready", "busy"}
+                    and llm.get("accepting_requests", llm.get("status") == "ready")
                     and llm.get("model_id") == self.config.local_llm_model
                 )
             except (httpx.HTTPError, ValueError, TypeError, AttributeError):

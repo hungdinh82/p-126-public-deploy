@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import hmac
 import json
+import logging
 import os
 import re
 import socket
@@ -19,8 +20,10 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response
 
 from jetson_ai.config import auth_required
 from jetson_ai.model_metrics import memory_snapshot
+from jetson_ai.scheduler import InferenceScheduler, SchedulingError
 from jetson_ai.speech import SpeechModels
 from jetson_ai.stream_routes import ModelStreams
+from jetson_ai.streaming import ClientDisconnectedError, while_connected, worker
 
 VERSION = "1.0"
 
@@ -33,8 +36,13 @@ class ServiceConfig:
     backend_id: str = "jetson-xavier"
     max_input_bytes: int = 262144
     max_tokens: int = 2048
-    timeout_seconds: float = 60.0
-    max_concurrent: int = 1
+    timeout_seconds: float = 90.0
+    scheduling_policy: str = "speech_reserved"
+    llm_queue_size: int = 4
+    speech_queue_size: int = 8
+    llm_queue_timeout_seconds: float = 90.0
+    stt_queue_timeout_seconds: float = 15.0
+    tts_queue_timeout_seconds: float = 30.0
     enable_speech: bool = False
     llm_model_path: str = ""
     llm_log_path: str = ""
@@ -46,16 +54,26 @@ class ServiceConfig:
         required = auth_required()
         if required and len(token) < 32:
             raise RuntimeError("JETSON_AI_TOKEN must contain at least 32 characters")
-        concurrency = int(os.environ.get("JETSON_AI_MAX_CONCURRENT", "1"))
-        if concurrency < 1 or concurrency > 4:
-            raise RuntimeError("JETSON_AI_MAX_CONCURRENT must be between 1 and 4")
+        if "JETSON_AI_MAX_CONCURRENT" in os.environ:
+            logging.getLogger(__name__).warning("JETSON_AI_MAX_CONCURRENT is obsolete; use per-model queues and JETSON_AI_SCHEDULING_POLICY")
+        def positive(name, default, cast=float):
+            value = cast(os.environ.get(name, str(default)))
+            if not 0 < value <= 600:
+                raise RuntimeError(f"{name} must be positive and <=600")
+            return value
         return cls(
             token=token,
             auth_required=required,
             model_id=os.environ.get("JETSON_AI_MODEL_ID", "vivi-qwen3-1.7b"),
             backend_url=os.environ.get("JETSON_AI_LLM_URL", "http://127.0.0.1:1235"),
             backend_id=os.environ.get("JETSON_AI_BACKEND_ID", "jetson-xavier"),
-            max_concurrent=concurrency,
+            timeout_seconds=positive("JETSON_AI_INFERENCE_TIMEOUT_SECONDS", 90),
+            scheduling_policy=os.environ.get("JETSON_AI_SCHEDULING_POLICY", "speech_reserved"),
+            llm_queue_size=positive("JETSON_AI_LLM_QUEUE_SIZE", 4, int),
+            speech_queue_size=positive("JETSON_AI_SPEECH_QUEUE_SIZE", 8, int),
+            llm_queue_timeout_seconds=positive("JETSON_AI_LLM_QUEUE_TIMEOUT_SECONDS", 90),
+            stt_queue_timeout_seconds=positive("JETSON_AI_STT_QUEUE_TIMEOUT_SECONDS", 15),
+            tts_queue_timeout_seconds=positive("JETSON_AI_TTS_QUEUE_TIMEOUT_SECONDS", 30),
             enable_speech=os.environ.get("JETSON_AI_ENABLE_SPEECH") == "1",
             llm_model_path=os.environ.get("JETSON_AI_LLM_MODEL_PATH", ""),
             llm_log_path=os.environ.get("JETSON_AI_LLM_LOG", ""),
@@ -63,18 +81,21 @@ class ServiceConfig:
 
 
 def create_app(config: ServiceConfig, *, transport: httpx.AsyncBaseTransport | None = None) -> FastAPI:
-    slots = asyncio.Semaphore(config.max_concurrent)
-    active = 0
+    scheduler = InferenceScheduler(policy=config.scheduling_policy,
+        queue_limits={"llm": config.llm_queue_size, "stt": config.speech_queue_size, "tts": config.speech_queue_size},
+        queue_timeouts={"llm": config.llm_queue_timeout_seconds, "stt": config.stt_queue_timeout_seconds,
+                        "tts": config.tts_queue_timeout_seconds})
     last_llm_latency = None
     last_llm_first_chunk = None
     speech = SpeechModels()
     load_task = None
 
     async def load_speech():
-        async with slots:
-            for name in ("stt", "tts"):
-                if speech.info[name]["status"] != "ready":
-                    await asyncio.to_thread(speech.load, name)
+        for name in ("stt", "tts"):
+            if speech.info[name]["status"] == "unavailable":
+                # Loading TTS must not take STT's inference lane. Reload never
+                # replaces a model with active inference or queued requests.
+                await worker(speech.load, name)
 
     @asynccontextmanager
     async def lifespan(_app):
@@ -89,6 +110,7 @@ def create_app(config: ServiceConfig, *, transport: httpx.AsyncBaseTransport | N
     app = FastAPI(title="ViVi Jetson AI", docs_url=None, redoc_url=None, openapi_url=None,
                   lifespan=lifespan)
     app.state.speech = speech
+    app.state.scheduler = scheduler
 
     def error(code: str, message: str, status: int, *, request: Request | None = None,
               retryable: bool = False, capability: str = "llm") -> JSONResponse:
@@ -99,6 +121,13 @@ def create_app(config: ServiceConfig, *, transport: httpx.AsyncBaseTransport | N
                                "call_id": getattr(request.state, "call_id", request.headers.get("x-vivi-call-id", "")) if request else "",
                                "attempt": getattr(request.state, "attempt", request.headers.get("x-vivi-attempt", "1")) if request else "1"}},
         )
+
+    @app.exception_handler(SchedulingError)
+    async def scheduling_error(request, exc):
+        response = error(exc.code, str(exc), exc.status, request=request,
+                         capability=exc.capability, retryable=True)
+        response.headers["Retry-After"] = "1"
+        return response
 
     async def backend_status() -> str:
         try:
@@ -118,7 +147,7 @@ def create_app(config: ServiceConfig, *, transport: httpx.AsyncBaseTransport | N
         nonlocal last_llm_latency, last_llm_first_chunk
         last_llm_latency, last_llm_first_chunk = latency, first_chunk
 
-    streams = ModelStreams(config, speech, slots, backend_status, error, record_llm, transport)
+    streams = ModelStreams(config, speech, scheduler, backend_status, error, record_llm, transport)
     streams.install(app)
 
     @app.middleware("http")
@@ -167,7 +196,7 @@ def create_app(config: ServiceConfig, *, transport: httpx.AsyncBaseTransport | N
     @app.get("/v1/capabilities")
     async def capabilities():
         llm_status = await backend_status()
-        if llm_status == "ready" and slots.locked():
+        if llm_status == "ready" and scheduler.snapshot("llm")["active_requests"]:
             llm_status = "busy"
         log = Path(config.llm_log_path)
         data = log.read_text(errors="replace") if config.llm_log_path and log.is_file() else ""
@@ -178,7 +207,7 @@ def create_app(config: ServiceConfig, *, transport: httpx.AsyncBaseTransport | N
                 "host": socket.gethostname(), "api_url": config.backend_url,
                 "capabilities": {
                     "llm": {"status": llm_status, "model_id": config.model_id,
-                            "stream": True, "stream_protocol": "sse", "queue_depth": 0,
+                            "stream": True, "stream_protocol": "sse",
                             "model_path": config.llm_model_path, "api_url": config.backend_url,
                             "host": socket.gethostname(), "pid": os.environ.get("JETSON_AI_LLM_PID"),
                             "device": "not-loaded" if llm_status in {"unavailable", "loading"} else "cuda" if gpu else "cpu" if offloads else "unknown",
@@ -192,6 +221,10 @@ def create_app(config: ServiceConfig, *, transport: httpx.AsyncBaseTransport | N
                     "tts": dict(speech.info["tts"]),
                 }}
         models = result["capabilities"]
+        result["scheduling_policy"] = scheduler.policy
+        for name, model in models.items():
+            model.update(scheduler.snapshot(name))
+            model["accepting_requests"] = model["accepting_requests"] and model["status"] in {"ready", "busy"}
         architectures = re.findall(r"general\.architecture(?:\s+str)?\s*(?:=|:)\s*(\S+)", data)
         models["llm"]["architecture"] = architectures[-1] if architectures else config.model_id
         models["llm"]["engine"] = "llama.cpp"
@@ -212,22 +245,19 @@ def create_app(config: ServiceConfig, *, transport: httpx.AsyncBaseTransport | N
                          request=request, retryable=True)
         return {"object": "list", "data": [{"id": config.model_id, "object": "model", "owned_by": config.backend_id}]}
 
-    async def complete(payload: dict[str, Any], request: Request, timeout_ms: int | None = None):
-        nonlocal active, last_llm_latency, last_llm_first_chunk
+    async def _complete(payload: dict[str, Any], request: Request, timeout_ms: int | None = None):
+        nonlocal last_llm_latency, last_llm_first_chunk
         state = await backend_status()
         if state != "ready":
             code = "MODEL_LOADING" if state == "loading" else "CAPABILITY_UNAVAILABLE"
             return error(code, "LLM backend is not ready", 503, request=request, retryable=True)
-        if slots.locked():
-            result = error("BACKEND_BUSY", "LLM backend is busy", 429, request=request, retryable=True)
-            result.headers["Retry-After"] = "1"
-            return result
-        async with slots:
-            active += 1
+        deadline = time.monotonic() + timeout_ms / 1000 if timeout_ms else None
+        async with await scheduler.acquire("llm", timeout=timeout_ms / 1000 if timeout_ms else None,
+                                                                      call_id=request.headers.get("x-vivi-call-id", "")):
             started = time.monotonic()
             try:
-                timeout = min(config.timeout_seconds, timeout_ms / 1000) if timeout_ms else config.timeout_seconds
-                async with httpx.AsyncClient(transport=transport, timeout=timeout) as client:
+                timeout = min(config.timeout_seconds, max(.001, deadline-time.monotonic())) if deadline else config.timeout_seconds
+                async with asyncio.timeout(timeout), httpx.AsyncClient(transport=transport, timeout=timeout) as client:
                     response = await client.post(config.backend_url.rstrip("/") + "/v1/chat/completions", json=payload)
                 if response.status_code >= 400:
                     code = "BACKEND_BUSY" if response.status_code == 429 else "MODEL_ERROR"
@@ -240,14 +270,22 @@ def create_app(config: ServiceConfig, *, transport: httpx.AsyncBaseTransport | N
                 if not isinstance(message, dict) or ("content" not in message and "tool_calls" not in message):
                     raise ValueError("missing assistant message")
                 return body
-            except httpx.TimeoutException:
+            except (httpx.TimeoutException, TimeoutError):
                 return error("SERVICE_TIMEOUT", "LLM backend timed out", 504, request=request, retryable=True)
             except (httpx.HTTPError, ValueError, TypeError):
                 return error("MODEL_ERROR", "LLM backend returned an invalid response", 502, request=request)
             finally:
-                active -= 1
                 last_llm_latency = round((time.monotonic() - started) * 1000)
                 last_llm_first_chunk = None
+
+    async def connected(operation, request: Request):
+        try:
+            return await while_connected(request, operation)
+        except ClientDisconnectedError:
+            return error("REQUEST_CANCELLED", "Inference caller disconnected", 499, request=request)
+
+    async def complete(payload: dict[str, Any], request: Request, timeout_ms: int | None = None):
+        return await connected(_complete(payload, request, timeout_ms), request)
 
     async def validate_json(request: Request) -> dict[str, Any] | JSONResponse:
         body = bytearray()
@@ -301,7 +339,7 @@ def create_app(config: ServiceConfig, *, transport: httpx.AsyncBaseTransport | N
         else:
             timeout_ms = None
         if payload.get("stream"):
-            return await streams.chat(payload, request, timeout_ms)
+            return await connected(streams.chat(payload, request, timeout_ms), request)
         return await complete(payload, request, timeout_ms)
 
     @app.post("/v1/llm/generate")
@@ -329,8 +367,8 @@ def create_app(config: ServiceConfig, *, transport: httpx.AsyncBaseTransport | N
             return invalid
         source = {**source, "model": config.model_id}
         if source.get("stream"):
-            return await streams.chat(source, request, timeout_ms, {
-                "request_id": payload["request_id"], "call_id": payload["call_id"], "attempt": payload["attempt"]})
+            return await connected(streams.chat(source, request, timeout_ms, {
+                "request_id": payload["request_id"], "call_id": payload["call_id"], "attempt": payload["attempt"]}), request)
         start = time.monotonic()
         result = await complete(source, request, timeout_ms)
         if isinstance(result, JSONResponse):
@@ -344,11 +382,9 @@ def create_app(config: ServiceConfig, *, transport: httpx.AsyncBaseTransport | N
 
     @app.post("/v1/stt/transcriptions")
     async def stt(request: Request):
-        if speech.info["stt"]["status"] != "ready":
+        if speech.info["stt"]["status"] not in {"ready", "busy"}:
             return error("CAPABILITY_UNAVAILABLE", speech.info["stt"].get("error") or "STT not ready",
                          503, request=request, capability="stt")
-        if slots.locked():
-            return error("BACKEND_BUSY", "GPU stage is busy", 429, request=request, capability="stt", retryable=True)
         form = await request.form()
         upload = form.get("file") or form.get("audio")
         if not hasattr(upload, "read"):
@@ -368,15 +404,10 @@ def create_app(config: ServiceConfig, *, transport: httpx.AsyncBaseTransport | N
         except (wave.Error, EOFError, ValueError) as exc:
             return error("INVALID_REQUEST", str(exc), 400, request=request, capability="stt")
         started = time.monotonic()
-        async with slots:
+        async with await scheduler.acquire("stt", call_id=request.headers.get("x-vivi-call-id", "")) as lease:
             speech.info["stt"]["status"] = "busy"
             try:
-                task = asyncio.create_task(asyncio.to_thread(speech.transcribe, audio))
-                try:
-                    text = await asyncio.shield(task)
-                except asyncio.CancelledError:
-                    await task
-                    raise
+                text = await worker(speech.transcribe, audio)
                 if not text:
                     raise RuntimeError("Empty transcript")
             except Exception as exc:
@@ -384,12 +415,12 @@ def create_app(config: ServiceConfig, *, transport: httpx.AsyncBaseTransport | N
             finally:
                 speech.info["stt"].update(status="ready", last_latency_ms=round((time.monotonic() - started) * 1000), first_chunk_ms=None)
         return {"contract_version": VERSION, "model_id": "whisper-base", "text": text,
-                "latency_ms": speech.info["stt"]["last_latency_ms"]}
+                "latency_ms": speech.info["stt"]["last_latency_ms"], "queue_ms": lease.queue_ms}
 
     @app.post("/v1/tts/synthesize")
     @app.post("/v1/tts/stream")
     async def tts(request: Request):
-        if speech.info["tts"]["status"] != "ready":
+        if speech.info["tts"]["status"] not in {"ready", "busy"}:
             return error("CAPABILITY_UNAVAILABLE", speech.info["tts"].get("error") or "TTS not ready",
                          503, request=request, capability="tts")
         payload = await validate_json(request)
@@ -404,25 +435,19 @@ def create_app(config: ServiceConfig, *, transport: httpx.AsyncBaseTransport | N
         if stream:
             if payload.get("format", "pcm_s16le") != "pcm_s16le":
                 return error("INVALID_REQUEST", "TTS stream format is pcm_s16le", 400, request=request, capability="tts")
-            return await streams.tts(text.strip(), request)
-        if slots.locked():
-            return error("BACKEND_BUSY", "GPU stage is busy", 429, request=request, capability="tts", retryable=True)
+            return await connected(streams.tts(text.strip(), request), request)
         started = time.monotonic()
-        async with slots:
+        async with await scheduler.acquire("tts", call_id=request.headers.get("x-vivi-call-id", "")) as lease:
             speech.info["tts"]["status"] = "busy"
             try:
-                task = asyncio.create_task(asyncio.to_thread(speech.synthesize, text.strip()))
-                try:
-                    audio = await asyncio.shield(task)
-                except asyncio.CancelledError:
-                    await task
-                    raise
+                audio = await worker(speech.synthesize, text.strip())
             except Exception as exc:
                 return error("MODEL_ERROR", str(exc), 502, request=request, capability="tts")
             finally:
                 speech.info["tts"].update(status="ready", last_latency_ms=round((time.monotonic() - started) * 1000), first_chunk_ms=None)
         return Response(audio, media_type="audio/wav", headers={
             "X-ViVi-Latency-Ms": str(speech.info["tts"]["last_latency_ms"]),
+            "X-ViVi-Queue-Ms": str(lease.queue_ms),
             "X-Audio-Sample-Rate": str(speech.info["tts"]["sample_rate"]),
             "X-Audio-Channels": "1", "X-Model-Id": "ZeroTTS", "X-Voice-Id": "VIVI",
         })

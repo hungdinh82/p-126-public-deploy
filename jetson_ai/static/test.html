@@ -30,7 +30,7 @@ const $=id=>document.getElementById(id);
 const callId=()=>crypto.randomUUID?crypto.randomUUID():Array.from(crypto.getRandomValues(new Uint8Array(16)),v=>v.toString(16).padStart(2,'0')).join('');
 let token=localToken||sessionStorage.getItem('vivi-ai-test-token')||'', busy=false, recorder=null, micStream=null, audioUrl=null, traces=[];
 $('token').value=token;if(localToken||!authRequired)$('auth').hidden=true;
-const fields=[['model_id','Model'],['architecture','Kiến trúc'],['engine','Runtime'],['memory_usage','RAM tiến trình (RSS)'],['model_path','Model load từ'],['precision','Độ chính xác số'],['api_url','Model API'],['location','Chạy tại'],['device','Thiết bị thực tế'],['load_ms','Thời gian load'],['last_latency_ms','Lần xử lý gần nhất'],['first_chunk_ms','Phần đầu tiên'],['stream_mode','Kiểu streaming']];
+const fields=[['model_id','Model'],['active_requests','Request đang chạy'],['queue_depth','Request đang chờ'],['queue_capacity','Sức chứa hàng đợi'],['last_queue_ms','Thời gian chờ gần nhất'],['architecture','Kiến trúc'],['engine','Runtime'],['memory_usage','RAM tiến trình (RSS)'],['model_path','Model load từ'],['precision','Độ chính xác số'],['api_url','Model API'],['location','Chạy tại'],['device','Thiết bị thực tế'],['load_ms','Thời gian load'],['last_latency_ms','Lần xử lý gần nhất'],['first_chunk_ms','Phần đầu tiên'],['stream_mode','Kiểu streaming']];
 for(const name of ['stt','llm','tts']){
  const c=document.createElement('div');c.className='card';c.id='card-'+name;
  const h=document.createElement('h2');h.append(name==='llm'?'SLM':name.toUpperCase());const badge=document.createElement('span');badge.id=name+'-status';badge.className='badge';badge.textContent='Đang kiểm tra';h.append(badge);c.append(h);
@@ -70,7 +70,7 @@ async function synthesize(text){
 async function generate(){
  const text=$('prompt').value.trim();if(!text)throw new Error('Hãy nhập câu hỏi.');$('progress').textContent='SLM đang sinh câu trả lời…';
  if($('llm-stream').checked){const answer=await generateStream(text);if($('read').checked)await synthesize(answer);return}
- const result=await(await api('/v1/llm/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contract_version:'1.0',capability:'llm',request_id:callId(),call_id:callId(),attempt:1,timeout_ms:60000,input:{messages:[{role:'system',content:'Bạn là trợ lý hữu ích. Trả lời bằng tiếng Việt, ngắn gọn trong một hoặc hai câu. /no_think'},{role:'user',content:text}],max_tokens:128,temperature:0.2,chat_template_kwargs:{enable_thinking:false}}})})).json();
+ const result=await(await api('/v1/llm/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contract_version:'1.0',capability:'llm',request_id:callId(),call_id:callId(),attempt:1,timeout_ms:180000,input:{messages:[{role:'system',content:'Bạn là trợ lý hữu ích. Trả lời bằng tiếng Việt, ngắn gọn trong một hoặc hai câu. /no_think'},{role:'user',content:text}],max_tokens:128,temperature:0.2,chat_template_kwargs:{enable_thinking:false}}})})).json();
  stage('llm',result.latency_ms);const answer=result.result.text||'';$('answer').textContent=answer;if($('read').checked)await synthesize(answer);
 }
 async function toWav(blob){

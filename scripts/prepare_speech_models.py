@@ -33,8 +33,8 @@ def ensure_original_tts(root):
 
 def prepare(root: Path, engine: str, tts_precision: str = "fp32", local_only: bool = False,
             calibration_texts: Path | None = None, activate: bool = True):
-    if tts_precision not in ("fp32", "int8", "int8-gpu"):
-        raise ValueError("TTS precision must be fp32, int8 (CPU) or int8-gpu")
+    if tts_precision not in ("fp32", "fp16", "int8", "int8-gpu"):
+        raise ValueError("TTS precision must be fp32, fp16 (CUDA), int8 (CPU) or int8-gpu")
     root.mkdir(parents=True, exist_ok=True)
     if local_only:
         if not (root / "whisper").is_dir():
@@ -52,7 +52,11 @@ def prepare(root: Path, engine: str, tts_precision: str = "fp32", local_only: bo
         snapshot_download("zeroweight-ai/ZeroTTS", revision=TTS_REV, local_dir=root / "zerotts",
                           allow_patterns=["*.json", "*.onnx", "*.data", "*.npy", "*.txt", "*.npz"])
         ensure_original_tts(root)
-    if tts_precision == "int8":
+    if tts_precision == "fp16":
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+        from scripts.convert_zerotts_fp16 import convert
+        convert(root / "zerotts", root / "zerotts-fp16")
+    elif tts_precision == "int8":
         sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
         from scripts.quantize_zerotts import quantize_zerotts
         quantize_zerotts(root / "zerotts", root / "zerotts-int8", TTS_REV)
@@ -84,7 +88,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", type=Path, required=True)
     parser.add_argument("--engine", choices=["transformers", "whisper_cpp"], default="transformers")
-    parser.add_argument("--tts-precision", choices=["fp32", "int8", "int8-gpu"], default="int8")
+    parser.add_argument("--tts-precision", choices=["fp32", "fp16", "int8", "int8-gpu"], default="int8")
     parser.add_argument("--calibration-texts", type=Path, help="UTF-8 calibration corpus, one sentence per line")
     parser.add_argument("--defer-selection", action="store_true", help="Prepare only; select after hardware smoke")
     parser.add_argument("--select-only", action="store_true", help="Select an already prepared artifact")

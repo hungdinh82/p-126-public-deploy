@@ -165,8 +165,8 @@ setup() {
   # Keep GPU TTS as the default on Jetson; native INT8 is an explicit CPU trial.
   local tts_precision=fp32
   if [[ $# -gt 0 ]]; then
-    [[ $# == 2 && "$1" == --tts-precision && ( "$2" == int8 || "$2" == fp32 || "$2" == int8-gpu ) ]] \
-      || fail "Usage: setup --profile agx [--tts-precision int8-gpu|int8|fp32]"
+    [[ $# == 2 && "$1" == --tts-precision && ( "$2" == int8 || "$2" == fp32 || "$2" == fp16 || "$2" == int8-gpu ) ]] \
+      || fail "Usage: setup --profile agx [--tts-precision int8-gpu|int8|fp16|fp32]"
     tts_precision="$2"
   fi
   export JETSON_AI_TTS_PRECISION="$tts_precision"
@@ -230,7 +230,7 @@ setup() {
     || fail "Gateway import check failed"
   "$VIVI_VENV/bin/python" scripts/check_jetson_runtime.py --write-manifest "$VIVI_MANIFEST"
   touch "$VIVI_COMPLETE"
-  echo "Setup complete: SLM + STT CUDA; ZeroTTS $tts_precision (int8-gpu TensorRT / int8 CPU / fp32 CUDA)."
+  echo "Setup complete: SLM + STT CUDA; ZeroTTS $tts_precision (int8-gpu TensorRT / int8 CPU / fp16 or fp32 CUDA)."
   echo "Service token: $VIVI_DATA/service.env (copy securely to Laptop)"
   if command -v tailscale >/dev/null 2>&1; then
     echo "Tailscale URL: http://$(tailscale ip -4 2>/dev/null | head -n 1):$VIVI_PORT"
@@ -262,11 +262,12 @@ run() {
   bind="${bind:-127.0.0.1}"
   [[ "$(cat "$VIVI_DATA/build/llama-mode-cu118-gcc10")" == cuda ]] || fail "Run setup again: a CUDA build is required"
   [[ "$VIVI_CONTEXT_SIZE" =~ ^[1-9][0-9]*$ ]] || fail "JETSON_AI_CONTEXT_SIZE must be a positive integer"
-  local gpu_layers=99 started=$SECONDS
+  local gpu_layers=99 started=$SECONDS prompt_cache_ram="${JETSON_AI_PROMPT_CACHE_RAM_MB:-0}"
+  [[ "$prompt_cache_ram" =~ ^[0-9]+$ ]] || fail "JETSON_AI_PROMPT_CACHE_RAM_MB must be a nonnegative integer"
   "$VIVI_DATA/build/llama.cpp/$VIVI_NATIVE_BUILD/bin/llama-server" \
     --model "$VIVI_MODEL" --alias vivi-qwen3-1.7b --host 127.0.0.1 \
     --port "$VIVI_BACKEND_PORT" --ctx-size "$VIVI_CONTEXT_SIZE" --parallel 1 \
-    --n-gpu-layers "$gpu_layers" --reasoning off --log-verbosity 4 \
+    --n-gpu-layers "$gpu_layers" --reasoning off --cache-ram "$prompt_cache_ram" --log-verbosity 4 \
     > "$VIVI_DATA/logs/llama-server.log" 2>&1 &
   local llm_pid=$!
   trap 'kill "$llm_pid" 2>/dev/null || true; wait "$llm_pid" 2>/dev/null || true' EXIT INT TERM
@@ -282,9 +283,17 @@ run() {
   (( ready == 1 )) || fail "llama-server did not become ready; see $VIVI_DATA/logs/llama-server.log"
   export JETSON_AI_LLM_LOAD_MS="$(((SECONDS-started)*1000))" JETSON_AI_LLM_PID="$llm_pid"
   started=$SECONDS
+  local stt_device="${JETSON_AI_STT_DEVICE:-cuda}"
+  local -a stt_device_args=()
+  case "$stt_device" in
+    cuda) ;;
+    cpu) stt_device_args+=(--no-gpu) ;;
+    *) fail "JETSON_AI_STT_DEVICE must be cuda or cpu" ;;
+  esac
+  export JETSON_AI_STT_DEVICE="$stt_device"
   "$VIVI_DATA/build/whisper.cpp/$VIVI_NATIVE_BUILD/bin/whisper-server" \
     --model "$VIVI_DATA/models/speech/whisper/ggml-base.bin" --host 127.0.0.1 \
-    --port "$VIVI_STT_PORT" --language vi > "$VIVI_DATA/logs/whisper-server.log" 2>&1 &
+    --port "$VIVI_STT_PORT" --language vi --no-context "${stt_device_args[@]}" > "$VIVI_DATA/logs/whisper-server.log" 2>&1 &
   local stt_pid=$!
   trap 'kill "$stt_pid" "$llm_pid" 2>/dev/null || true; wait "$stt_pid" "$llm_pid" 2>/dev/null || true' EXIT INT TERM
   ready=0
@@ -306,7 +315,11 @@ run() {
   echo "Jetson AI API: http://$bind:$VIVI_PORT (STT/TTS tiếp tục nạp ở nền)."
   echo "Giao diện test: http://$bind:$VIVI_PORT/test"
   cd "$VIVI_REPO"
-  "$VIVI_VENV/bin/python" -m uvicorn jetson_ai.app:app --host "$bind" --port "$VIVI_PORT" --workers 1 &
+  # A stalled SSH/VS Code terminal must never block the HTTP event loop.
+  # Read this file from a separate terminal with tail -F.
+  echo "Gateway log: $VIVI_DATA/logs/gateway-run.log"
+  "$VIVI_VENV/bin/python" -m uvicorn jetson_ai.app:app --host "$bind" --port "$VIVI_PORT" --workers 1 \
+    >> "$VIVI_DATA/logs/gateway-run.log" 2>&1 &
   local gateway_pid=$!
   trap 'kill "$gateway_pid" "$stt_pid" "$llm_pid" 2>/dev/null || true; wait "$gateway_pid" "$stt_pid" "$llm_pid" 2>/dev/null || true' EXIT INT TERM
   wait "$gateway_pid"
@@ -320,9 +333,13 @@ case "${1:-}" in
   setup) shift; setup "$@" ;;
   run) shift
     if [[ $# -gt 0 ]]; then
-      [[ $# == 2 && "$1" == --tts-precision && ( "$2" == int8 || "$2" == fp32 || "$2" == int8-gpu ) ]] \
-        || fail "Usage: bash scripts/jetson_ai.sh run [--tts-precision int8-gpu|int8|fp32]"
+      [[ $# == 2 && "$1" == --tts-precision && ( "$2" == int8 || "$2" == fp32 || "$2" == fp16 || "$2" == int8-gpu ) ]] \
+        || fail "Usage: bash scripts/jetson_ai.sh run [--tts-precision int8-gpu|int8|fp16|fp32]"
       export JETSON_AI_TTS_PRECISION="$2"
+    else
+      # Do not inherit an old model-selection file from a prior experiment.
+      # Production starts with the known fp32 profile unless explicitly asked.
+      export JETSON_AI_TTS_PRECISION="${JETSON_AI_TTS_PRECISION:-fp32}"
     fi
     run ;;
   doctor) check_platform; check_sdk; [[ -x "$VIVI_VENV/bin/python" ]] || fail "Run setup first: missing profile venv"

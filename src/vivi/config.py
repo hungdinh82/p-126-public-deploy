@@ -156,9 +156,33 @@ class Settings(BaseSettings):
         "AI_SERVER_TOKEN", "JETSON_AI_TOKEN", "ai_server_token", "jetson_ai_token"
     ))
     jetson_ai_probe_timeout_seconds: float = Field(default=0.75, gt=0, le=5)
+    ai_server_request_timeout_seconds: float = Field(default=180, ge=1, le=300)
+    # Main UI uses direct turns. Durable voice intake is an explicit local-only API.
+    local_voice_buffering_enabled: bool = False
+
+    @property
+    def local_request_budget_seconds(self) -> float:
+        return self.ai_server_request_timeout_seconds if self.jetson_ai_policy != "disabled" and self.jetson_ai_url else self.local_budget_seconds
+
+    @property
+    def effective_turn_timeout_seconds(self) -> float:
+        # Semantic analysis and answer generation can each need a long prefill.
+        if self.jetson_ai_policy != "disabled" and self.jetson_ai_url:
+            return max(self.turn_timeout_seconds, 2 * self.local_request_budget_seconds + 15)
+        return self.turn_timeout_seconds
     ai_server_auth_required: bool = Field(default=True, validation_alias=AliasChoices(
         "AI_SERVER_AUTH_REQUIRED", "JETSON_AI_AUTH_REQUIRED", "ai_server_auth_required"
     ))
+    internet_probe_url: str = "https://clients3.google.com/generate_204"
+    internet_probe_timeout_seconds: float = Field(default=1.5, gt=0, le=10)
+    connectivity_probe_interval_seconds: float = Field(default=2.0, ge=0.5, le=30)
+    connectivity_failure_threshold: int = Field(default=2, ge=1, le=10)
+    connectivity_success_threshold: int = Field(default=2, ge=1, le=10)
+    connectivity_retention_days: int = Field(default=7, ge=1, le=90)
+
+    @property
+    def connectivity_db_path(self) -> Path:
+        return self.data_dir / "runtime" / "connectivity.sqlite3"
 
     @model_validator(mode="after")
     def configure_ai_server(self) -> Settings:

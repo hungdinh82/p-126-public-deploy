@@ -209,7 +209,7 @@ class LocalHandbookGenerator(StructuredAPIHandbookGenerator):
                 base_url=config.local_llm_base_url,
                 api_key=config.local_llm_api_key,
                 model=config.local_llm_model,
-                timeout_seconds=config.llm_timeout_seconds,
+                timeout_seconds=config.local_request_budget_seconds if config.jetson_ai_policy != "disabled" and config.jetson_ai_url else config.llm_timeout_seconds,
                 max_tokens=config.local_llm_max_tokens,
                 extra_body={"chat_template_kwargs": {"enable_thinking": False}},
                 max_attempts=1,
