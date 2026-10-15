@@ -116,8 +116,8 @@ function setMessage(text, tone = '') {
 
 const mapAdapter = new JourneyMap({
   fetchConfig:async()=>{
-    config=await api('/api/v1/navigation/config');
-    if(config.available)void api('/api/v1/navigation/map-health').then(health=>{
+    config=await api('/api/v2/navigation/config');
+    if(config.available)void api('/api/v2/navigation/map-health').then(health=>{
       if([401,403,423,429].includes(health.tile_status)){
         const notice=$('#journey-notice');notice.textContent=`Nền bản đồ chưa sẵn sàng (HTTP ${health.tile_status}). Bạn vẫn có thể tìm điểm đến.`;notice.hidden=false;
       }
@@ -215,7 +215,7 @@ async function search(text) {
   const token = ++searchToken;
   const near = origin ? `&near=${origin.lat},${origin.lng}` : '';
   try {
-    const places = await api(`/api/v1/navigation/search?text=${encodeURIComponent(text)}${near}`);
+    const places = await api(`/api/v2/navigation/search?text=${encodeURIComponent(text)}${near}`);
     if (token === searchToken) renderResults(places);
   } catch (error) {
     if (token === searchToken) setMessage(error.message, 'error');
@@ -226,7 +226,7 @@ async function choosePlace(place) {
   closeResults();
   setMessage(`Đang lấy vị trí “${place.name}”…`);
   try {
-    const detail = await api(`/api/v1/navigation/place/${encodeURIComponent(place.ref_id)}`);
+    const detail = await api(`/api/v2/navigation/place/${encodeURIComponent(place.ref_id)}`);
     setDestination({ lat: detail.lat, lng: detail.lng, name: detail.name || place.name, address: detail.address || place.address });
   } catch (error) {
     setMessage(error.message, 'error');
@@ -239,7 +239,7 @@ async function planRoute() {
   setMessage('Đang tìm tuyến đường phù hợp…');
   $('#journey').classList.add('loading');
   try {
-    const planned = await api(`/api/v1/navigation/route?origin=${origin.lat},${origin.lng}&destination=${destination.lat},${destination.lng}`);
+    const planned = await api(`/api/v2/navigation/route?origin=${origin.lat},${origin.lng}&destination=${destination.lat},${destination.lng}`);
     const cumulative = [0];
     for (let index = 1; index < planned.coordinates.length; index++) cumulative.push(cumulative[index - 1] + haversine(planned.coordinates[index - 1], planned.coordinates[index]));
     const length = cumulative.at(-1) || planned.distance_m;
@@ -941,7 +941,7 @@ export async function applyNavigation(payload) {
     }
   }
   if(!origin && payload.ui_events?.some(event=>['navigation.locate','trip.locate'].includes(event.type))) {
-    config ||= await api('/api/v1/navigation/config');locate();
+    config ||= await api('/api/v2/navigation/config');locate();
   }
   const next = payload.navigation;
   renderInformation();

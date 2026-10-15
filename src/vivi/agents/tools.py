@@ -112,7 +112,12 @@ class MemoryRemember(MemoryForget):
     memory_value: str = Field(min_length=1, max_length=700)
 
 
-class NavigationSearch(Parameters):
+class PlanReference(Parameters):
+    plan_id: str | None = None
+    route_revision: StrictInt | None = Field(default=None, ge=1)
+
+
+class NavigationSearch(PlanReference):
     destination: DestinationSpec | None = None
     query: str = Field(min_length=2, max_length=200)
     category: Literal["pharmacy", "charging"] | None = None
@@ -120,11 +125,11 @@ class NavigationSearch(Parameters):
     destination_scope: Literal["place", "region"] = "place"
 
 
-class NavigationSelect(Parameters):
+class NavigationSelect(PlanReference):
     place_handle: str = Field(min_length=1, max_length=80)
 
 
-class NavigationRefine(Parameters):
+class NavigationRefine(PlanReference):
     destination: DestinationSpec | None = None
     reject_candidates: bool | None = None
     choice_handle: str | None = Field(default=None, min_length=1, max_length=80)
@@ -138,6 +143,7 @@ class NavigationRefine(Parameters):
 
 
 class NavigationPlan(NavigationSearch):
+    purpose: Literal["navigate", "itinerary"] = "navigate"
     trip_kind: Literal["one_way", "round_trip"] = "one_way"
     origin_query: str | None = Field(default=None, min_length=2, max_length=200)
     query: str | None = Field(default=None, min_length=2, max_length=200)
@@ -145,7 +151,11 @@ class NavigationPlan(NavigationSearch):
 
     @model_validator(mode="after")
     def valid_destination(self):
-        if not self.query and not (self.destination and (self.destination.query() or self.destination.reference)) and not self.use_search_results:
+        if (
+            not self.query
+            and not (self.destination and (self.destination.query() or self.destination.reference))
+            and not self.use_search_results
+        ):
             raise ValueError("A destination query or preceding search is required")
         return self
 
@@ -186,10 +196,34 @@ class WeatherQuery(SearchQuery):
 
 
 TOOLS = (
-    ToolSpec("conversation.respond", "Trò chuyện, kiến thức phổ thông ổn định hoặc truyện ngắn giải trí. Không báo dữ liệu live hoặc thực thi xe.", ConversationQuery, "Bạn muốn trò chuyện về điều gì?", True),
-    ToolSpec("web.search", "Tìm thông tin internet có nguồn: du lịch, địa điểm tham quan, tin mới, giá vàng. Không lập tuyến hay bắt đầu dẫn đường.", SearchQuery, "Bạn muốn tìm thông tin gì?", True),
-    ToolSpec("weather.get_forecast", "Thời tiết hôm nay/ngày mai tại địa điểm hoặc vị trí hiện tại. Không lấy nhiệt độ điều hoà xe.", WeatherQuery, "Bạn muốn xem thời tiết ở đâu?", True),
-    ToolSpec("knowledge.lookup", "Tra Wikipedia cho thông tin nền: địa danh, lịch sử, văn hóa. Không tra giá hoặc thời tiết mới nhất.", SearchQuery, "Bạn muốn tìm hiểu chủ đề nào?", True),
+    ToolSpec(
+        "conversation.respond",
+        "Trò chuyện, kiến thức phổ thông ổn định hoặc truyện ngắn giải trí. Không báo dữ liệu live hoặc thực thi xe.",
+        ConversationQuery,
+        "Bạn muốn trò chuyện về điều gì?",
+        True,
+    ),
+    ToolSpec(
+        "web.search",
+        "Tìm thông tin internet có nguồn: du lịch, địa điểm tham quan, tin mới, giá vàng. Không lập tuyến hay bắt đầu dẫn đường.",
+        SearchQuery,
+        "Bạn muốn tìm thông tin gì?",
+        True,
+    ),
+    ToolSpec(
+        "weather.get_forecast",
+        "Thời tiết hôm nay/ngày mai tại địa điểm hoặc vị trí hiện tại. Không lấy nhiệt độ điều hoà xe.",
+        WeatherQuery,
+        "Bạn muốn xem thời tiết ở đâu?",
+        True,
+    ),
+    ToolSpec(
+        "knowledge.lookup",
+        "Tra Wikipedia cho thông tin nền: địa danh, lịch sử, văn hóa. Không tra giá hoặc thời tiết mới nhất.",
+        SearchQuery,
+        "Bạn muốn tìm hiểu chủ đề nào?",
+        True,
+    ),
     ToolSpec(
         "memory.recall",
         "Đọc thông tin người dùng đã yêu cầu lưu. Không suy diễn từ lịch sử.",
@@ -341,67 +375,6 @@ NAVIGATION_TOOLS = (
 )
 NAVIGATION_TOOL = NAVIGATION_TOOLS[0]
 TOOL_REGISTRY.update({tool.name: tool for tool in NAVIGATION_TOOLS})
-
-
-class TripSelect(NavigationSelect):
-    plan_id: str
-    route_revision: StrictInt = Field(ge=1)
-
-
-class TripRefine(NavigationRefine):
-    plan_id: str
-    route_revision: StrictInt = Field(ge=1)
-
-
-class TripIdentity(Parameters):
-    plan_id: str
-    route_revision: StrictInt = Field(ge=1)
-
-
-TRIP_TOOLS = (
-    ToolSpec(
-        "trip.plan",
-        "Lập kế hoạch chuyến đi/sạc, độc lập dẫn đường đang chạy. Tách điểm đến query, origin_query và trip_kind (round_trip nếu quay lại). Không tự chạy.",
-        NavigationPlan,
-        "Bạn muốn lập kế hoạch tới đâu?",
-        True,
-    ),
-    ToolSpec(
-        "trip.select",
-        "Chọn handle địa điểm của trip_plan hiện tại; giữ đúng ID/revision.",
-        TripSelect,
-        "Bạn chọn địa điểm nào?",
-        True,
-    ),
-    ToolSpec(
-        "trip.refine",
-        "Đổi/giữ điểm mặc định theo câu hỏi trip_plan.clarification, dùng handle hoặc query và ID/revision.",
-        TripRefine,
-        "Bạn muốn đổi điểm đến nào?",
-        True,
-    ),
-    ToolSpec(
-        "trip.start",
-        "Chấp nhận đề nghị bắt đầu kế hoạch đã xem, với đúng ID/revision. Server kiểm tra lại pin/vị trí/policy trước khi chạy.",
-        TripIdentity,
-        "Bạn muốn bắt đầu kế hoạch nào?",
-    ),
-    ToolSpec(
-        "trip.decline",
-        "Từ chối bắt đầu, vẫn giữ kế hoạch để xem lại.",
-        TripIdentity,
-        "Bạn muốn giữ kế hoạch nào?",
-        True,
-    ),
-    ToolSpec(
-        "trip.cancel",
-        "Huỷ kế hoạch đang chờ; không dừng chuyến đang chạy.",
-        TripIdentity,
-        "Bạn muốn huỷ kế hoạch nào?",
-        True,
-    ),
-)
-TOOL_REGISTRY.update({tool.name: tool for tool in TRIP_TOOLS})
 
 
 def validate_tool_arguments(name: str, arguments: dict) -> tuple[dict | None, str | None]:

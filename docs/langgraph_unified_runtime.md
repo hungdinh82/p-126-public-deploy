@@ -1,3 +1,5 @@
+> Tài liệu lịch sử. Contract và vận hành hiện hành: [Lõi hội thoại Core v2](langgraph_core_v2.md).
+
 # Lõi hội thoại thống nhất (`unified-6`)
 
 Trạng thái hành trình và receipt hiện thuộc NavigationService, nằm ngoài checkpoint hội thoại. Xem [contract, migration và kiểm chứng navigation](navigation_runtime.md).

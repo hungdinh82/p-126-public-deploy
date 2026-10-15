@@ -9,12 +9,6 @@ from src.vivi.dialogue.contracts import ActionDraft, QuestionReply
 from src.vivi.navigation.workflow import NavigationEvent, Position
 
 Intent = Literal[
-    "trip.plan",
-    "trip.select",
-    "trip.refine",
-    "trip.start",
-    "trip.decline",
-    "trip.cancel",
     "navigation.search",
     "navigation.plan",
     "navigation.select",
@@ -258,9 +252,7 @@ class TurnRequest(BaseModel):
         deprecated=True,
         description="Compatibility context only; ignored at the policy boundary.",
     )
-    confirmation_id: str | None = Field(default=None, max_length=100)
-    confirmation_decision: Literal["approve", "deny"] | None = None
-    llm_provider: Literal["rules", "openai", "google", "local", "openrouter"] | None = None
+    llm_provider: Literal["openai", "google", "local", "openrouter"] | None = None
 
     @model_validator(mode="after")
     def validate_navigation(self):
@@ -337,7 +329,7 @@ class ConfirmationDecisionRequest(BaseModel):
     session_id: str = Field(min_length=1, max_length=100)
     turn_id: str = Field(min_length=1, max_length=100)
     decision: Literal["approve", "deny"]
-    llm_provider: Literal["rules", "openai", "google", "local", "openrouter"] | None = None
+    llm_provider: Literal["openai", "google", "local", "openrouter"] | None = None
 
 
 class DemoDrivingRequest(BaseModel):

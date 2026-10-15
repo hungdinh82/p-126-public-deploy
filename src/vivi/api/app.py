@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.vivi.api.routes import (
+    core,
     engineer,
     health,
     history,
@@ -20,7 +21,8 @@ from src.vivi.api.routes import (
     vehicle,
     web,
 )
-from src.vivi.api.runtime import runtime
+from src.vivi.api.runtime import active_runtime, build_runtime, runtime
+from src.vivi.config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +37,9 @@ async def _preload_stt_fallback() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    del app
+    if not hasattr(app.state, "runtime"):
+        app.state.runtime = app.state.runtime_factory(app.state.settings)
+    token = active_runtime.set(app.state.runtime)
     metrics.start_gpu_sampler()
     config = runtime.settings
     background = []
@@ -62,25 +66,47 @@ async def lifespan(app: FastAPI):
             task.cancel()
         await asyncio.gather(*background, return_exceptions=True)
         await runtime.aclose()
+        active_runtime.reset(token)
 
 
-def create_app() -> FastAPI:
+class RuntimeBindingMiddleware:
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] not in {"http", "websocket"}:
+            return await self.app(scope, receive, send)
+        application = scope["app"]
+        if not hasattr(application.state, "runtime"):
+            application.state.runtime = application.state.runtime_factory(application.state.settings)
+        token = active_runtime.set(application.state.runtime)
+        try:
+            await self.app(scope, receive, send)
+        finally:
+            active_runtime.reset(token)
+
+
+def create_app(*, config=None, runtime=None, runtime_factory=build_runtime) -> FastAPI:
     application = FastAPI(
         title="ViVi Local API",
         version="0.1.0",
         lifespan=lifespan,
     )
+    application.state.settings = config or get_settings()
+    application.state.runtime_factory = runtime_factory
+    if runtime is not None:
+        application.state.runtime = runtime
+    application.add_middleware(RuntimeBindingMiddleware)
     application.add_middleware(
         CORSMiddleware,
         allow_origins=[
-            origin.strip()
-            for origin in runtime.settings.cors_origins.split(",")
-            if origin.strip()
+            origin.strip() for origin in application.state.settings.cors_origins.split(",") if origin.strip()
         ],
         allow_methods=["*"],
         allow_headers=["*"],
     )
     for router in (
+        core.router,
         health.router,
         memory.router,
         history.router,

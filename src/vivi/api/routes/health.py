@@ -10,11 +10,7 @@ router = APIRouter()
 
 async def _local_llm_available() -> tuple[bool, str | None]:
     config = runtime.settings
-    headers = (
-        {"Authorization": f"Bearer {config.local_llm_api_key}"}
-        if config.local_llm_api_key
-        else {}
-    )
+    headers = {"Authorization": f"Bearer {config.local_llm_api_key}"} if config.local_llm_api_key else {}
     try:
         async with httpx.AsyncClient(timeout=0.75) as client:
             response = await client.get(
@@ -30,7 +26,9 @@ async def _local_llm_available() -> tuple[bool, str | None]:
 async def _llm_options() -> list[dict]:
     options = []
     for provider, model in runtime.llm_models.items():
-        available = provider in getattr(runtime.orchestrator, "semantic_providers", runtime.orchestrator.graph_providers)
+        available = provider in getattr(
+            runtime.orchestrator, "semantic_providers", runtime.orchestrator.graph_providers
+        )
         detail = runtime.orchestrator.provider_errors.get(provider)
         if provider == "local" and available:
             available, detail = await _local_llm_available()
@@ -41,12 +39,7 @@ async def _llm_options() -> list[dict]:
 
 
 def _fallback_chain(config):
-    if config.jetson_ai_policy == "offline_only" or config.rag_local_only:
-        return ["rules"] if config.llm_provider == "rules" else ["local", "rules"]
-    configured = getattr(runtime.orchestrator, "provider_fallbacks", {})
-    if config.llm_provider in configured:
-        return list(dict.fromkeys([*configured[config.llm_provider], "rules"]))
-    return ["rules"] if config.llm_provider == "rules" else ["local", "rules"] if config.llm_provider == "local" else [config.llm_provider, "local", "rules"]
+    return runtime.orchestrator.graph.navigation.workflow.resolver.gateway.chain(config.llm_provider)
 
 
 @router.get("/api/v1/health")
@@ -59,17 +52,16 @@ async def health():
         (
             item["provider"]
             for item in llm_options
-            if item["provider"] == runtime.orchestrator.default_provider
-            and item["available"]
+            if item["provider"] == runtime.orchestrator.default_provider and item["available"]
         ),
-        "rules",
+        runtime.orchestrator.default_provider,
     )
     return {
         "status": "ok",
         "runtime": "local",
         "orchestration": {
             "engine": "langgraph",
-            "workflow_version": "unified-5",
+            "workflow_version": "core-2",
             "fallback_chain": _fallback_chain(config),
             "cloud_budget_seconds": config.cloud_budget_seconds,
             "local_budget_seconds": config.local_budget_seconds,
@@ -88,7 +80,8 @@ async def health():
         },
         "llm": {
             "provider": active_provider,
-            "configured": config.llm_provider in getattr(runtime.orchestrator, "semantic_providers", runtime.orchestrator.graph_providers),
+            "configured": config.llm_provider
+            in getattr(runtime.orchestrator, "semantic_providers", runtime.orchestrator.graph_providers),
             "detail": runtime.orchestrator.provider_errors.get(config.llm_provider),
             "options": llm_options,
         },

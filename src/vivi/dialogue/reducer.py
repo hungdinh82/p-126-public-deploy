@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 from src.vivi.capabilities.registry import (
+    REGISTRY,
     compatible_change,
     merge_arguments,
     merge_exclusions,
@@ -32,16 +33,22 @@ def expire(session: SessionState):
 
 def synchronize_question(session, proposal=None):
     """The reducer owns the persisted foreground question, including legacy import."""
-    from src.vivi.dialogue.questions import current_question
+    from src.vivi.dialogue.questions import bind_question
 
-    session.dialogue_question = current_question(session, proposal)
-    if (session.dialogue_question and session.dialogue_question.expires_at <= datetime.now(UTC)
-        and session.dialogue_question.kind != "confirm_action"):
+    session.dialogue_question = bind_question(session, proposal)
+    if (
+        session.dialogue_question
+        and session.dialogue_question.expires_at <= datetime.now(UTC)
+        and session.dialogue_question.kind != "confirm_action"
+    ):
         from uuid import uuid4
 
-        session.dialogue_question = session.dialogue_question.model_copy(update={
-            "id": "question:" + str(uuid4()), "expires_at": datetime.now(UTC) + timedelta(minutes=3),
-        })
+        session.dialogue_question = session.dialogue_question.model_copy(
+            update={
+                "id": "question:" + str(uuid4()),
+                "expires_at": datetime.now(UTC) + timedelta(minutes=3),
+            }
+        )
     return session
 
 
@@ -63,18 +70,19 @@ def reduce_turn(
         from src.vivi.dialogue.answers import AnswerResolver
 
         answer = AnswerResolver().resolve("", state, act=value.act)
-        if answer and answer.actions:
+        if answer:
             value = answer
     # All tiers, including typed UI, validate references before changing a task.
     for draft in value.drafts():
-        if not draft.capability.startswith(("trip.", "navigation.")):
+        if not draft.capability.startswith("navigation."):
             continue
-        owner = state.trip_plan if draft.capability.startswith("trip.") else state.navigation
+        owner = state.navigation_workspace.draft
         args = draft.arguments
         if (
-            draft.capability.startswith("trip.")
-            and draft.capability != "trip.plan"
-            and (not owner or args.plan_id != owner.id or args.route_revision != owner.revision)
+            args.plan_id
+            and (not owner or args.plan_id != owner.id)
+            or args.route_revision
+            and (not owner or args.route_revision != owner.revision)
         ):
             return state, "Kế hoạch đã thay đổi. Bạn chọn lại nhé."
         if args.choice_handle and (
@@ -85,13 +93,7 @@ def reduce_turn(
         ):
             return state, "Lựa chọn đã thay đổi. Bạn chọn lại nhé."
         if args.place_handle:
-            energy = (
-                owner.pending.get("navigation", {}).get("energy")
-                if owner and owner.pending
-                else owner.energy
-                if owner
-                else None
-            )
+            energy = owner.energy if owner else None
             places = [*owner.candidates, *(energy or {}).get("station_candidates", [])] if owner else []
             if not any(place.get("handle") == args.place_handle for place in places):
                 return state, "Địa điểm đã thay đổi. Bạn chọn lại nhé."
@@ -101,47 +103,51 @@ def reduce_turn(
     if value.act == "request" and len(value.actions) == 1 and current_index is not None:
         current = state.active.steps[current_index]
         incoming = value.actions[0]
-        if incoming.capability in {"navigation.cancel", "trip.cancel"}:
-            owner = state.trip_plan if incoming.capability.startswith("trip.") else state.navigation
+        if (
+            incoming.capability == "navigation.start"
+            and current.draft.capability == "navigation.start"
+            and current.status == "waiting_confirmation"
+        ):
+            expected = current.draft.arguments
+            if (
+                incoming.arguments.plan_id != expected.plan_id
+                or incoming.arguments.route_revision != expected.route_revision
+            ):
+                return state, "Kế hoạch đã thay đổi. Bạn xác nhận lại nhé."
+            value = SemanticTurn(act="confirm", task_ref="active", consent_question_id=value.consent_question_id)
+        if incoming.capability == "navigation.cancel":
+            owner = state.navigation_workspace.draft
             if (
                 not owner
                 or incoming.arguments.route_revision != owner.revision
-                or incoming.capability.startswith("trip.")
-                and incoming.arguments.plan_id != owner.id
+                or incoming.arguments.plan_id != owner.id
             ):
                 return state, "Yêu cầu đã thay đổi. Bạn chọn lại nhé."
             if current.draft.capability.split(".")[0] == incoming.capability.split(".")[0]:
                 prefix = incoming.capability.split(".")[0] + "."
                 whole_task = value.task_ref == "active"
                 for item in state.active.steps:
-                    if (whole_task or item.draft.capability.startswith(prefix)) and item.status not in {"completed", "unknown", "running"}:
+                    if (whole_task or item.draft.capability.startswith(prefix)) and item.status not in {
+                        "completed",
+                        "unknown",
+                        "running",
+                    }:
                         item.status, item.confirmation = "cancelled", None
                 state.active.revision += 1
                 if not whole_task:
                     # A component cancel (e.g. the trip UI) keeps independently
                     # requested steps. A bare voice cancel targets the whole task.
-                    if prefix == "navigation.":
-                        nav = state.navigation
-                        nav.revision += 1
-                        nav.pending, nav.offer, nav.clarification, nav.candidates = None, None, None, []
-                        if nav.status in {"preview", "selecting"}:
-                            nav.status, nav.route, nav.selected, nav.energy = "idle", None, None, None
-                        state.navigation = nav
-                    elif state.trip_plan:
-                        state.trip_plan.revision += 1
-                        state.trip_plan.calculation_status = "cancelled"
-                        state.trip_plan.offer, state.trip_plan.clarification = None, None
+                    state.domain_commands.append(
+                        {
+                            "kind": "cancel_draft",
+                            "plan_id": state.navigation_workspace.draft.id
+                            if state.navigation_workspace.draft
+                            else None,
+                        }
+                    )
                     return state, None if state.active.current_index() is not None else "Đã huỷ yêu cầu lập tuyến."
                 # Schedule the whole-task cancellation through the domain writer
                 # to revoke the saved route proposal without running later steps.
-        if (
-            incoming.capability in {"trip.select", "trip.refine", "trip.start"}
-            and current.status == "waiting_slot"
-            and current.draft.capability.startswith("trip.")
-        ):
-            value = SemanticTurn(
-                act="modify", task_ref="active", step_updates=[{"step_index": current_index, "action": incoming}]
-            )
         if (
             incoming.capability == "navigation.start"
             and current.status == "waiting_slot"
@@ -185,9 +191,6 @@ def reduce_turn(
         )
     if value.act == "unsupported":
         return state, value.text or "Mình chưa hỗ trợ chức năng đó bằng giọng nói."
-    if value.negated and value.act == "reply" and state.active and state.active.current_index() is not None:
-        cancelled, _ = reduce_turn(state, SemanticTurn(act="cancel", task_ref="active"))
-        return cancelled, value.text or "Mình đã huỷ các bước chưa thực hiện."
     if value.negated or value.conditional or value.scheduled or value.conflicting or value.unresolved:
         state.clarification = ClarificationState(
             source_text=value.text,
@@ -231,22 +234,13 @@ def reduce_turn(
             if step.status != "completed":
                 step.status = "cancelled"
                 step.confirmation = None
-        if any(s.draft.capability.startswith("trip.") for s in task.steps) and state.trip_plan:
-            state.trip_plan.revision += 1
-            state.trip_plan.calculation_status = "cancelled"
-            state.trip_plan.offer, state.trip_plan.clarification = None, None
-            state.trip_plan.candidates = []
         if any(s.draft.capability.startswith("navigation.") for s in task.steps):
-            nav = state.navigation
-            nav.clarification = None
-            nav.candidates = []
-            nav.pending = None
-            nav.revision += 1
-            if nav.status in {"preview", "selecting"}:
-                nav.status = "idle"
-                nav.selected, nav.route, nav.energy = None, None, None
-                nav.summary, nav.alternatives = None, []
-            state.navigation = nav
+            state.domain_commands.append(
+                {
+                    "kind": "cancel_draft",
+                    "plan_id": state.navigation_workspace.draft.id if state.navigation_workspace.draft else None,
+                }
+            )
         return state, "Mình đã hủy các bước chưa thực hiện."
     # Bind deictic targets from server-owned state for every provider. A model
     # cannot invent or silently override a referenced side.
@@ -282,13 +276,30 @@ def reduce_turn(
     if value.act in {"request", "question", "offer"}:
         if not value.actions:
             return state, value.text or "Bạn muốn mình làm gì?"
-        if value.act == "question" and state.active and state.active.current_index() is not None:
+        information = all(
+            REGISTRY[a.capability].spec.read_only and REGISTRY[a.capability].executor != "navigation"
+            for a in value.actions
+        )
+        if (value.act == "question" or information) and state.active and state.active.current_index() is not None:
             paused, _ = reduce_turn(state, SemanticTurn(act="suspend", task_ref="active"))
             state = paused
         state.active = DialogueTask(
-            contract_version=9,
+            contract_version=10,
             steps=[
-                TaskStep(draft=draft, status="offer" if value.act == "offer" else "pending") for draft in value.actions
+                TaskStep(
+                    draft=draft,
+                    status="offer"
+                    if value.act == "offer"
+                    else "approved"
+                    if draft.capability == "navigation.start"
+                    and value.consent_question_id
+                    and state.dialogue_question
+                    and value.consent_question_id == state.dialogue_question.id
+                    else "waiting_confirmation"
+                    if draft.capability == "navigation.start"
+                    else "pending",
+                )
+                for draft in value.actions
             ],
         )
         state.clarification = None
@@ -364,6 +375,9 @@ def reduce_turn(
                 step.status, step.confirmation, step.command_id, step.resolved_arguments = "pending", None, None, None
                 task.revision += 1
             else:
+                question = state.dialogue_question
+                if not question or value.consent_question_id != question.id:
+                    return state, "Bạn trả lời câu hỏi xác nhận hiện tại trước khi thực hiện nhé."
                 step.status = "approved"
         else:
             return state, "Bước này còn thiếu thông tin, chưa thể xác nhận."
@@ -373,7 +387,7 @@ def reduce_turn(
         if step.status == "waiting_confirmation":
             step.confirmation, step.command_id, step.resolved_arguments = None, None, None
             task.revision += 1
-        step.status = "pending"
+        step.status = "waiting_confirmation" if step.draft.capability == "navigation.start" else "pending"
     return state, None
 
 
@@ -400,47 +414,12 @@ def prepare_step(session: SessionState, index: int, arguments: dict, command_id:
     return state
 
 
-def record_navigation(session, update):
-    from src.vivi.dialogue.contracts import NavigationState
-
-    state = session.model_copy(deep=True)
-    nav = NavigationState.model_validate(update)
-    nav.event_sequence = session.navigation.event_sequence + 1
-    state.navigation = nav
-    if nav.status in {"ended", "completed"} and session.navigation.status not in {"ended", "completed"}:
-        state.navigation_workspace.history = [
-            *state.navigation_workspace.history[-19:],
-            {
-                "id": nav.route_id,
-                "destination": nav.selected,
-                "status": nav.status,
-                "distance_m": nav.progress_m,
-                "ended_at": datetime.now(UTC).isoformat(),
-            },
-        ]
-    before, after = session.navigation_workspace.draft, state.navigation_workspace.draft
-    if after and (not before or before.request_id != after.request_id or before.revision != after.revision):
-        state.navigation_focus = "navigation"
-    return state
-
-
-def record_trip_plan(session, update):
-    from src.vivi.dialogue.contracts import TripPlanState
-
-    state = session.model_copy(deep=True)
-    state.navigation_focus = "trip"
-    state.trip_plan = TripPlanState.model_validate(update)
-    state.trip_plan.event_sequence = (session.trip_plan.event_sequence if session.trip_plan else 0) + 1
-    return state
-
-
 def clear_journey(session):
     """Clear journey references while retaining unrelated tasks and effect history."""
     state = session.model_copy(deep=True)
-    state.trip_plan = None
     for task in [state.active, *state.suspended]:
         if task:
-            remaining = [step for step in task.steps if not step.draft.capability.startswith(("navigation.", "trip."))]
+            remaining = [step for step in task.steps if not step.draft.capability.startswith("navigation.")]
             if len(remaining) != len(task.steps):
                 task.steps = remaining
                 task.revision += 1
@@ -455,49 +434,41 @@ def clear_journey(session):
     if state.active and not state.active.steps:
         state.active = None
     state.suspended = [task for task in state.suspended if task.current_index() is not None]
-    if state.clarification and any(
-        draft.capability.startswith(("navigation.", "trip.")) for draft in state.clarification.drafts
-    ):
+    if state.clarification and any(draft.capability.startswith("navigation.") for draft in state.clarification.drafts):
         state.clarification = None
     return state
 
 
-def upgrade_contract(session):
-    state = session.model_copy(deep=True)
-    for task in [state.active, *state.suspended]:
-        if task and task.contract_version != 9:
-            task.contract_version = 9
-            task.revision += 1
-            for step in task.steps:
-                if (
-                    step.draft.capability.startswith("navigation.")
-                    and state.navigation.trip_kind is None
-                    and step.status not in {"completed", "cancelled"}
-                ):
-                    step.status = "blocked"
-                    step.confirmation, step.command_id, step.resolved_arguments = None, None, None
-                    step.result = {
-                        "status": "blocked",
-                        "error_code": "trip_kind_required",
-                        "message": "Kế hoạch cũ chưa rõ một chiều hay khứ hồi. Bạn lập lại tuyến nhé.",
-                    }
-                if step.status in {"waiting_confirmation", "approved"}:
-                    if (
-                        task is state.active
-                        and step.draft.capability == "navigation.plan"
-                        and state.navigation.status == "preview"
-                    ):
-                        # Older unique-match routes skipped the destination
-                        # choice. Require it now without replaying any effects.
-                        nav = state.navigation
-                        nav.status = "selecting"
-                        nav.selected, nav.route = None, None
-                        nav.energy, nav.alternatives = None, []
-                        state.navigation = nav
-                    step.status, step.confirmation, step.command_id, step.resolved_arguments = (
-                        "pending",
-                        None,
-                        None,
-                        None,
-                    )
-    return state
+def synchronize_navigation_question(session):
+    """A changed plan revokes a pending start; it never inherits old approval."""
+    task = session.active
+    index = task.current_index() if task else None
+    plan = session.navigation_workspace.draft
+    if index is not None and plan:
+        step = task.steps[index]
+        if step.draft.capability == "navigation.start" and step.status not in {
+            "unknown",
+            "running",
+            "completed",
+            "cancelled",
+        }:
+            args = step.draft.arguments
+            if args.plan_id and args.plan_id != plan.id:
+                step.status = "blocked"
+                step.result = {
+                    "status": "blocked",
+                    "message": "Kế hoạch này đã được thay thế. Bạn lập lại tuyến nhé.",
+                    "error_code": "stale_plan",
+                }
+                session.dialogue_question = None
+            elif args.route_revision != plan.revision:
+                args.plan_id, args.route_revision = plan.id, plan.revision
+                step.status, step.confirmation, step.command_id, step.resolved_arguments = (
+                    "waiting_confirmation",
+                    None,
+                    None,
+                    None,
+                )
+                task.revision += 1
+                session.dialogue_question = None
+    return synchronize_question(session)

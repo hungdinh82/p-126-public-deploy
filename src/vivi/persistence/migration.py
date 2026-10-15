@@ -7,7 +7,7 @@ import sqlite3
 from datetime import UTC, datetime
 from pathlib import Path
 
-WORKFLOW_VERSION = 5
+WORKFLOW_VERSION = 7
 
 
 def migrate_runtime(store, *, databases=()):
@@ -33,6 +33,15 @@ def migrate_runtime(store, *, databases=()):
             exists = db.execute("SELECT 1 FROM sqlite_master WHERE name='confirmation_grants'").fetchone()
             if exists:
                 db.execute("UPDATE confirmation_grants SET used=1")
+            db.execute(
+                "CREATE TABLE IF NOT EXISTS runtime_navigation_resets(session TEXT PRIMARY KEY, park INTEGER NOT NULL)"
+            )
+            navigation = db.execute("SELECT 1 FROM sqlite_master WHERE name='navigation_sessions'").fetchone()
+            if navigation:
+                db.execute(
+                    "INSERT OR IGNORE INTO runtime_navigation_resets SELECT session, CASE WHEN json_extract(payload, '$.navigation_workspace.journey.status') IN ('running','charging') THEN 1 ELSE 0 END FROM navigation_sessions"
+                )
+                db.execute("DELETE FROM navigation_sessions")
             db.execute("INSERT INTO runtime_schema VALUES (?)", (WORKFLOW_VERSION,))
     return backups
 

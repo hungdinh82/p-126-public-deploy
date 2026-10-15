@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import Any
 
@@ -27,7 +28,7 @@ class Runtime:
     llm_models: dict[str, str]
 
     def close(self) -> None:
-        for graph in set(self.orchestrator.graphs.values()):
+        for graph in [self.orchestrator.graph]:
             if hasattr(graph, "close"):
                 graph.close()
         if isinstance(self.vehicle, MqttVehicleAdapter):
@@ -66,4 +67,19 @@ def build_runtime(config: Settings = settings) -> Runtime:
     )
 
 
-runtime = build_runtime()
+active_runtime: ContextVar[Runtime | None] = ContextVar("vivi_runtime", default=None)
+
+
+class RuntimeReference:
+    """Request-local dependency; importing a route never opens a database."""
+
+    def __getattr__(self, name):
+        current = active_runtime.get()
+        if current is None:
+            if name == "settings":
+                return settings
+            raise RuntimeError("Runtime is not bound. Use create_app(runtime=...) or application lifespan.")
+        return getattr(current, name)
+
+
+runtime = RuntimeReference()

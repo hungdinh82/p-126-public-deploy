@@ -26,8 +26,13 @@ class EngineerError(Exception):
 
 class ScenarioRequest(BaseModel):
     scenario: Literal[
-        "reset", "low_battery", "front_left_low", "rear_right_high",
-        "powertrain_hot", "driver_door_open", "disconnect",
+        "reset",
+        "low_battery",
+        "front_left_low",
+        "rear_right_high",
+        "powertrain_hot",
+        "driver_door_open",
+        "disconnect",
     ]
 
 
@@ -124,14 +129,20 @@ class EngineerService:
         # The memory runtime is session-scoped while AlertEngine is vehicle-scoped.
         # Keep this dashboard observer separate so it cannot contaminate the driver's
         # alert episode for the same demo-car-1 identifier.
-        self.dashboard_alerts = runtime.alerts.__class__()
-        self.twin_alerts = {vehicle_id: runtime.alerts.__class__() for vehicle_id in SIMULATED_IDS}
+        from src.vivi.vehicle.alerts import AlertEngine
+
+        self.dashboard_alerts = AlertEngine()
+        self.twin_alerts = {vehicle_id: AlertEngine() for vehicle_id in SIMULATED_IDS}
         self.audit: deque[AuditEvent] = deque(maxlen=100)
         self.ota_history: deque[dict[str, Any]] = deque(maxlen=20)
         self.selected_profile = "runtime"
 
     def _record(self, actor: str, action: str, target: str, detail: str, result: str = "ok") -> None:
-        self.audit.appendleft(AuditEvent(occurred_at=datetime.now(UTC), actor=actor, action=action, target=target, detail=detail, result=result))
+        self.audit.appendleft(
+            AuditEvent(
+                occurred_at=datetime.now(UTC), actor=actor, action=action, target=target, detail=detail, result=result
+            )
+        )
 
     async def snapshot(self) -> dict[str, Any]:
         # These are the canonical endpoint functions, so hardware and pipeline
@@ -148,39 +159,74 @@ class EngineerService:
         except Exception:
             return None
 
-    def _vehicle_payload(self, state: VehicleState | None, *, source: str, connected: bool, model_profile: str) -> dict[str, Any]:
+    def _vehicle_payload(
+        self, state: VehicleState | None, *, source: str, connected: bool, model_profile: str
+    ) -> dict[str, Any]:
         if state is None:
-            return {"vehicle_id": self.runtime.settings.vehicle_id, "source": source, "availability": "unavailable", "online": False, "last_seen": None, "stale_seconds": None,
-                    "state": None, "alerts": [], "software_profile": model_profile}
-        alerts = (self.dashboard_alerts if state.vehicle_id == self.runtime.settings.vehicle_id else self.twin_alerts[state.vehicle_id]).evaluate(state)
+            return {
+                "vehicle_id": self.runtime.settings.vehicle_id,
+                "source": source,
+                "availability": "unavailable",
+                "online": False,
+                "last_seen": None,
+                "stale_seconds": None,
+                "state": None,
+                "alerts": [],
+                "software_profile": model_profile,
+            }
+        alerts = (
+            self.dashboard_alerts
+            if state.vehicle_id == self.runtime.settings.vehicle_id
+            else self.twin_alerts[state.vehicle_id]
+        ).evaluate(state)
         now = datetime.now(UTC)
         stale = max(0.0, (now - state.updated_at).total_seconds())
-        availability = "live" if source == "mqtt live" and connected else "memory" if source == "memory runtime" else "simulated"
+        availability = (
+            "live" if source == "mqtt live" and connected else "memory" if source == "memory runtime" else "simulated"
+        )
         if not connected:
             availability = "unavailable"
         return {
-            "vehicle_id": state.vehicle_id, "source": source, "availability": availability, "online": connected,
-            "last_seen": state.updated_at, "stale_seconds": round(stale, 1), "state": state,
-            "alerts": alerts.active_alerts, "software_profile": model_profile,
+            "vehicle_id": state.vehicle_id,
+            "source": source,
+            "availability": availability,
+            "online": connected,
+            "last_seen": state.updated_at,
+            "stale_seconds": round(stale, 1),
+            "state": state,
+            "alerts": alerts.active_alerts,
+            "software_profile": model_profile,
         }
 
     async def fleet(self) -> dict[str, Any]:
         state = await self._runtime_state()
         provider = self.runtime.settings.vehicle_provider
         runtime_source = "mqtt live" if provider == "mqtt" else "memory runtime"
-        vehicles = [self._vehicle_payload(state, source=runtime_source, connected=self.runtime.vehicle.is_connected(), model_profile="runtime")]
+        vehicles = [
+            self._vehicle_payload(
+                state, source=runtime_source, connected=self.runtime.vehicle.is_connected(), model_profile="runtime"
+            )
+        ]
         for twin in self.twins.values():
-            vehicles.append(self._vehicle_payload(twin.state, source="simulated twin", connected=twin.connected, model_profile="simulation"))
+            vehicles.append(
+                self._vehicle_payload(
+                    twin.state, source="simulated twin", connected=twin.connected, model_profile="simulation"
+                )
+            )
         return {"vehicles": vehicles}
 
     async def scenarios(self) -> dict[str, Any]:
-        return {"scenarios": [
-            {"id": "reset", "label": "Reset mặc định"}, {"id": "low_battery", "label": "Pin thấp 15%"},
-            {"id": "front_left_low", "label": "Lốp trước trái thấp 205 kPa"},
-            {"id": "rear_right_high", "label": "Lốp sau phải cao 315 kPa"},
-            {"id": "powertrain_hot", "label": "Hệ truyền động 95°C"}, {"id": "driver_door_open", "label": "Cửa tài mở khi READY"},
-            {"id": "disconnect", "label": "Mất kết nối twin", "simulated_only": True},
-        ]}
+        return {
+            "scenarios": [
+                {"id": "reset", "label": "Reset mặc định"},
+                {"id": "low_battery", "label": "Pin thấp 15%"},
+                {"id": "front_left_low", "label": "Lốp trước trái thấp 205 kPa"},
+                {"id": "rear_right_high", "label": "Lốp sau phải cao 315 kPa"},
+                {"id": "powertrain_hot", "label": "Hệ truyền động 95°C"},
+                {"id": "driver_door_open", "label": "Cửa tài mở khi READY"},
+                {"id": "disconnect", "label": "Mất kết nối twin", "simulated_only": True},
+            ]
+        }
 
     async def apply_scenario(self, vehicle_id: str, request: ScenarioRequest, actor: str) -> dict[str, Any]:
         scenario = request.scenario
@@ -222,14 +268,32 @@ class EngineerService:
 
     async def models(self) -> dict[str, Any]:
         settings = self.runtime.settings
-        return {"selected_profile": self.selected_profile, "profiles": [
-            {"id": "runtime", "label": "Runtime hiện tại", "mode": "runtime", "verified": True,
-             "detail": f"STT {settings.stt_provider}; LLM {settings.llm_provider}; TTS {settings.tts_provider}"},
-            {"id": "pc_offline", "label": "PC offline", "mode": "simulation", "verified": False,
-             "detail": "PhoWhisper + local Qwen GGUF Q4 + ZeroTTS"},
-            {"id": "jetson_offline", "label": "Jetson/Nano offline", "mode": "simulation", "verified": False,
-             "detail": "Whisper.cpp + local model + TTS fallback"},
-        ]}
+        return {
+            "selected_profile": self.selected_profile,
+            "profiles": [
+                {
+                    "id": "runtime",
+                    "label": "Runtime hiện tại",
+                    "mode": "runtime",
+                    "verified": True,
+                    "detail": f"STT {settings.stt_provider}; LLM {settings.llm_provider}; TTS {settings.tts_provider}",
+                },
+                {
+                    "id": "pc_offline",
+                    "label": "PC offline",
+                    "mode": "simulation",
+                    "verified": False,
+                    "detail": "PhoWhisper + local Qwen GGUF Q4 + ZeroTTS",
+                },
+                {
+                    "id": "jetson_offline",
+                    "label": "Jetson/Nano offline",
+                    "mode": "simulation",
+                    "verified": False,
+                    "detail": "Whisper.cpp + local model + TTS fallback",
+                },
+            ],
+        }
 
     async def select_model_profile(self, request: ModelSelectionRequest, actor: str) -> dict[str, Any]:
         self.selected_profile = request.profile_id
@@ -244,7 +308,13 @@ class EngineerService:
         states = ["READY", "CANARY_DEPLOYING", "CANARY_HEALTHY", "ROLLING_OUT", "COMPLETED"]
         if request.outcome == "rollback":
             states = ["READY", "CANARY_DEPLOYING", "HEALTH_CHECK_FAILED", "ROLLING_BACK", "ROLLED_BACK"]
-        record = {"id": str(uuid4()), "occurred_at": datetime.now(UTC), "states": states, "result": states[-1], "mode": "simulation"}
+        record = {
+            "id": str(uuid4()),
+            "occurred_at": datetime.now(UTC),
+            "states": states,
+            "result": states[-1],
+            "mode": "simulation",
+        }
         self.ota_history.appendleft(record)
         self._record(actor, "ota.deploy", record["id"][:8], f"{' → '.join(states)}; mode: simulation")
         return record

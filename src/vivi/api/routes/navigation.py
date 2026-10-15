@@ -6,19 +6,20 @@ from uuid import uuid4
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 
+from src.vivi.api.contracts import envelope
 from src.vivi.api.runtime import runtime
 from src.vivi.domain.models import TurnRequest
 from src.vivi.navigation import Place, Route, VietMapClient, VietMapError
 from src.vivi.navigation.workflow import NavigationEvent
 
-router = APIRouter(prefix="/api/v1/navigation")
+router = APIRouter(prefix="/api/v2/navigation")
 
 
 @router.get("/snapshot")
 async def navigation_snapshot(
     session_id: str = Query(min_length=1, max_length=100), event_id: str | None = Query(default=None, max_length=100)
 ):
-    return await runtime.orchestrator.navigation_snapshot(session_id, event_id)
+    return envelope(await runtime.orchestrator.navigation_snapshot(session_id, event_id))
 
 
 class NavigationRequest(BaseModel):
@@ -36,10 +37,9 @@ async def navigation_event(request: NavigationRequest):
             turn_id=str(uuid4()),
             transcript="Cập nhật hành trình",
             navigation_event=request.event.model_dump(mode="json"),
-            llm_provider="rules",
         )
-        response = await runtime.orchestrator.run(turn, provider="rules")
-        payload = response.model_dump(mode="json")
+        response = await runtime.orchestrator.run(turn)
+        payload = envelope(response)
         if request.event.kind in {"progress", "charge"}:
             from src.vivi.navigation.transport import compact_snapshot
 

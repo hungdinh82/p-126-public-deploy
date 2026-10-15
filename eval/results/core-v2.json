@@ -1,0 +1,1801 @@
+{
+  "created_at": "2026-10-15T20:22:03.224840+00:00",
+  "revision": "5a549456b678d24ef5d68550d26ddb954b7c34b1",
+  "working_tree_dirty": true,
+  "environment": {
+    "platform": "Linux-6.18.54.1-microsoft-standard-WSL2-x86_64-with-glibc2.43",
+    "python": "3.12.12"
+  },
+  "profile": "authored_semantic_contract",
+  "dataset_sha256": "611b399880dc22361357372d02eb92ff0baf3d6221b97917087419ad2708d4aa",
+  "limitations": [
+    "Fake models, maps and vehicle; does not measure semantic accuracy or live adapters.",
+    "Authored cases used during development; not a held-out language evaluation."
+  ],
+  "episodes": 30,
+  "passed": 30,
+  "results": [
+    {
+      "id": "navigate-then-music",
+      "group": "journey_lifecycle",
+      "repeat": 0,
+      "passed": true,
+      "steps": [
+        {
+          "id": "preview",
+          "checks": {
+            "navigation_workspace.draft.route:exists": {
+              "passed": true,
+              "expected": true,
+              "actual": {
+                "distance_m": 10000.0,
+                "duration_s": 900.0,
+                "coordinates": [
+                  [
+                    105.85,
+                    21.0
+                  ],
+                  [
+                    105.92,
+                    20.25
+                  ]
+                ],
+                "steps": [],
+                "bbox": null
+              }
+            },
+            "observed.vehicle.driving": {
+              "passed": true,
+              "expected": false,
+              "actual": false
+            },
+            "pending_question.purpose": {
+              "passed": true,
+              "expected": "approve_execution",
+              "actual": "approve_execution"
+            },
+            "diagnostics.semantic_source": {
+              "passed": true,
+              "expected": "llm",
+              "actual": "llm"
+            },
+            "observed.vehicle.media_playing": {
+              "passed": true,
+              "expected": false,
+              "actual": false
+            }
+          },
+          "wall_ms": 355.9,
+          "passed": true
+        },
+        {
+          "id": "start",
+          "checks": {
+            "observed.vehicle.driving": {
+              "passed": true,
+              "expected": true,
+              "actual": true
+            },
+            "observed.vehicle.media_playing": {
+              "passed": true,
+              "expected": true,
+              "actual": true
+            },
+            "navigation_workspace.journey.status": {
+              "passed": true,
+              "expected": "running",
+              "actual": "running"
+            }
+          },
+          "wall_ms": 497.54,
+          "passed": true
+        }
+      ]
+    },
+    {
+      "id": "navigate-then-music",
+      "group": "journey_lifecycle",
+      "repeat": 1,
+      "passed": true,
+      "steps": [
+        {
+          "id": "preview",
+          "checks": {
+            "navigation_workspace.draft.route:exists": {
+              "passed": true,
+              "expected": true,
+              "actual": {
+                "distance_m": 10000.0,
+                "duration_s": 900.0,
+                "coordinates": [
+                  [
+                    105.85,
+                    21.0
+                  ],
+                  [
+                    105.92,
+                    20.25
+                  ]
+                ],
+                "steps": [],
+                "bbox": null
+              }
+            },
+            "observed.vehicle.driving": {
+              "passed": true,
+              "expected": false,
+              "actual": false
+            },
+            "pending_question.purpose": {
+              "passed": true,
+              "expected": "approve_execution",
+              "actual": "approve_execution"
+            },
+            "diagnostics.semantic_source": {
+              "passed": true,
+              "expected": "llm",
+              "actual": "llm"
+            },
+            "observed.vehicle.media_playing": {
+              "passed": true,
+              "expected": false,
+              "actual": false
+            }
+          },
+          "wall_ms": 441.91,
+          "passed": true
+        },
+        {
+          "id": "start",
+          "checks": {
+            "observed.vehicle.driving": {
+              "passed": true,
+              "expected": true,
+              "actual": true
+            },
+            "observed.vehicle.media_playing": {
+              "passed": true,
+              "expected": true,
+              "actual": true
+            },
+            "navigation_workspace.journey.status": {
+              "passed": true,
+              "expected": "running",
+              "actual": "running"
+            }
+          },
+          "wall_ms": 494.67,
+          "passed": true
+        }
+      ]
+    },
+    {
+      "id": "navigate-then-music",
+      "group": "journey_lifecycle",
+      "repeat": 2,
+      "passed": true,
+      "steps": [
+        {
+          "id": "preview",
+          "checks": {
+            "navigation_workspace.draft.route:exists": {
+              "passed": true,
+              "expected": true,
+              "actual": {
+                "distance_m": 10000.0,
+                "duration_s": 900.0,
+                "coordinates": [
+                  [
+                    105.85,
+                    21.0
+                  ],
+                  [
+                    105.92,
+                    20.25
+                  ]
+                ],
+                "steps": [],
+                "bbox": null
+              }
+            },
+            "observed.vehicle.driving": {
+              "passed": true,
+              "expected": false,
+              "actual": false
+            },
+            "pending_question.purpose": {
+              "passed": true,
+              "expected": "approve_execution",
+              "actual": "approve_execution"
+            },
+            "diagnostics.semantic_source": {
+              "passed": true,
+              "expected": "llm",
+              "actual": "llm"
+            },
+            "observed.vehicle.media_playing": {
+              "passed": true,
+              "expected": false,
+              "actual": false
+            }
+          },
+          "wall_ms": 456.12,
+          "passed": true
+        },
+        {
+          "id": "start",
+          "checks": {
+            "observed.vehicle.driving": {
+              "passed": true,
+              "expected": true,
+              "actual": true
+            },
+            "observed.vehicle.media_playing": {
+              "passed": true,
+              "expected": true,
+              "actual": true
+            },
+            "navigation_workspace.journey.status": {
+              "passed": true,
+              "expected": "running",
+              "actual": "running"
+            }
+          },
+          "wall_ms": 535.17,
+          "passed": true
+        }
+      ]
+    },
+    {
+      "id": "itinerary-then-music",
+      "group": "trip_planning",
+      "repeat": 0,
+      "passed": true,
+      "steps": [
+        {
+          "id": "plan",
+          "checks": {
+            "navigation_workspace.draft.purpose": {
+              "passed": true,
+              "expected": "itinerary",
+              "actual": "itinerary"
+            },
+            "observed.vehicle.driving": {
+              "passed": true,
+              "expected": false,
+              "actual": false
+            },
+            "observed.vehicle.media_playing": {
+              "passed": true,
+              "expected": true,
+              "actual": true
+            }
+          },
+          "wall_ms": 601.35,
+          "passed": true
+        }
+      ]
+    },
+    {
+      "id": "itinerary-then-music",
+      "group": "trip_planning",
+      "repeat": 1,
+      "passed": true,
+      "steps": [
+        {
+          "id": "plan",
+          "checks": {
+            "navigation_workspace.draft.purpose": {
+              "passed": true,
+              "expected": "itinerary",
+              "actual": "itinerary"
+            },
+            "observed.vehicle.driving": {
+              "passed": true,
+              "expected": false,
+              "actual": false
+            },
+            "observed.vehicle.media_playing": {
+              "passed": true,
+              "expected": true,
+              "actual": true
+            }
+          },
+          "wall_ms": 539.12,
+          "passed": true
+        }
+      ]
+    },
+    {
+      "id": "itinerary-then-music",
+      "group": "trip_planning",
+      "repeat": 2,
+      "passed": true,
+      "steps": [
+        {
+          "id": "plan",
+          "checks": {
+            "navigation_workspace.draft.purpose": {
+              "passed": true,
+              "expected": "itinerary",
+              "actual": "itinerary"
+            },
+            "observed.vehicle.driving": {
+              "passed": true,
+              "expected": false,
+              "actual": false
+            },
+            "observed.vehicle.media_playing": {
+              "passed": true,
+              "expected": true,
+              "actual": true
+            }
+          },
+          "wall_ms": 773.51,
+          "passed": true
+        }
+      ]
+    },
+    {
+      "id": "conditional-no-prefix",
+      "group": "policy",
+      "repeat": 0,
+      "passed": true,
+      "steps": [
+        {
+          "id": "conditional",
+          "checks": {
+            "status": {
+              "passed": true,
+              "expected": "clarify",
+              "actual": "clarify"
+            },
+            "observed.vehicle.state_version": {
+              "passed": true,
+              "expected": 0,
+              "actual": 0
+            }
+          },
+          "wall_ms": 271.1,
+          "passed": true
+        }
+      ]
+    },
+    {
+      "id": "conditional-no-prefix",
+      "group": "policy",
+      "repeat": 1,
+      "passed": true,
+      "steps": [
+        {
+          "id": "conditional",
+          "checks": {
+            "status": {
+              "passed": true,
+              "expected": "clarify",
+              "actual": "clarify"
+            },
+            "observed.vehicle.state_version": {
+              "passed": true,
+              "expected": 0,
+              "actual": 0
+            }
+          },
+          "wall_ms": 267.31,
+          "passed": true
+        }
+      ]
+    },
+    {
+      "id": "conditional-no-prefix",
+      "group": "policy",
+      "repeat": 2,
+      "passed": true,
+      "steps": [
+        {
+          "id": "conditional",
+          "checks": {
+            "status": {
+              "passed": true,
+              "expected": "clarify",
+              "actual": "clarify"
+            },
+            "observed.vehicle.state_version": {
+              "passed": true,
+              "expected": 0,
+              "actual": 0
+            }
+          },
+          "wall_ms": 293.2,
+          "passed": true
+        }
+      ]
+    },
+    {
+      "id": "offline-compound-preserves-task",
+      "group": "provider_failure",
+      "repeat": 0,
+      "passed": true,
+      "steps": [
+        {
+          "id": "preview",
+          "checks": {
+            "navigation_workspace.draft.route:exists": {
+              "passed": true,
+              "expected": true,
+              "actual": {
+                "distance_m": 10000.0,
+                "duration_s": 900.0,
+                "coordinates": [
+                  [
+                    105.85,
+                    21.0
+                  ],
+                  [
+                    105.92,
+                    20.25
+                  ]
+                ],
+                "steps": [],
+                "bbox": null
+              }
+            },
+            "observed.vehicle.driving": {
+              "passed": true,
+              "expected": false,
+              "actual": false
+            },
+            "pending_question.purpose": {
+              "passed": true,
+              "expected": "approve_execution",
+              "actual": "approve_execution"
+            },
+            "diagnostics.semantic_source": {
+              "passed": true,
+              "expected": "llm",
+              "actual": "llm"
+            }
+          },
+          "wall_ms": 482.02,
+          "passed": true
+        },
+        {
+          "id": "failure",
+          "checks": {
+            "observed.vehicle.driving": {
+              "passed": true,
+              "expected": false,
+              "actual": false
+            },
+            "pending_question.id": {
+              "passed": true,
+              "expected": "question:39aba1cca6f2acde2f495c655df0f10b",
+              "actual": "question:39aba1cca6f2acde2f495c655df0f10b"
+            },
+            "diagnostics.semantic_source": {
+              "passed": true,
+              "expected": "fallback",
+              "actual": "fallback"
+            }
+          },
+          "wall_ms": 280.03,
+          "passed": true
+        }
+      ]
+    },
+    {
+      "id": "offline-compound-preserves-task",
+      "group": "provider_failure",
+      "repeat": 1,
+      "passed": true,
+      "steps": [
+        {
+          "id": "preview",
+          "checks": {
+            "navigation_workspace.draft.route:exists": {
+              "passed": true,
+              "expected": true,
+              "actual": {
+                "distance_m": 10000.0,
+                "duration_s": 900.0,
+                "coordinates": [
+                  [
+                    105.85,
+                    21.0
+                  ],
+                  [
+                    105.92,
+                    20.25
+                  ]
+                ],
+                "steps": [],
+                "bbox": null
+              }
+            },
+            "observed.vehicle.driving": {
+              "passed": true,
+              "expected": false,
+              "actual": false
+            },
+            "pending_question.purpose": {
+              "passed": true,
+              "expected": "approve_execution",
+              "actual": "approve_execution"
+            },
+            "diagnostics.semantic_source": {
+              "passed": true,
+              "expected": "llm",
+              "actual": "llm"
+            }
+          },
+          "wall_ms": 442.99,
+          "passed": true
+        },
+        {
+          "id": "failure",
+          "checks": {
+            "observed.vehicle.driving": {
+              "passed": true,
+              "expected": false,
+              "actual": false
+            },
+            "pending_question.id": {
+              "passed": true,
+              "expected": "question:505e4a4b2d8935e25699e0867465b7c2",
+              "actual": "question:505e4a4b2d8935e25699e0867465b7c2"
+            },
+            "diagnostics.semantic_source": {
+              "passed": true,
+              "expected": "fallback",
+              "actual": "fallback"
+            }
+          },
+          "wall_ms": 255.47,
+          "passed": true
+        }
+      ]
+    },
+    {
+      "id": "offline-compound-preserves-task",
+      "group": "provider_failure",
+      "repeat": 2,
+      "passed": true,
+      "steps": [
+        {
+          "id": "preview",
+          "checks": {
+            "navigation_workspace.draft.route:exists": {
+              "passed": true,
+              "expected": true,
+              "actual": {
+                "distance_m": 10000.0,
+                "duration_s": 900.0,
+                "coordinates": [
+                  [
+                    105.85,
+                    21.0
+                  ],
+                  [
+                    105.92,
+                    20.25
+                  ]
+                ],
+                "steps": [],
+                "bbox": null
+              }
+            },
+            "observed.vehicle.driving": {
+              "passed": true,
+              "expected": false,
+              "actual": false
+            },
+            "pending_question.purpose": {
+              "passed": true,
+              "expected": "approve_execution",
+              "actual": "approve_execution"
+            },
+            "diagnostics.semantic_source": {
+              "passed": true,
+              "expected": "llm",
+              "actual": "llm"
+            }
+          },
+          "wall_ms": 454.39,
+          "passed": true
+        },
+        {
+          "id": "failure",
+          "checks": {
+            "observed.vehicle.driving": {
+              "passed": true,
+              "expected": false,
+              "actual": false
+            },
+            "pending_question.id": {
+              "passed": true,
+              "expected": "question:2e9d89e26e9cbeecbcccfbb9418fa448",
+              "actual": "question:2e9d89e26e9cbeecbcccfbb9418fa448"
+            },
+            "diagnostics.semantic_source": {
+              "passed": true,
+              "expected": "fallback",
+              "actual": "fallback"
+            }
+          },
+          "wall_ms": 253.74,
+          "passed": true
+        }
+      ]
+    },
+    {
+      "id": "offline-bound-approval",
+      "group": "provider_failure",
+      "repeat": 0,
+      "passed": true,
+      "steps": [
+        {
+          "id": "preview",
+          "checks": {
+            "navigation_workspace.draft.route:exists": {
+              "passed": true,
+              "expected": true,
+              "actual": {
+                "distance_m": 10000.0,
+                "duration_s": 900.0,
+                "coordinates": [
+                  [
+                    105.85,
+                    21.0
+                  ],
+                  [
+                    105.92,
+                    20.25
+                  ]
+                ],
+                "steps": [],
+                "bbox": null
+              }
+            },
+            "observed.vehicle.driving": {
+              "passed": true,
+              "expected": false,
+              "actual": false
+            },
+            "pending_question.purpose": {
+              "passed": true,
+              "expected": "approve_execution",
+              "actual": "approve_execution"
+            },
+            "diagnostics.semantic_source": {
+              "passed": true,
+              "expected": "llm",
+              "actual": "llm"
+            }
+          },
+          "wall_ms": 410.98,
+          "passed": true
+        },
+        {
+          "id": "yes",
+          "checks": {
+            "observed.vehicle.driving": {
+              "passed": true,
+              "expected": true,
+              "actual": true
+            },
+            "diagnostics.semantic_source": {
+              "passed": true,
+              "expected": "fallback",
+              "actual": "fallback"
+            }
+          },
+          "wall_ms": 428.04,
+          "passed": true
+        }
+      ]
+    },
+    {
+      "id": "offline-bound-approval",
+      "group": "provider_failure",
+      "repeat": 1,
+      "passed": true,
+      "steps": [
+        {
+          "id": "preview",
+          "checks": {
+            "navigation_workspace.draft.route:exists": {
+              "passed": true,
+              "expected": true,
+              "actual": {
+                "distance_m": 10000.0,
+                "duration_s": 900.0,
+                "coordinates": [
+                  [
+                    105.85,
+                    21.0
+                  ],
+                  [
+                    105.92,
+                    20.25
+                  ]
+                ],
+                "steps": [],
+                "bbox": null
+              }
+            },
+            "observed.vehicle.driving": {
+              "passed": true,
+              "expected": false,
+              "actual": false
+            },
+            "pending_question.purpose": {
+              "passed": true,
+              "expected": "approve_execution",
+              "actual": "approve_execution"
+            },
+            "diagnostics.semantic_source": {
+              "passed": true,
+              "expected": "llm",
+              "actual": "llm"
+            }
+          },
+          "wall_ms": 467.26,
+          "passed": true
+        },
+        {
+          "id": "yes",
+          "checks": {
+            "observed.vehicle.driving": {
+              "passed": true,
+              "expected": true,
+              "actual": true
+            },
+            "diagnostics.semantic_source": {
+              "passed": true,
+              "expected": "fallback",
+              "actual": "fallback"
+            }
+          },
+          "wall_ms": 438.69,
+          "passed": true
+        }
+      ]
+    },
+    {
+      "id": "offline-bound-approval",
+      "group": "provider_failure",
+      "repeat": 2,
+      "passed": true,
+      "steps": [
+        {
+          "id": "preview",
+          "checks": {
+            "navigation_workspace.draft.route:exists": {
+              "passed": true,
+              "expected": true,
+              "actual": {
+                "distance_m": 10000.0,
+                "duration_s": 900.0,
+                "coordinates": [
+                  [
+                    105.85,
+                    21.0
+                  ],
+                  [
+                    105.92,
+                    20.25
+                  ]
+                ],
+                "steps": [],
+                "bbox": null
+              }
+            },
+            "observed.vehicle.driving": {
+              "passed": true,
+              "expected": false,
+              "actual": false
+            },
+            "pending_question.purpose": {
+              "passed": true,
+              "expected": "approve_execution",
+              "actual": "approve_execution"
+            },
+            "diagnostics.semantic_source": {
+              "passed": true,
+              "expected": "llm",
+              "actual": "llm"
+            }
+          },
+          "wall_ms": 436.84,
+          "passed": true
+        },
+        {
+          "id": "yes",
+          "checks": {
+            "observed.vehicle.driving": {
+              "passed": true,
+              "expected": true,
+              "actual": true
+            },
+            "diagnostics.semantic_source": {
+              "passed": true,
+              "expected": "fallback",
+              "actual": "fallback"
+            }
+          },
+          "wall_ms": 471.75,
+          "passed": true
+        }
+      ]
+    },
+    {
+      "id": "stream-replay-collision",
+      "group": "recovery",
+      "repeat": 0,
+      "passed": true,
+      "steps": [
+        {
+          "id": "temperature",
+          "checks": {
+            "observed.vehicle.temperature_celsius": {
+              "passed": true,
+              "expected": 25,
+              "actual": 25.0
+            }
+          },
+          "wall_ms": 393.66,
+          "passed": true
+        },
+        {
+          "id": "replay",
+          "checks": {
+            "observed.vehicle.state_version": {
+              "passed": true,
+              "expected": 1,
+              "actual": 1
+            },
+            "observed.model_calls": {
+              "passed": true,
+              "expected": 1,
+              "actual": 1
+            }
+          },
+          "wall_ms": 1.65,
+          "passed": true
+        },
+        {
+          "id": "collision",
+          "checks": {
+            "collision": {
+              "passed": true,
+              "expected": true,
+              "actual": true
+            }
+          },
+          "wall_ms": 2.06,
+          "passed": true
+        }
+      ]
+    },
+    {
+      "id": "stream-replay-collision",
+      "group": "recovery",
+      "repeat": 1,
+      "passed": true,
+      "steps": [
+        {
+          "id": "temperature",
+          "checks": {
+            "observed.vehicle.temperature_celsius": {
+              "passed": true,
+              "expected": 25,
+              "actual": 25.0
+            }
+          },
+          "wall_ms": 384.65,
+          "passed": true
+        },
+        {
+          "id": "replay",
+          "checks": {
+            "observed.vehicle.state_version": {
+              "passed": true,
+              "expected": 1,
+              "actual": 1
+            },
+            "observed.model_calls": {
+              "passed": true,
+              "expected": 1,
+              "actual": 1
+            }
+          },
+          "wall_ms": 1.38,
+          "passed": true
+        },
+        {
+          "id": "collision",
+          "checks": {
+            "collision": {
+              "passed": true,
+              "expected": true,
+              "actual": true
+            }
+          },
+          "wall_ms": 0.86,
+          "passed": true
+        }
+      ]
+    },
+    {
+      "id": "stream-replay-collision",
+      "group": "recovery",
+      "repeat": 2,
+      "passed": true,
+      "steps": [
+        {
+          "id": "temperature",
+          "checks": {
+            "observed.vehicle.temperature_celsius": {
+              "passed": true,
+              "expected": 25,
+              "actual": 25.0
+            }
+          },
+          "wall_ms": 410.25,
+          "passed": true
+        },
+        {
+          "id": "replay",
+          "checks": {
+            "observed.vehicle.state_version": {
+              "passed": true,
+              "expected": 1,
+              "actual": 1
+            },
+            "observed.model_calls": {
+              "passed": true,
+              "expected": 1,
+              "actual": 1
+            }
+          },
+          "wall_ms": 1.67,
+          "passed": true
+        },
+        {
+          "id": "collision",
+          "checks": {
+            "collision": {
+              "passed": true,
+              "expected": true,
+              "actual": true
+            }
+          },
+          "wall_ms": 1.19,
+          "passed": true
+        }
+      ]
+    },
+    {
+      "id": "restart-does-not-drive",
+      "group": "recovery",
+      "repeat": 0,
+      "passed": true,
+      "steps": [
+        {
+          "id": "preview",
+          "checks": {
+            "navigation_workspace.draft.route:exists": {
+              "passed": true,
+              "expected": true,
+              "actual": {
+                "distance_m": 10000.0,
+                "duration_s": 900.0,
+                "coordinates": [
+                  [
+                    105.85,
+                    21.0
+                  ],
+                  [
+                    105.92,
+                    20.25
+                  ]
+                ],
+                "steps": [],
+                "bbox": null
+              }
+            },
+            "observed.vehicle.driving": {
+              "passed": true,
+              "expected": false,
+              "actual": false
+            },
+            "pending_question.purpose": {
+              "passed": true,
+              "expected": "approve_execution",
+              "actual": "approve_execution"
+            },
+            "diagnostics.semantic_source": {
+              "passed": true,
+              "expected": "llm",
+              "actual": "llm"
+            }
+          },
+          "wall_ms": 443.33,
+          "passed": true
+        },
+        {
+          "id": "start",
+          "checks": {
+            "observed.vehicle.driving": {
+              "passed": true,
+              "expected": true,
+              "actual": true
+            }
+          },
+          "wall_ms": 385.45,
+          "passed": true
+        },
+        {
+          "id": "restart",
+          "checks": {
+            "navigation_workspace.journey.status": {
+              "passed": true,
+              "expected": "paused",
+              "actual": "paused"
+            },
+            "observed.vehicle.driving": {
+              "passed": true,
+              "expected": false,
+              "actual": false
+            },
+            "observed.model_calls": {
+              "passed": true,
+              "expected": 2,
+              "actual": 2
+            }
+          },
+          "wall_ms": 83.06,
+          "passed": true
+        }
+      ]
+    },
+    {
+      "id": "restart-does-not-drive",
+      "group": "recovery",
+      "repeat": 1,
+      "passed": true,
+      "steps": [
+        {
+          "id": "preview",
+          "checks": {
+            "navigation_workspace.draft.route:exists": {
+              "passed": true,
+              "expected": true,
+              "actual": {
+                "distance_m": 10000.0,
+                "duration_s": 900.0,
+                "coordinates": [
+                  [
+                    105.85,
+                    21.0
+                  ],
+                  [
+                    105.92,
+                    20.25
+                  ]
+                ],
+                "steps": [],
+                "bbox": null
+              }
+            },
+            "observed.vehicle.driving": {
+              "passed": true,
+              "expected": false,
+              "actual": false
+            },
+            "pending_question.purpose": {
+              "passed": true,
+              "expected": "approve_execution",
+              "actual": "approve_execution"
+            },
+            "diagnostics.semantic_source": {
+              "passed": true,
+              "expected": "llm",
+              "actual": "llm"
+            }
+          },
+          "wall_ms": 441.17,
+          "passed": true
+        },
+        {
+          "id": "start",
+          "checks": {
+            "observed.vehicle.driving": {
+              "passed": true,
+              "expected": true,
+              "actual": true
+            }
+          },
+          "wall_ms": 442.36,
+          "passed": true
+        },
+        {
+          "id": "restart",
+          "checks": {
+            "navigation_workspace.journey.status": {
+              "passed": true,
+              "expected": "paused",
+              "actual": "paused"
+            },
+            "observed.vehicle.driving": {
+              "passed": true,
+              "expected": false,
+              "actual": false
+            },
+            "observed.model_calls": {
+              "passed": true,
+              "expected": 2,
+              "actual": 2
+            }
+          },
+          "wall_ms": 77.86,
+          "passed": true
+        }
+      ]
+    },
+    {
+      "id": "restart-does-not-drive",
+      "group": "recovery",
+      "repeat": 2,
+      "passed": true,
+      "steps": [
+        {
+          "id": "preview",
+          "checks": {
+            "navigation_workspace.draft.route:exists": {
+              "passed": true,
+              "expected": true,
+              "actual": {
+                "distance_m": 10000.0,
+                "duration_s": 900.0,
+                "coordinates": [
+                  [
+                    105.85,
+                    21.0
+                  ],
+                  [
+                    105.92,
+                    20.25
+                  ]
+                ],
+                "steps": [],
+                "bbox": null
+              }
+            },
+            "observed.vehicle.driving": {
+              "passed": true,
+              "expected": false,
+              "actual": false
+            },
+            "pending_question.purpose": {
+              "passed": true,
+              "expected": "approve_execution",
+              "actual": "approve_execution"
+            },
+            "diagnostics.semantic_source": {
+              "passed": true,
+              "expected": "llm",
+              "actual": "llm"
+            }
+          },
+          "wall_ms": 415.84,
+          "passed": true
+        },
+        {
+          "id": "start",
+          "checks": {
+            "observed.vehicle.driving": {
+              "passed": true,
+              "expected": true,
+              "actual": true
+            }
+          },
+          "wall_ms": 317.15,
+          "passed": true
+        },
+        {
+          "id": "restart",
+          "checks": {
+            "navigation_workspace.journey.status": {
+              "passed": true,
+              "expected": "paused",
+              "actual": "paused"
+            },
+            "observed.vehicle.driving": {
+              "passed": true,
+              "expected": false,
+              "actual": false
+            },
+            "observed.model_calls": {
+              "passed": true,
+              "expected": 2,
+              "actual": 2
+            }
+          },
+          "wall_ms": 51.15,
+          "passed": true
+        }
+      ]
+    },
+    {
+      "id": "new-draft-keeps-live-journey",
+      "group": "concurrency",
+      "repeat": 0,
+      "passed": true,
+      "steps": [
+        {
+          "id": "preview",
+          "checks": {
+            "navigation_workspace.draft.route:exists": {
+              "passed": true,
+              "expected": true,
+              "actual": {
+                "distance_m": 10000.0,
+                "duration_s": 900.0,
+                "coordinates": [
+                  [
+                    105.85,
+                    21.0
+                  ],
+                  [
+                    105.92,
+                    20.25
+                  ]
+                ],
+                "steps": [],
+                "bbox": null
+              }
+            },
+            "observed.vehicle.driving": {
+              "passed": true,
+              "expected": false,
+              "actual": false
+            },
+            "pending_question.purpose": {
+              "passed": true,
+              "expected": "approve_execution",
+              "actual": "approve_execution"
+            },
+            "diagnostics.semantic_source": {
+              "passed": true,
+              "expected": "llm",
+              "actual": "llm"
+            }
+          },
+          "wall_ms": 421.03,
+          "passed": true
+        },
+        {
+          "id": "start",
+          "checks": {
+            "observed.vehicle.driving": {
+              "passed": true,
+              "expected": true,
+              "actual": true
+            }
+          },
+          "wall_ms": 333.61,
+          "passed": true
+        },
+        {
+          "id": "new",
+          "checks": {
+            "navigation_workspace.journey.route_id": {
+              "passed": true,
+              "expected": "route:d0e1608e-8b27-422d-b22c-062aaa25477b",
+              "actual": "route:d0e1608e-8b27-422d-b22c-062aaa25477b"
+            },
+            "navigation_workspace.draft.selected.name": {
+              "passed": true,
+              "expected": "Tam Cốc",
+              "actual": "Tam Cốc"
+            },
+            "observed.vehicle.driving": {
+              "passed": true,
+              "expected": true,
+              "actual": true
+            }
+          },
+          "wall_ms": 396.54,
+          "passed": true
+        },
+        {
+          "id": "late",
+          "checks": {
+            "status": {
+              "passed": true,
+              "expected": "clarify",
+              "actual": "clarify"
+            },
+            "navigation_workspace.journey.route_id": {
+              "passed": true,
+              "expected": "route:d0e1608e-8b27-422d-b22c-062aaa25477b",
+              "actual": "route:d0e1608e-8b27-422d-b22c-062aaa25477b"
+            }
+          },
+          "wall_ms": 211.81,
+          "passed": true
+        }
+      ]
+    },
+    {
+      "id": "new-draft-keeps-live-journey",
+      "group": "concurrency",
+      "repeat": 1,
+      "passed": true,
+      "steps": [
+        {
+          "id": "preview",
+          "checks": {
+            "navigation_workspace.draft.route:exists": {
+              "passed": true,
+              "expected": true,
+              "actual": {
+                "distance_m": 10000.0,
+                "duration_s": 900.0,
+                "coordinates": [
+                  [
+                    105.85,
+                    21.0
+                  ],
+                  [
+                    105.92,
+                    20.25
+                  ]
+                ],
+                "steps": [],
+                "bbox": null
+              }
+            },
+            "observed.vehicle.driving": {
+              "passed": true,
+              "expected": false,
+              "actual": false
+            },
+            "pending_question.purpose": {
+              "passed": true,
+              "expected": "approve_execution",
+              "actual": "approve_execution"
+            },
+            "diagnostics.semantic_source": {
+              "passed": true,
+              "expected": "llm",
+              "actual": "llm"
+            }
+          },
+          "wall_ms": 657.38,
+          "passed": true
+        },
+        {
+          "id": "start",
+          "checks": {
+            "observed.vehicle.driving": {
+              "passed": true,
+              "expected": true,
+              "actual": true
+            }
+          },
+          "wall_ms": 486.99,
+          "passed": true
+        },
+        {
+          "id": "new",
+          "checks": {
+            "navigation_workspace.journey.route_id": {
+              "passed": true,
+              "expected": "route:af5988ed-2bd0-4fa5-bdbd-94cf6a46fb70",
+              "actual": "route:af5988ed-2bd0-4fa5-bdbd-94cf6a46fb70"
+            },
+            "navigation_workspace.draft.selected.name": {
+              "passed": true,
+              "expected": "Tam Cốc",
+              "actual": "Tam Cốc"
+            },
+            "observed.vehicle.driving": {
+              "passed": true,
+              "expected": true,
+              "actual": true
+            }
+          },
+          "wall_ms": 389.05,
+          "passed": true
+        },
+        {
+          "id": "late",
+          "checks": {
+            "status": {
+              "passed": true,
+              "expected": "clarify",
+              "actual": "clarify"
+            },
+            "navigation_workspace.journey.route_id": {
+              "passed": true,
+              "expected": "route:af5988ed-2bd0-4fa5-bdbd-94cf6a46fb70",
+              "actual": "route:af5988ed-2bd0-4fa5-bdbd-94cf6a46fb70"
+            }
+          },
+          "wall_ms": 206.59,
+          "passed": true
+        }
+      ]
+    },
+    {
+      "id": "new-draft-keeps-live-journey",
+      "group": "concurrency",
+      "repeat": 2,
+      "passed": true,
+      "steps": [
+        {
+          "id": "preview",
+          "checks": {
+            "navigation_workspace.draft.route:exists": {
+              "passed": true,
+              "expected": true,
+              "actual": {
+                "distance_m": 10000.0,
+                "duration_s": 900.0,
+                "coordinates": [
+                  [
+                    105.85,
+                    21.0
+                  ],
+                  [
+                    105.92,
+                    20.25
+                  ]
+                ],
+                "steps": [],
+                "bbox": null
+              }
+            },
+            "observed.vehicle.driving": {
+              "passed": true,
+              "expected": false,
+              "actual": false
+            },
+            "pending_question.purpose": {
+              "passed": true,
+              "expected": "approve_execution",
+              "actual": "approve_execution"
+            },
+            "diagnostics.semantic_source": {
+              "passed": true,
+              "expected": "llm",
+              "actual": "llm"
+            }
+          },
+          "wall_ms": 455.15,
+          "passed": true
+        },
+        {
+          "id": "start",
+          "checks": {
+            "observed.vehicle.driving": {
+              "passed": true,
+              "expected": true,
+              "actual": true
+            }
+          },
+          "wall_ms": 469.47,
+          "passed": true
+        },
+        {
+          "id": "new",
+          "checks": {
+            "navigation_workspace.journey.route_id": {
+              "passed": true,
+              "expected": "route:06ff746e-68e7-4d0a-a20e-9f605b424afe",
+              "actual": "route:06ff746e-68e7-4d0a-a20e-9f605b424afe"
+            },
+            "navigation_workspace.draft.selected.name": {
+              "passed": true,
+              "expected": "Tam Cốc",
+              "actual": "Tam Cốc"
+            },
+            "observed.vehicle.driving": {
+              "passed": true,
+              "expected": true,
+              "actual": true
+            }
+          },
+          "wall_ms": 347.38,
+          "passed": true
+        },
+        {
+          "id": "late",
+          "checks": {
+            "status": {
+              "passed": true,
+              "expected": "clarify",
+              "actual": "clarify"
+            },
+            "navigation_workspace.journey.route_id": {
+              "passed": true,
+              "expected": "route:06ff746e-68e7-4d0a-a20e-9f605b424afe",
+              "actual": "route:06ff746e-68e7-4d0a-a20e-9f605b424afe"
+            }
+          },
+          "wall_ms": 180.7,
+          "passed": true
+        }
+      ]
+    },
+    {
+      "id": "place-selection-ordinal",
+      "group": "place_selection",
+      "repeat": 0,
+      "passed": true,
+      "steps": [
+        {
+          "id": "select",
+          "checks": {
+            "pending_question.purpose": {
+              "passed": true,
+              "expected": "select_entity",
+              "actual": "select_entity"
+            },
+            "pending_question.choices:length": {
+              "passed": true,
+              "expected": 2,
+              "actual": 2
+            }
+          },
+          "wall_ms": 457.85,
+          "passed": true
+        },
+        {
+          "id": "second",
+          "checks": {
+            "navigation_workspace.draft.selected.ref_id": {
+              "passed": true,
+              "expected": "b",
+              "actual": "b"
+            },
+            "observed.vehicle.driving": {
+              "passed": true,
+              "expected": false,
+              "actual": false
+            }
+          },
+          "wall_ms": 309.78,
+          "passed": true
+        }
+      ]
+    },
+    {
+      "id": "place-selection-ordinal",
+      "group": "place_selection",
+      "repeat": 1,
+      "passed": true,
+      "steps": [
+        {
+          "id": "select",
+          "checks": {
+            "pending_question.purpose": {
+              "passed": true,
+              "expected": "select_entity",
+              "actual": "select_entity"
+            },
+            "pending_question.choices:length": {
+              "passed": true,
+              "expected": 2,
+              "actual": 2
+            }
+          },
+          "wall_ms": 403.04,
+          "passed": true
+        },
+        {
+          "id": "second",
+          "checks": {
+            "navigation_workspace.draft.selected.ref_id": {
+              "passed": true,
+              "expected": "b",
+              "actual": "b"
+            },
+            "observed.vehicle.driving": {
+              "passed": true,
+              "expected": false,
+              "actual": false
+            }
+          },
+          "wall_ms": 304.09,
+          "passed": true
+        }
+      ]
+    },
+    {
+      "id": "place-selection-ordinal",
+      "group": "place_selection",
+      "repeat": 2,
+      "passed": true,
+      "steps": [
+        {
+          "id": "select",
+          "checks": {
+            "pending_question.purpose": {
+              "passed": true,
+              "expected": "select_entity",
+              "actual": "select_entity"
+            },
+            "pending_question.choices:length": {
+              "passed": true,
+              "expected": 2,
+              "actual": 2
+            }
+          },
+          "wall_ms": 387.75,
+          "passed": true
+        },
+        {
+          "id": "second",
+          "checks": {
+            "navigation_workspace.draft.selected.ref_id": {
+              "passed": true,
+              "expected": "b",
+              "actual": "b"
+            },
+            "observed.vehicle.driving": {
+              "passed": true,
+              "expected": false,
+              "actual": false
+            }
+          },
+          "wall_ms": 325.35,
+          "passed": true
+        }
+      ]
+    },
+    {
+      "id": "sam-son-deictic-followup",
+      "group": "trip_planning",
+      "repeat": 0,
+      "passed": true,
+      "steps": [
+        {
+          "id": "out",
+          "checks": {
+            "navigation_workspace.draft.trip_kind": {
+              "passed": true,
+              "expected": "one_way",
+              "actual": "one_way"
+            },
+            "observed.vehicle.driving": {
+              "passed": true,
+              "expected": false,
+              "actual": false
+            }
+          },
+          "wall_ms": 429.88,
+          "passed": true
+        },
+        {
+          "id": "return",
+          "checks": {
+            "navigation_workspace.draft.trip_kind": {
+              "passed": true,
+              "expected": "round_trip",
+              "actual": "round_trip"
+            },
+            "navigation_workspace.draft.waypoint_routes:length": {
+              "passed": true,
+              "expected": 2,
+              "actual": 2
+            },
+            "observed.vehicle.driving": {
+              "passed": true,
+              "expected": false,
+              "actual": false
+            }
+          },
+          "wall_ms": 417.55,
+          "passed": true
+        }
+      ]
+    },
+    {
+      "id": "sam-son-deictic-followup",
+      "group": "trip_planning",
+      "repeat": 1,
+      "passed": true,
+      "steps": [
+        {
+          "id": "out",
+          "checks": {
+            "navigation_workspace.draft.trip_kind": {
+              "passed": true,
+              "expected": "one_way",
+              "actual": "one_way"
+            },
+            "observed.vehicle.driving": {
+              "passed": true,
+              "expected": false,
+              "actual": false
+            }
+          },
+          "wall_ms": 421.88,
+          "passed": true
+        },
+        {
+          "id": "return",
+          "checks": {
+            "navigation_workspace.draft.trip_kind": {
+              "passed": true,
+              "expected": "round_trip",
+              "actual": "round_trip"
+            },
+            "navigation_workspace.draft.waypoint_routes:length": {
+              "passed": true,
+              "expected": 2,
+              "actual": 2
+            },
+            "observed.vehicle.driving": {
+              "passed": true,
+              "expected": false,
+              "actual": false
+            }
+          },
+          "wall_ms": 388.56,
+          "passed": true
+        }
+      ]
+    },
+    {
+      "id": "sam-son-deictic-followup",
+      "group": "trip_planning",
+      "repeat": 2,
+      "passed": true,
+      "steps": [
+        {
+          "id": "out",
+          "checks": {
+            "navigation_workspace.draft.trip_kind": {
+              "passed": true,
+              "expected": "one_way",
+              "actual": "one_way"
+            },
+            "observed.vehicle.driving": {
+              "passed": true,
+              "expected": false,
+              "actual": false
+            }
+          },
+          "wall_ms": 494.69,
+          "passed": true
+        },
+        {
+          "id": "return",
+          "checks": {
+            "navigation_workspace.draft.trip_kind": {
+              "passed": true,
+              "expected": "round_trip",
+              "actual": "round_trip"
+            },
+            "navigation_workspace.draft.waypoint_routes:length": {
+              "passed": true,
+              "expected": 2,
+              "actual": 2
+            },
+            "observed.vehicle.driving": {
+              "passed": true,
+              "expected": false,
+              "actual": false
+            }
+          },
+          "wall_ms": 361.69,
+          "passed": true
+        }
+      ]
+    }
+  ]
+}

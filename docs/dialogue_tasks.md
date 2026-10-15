@@ -1,3 +1,5 @@
+> Tài liệu lịch sử. Contract và vận hành hiện hành: [Lõi hội thoại Core v2](langgraph_core_v2.md).
+
 # Quản lý hội thoại theo tác vụ — 07/10/2026
 
 ## Kết luận từ log

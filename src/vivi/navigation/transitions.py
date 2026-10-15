@@ -5,9 +5,8 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from uuid import uuid4
 
-from src.vivi.dialogue.contracts import NavigationWorkspace
-from src.vivi.dialogue.reducer import clear_journey
 from src.vivi.navigation.effects import vehicle_effect
+from src.vivi.navigation.models import NavigationWorkspace, clear_navigation
 from src.vivi.navigation.presentation import resume_message
 from src.vivi.navigation.workflow import current_origin
 
@@ -117,7 +116,7 @@ class NavigationTransitions:
                 if observed.driving or journey and journey.status in {"running", "charging"}:
                     return self.blocked("Chuyển P trước khi xoá hành trình.", "journey_running"), session
                 origin = await current_origin(session.navigation)
-                session = clear_journey(session)
+                session = clear_navigation(session)
                 session.navigation_workspace = NavigationWorkspace(
                     origin=origin,
                     revision=workspace.revision + 1,

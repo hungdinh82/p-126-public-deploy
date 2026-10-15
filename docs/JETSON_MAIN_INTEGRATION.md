@@ -128,7 +128,7 @@ adapter chưa thuộc bản ghép này. Jetson `/test` kiểm thử trực tiế
 Smoke text, history và xe mô phỏng riêng, không sửa config cá nhân:
 
 ```bash
-.venv/bin/python scripts/test_pipeline.py --mode rules
+.venv/bin/python scripts/test_pipeline.py --mode fallback
 .venv/bin/python scripts/test_pipeline.py --mode jetson --policy prefer_local \
   --jetson-url http://<jetson-private-ip>:8789
 ```

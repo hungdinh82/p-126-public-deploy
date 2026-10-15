@@ -12,6 +12,24 @@ from uuid import uuid4
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictFloat, StrictInt, model_validator
 
 from src.vivi.navigation.contracts import DestinationSpec
+from src.vivi.navigation.models import (
+    ActiveJourney as ActiveJourney,
+)
+from src.vivi.navigation.models import (
+    NavigationState as NavigationState,
+)
+from src.vivi.navigation.models import (
+    NavigationWorkspace as NavigationWorkspace,
+)
+from src.vivi.navigation.models import (
+    PlanDraft as PlanDraft,
+)
+from src.vivi.navigation.models import (
+    RouteSnapshot as RouteSnapshot,
+)
+from src.vivi.navigation.models import (
+    TripPlanState as TripPlanState,
+)
 
 
 class Arguments(BaseModel):
@@ -45,6 +63,7 @@ class Arguments(BaseModel):
     nearest: bool | None = None
     destination_scope: Literal["place", "region"] | None = None
     trip_kind: Literal["one_way", "round_trip"] | None = None
+    purpose: Literal["navigate", "itinerary"] | None = None
     origin_query: str | None = None
     plan_id: str | None = None
     route_revision: int | None = Field(default=None, ge=1)
@@ -70,7 +89,11 @@ class ActionDraft(BaseModel):
 
         spec = TOOL_REGISTRY.get(self.capability)
         if spec is not None:
-            if self.arguments.destination and self.arguments.destination.selection != "reference" and not self.arguments.query:
+            if (
+                self.arguments.destination
+                and self.arguments.destination.selection != "reference"
+                and not self.arguments.query
+            ):
                 self.arguments.query = self.arguments.destination.query() or None
             allowed = set(spec.parameters.model_fields)
             if self.capability == "climate.set_temperature":
@@ -92,6 +115,7 @@ class StepUpdate(BaseModel):
 class SemanticTurn(BaseModel):
     model_config = ConfigDict(extra="forbid")
     act: Literal[
+        "answer",
         "request",
         "modify",
         "confirm",
@@ -110,6 +134,8 @@ class SemanticTurn(BaseModel):
     actions: list[ActionDraft] = Field(default_factory=list, max_length=5)
     step_updates: list[StepUpdate] = Field(default_factory=list, max_length=5)
     append_actions: list[ActionDraft] = Field(default_factory=list, max_length=5)
+    question_answer: QuestionReply | None = None
+    consent_question_id: str | None = None
     clarification_drafts: list[ActionDraft] = Field(default_factory=list, max_length=5)
     text: str = ""
     negated: bool = False
@@ -123,6 +149,8 @@ class SemanticTurn(BaseModel):
 
     @model_validator(mode="after")
     def coherent_act(self):
+        if (self.act == "answer") != (self.question_answer is not None):
+            raise ValueError("answer requires question_answer; other acts cannot carry one")
         if (self.step_updates or self.append_actions) and self.act != "modify":
             raise ValueError("Step patches and appended steps require modify")
         if self.step_updates and self.actions:
@@ -132,7 +160,7 @@ class SemanticTurn(BaseModel):
         if len({patch.step_index for patch in self.step_updates}) != len(self.step_updates):
             raise ValueError("Duplicate step update")
         if (
-            self.act in {"confirm", "deny", "cancel", "reply", "resume", "suspend", "clarify", "unsupported"}
+            self.act in {"answer", "confirm", "deny", "cancel", "reply", "resume", "suspend", "clarify", "unsupported"}
             and self.actions
         ):
             raise ValueError(
@@ -195,10 +223,8 @@ class TurnEvent(BaseModel):
     session_id: str
     turn_id: str
     text: str = ""
-    provider: str = "rules"
-    kind: Literal["utterance", "confirmation", "action", "navigation"] = "utterance"
-    confirmation_id: str | None = None
-    confirmation_decision: Literal["approve", "deny"] | None = None
+    provider: str = "google"
+    kind: Literal["utterance", "action", "navigation"] = "utterance"
     action: ActionDraft | None = None
     question_reply: QuestionReply | None = None
     navigation_event: dict | None = None
@@ -253,185 +279,8 @@ class ClarificationState(BaseModel):
     expires_at: datetime = Field(default_factory=lambda: datetime.now(UTC) + timedelta(minutes=3))
 
 
-class RouteSnapshot(BaseModel):
-    """An immutable-by-convention calculated route, shared by plans and journeys."""
-
-    request_id: str = ""
-    destination: DestinationSpec | None = None
-    route_id: str | None = None
-    revision: int = 0
-    event_sequence: int = 0
-    trip_kind: Literal["one_way", "round_trip"] | None = None
-    waypoint_routes: list[dict] = Field(default_factory=list)
-    origin: dict | None = None
-    summary: dict | None = None
-    selected: dict | None = None
-    route: dict | None = None
-    energy: dict | None = None
-    alternatives: list[dict] = Field(default_factory=list)
-    initial_soc: float | None = None
-
-
-class PlanDraft(RouteSnapshot):
-    status: Literal["idle", "selecting", "preview"] = "idle"
-    candidates: list[dict] = Field(default_factory=list)
-    selection_decision: dict | None = None
-    clarification: dict | None = None
-    offer: dict | None = None
-    phase: Literal["needs_origin", "needs_destination", "ready", "incomplete"] = "needs_destination"
-
-
-class ActiveJourney(RouteSnapshot):
-    status: Literal["running", "charging", "paused", "completed", "ended"]
-    resume_status: Literal["running", "charging"] | None = None
-    progress_m: float = 0
-    last_assessment_m: float = 0
-    last_assessment_soc: float | None = None
-    alerts: list[dict] = Field(default_factory=list)
-    last_alert_at: datetime | None = None
-    last_alert_severity: Literal["warning", "critical"] | None = None
-    simulated_soc: float | None = None
-    stop_index: int = 0
-    charge_elapsed_s: float = 0
-
-
-class NavigationState(BaseModel):
-    request_id: str = ""
-    destination: DestinationSpec | None = None
-    route_id: str | None = None
-    revision: int = 0
-    event_sequence: int = 0
-    status: Literal["idle", "selecting", "preview", "running", "charging", "paused", "completed", "ended"] = "idle"
-    resume_status: Literal["running", "charging"] | None = None
-    trip_kind: Literal["one_way", "round_trip"] | None = None
-    waypoint_routes: list[dict] = Field(default_factory=list)
-    origin: dict | None = None
-    candidates: list[dict] = Field(default_factory=list)
-    selection_decision: dict | None = None
-    clarification: dict | None = None
-    summary: dict | None = None
-    selected: dict | None = None
-    route: dict | None = None
-    energy: dict | None = None
-    alternatives: list[dict] = Field(default_factory=list)
-    progress_m: float = 0
-    initial_soc: float | None = None
-    last_assessment_m: float = 0
-    last_assessment_soc: float | None = None
-    alerts: list[dict] = Field(default_factory=list)
-    last_alert_at: datetime | None = None
-    last_alert_severity: Literal["warning", "critical"] | None = None
-    simulated_soc: float | None = None
-    stop_index: int = 0
-    charge_elapsed_s: float = 0
-    pending: dict | None = None
-    offer: dict | None = None
-    applied_events: list[str] = Field(default_factory=list)
-
-
-class NavigationWorkspace(BaseModel):
-    """Canonical checkpoint state. Flat NavigationState is only an adapter DTO."""
-
-    version: int = 1
-    revision: int = 0
-    cleared_at_revision: int = 0
-    event_sequence: int = 0
-    origin: dict | None = None
-    draft: PlanDraft | None = None
-    journey: ActiveJourney | None = None
-    history: list[dict] = Field(default_factory=list)
-    pending_status: str | None = None
-    pending_message: str = ""
-    applied_events: list[str] = Field(default_factory=list)
-
-    @classmethod
-    def from_snapshot(cls, nav, previous=None):
-        data = nav.model_dump(mode="json")
-        live = nav.status in {"running", "charging", "paused", "completed", "ended"}
-        journey = ActiveJourney.model_validate(data) if live and nav.route else None
-        if journey and previous and previous.journey and previous.journey.route_id == journey.route_id:
-            journey.revision = previous.journey.revision
-        pending = nav.pending or {}
-        draft_data = pending.get("navigation") if live else data
-        if live and not draft_data and (nav.clarification or nav.candidates):
-            draft_data = {
-                "status": "selecting",
-                "request_id": nav.request_id,
-                "revision": nav.revision,
-                "origin": nav.origin,
-                "candidates": nav.candidates,
-                "clarification": nav.clarification,
-                "destination": (nav.clarification or {}).get("destination"),
-            }
-        draft = None
-        if draft_data and (
-            draft_data.get("route")
-            or draft_data.get("candidates")
-            or draft_data.get("clarification")
-            or draft_data.get("status") == "selecting"
-        ):
-            draft = PlanDraft.model_validate(draft_data)
-            draft.phase = (
-                "needs_origin"
-                if not draft.origin
-                else "needs_destination"
-                if draft.clarification or not draft.route
-                else "ready"
-                if (draft.energy or {}).get("selected_plan")
-                else "incomplete"
-            )
-            if not draft.offer and previous and previous.draft and previous.draft.revision == draft.revision:
-                draft.offer = previous.draft.offer
-        return cls(
-            revision=nav.revision,
-            cleared_at_revision=previous.cleared_at_revision if previous else 0,
-            event_sequence=nav.event_sequence,
-            origin=nav.origin,
-            history=list(previous.history) if previous else [],
-            draft=draft,
-            journey=journey,
-            pending_status=pending.get("status"),
-            pending_message=pending.get("message", ""),
-            applied_events=nav.applied_events,
-        )
-
-    def snapshot(self):
-        base = self.journey or self.draft
-        nav = NavigationState.model_validate(base.model_dump(mode="json") if base else {"origin": self.origin})
-        nav.revision, nav.event_sequence = self.revision, self.event_sequence
-        nav.applied_events = list(self.applied_events)
-        if self.journey and self.draft:
-            nav.request_id = self.draft.request_id
-            nav.candidates = list(self.draft.candidates)
-            nav.clarification = self.draft.clarification
-            nav.pending = {
-                "status": self.pending_status
-                or ("selecting" if self.draft.clarification or not self.draft.route else "preview"),
-                "message": self.pending_message,
-                "navigation": NavigationState.model_validate(self.draft.model_dump(mode="json")).model_dump(
-                    mode="json"
-                ),
-            }
-        elif self.pending_status:
-            nav.pending = {"status": self.pending_status, "message": self.pending_message}
-        return nav
-
-
-class TripPlanState(PlanDraft):
-    """A calculation: no progress, gear, charging timer or pause lifecycle."""
-
-    id: str = Field(default_factory=lambda: "trip:" + str(uuid4()))
-    purpose: Literal["charging_itinerary"] = "charging_itinerary"
-    calculation_status: Literal["draft", "ready", "incomplete", "cancelled"] = "draft"
-    started_revision: int | None = None
-    calculation_basis: str | None = None
-
-    @property
-    def pending(self):
-        return None
-
-
 class SessionState(BaseModel):
+    domain_commands: list[dict] = Field(default_factory=list, exclude=True)
     dialogue_question: PendingQuestion | None = None
     control_revision: int = 0
     snapshot_sequence: int = 0
@@ -440,13 +289,21 @@ class SessionState(BaseModel):
     suspended: list[DialogueTask] = Field(default_factory=list)
     clarification: ClarificationState | None = None
     navigation_workspace: NavigationWorkspace = Field(default_factory=NavigationWorkspace)
-    trip_plan: TripPlanState | None = None
     navigation_focus: Literal["navigation", "trip"] = "navigation"
     conversation_context: dict = Field(default_factory=dict)
 
     @model_validator(mode="before")
     @classmethod
     def migrate_navigation(cls, value):
+        if isinstance(value, dict) and "trip_plan" in value:
+            value = dict(value)
+            trip = value.pop("trip_plan")
+            if trip:
+                workspace = NavigationWorkspace.model_validate(value.get("navigation_workspace") or {})
+                workspace.draft = PlanDraft.model_validate(
+                    {**(trip.model_dump(mode="json") if hasattr(trip, "model_dump") else trip), "purpose": "itinerary"}
+                )
+                value["navigation_workspace"] = workspace
         if isinstance(value, dict) and "navigation" in value:
             value = dict(value)
             legacy = value.pop("navigation")
@@ -464,6 +321,20 @@ class SessionState(BaseModel):
     def navigation(self, value):
         snapshot = NavigationState.model_validate(value.model_dump(mode="json"))
         self.navigation_workspace = NavigationWorkspace.from_snapshot(snapshot, self.navigation_workspace)
+
+    @property
+    def trip_plan(self):
+        draft = self.navigation_workspace.draft
+        return draft if draft and draft.purpose == "itinerary" else None
+
+    @trip_plan.setter
+    def trip_plan(self, value):
+        if value is not None:
+            self.navigation_workspace.draft = PlanDraft.model_validate(
+                {**value.model_dump(mode="json"), "purpose": "itinerary"}
+            )
+        elif self.trip_plan:
+            self.navigation_workspace.draft = None
 
     def pending_question(self):
         from src.vivi.dialogue.questions import current_question, legacy_view
@@ -488,5 +359,11 @@ def semantic_schema():
     from src.vivi.agents.tools import TOOL_REGISTRY
 
     schema = SemanticTurn.model_json_schema()
-    schema["$defs"]["ActionDraft"]["properties"]["capability"]["enum"] = list(TOOL_REGISTRY)
+    schema["properties"].pop("consent_question_id", None)
+    schema["$defs"]["ActionDraft"]["properties"]["capability"]["enum"] = [
+        name for name in TOOL_REGISTRY if not name.startswith("trip.")
+    ]
     return schema
+
+
+SemanticTurn.model_rebuild()

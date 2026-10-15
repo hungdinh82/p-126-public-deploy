@@ -141,7 +141,7 @@ def answer_result(generator, query: str, chunks: list, case: dict) -> dict:
                 "latency_ms": round((time.perf_counter() - started) * 1000, 2), "error": str(exc)}
 
 
-def route_macro_f1(rows: list[dict]) -> float:
+def route_macro_f1(rows: list[dict]) -> float | None:
     labels = {row["expected_route"] for row in rows}
     values = []
     for label in labels:
@@ -150,7 +150,7 @@ def route_macro_f1(rows: list[dict]) -> float:
         false_negative = sum(row["expected_route"] == label and row["route"] != label for row in rows)
         denominator = 2 * true_positive + false_positive + false_negative
         values.append(2 * true_positive / denominator if denominator else 0)
-    return round(statistics.mean(values), 4)
+    return round(statistics.mean(values), 4) if values else None
 
 
 def run(args) -> dict:
@@ -158,7 +158,7 @@ def run(args) -> dict:
     cases = [case for case in cases if args.split == "all" or case["split"] == args.split]
     if not cases:
         raise ValueError("Selected split is empty")
-    config = Settings(llm_provider=args.provider, rag_local_only=True,
+    config = Settings(llm_provider="local" if args.provider == "local" else "google", rag_local_only=True,
                       local_llm_model=args.model or "", local_llm_base_url=args.base_url,
                       llm_timeout_seconds=args.timeout)
     generator = LocalHandbookGenerator(config) if args.provider == "local" else ExtractiveHandbookGenerator()
@@ -176,7 +176,7 @@ def run(args) -> dict:
         oracle = {row["source_id"]: source_store._to_retrieved(row) for row in
                   connection.execute("SELECT *, 0 AS rank FROM handbook_chunks")}
     intent_rows = []
-    for case in cases:
+    for case in (cases if args.provider == "local" else []):
         started = time.perf_counter()
         try:
             frame, tier, attempts = asyncio.run(resolver.resolve(case["query"], SessionState(), requested=args.provider, catalog=catalog()))
@@ -211,7 +211,7 @@ def run(args) -> dict:
             started = time.perf_counter()
             error = None
             try:
-                chunks = ([] if intent_by_id[case["id"]]["route"] != "handbook" else
+                chunks = ([] if args.provider == "local" and intent_by_id[case["id"]]["route"] != "handbook" else
                           retriever.retrieve(case["query"], case["vehicle_model"], case["model_year"], case["locale"]))
             except Exception as exc:
                 chunks, error = [], str(exc)
@@ -307,7 +307,7 @@ def main() -> None:
     parser.add_argument("--database", type=Path, default=Path("data/handbooks/handbook.sqlite3"))
     parser.add_argument("--model-dir", type=Path, default=Path("models/multilingual-e5-small-int8"))
     parser.add_argument("--retriever", choices=("fts", "fts_local", "vector", "hybrid", "all"), default="all")
-    parser.add_argument("--provider", choices=("rules", "local"), default="rules")
+    parser.add_argument("--provider", choices=("extractive", "local"), default="extractive")
     parser.add_argument("--model", help="Required for --provider local; never calls cloud providers")
     parser.add_argument("--base-url", default="http://127.0.0.1:1234/v1")
     parser.add_argument("--timeout", type=float, default=15)
