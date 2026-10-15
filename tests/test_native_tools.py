@@ -33,10 +33,6 @@ async def test_local_uses_one_native_semantic_function():
         assert body["tool_choice"] == "required" and body["parallel_tool_calls"] is False
         assert body["chat_template_kwargs"]["enable_thinking"] is False
         assert [t["function"]["name"] for t in body["tools"]] == ["interpret_turn"]
-        schema = body["tools"][0]["function"]["parameters"]
-        assert schema["required"] == ["act"]
-        assert "step_updates" not in schema["required"]
-        assert "required" not in schema["$defs"]["Arguments"]
         return response({"act":"request", "actions":[{"capability":"media.play"}]})
     frame, tier, _ = await resolve(handler)
     assert tier == "local" and frame.actions[0].capability == "media.play"

@@ -55,6 +55,7 @@ class LangGraphOrchestrator:
         ledger: RuntimeStore | None = None,
         timeout_seconds: float = 45,
         profile_id: str = "default",
+        local_timeout_seconds: float | None = None,
     ) -> None:
         self.graphs = graphs
         self.gateway = gateway
@@ -62,6 +63,7 @@ class LangGraphOrchestrator:
         self.default_provider = default_provider
         self.provider_errors = provider_errors or {}
         self.ledger, self.timeout_seconds = ledger, timeout_seconds
+        self.local_timeout_seconds = local_timeout_seconds
         self.profile_id = profile_id
         self._sessions: dict[str, asyncio.Lock] = {}
         self._active: dict[tuple[str, str], TurnControl] = {}
@@ -83,12 +85,13 @@ class LangGraphOrchestrator:
         self._in_scope += 1
         session = self.session_key(request)
         lock = self._sessions.setdefault(session, asyncio.Lock())
-        control = TurnControl(time.monotonic() + self.timeout_seconds)
+        timeout = self.local_timeout_seconds if provider == "local" and self.local_timeout_seconds is not None else self.timeout_seconds
+        control = TurnControl(time.monotonic() + timeout)
         started = time.perf_counter()
         token = current_control.set(control)
         key = (request.session_id, request.turn_id)
         try:
-            async with asyncio.timeout(self.timeout_seconds):
+            async with asyncio.timeout(timeout):
                 async with nullcontext() if (request.navigation_event or {}).get("kind") in CONTROL_EVENTS else lock:
                     cached = (
                         await asyncio.to_thread(
@@ -587,8 +590,7 @@ def create_langgraph_orchestrator(
         try:
             candidate = create_services(config, provider=name)
             client = candidate.semantic_client
-            client.max_tokens = (min(config.planner_max_tokens, config.local_llm_max_tokens)
-                                 if name == "local" else config.planner_max_tokens)
+            client.max_tokens = config.planner_max_tokens
             client.max_attempts = 1
             budget = config.local_request_budget_seconds if name == "local" else config.cloud_budget_seconds
             providers[name] = ModelProvider(name, client, budget)
@@ -634,7 +636,9 @@ def create_langgraph_orchestrator(
         default_provider=config.llm_provider,
         provider_errors=errors,
         ledger=ledger,
-        timeout_seconds=config.effective_turn_timeout_seconds,
+        timeout_seconds=config.turn_timeout_seconds,
+        local_timeout_seconds=config.effective_turn_timeout_seconds
+        if config.jetson_ai_policy != "disabled" and config.jetson_ai_url else None,
         profile_id=config.memory_profile_id,
     )
     result.local_semantic_client = providers["local"].client if "local" in providers else None

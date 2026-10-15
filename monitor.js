@@ -220,9 +220,7 @@ function updateTurnDetail() {
   if (signature === detailSignature) return;
   detailSignature = signature;
   const modelMs = pipeline.generate ?? null;
-  // The current graph calls semantic routing "interpret". Keep the older
-  // classify_intent key as a fallback for historical event records.
-  const classifierMs = pipeline.classify_intent ?? pipeline.interpret ?? null;
+  const classifierMs = pipeline.classify_intent ?? null;
   // Stage bars share one scale so the slow step stands out at a glance.
   const stageEntries = Object.entries(pipeline).filter(([name]) => name !== 'total');
   const slowest = Math.max(1, ...stageEntries.map(([, value]) => Number(value) || 0));

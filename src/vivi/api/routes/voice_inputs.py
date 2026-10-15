@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import json
 from pathlib import Path
+from typing import Literal
 
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
@@ -41,7 +42,7 @@ async def accept(session_id,turn_id,context,**content):
 
 @router.post('/inputs',status_code=202)
 async def receive_audio(audio: UploadFile=File(...),session_id: str=Form(...,min_length=1,max_length=100),
-                        turn_id: str=Form(...,min_length=1,max_length=100),llm_provider: str=Form('local'),
+                        turn_id: str=Form(...,min_length=1,max_length=100),llm_provider: Literal['local']=Form('local'),
                         position: str=Form('null')):
     content = await audio.read(25*1024*1024+1)
     await audio.close()
@@ -59,7 +60,7 @@ class TranscriptInput(BaseModel):
     session_id: str=Field(min_length=1,max_length=100)
     turn_id: str=Field(min_length=1,max_length=100)
     transcript: str=Field(min_length=1,max_length=10000)
-    llm_provider: str='local'
+    llm_provider: Literal['local']='local'
     position: dict|None=None
 
 

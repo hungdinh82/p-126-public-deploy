@@ -41,9 +41,10 @@ async def lifespan(app: FastAPI):
     config = runtime.settings
     background = []
     try:
-        from src.vivi.speech.input_service import VoiceInputService
-        runtime.voice = VoiceInputService(runtime)
-        await runtime.voice.start()
+        if config.local_voice_buffering_enabled:
+            from src.vivi.speech.input_service import VoiceInputService
+            runtime.voice = VoiceInputService(runtime)
+            await runtime.voice.start()
         if config.tts_provider != "off" and config.zerotts_preload:
             await runtime.tts.preload()
         if config.stt_provider != "off" and config.phowhisper_preload:

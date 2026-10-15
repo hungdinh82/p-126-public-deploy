@@ -73,7 +73,8 @@ async def health():
             "fallback_chain": _fallback_chain(config),
             "cloud_budget_seconds": config.cloud_budget_seconds,
             "local_budget_seconds": config.local_request_budget_seconds,
-            "turn_timeout_seconds": config.effective_turn_timeout_seconds,
+            "turn_timeout_seconds": config.turn_timeout_seconds,
+            "local_turn_timeout_seconds": config.effective_turn_timeout_seconds,
             "durable_tasks": True,
             "graph_providers": sorted(runtime.orchestrator.graph_providers),
             "retrieval": {

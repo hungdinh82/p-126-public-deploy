@@ -157,6 +157,8 @@ class Settings(BaseSettings):
     ))
     jetson_ai_probe_timeout_seconds: float = Field(default=0.75, gt=0, le=5)
     ai_server_request_timeout_seconds: float = Field(default=180, ge=1, le=300)
+    # Main UI uses direct turns. Durable voice intake is an explicit local-only API.
+    local_voice_buffering_enabled: bool = False
 
     @property
     def local_request_budget_seconds(self) -> float:

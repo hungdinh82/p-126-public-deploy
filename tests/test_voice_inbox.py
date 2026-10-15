@@ -65,9 +65,9 @@ async def test_rapid_speech_is_batched_into_one_ordered_snapshot(tmp_path):
             return path.read_bytes().decode()
     class Orchestrator:
         ledger=None
-        default_provider='rules'
-        graph_providers={'rules'}
-        semantic_providers={'rules'}
+        default_provider='local'
+        graph_providers={'local'}
+        semantic_providers={'local'}
         active_task=None
         async def run(self,request,provider):
             self.active_task=asyncio.current_task()
@@ -116,9 +116,9 @@ async def test_two_new_utterances_replace_running_qwen_with_one_combined_input(t
             return path.read_bytes().decode()
     class Orchestrator:
         ledger=None
-        default_provider='rules'
-        graph_providers={'rules'}
-        semantic_providers={'rules'}
+        default_provider='local'
+        graph_providers={'local'}
+        semantic_providers={'local'}
         active_task=None
         async def run(self,request,provider):
             nonlocal active,maximum_active
@@ -209,8 +209,8 @@ async def test_worker_shutdown_waits_for_inference_cleanup_and_keeps_pending_tex
             stopped.set()
 
     settings = SimpleNamespace(data_dir=tmp_path, store_audio=False, jetson_ai_policy='disabled', jetson_ai_url='')
-    orchestrator = SimpleNamespace(ledger=None, default_provider='rules', graph_providers={'rules'},
-        semantic_providers={'rules'}, run=run, cancel=lambda *_:{'cancelled':False,'dispatched':False})
+    orchestrator = SimpleNamespace(ledger=None, default_provider='local', graph_providers={'local'},
+        semantic_providers={'local'}, run=run, cancel=lambda *_:{'cancelled':False,'dispatched':False})
     service = VoiceInputService(SimpleNamespace(settings=settings, stt=None, orchestrator=orchestrator,
         store=SimpleNamespace(append_event=lambda _:None)))
     job = service.inbox.accept('driver', 'first', {}, transcript='tôi vẫn đang nói')

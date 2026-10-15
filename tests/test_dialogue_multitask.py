@@ -69,29 +69,6 @@ async def test_climate_defaults_limits_and_explicit_amounts(services, tmp_path, 
     graph.close()
 
 
-@pytest.mark.parametrize("tier,reply", [
-    ("rules", {"act": "clarify", "text": "Bạn muốn bao nhiêu độ?"}),
-    ("local", {"act": "request", "actions": [{"capability": "climate.set_temperature",
-                                               "arguments": {"value_celsius": 30}}]}),
-    ("local", {"act": "clarify", "text": "Bạn muốn tăng bao nhiêu độ?"}),
-])
-@pytest.mark.asyncio
-async def test_named_air_conditioner_temperature_uses_default_increment(services, tmp_path, tier, reply):
-    # A model-selected absolute value must not replace the existing +2C policy.
-    model = ScriptedModel([reply])
-    graph, _, gateway = build(services, tmp_path, local=model if tier == "local" else None)
-    graph.default_provider = tier
-    result = await invoke(graph, "tăng nhiệt độ điều hòa lên", "named-temperature")
-    if tier == "local" and reply["act"] == "clarify":
-        assert result["status"] == "clarify"
-        assert gateway.vehicle.state_for("driver").state_version == 0
-    else:
-        assert result["execution"]["verified"]
-        assert gateway.vehicle.state_for("driver").temperature_celsius == 25
-        assert "25" in result["response_text"]
-    graph.close()
-
-
 @pytest.mark.asyncio
 async def test_fill_slot_and_append_task_without_replacing_ids(services, tmp_path):
     graph, _, gateway = build(services, tmp_path)

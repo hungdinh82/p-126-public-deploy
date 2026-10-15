@@ -250,7 +250,7 @@ class TurnRequest(BaseModel):
     action: ActionDraft | None = None
     navigation_event: dict[str, Any] | None = None
     position: dict[str, Any] | None = None
-    transcript: str = Field(min_length=1, max_length=10000)
+    transcript: str = Field(min_length=1, max_length=500)
     session_id: str = Field(min_length=1, max_length=100)
     turn_id: str = Field(min_length=1, max_length=100)
     vehicle_state: VehicleState | None = Field(

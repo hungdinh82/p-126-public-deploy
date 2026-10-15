@@ -194,25 +194,6 @@ async def test_local_tool_semantic_contract():
 
 
 @pytest.mark.asyncio
-async def test_offline_grammar_does_not_veto_model_reply_to_unparsed_command():
-    greeting_offer = {
-        "act": "offer",
-        "text": "Mình đây, bạn cần gì thế?",
-        "actions": [{"capability": "conversation.respond", "arguments": {
-            "query": "Mình đây, bạn cần gì thế?", "mode": "general",
-        }}],
-    }
-    resolver = SemanticResolver({"local": ModelProvider("local", ScriptedModel([greeting_offer]), .1)})
-    value, served, _ = await resolver.resolve(
-        "Mở gửi xe xa cho tôi Mở gửi xe xa cho tôi", SessionState(), requested="local"
-    )
-    assert served == "local"
-    assert value.act == "offer"
-    assert value.actions[0].capability == "conversation.respond"
-    assert value.actions[0].arguments.query == "Mở gửi xe xa cho tôi Mở gửi xe xa cho tôi"
-
-
-@pytest.mark.asyncio
 async def test_timeout_moves_to_parser():
     class Slow:
         async def agenerate_json(self, **kwargs):

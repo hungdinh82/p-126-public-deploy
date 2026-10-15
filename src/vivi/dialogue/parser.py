@@ -9,12 +9,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from src.vivi.capabilities.registry import (
-    DEFAULT_CLIMATE_DELTA_CELSIUS,
-    compatible_change,
-    merge_arguments,
-    merge_exclusions,
-)
+from src.vivi.capabilities.registry import DEFAULT_CLIMATE_DELTA_CELSIUS, compatible_change
 from src.vivi.conversation.context import resolve_query, search_followup_query
 from src.vivi.dialogue.contracts import ActionDraft, NavigationState, SemanticTurn, SessionState
 from src.vivi.navigation.contracts import AreaConstraint, DestinationSpec
@@ -59,8 +54,6 @@ def place_query_matches(query, place):
 
 
 ZONES = ("driver", "front_passenger", "rear_left", "rear_right")
-# One climate target grammar for defaults, explicit amounts, limits and guards.
-_CLIMATE_TARGET = r"(?:nhiet do(?: (?:cua )?dieu hoa)?|dieu hoa)"
 # A spoken yes to a pending question, as normalized text. STT writes "OK" the
 # Vietnamese way ("Ô kê"), and people add a verb or a tail: "ừ mở đi", "ok luôn nhé".
 # Bare "dung" is left out on purpose: it is "đúng" but also "dừng" (stop).
@@ -136,7 +129,7 @@ class Lexer:
     def clauses(self, text):
         # Splitting before parsing requires every conjunct to produce a frame.
         raw = re.split(
-            r"\s+(?:và|va|rồi|roi|sau đó|sau do)\s+(?=(?:mở|mo|đóng|dong|đặt|dat|chỉnh|chinh|tăng|tang|giảm|giam|hạ|ha|bật|bat|tắt|tat|phát|phat|dừng|dung|khoá|khóa|khoa|sưởi|suoi|đọc|doc|kiểm|kiem|gửi|gui|gọi|goi|xóa|xoá|xoa|quên|quen|ghi|nhớ|nho|tra)\b)|[,;]\s*(?=(?:mở|mo|đóng|dong|đặt|dat|phát|phat|bật|bat|tắt|tat|tra)\b)",
+            r"\s+(?:và|va|rồi|roi|sau đó|sau do)\s+(?=(?:mở|mo|đóng|dong|đặt|dat|chỉnh|chinh|tăng|tang|giảm|giam|hạ|ha|bật|bat|tắt|tat|phát|phat|dừng|dung|khoá|khóa|khoa|sưởi|suoi|đọc|doc|kiểm|kiem|gửi|gui|gọi|goi|xóa|xoá|xoa|quên|quen|ghi|nhớ|nho)\b)|[,;]\s*(?=(?:mở|mo|đóng|dong|đặt|dat|phát|phat|bật|bat|tắt|tat)\b)",
             text.strip(),
             flags=re.I,
         )
@@ -171,9 +164,6 @@ class OfflineParser:
         self.lexer = Lexer()
 
     def interpret(self, text: str, session: SessionState, memory=None, history=None) -> SemanticTurn:
-        segments = [part.strip() for part in text.splitlines() if part.strip()]
-        if len(segments) > 1:
-            return self.interpret_segments(segments, session, memory, history)
         text = strip_fillers(text)
         gear = re.fullmatch(
             r"(?:chuyen|ve|sang|vao)(?: sang| ve)?(?: so| che do)? ([pd])(?: nhe| di)?",
@@ -257,8 +247,20 @@ class OfflineParser:
             cleaned = re.sub(r"^(?:khong[, ]+|doi (?:thanh|sang) |chi )", "", value)
             if patch := self.slot_patch(cleaned, current.draft, text):
                 return SemanticTurn(act="modify", task_ref="active", actions=[patch])
-        if patch := self.completed_slot_patch(value, text, session):
-            return self.request(patch.capability, patch.arguments.model_dump(exclude_none=True))
+        if not live and task:
+            previous = next(
+                (
+                    s
+                    for s in reversed(task.steps)
+                    if s.draft.capability == "climate.set_temperature" and s.status == "completed"
+                ),
+                None,
+            )
+            patch = self.slot_patch(value, previous.draft, text) if previous else None
+            if patch and (
+                patch.arguments.temperature_delta_celsius is not None or patch.arguments.value_celsius is not None
+            ):
+                return self.request("climate.set_temperature", patch.arguments.model_dump(exclude_none=True))
         if affirmed(value):
             return (
                 SemanticTurn(act="confirm", task_ref="active")
@@ -707,80 +709,11 @@ class OfflineParser:
                 arguments["requested_model_year"] = int(year[1])
         return SemanticTurn(act=act, actions=[ActionDraft(capability=capability, arguments=arguments or {})])
 
-    def completed_slot_patch(self, value, text, session):
-        """Resolve explicit slot continuations from committed effects, not tasks to replay."""
-        task = session.active
-        if task is None or task.current_index() is not None:
-            return None
-        previous = next((step for step in reversed(task.steps)
-                         if step.draft.capability == "climate.set_temperature" and step.status == "completed"), None)
-        patch = self.slot_patch(value, previous.draft, text) if previous else None
-        if patch and (patch.arguments.temperature_delta_celsius is not None or patch.arguments.value_celsius is not None):
-            return patch
-        return None
-
-    def interpret_segments(self, segments, session, memory=None, history=None):
-        """Compose pending speech without executing or changing checkpoint state.
-
-        Explicit corrections amend the most recent compatible pending draft;
-        unrelated requests remain ordered. Unknown segments block the snapshot,
-        retaining recognized drafts for clarification rather than partial effects.
-        """
-        actions, unknown = [], []
-        last_text = None
-        for segment in segments:
-            normalized = self.lexer.normalize(segment)
-            if normalized == last_text:
-                continue
-            last_text = normalized
-            correction = re.match(
-                r"^(?:à\s+không|a\s+khong|ý\s+(?:tôi|mình)\s+là|y\s+(?:toi|minh)\s+la|"
-                r"đổi\s+(?:thành|sang)|doi\s+(?:thanh|sang))\b[\s,:;]*", segment, re.I)
-            if correction and actions:
-                replacement = segment[correction.end():].strip()
-                value = self.lexer.normalize(replacement)
-                # A context-dependent value may omit the previous slot's noun.
-                value = re.sub(r"^(?:dat|chinh)(?: (?:thanh|la|len|xuong))? (?=\d)", "", value)
-                for index in range(len(actions) - 1, -1, -1):
-                    previous = actions[index]
-                    patch = self.slot_patch(value, previous, replacement)
-                    if patch and compatible_change(previous, patch):
-                        actions[index] = ActionDraft(
-                            capability=patch.capability,
-                            arguments=merge_arguments(previous, patch),
-                            excluded_zones=merge_exclusions(previous, patch),
-                            exclusion_mode=patch.exclusion_mode,
-                            referenced_target=patch.referenced_target,
-                        )
-                        break
-                else:
-                    unknown.append(segment)
-                continue
-            frame = self.interpret(segment, session, memory, history)
-            if (frame.act not in {"request", "question"} or not frame.actions
-                or frame.negated or frame.conditional or frame.scheduled or frame.conflicting
-                or frame.unresolved):
-                unknown.append(segment)
-                continue
-            actions.extend(frame.actions)
-        if len(actions) > 5 or len(unknown) > 5:
-            return self.ask("Bạn chia yêu cầu thành tối đa năm thao tác mỗi lần nhé.")
-        if unknown:
-            return SemanticTurn(act="clarify", clarification_drafts=actions, unresolved=unknown,
-                                text="Mình chưa hiểu đủ toàn bộ yêu cầu. Bạn nói rõ phần chưa hiểu nhé.")
-        return SemanticTurn(act="request", actions=actions)
-
     def slot_patch(self, value, draft, raw=None):
         # Correction particles belong to this contextual grammar, not global
         # normalization (where they could be part of a place or memory value).
         value = re.sub(r" (?:co ma|ay)$", "", value)
         value = re.sub(r"^(?:a thoi|a|thoi) ", "", value)
-        if draft.capability == "weather.get_forecast":
-            day = re.fullmatch(r"(?:con |vao )?(hom nay|ngay mai|ngay kia)(?: thi sao)?", value)
-            if day:
-                return ActionDraft(capability=draft.capability, arguments={
-                    "forecast_day": {"hom nay": "today", "ngay mai": "tomorrow", "ngay kia": "day_after_tomorrow"}[day[1]],
-                })
         if draft.capability in {"window.set_position", "door.set_open", "door.set_lock"}:
             pair = re.fullmatch(r"(?:chi )?(?:2|hai) (?:cua |window |door |kinh )?(truoc|sau)", value)
             if pair:
@@ -970,7 +903,7 @@ class OfflineParser:
                 capability=capability, arguments=args, excluded_zones=exclusions, referenced_target=reference
             )
         limit = re.fullmatch(
-            rf"(tang|giam|ha|dat|chinh) {_CLIMATE_TARGET}(?: len| xuong| ve)? (toi da|cao nhat|toi thieu|thap nhat)",
+            r"(tang|giam|ha|dat|chinh) (?:dieu hoa|nhiet do)(?: len| xuong| ve)? (toi da|cao nhat|toi thieu|thap nhat)",
             value,
         )
         if limit:
@@ -985,7 +918,7 @@ class OfflineParser:
                 },
             )
         relative = re.fullmatch(
-            rf"(?:tang|giam|ha) {_CLIMATE_TARGET}(?: (them|bot|len|xuong))? (\d+(?:[.,]\d+)?) do(?: c)?", value
+            r"(?:tang|giam|ha) (?:dieu hoa|nhiet do)(?: (them|bot|len|xuong))? (\d+(?:[.,]\d+)?) do(?: c)?", value
         )
         if relative:
             amount = float(relative[2].replace(",", "."))
@@ -999,7 +932,7 @@ class OfflineParser:
                 arguments={"temperature_delta_celsius": amount * (-1 if value.startswith(("giam", "ha")) else 1)},
             )
         match = re.fullmatch(
-            rf"(?:dat|chinh|tang(?: len)?|giam(?: xuong)?|ha)\s+{_CLIMATE_TARGET}(?:\s+(?:o|ve|den|len|xuong|thanh))?(?:\s+(\d+(?:[.,]\d+)?)(?: do(?: c)?)?)?",
+            r"(?:dat|chinh|tang(?: len)?|giam(?: xuong)?|ha)\s+(?:nhiet do|dieu hoa)(?:\s+(?:o|ve|den|len|xuong|thanh))?(?:\s+(\d+(?:[.,]\d+)?)(?: do(?: c)?)?)?",
             value,
         )
         if match:
@@ -1014,10 +947,6 @@ class OfflineParser:
                 if value.startswith(("tang", "giam", "ha"))
                 else {},
             )
-        target = re.fullmatch(r"(?:dat|chinh)(?: (?:thanh|ve|o))? (\d+(?:[.,]\d+)?) do(?: c)?", value)
-        if target:
-            return ActionDraft(capability="climate.set_temperature",
-                               arguments={"value_celsius": float(target[1].replace(",", "."))})
         match = re.fullmatch(r"(?:tang|giam|ha)(?: them| bot| len| xuong)?\s+(\d+(?:[.,]\d+)?) do(?: c)?", value)
         if match:
             return ActionDraft(
@@ -1602,18 +1531,7 @@ class OfflineParser:
             return self.ask("Mình chưa có thao tác đang chờ xác nhận.")
         value = self.lexer.normalize(text)
         result = semantic.model_copy(deep=True)
-        for action in result.drafts():
-            if action.capability == "conversation.respond":
-                # This is the user's current question, not a model-selected
-                # task/history query. Exact subclauses of compound inputs are
-                # allowed; otherwise the answer generator receives the input.
-                query = action.arguments.query or ""
-                if not query.strip() or normalize_text(query).strip() not in normalize_text(text):
-                    action.arguments.query = text
         bounded = self.interpret(text, session, memory, history)
-        if (bounded.act == "request" and self.command(value) is None
-            and self.completed_slot_patch(value, text, session)):
-            return bounded
         if session.active and session.active.current_index() is not None and re.fullmatch(r"(?:xin )?chao(?: vivi| ban)?|vivi|hello|hi", value):
             return bounded
         # Explicit internet/weather/story requests cannot be answered as stale
@@ -1809,7 +1727,7 @@ class OfflineParser:
         climate_clauses = [self.command(clause.text) for clause in self.lexer.clauses(text)]
         proposals, evidence = result.drafts(), bounded.drafts()
         ambiguous_target = re.fullmatch(
-            rf"(?:tang|giam|ha) {_CLIMATE_TARGET} (?:len|xuong) (\d+(?:[.,]\d+)?) do(?: c)?", value
+            r"(?:tang|giam|ha) (?:dieu hoa|nhiet do) (?:len|xuong) (\d+(?:[.,]\d+)?) do(?: c)?", value
         )
         ambiguous_target = bool(ambiguous_target and 16 <= float(ambiguous_target[1].replace(",", ".")) <= 30)
         for index, action in enumerate(proposals):

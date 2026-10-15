@@ -8,6 +8,7 @@ from pathlib import Path
 from uuid import uuid4
 
 import httpx
+from pydantic import Field
 
 from src.vivi.ai_router import JetsonProviderRouter
 from src.vivi.domain.models import TurnRequest
@@ -15,6 +16,12 @@ from src.vivi.speech.inbox import VoiceInbox
 
 logger = logging.getLogger(__name__)
 MAX_SNAPSHOT_CHARS = 10000
+
+
+class VoiceTurnRequest(TurnRequest):
+    """Long local snapshots do not expand main's public turn API contract."""
+
+    transcript: str = Field(min_length=1, max_length=MAX_SNAPSHOT_CHARS)
 
 
 class VoiceInputService:
@@ -102,10 +109,13 @@ class VoiceInputService:
     async def _turn_snapshot(self,job):
         session_id=job['session_id']
         changed=self._revision_event(session_id)
+        requested = job['context'].get('llm_provider') or self.runtime.orchestrator.default_provider
+        available = getattr(self.runtime.orchestrator,'semantic_providers',self.runtime.orchestrator.graph_providers)
+        provider = await self.router.select(requested, available)
         # Coalesce short consecutive utterances, but start within a bounded
         # window even if the driver keeps speaking.
         first=time.monotonic()
-        while time.monotonic()-first < 1.5:
+        while provider == 'local' and time.monotonic()-first < 1.5:
             changed.clear()
             try:
                 await asyncio.wait_for(changed.wait(),timeout=min(.45,1.5-(time.monotonic()-first)))
@@ -138,12 +148,9 @@ class VoiceInputService:
         transcript='\n'.join(row['transcript'] for row in rows)
         context={**rows[0]['context'],**rows[-1]['context']}
         context['llm_provider']=rows[-1]['context'].get('llm_provider') or rows[0]['context'].get('llm_provider')
-        request = TurnRequest(session_id=session_id,turn_id=generation_id,transcript=transcript,**context)
+        request = VoiceTurnRequest(session_id=session_id,turn_id=generation_id,transcript=transcript,**context)
         generation = None
         try:
-            requested = context.get('llm_provider') or self.runtime.orchestrator.default_provider
-            available = getattr(self.runtime.orchestrator,'semantic_providers',self.runtime.orchestrator.graph_providers)
-            provider = await self.router.select(requested,available)
             generation=asyncio.create_task(self.runtime.orchestrator.run(request,provider=provider))
             revision_changed=asyncio.create_task(changed.wait())
             try:
