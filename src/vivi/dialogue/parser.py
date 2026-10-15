@@ -59,6 +59,8 @@ def place_query_matches(query, place):
 
 
 ZONES = ("driver", "front_passenger", "rear_left", "rear_right")
+# One climate target grammar for defaults, explicit amounts, limits and guards.
+_CLIMATE_TARGET = r"(?:nhiet do(?: (?:cua )?dieu hoa)?|dieu hoa)"
 # A spoken yes to a pending question, as normalized text. STT writes "OK" the
 # Vietnamese way ("Ô kê"), and people add a verb or a tail: "ừ mở đi", "ok luôn nhé".
 # Bare "dung" is left out on purpose: it is "đúng" but also "dừng" (stop).
@@ -973,7 +975,7 @@ class OfflineParser:
                 capability=capability, arguments=args, excluded_zones=exclusions, referenced_target=reference
             )
         limit = re.fullmatch(
-            r"(tang|giam|ha|dat|chinh) (?:dieu hoa|nhiet do)(?: len| xuong| ve)? (toi da|cao nhat|toi thieu|thap nhat)",
+            rf"(tang|giam|ha|dat|chinh) {_CLIMATE_TARGET}(?: len| xuong| ve)? (toi da|cao nhat|toi thieu|thap nhat)",
             value,
         )
         if limit:
@@ -988,7 +990,7 @@ class OfflineParser:
                 },
             )
         relative = re.fullmatch(
-            r"(?:tang|giam|ha) (?:dieu hoa|nhiet do)(?: (them|bot|len|xuong))? (\d+(?:[.,]\d+)?) do(?: c)?", value
+            rf"(?:tang|giam|ha) {_CLIMATE_TARGET}(?: (them|bot|len|xuong))? (\d+(?:[.,]\d+)?) do(?: c)?", value
         )
         if relative:
             amount = float(relative[2].replace(",", "."))
@@ -1002,7 +1004,7 @@ class OfflineParser:
                 arguments={"temperature_delta_celsius": amount * (-1 if value.startswith(("giam", "ha")) else 1)},
             )
         match = re.fullmatch(
-            r"(?:dat|chinh|tang(?: len)?|giam(?: xuong)?|ha)\s+(?:nhiet do|dieu hoa)(?:\s+(?:o|ve|den|len|xuong|thanh))?(?:\s+(\d+(?:[.,]\d+)?)(?: do(?: c)?)?)?",
+            rf"(?:dat|chinh|tang(?: len)?|giam(?: xuong)?|ha)\s+{_CLIMATE_TARGET}(?:\s+(?:o|ve|den|len|xuong|thanh))?(?:\s+(\d+(?:[.,]\d+)?)(?: do(?: c)?)?)?",
             value,
         )
         if match:
@@ -1631,6 +1633,16 @@ class OfflineParser:
                      and not bounded.clarification_drafts))):
             return bounded
         literal = self.command(value)
+        if (literal and literal.capability == "climate.set_temperature"
+            and bounded.act == "request" and len(bounded.actions) == 1
+            and result.act == "clarify"
+            and not (result.conflicting or result.conditional or result.scheduled)
+            and literal.arguments.temperature_delta_celsius is not None
+            and re.match(r"^(?:tang|giam|ha)\b", value)
+            and not re.search(r"\d", value)):
+            # An unspecified increase/decrease has an established +/-2C
+            # default; asking for its magnitude would contradict that policy.
+            return bounded
         if (literal and bounded.act == "request" and len(bounded.actions) == 1
             and result.act in {"request", "question"} and result.actions
             and [action.capability for action in result.actions] != [literal.capability]):
@@ -1854,7 +1866,7 @@ class OfflineParser:
         climate_clauses = [self.command(clause.text) for clause in self.lexer.clauses(text)]
         proposals, evidence = result.drafts(), bounded.drafts()
         ambiguous_target = re.fullmatch(
-            r"(?:tang|giam|ha) (?:dieu hoa|nhiet do) (?:len|xuong) (\d+(?:[.,]\d+)?) do(?: c)?", value
+            rf"(?:tang|giam|ha) {_CLIMATE_TARGET} (?:len|xuong) (\d+(?:[.,]\d+)?) do(?: c)?", value
         )
         ambiguous_target = bool(ambiguous_target and 16 <= float(ambiguous_target[1].replace(",", ".")) <= 30)
         for index, action in enumerate(proposals):

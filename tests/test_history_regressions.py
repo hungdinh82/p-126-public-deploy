@@ -26,6 +26,14 @@ def chunk(source_id, content, section):
     ("hạ nhiệt độ xuống thấp nhất", 16),
     ("tăng nhiệt độ thêm 20 độ", 30),
     ("tăng nhiệt độ lên 20 độ", 20),
+    ("tăng nhiệt độ điều hòa lên", 25),
+    ("giảm nhiệt độ điều hoà xuống", 21),
+    ("tăng nhiệt độ của điều hòa lên", 25),
+    ("tăng nhiệt độ điều hòa thêm 3 độ", 26),
+    ("giảm nhiệt độ điều hòa xuống 2 độ", 21),
+    ("đặt nhiệt độ điều hòa ở 24 độ", 24),
+    ("tăng nhiệt độ điều hòa lên tối đa", 30),
+    ("hạ nhiệt độ điều hòa xuống thấp nhất", 16),
 
 ])
 def test_temperature_target_words_take_precedence_over_numeric_heuristics(query, expected):
