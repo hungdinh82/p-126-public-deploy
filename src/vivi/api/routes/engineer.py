@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from src.vivi.api.routes.roles import require_role
 from src.vivi.api.runtime import runtime
 from src.vivi.engineer.service import (
+    ConnectivityScenarioRequest,
     EngineerError,
     EngineerService,
     ModelSelectionRequest,
@@ -45,6 +46,19 @@ async def apply_scenario(vehicle_id: str, request: ScenarioRequest, actor: str =
         return await service.apply_scenario(vehicle_id, request, actor)
     except EngineerError as exc:
         raise _http_error(exc) from exc
+
+
+@router.get("/connectivity/scenarios")
+async def connectivity_scenarios(_: str = Depends(engineer_role)):
+    return await service.connectivity_scenarios()
+
+
+@router.post("/connectivity/scenario")
+async def apply_connectivity_scenario(request: ConnectivityScenarioRequest, actor: str = Depends(engineer_role)):
+    try:
+        return await service.apply_connectivity_scenario(request, actor)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.get("/models")

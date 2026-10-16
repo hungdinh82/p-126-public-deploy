@@ -16,7 +16,7 @@ const API_BASE = '';
 const makeId = () => globalThis.crypto?.randomUUID?.() || `vivi-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 const sessionId = localStorage.getItem('vivi-session-id') || makeId();
 localStorage.setItem('vivi-session-id', sessionId);
-const state = { phase: 'idle', temp: 23, window: false, music: false, driving: false, powerState: 'off', battery: 82, range: 328, powertrainTemp: 45, tirePressures: {}, windows: {}, doors: {}, seatHeatLevels: {}, doorLocked: false, doorOpen: false, hoodOpen: false, trunkOpen: false, seatHeat: 0, alerts: [], alertSequence: 0, reduced: motionPreference.matches, sound: true, busy: false, backendAvailable: false, vehicleProvider: '', sttAvailable: false, sttProvider: '', sttStreaming: false, sttDevice: '', ttsAvailable: false, ttsProvider: '', ttsVoice: '', ttsDevice: '', ttsOptions: [], storeAudio: false, storeTranscripts: false, llmProvider: '', llmOptions: [], lastCommand: '', manualAnswer: '', manualEvidence: [], progress: 0 };
+const state = { phase: 'idle', temp: 23, window: false, music: false, driving: false, powerState: 'off', battery: 82, range: 328, powertrainTemp: 45, tirePressures: {}, windows: {}, doors: {}, seatHeatLevels: {}, doorLocked: false, doorOpen: false, hoodOpen: false, trunkOpen: false, seatHeat: 0, alerts: [], alertSequence: 0, reduced: motionPreference.matches, sound: true, busy: false, backendAvailable: false, connectivityMode: '', connectivityOverride: 'actual', vehicleProvider: '', sttAvailable: false, sttProvider: '', sttStreaming: false, sttDevice: '', ttsAvailable: false, ttsProvider: '', ttsVoice: '', ttsDevice: '', ttsOptions: [], storeAudio: false, storeTranscripts: false, llmProvider: '', llmOptions: [], lastCommand: '', manualAnswer: '', manualEvidence: [], progress: 0 };
 const navigationStore = new NavigationStore();
 const snapshotOrder = navigationStore.order;
 let syncRequest = null;
@@ -1029,7 +1029,7 @@ function resolveLlmProvider(options, backendDefault, savedProvider, savedDefault
 async function checkBackend() {
   try {
     const response = await fetch(`${API_BASE}/api/v1/health`); if (!response.ok) throw new Error();
-    const health = await response.json(); state.backendAvailable = true; state.vehicleProvider = health.vehicle.provider; state.sttAvailable = health.stt.available; state.sttProvider = health.stt.provider; state.sttStreaming = Boolean(health.stt.streaming); state.sttDevice = health.stt.device; state.ttsOptions = health.tts.options || []; applyTtsProvider(resolveTtsProvider(health.tts)); state.storeAudio = health.storage.audio; state.storeTranscripts = health.storage.transcripts;
+    const health = await response.json(); state.backendAvailable = true; applyConnectivity(health.connectivity, true); state.vehicleProvider = health.vehicle.provider; state.sttAvailable = health.stt.available; state.sttProvider = health.stt.provider; state.sttStreaming = Boolean(health.stt.streaming); state.sttDevice = health.stt.device; state.ttsOptions = health.tts.options || []; applyTtsProvider(resolveTtsProvider(health.tts)); state.storeAudio = health.storage.audio; state.storeTranscripts = health.storage.transcripts;
     edgeCommandHistory = state.storeTranscripts ? readEdgeCommandHistory() : [];
     if (!state.storeTranscripts) localStorage.removeItem(edgeCommandHistoryKey);
     state.llmOptions = health.llm.options || [];
@@ -1052,6 +1052,34 @@ async function checkBackend() {
     state.backendAvailable = false; $('#backend-status').classList.add('offline'); $('#backend-status').innerHTML = '<i></i> Backend offline';
     $('#backend-status').title = 'Chế độ prototype · hãy chạy python run.py';
   }
+}
+
+function applyConnectivity(connectivity, startup = false) {
+  if (!connectivity?.effective) return;
+  const previous = state.connectivityMode;
+  const mode = connectivity.effective.mode;
+  state.connectivityMode = mode;
+  state.connectivityOverride = connectivity.override;
+  const messages = {
+    cloud: 'Có Internet. Chế độ tự động có thể dùng dịch vụ Cloud.',
+    jetson: 'Không có Cloud khả dụng. Jetson đang sẵn sàng xử lý cục bộ.',
+    local: 'Model cục bộ đang sẵn sàng.',
+    fallback: 'Hiện chỉ có thao tác trực tiếp và câu trả lời giới hạn.'
+  };
+  if ((previous && previous !== mode) || (startup && mode !== 'cloud')) {
+    queueAnnouncement(messages[mode], 1, `connectivity-${mode}-${Date.now()}`);
+  }
+  if ($('#backend-status')) {
+    $('#backend-status').title = `${messages[mode]}${connectivity.simulated ? ` Đang giả lập ${connectivity.override}.` : ''}`;
+  }
+}
+
+async function pollConnectivity() {
+  if (!state.backendAvailable) return;
+  try {
+    const response = await fetch(`${API_BASE}/api/v1/connectivity`);
+    if (response.ok) applyConnectivity(await response.json());
+  } catch { /* giữ trạng thái cuối cùng trong lúc backend chập chờn */ }
 }
 
 function updateModelStatus() {
@@ -1152,9 +1180,9 @@ function handleSpeakerCommand(command) {
 $('#sound-toggle').addEventListener('click', () => setSound(!state.sound));
 
 const dialog = $('#info-dialog');
-const modelLabels = { rules: 'Kịch bản', openai: 'OpenAI', google: 'Google Gemini', local: 'Local API', openrouter: 'OpenRouter' };
-const ttsLabels = { zerotts: 'ViVi', vieneu: 'VieNeu' };
-const ttsModes = { zerotts: 'On-device · ZeroTTS', vieneu: 'Cloud · cần Internet' };
+const modelLabels = { openai: 'OpenAI', google: 'Google Gemini', local: 'Local API', openrouter: 'OpenRouter' };
+const ttsLabels = { auto: 'Tự động', zerotts: 'ViVi', vieneu: 'VieNeu' };
+const ttsModes = { auto: 'Cloud → Jetson → trình duyệt', zerotts: 'On-device · ZeroTTS', vieneu: 'Cloud · cần Internet' };
 const ttsVoiceLabel = voice => voice === 'VIVI' ? 'ViVi' : voice;
 function resolveTtsProvider(tts) {
   // The saved choice wins while it is usable; otherwise the backend default.
@@ -1191,7 +1219,7 @@ function selectTtsProvider(provider) {
   const activeVoice = $('#active-voice');
   if (activeVoice) activeVoice.textContent = `${ttsLabels[provider] || provider} · ${ttsVoiceLabel(state.ttsVoice)}`;
 }
-const modelModes = { rules: 'Phản hồi định sẵn', openai: 'Cloud · cần Internet', google: 'Cloud · cần Internet', local: 'On-device · riêng tư', openrouter: 'Cloud · cần Internet' };
+const modelModes = { openai: 'Cloud · cần Internet', google: 'Cloud · cần Internet', local: 'On-device · riêng tư', openrouter: 'Cloud · cần Internet' };
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>'"]/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character]);
 }
@@ -1368,7 +1396,7 @@ document.addEventListener('keydown', event => {
 });
 function updateClock() { $('#clock').textContent = new Intl.DateTimeFormat('vi-VN', { hour: '2-digit', minute: '2-digit' }).format(new Date()); }
 if (location.hash === '#journey') openPanel('journey');
-updateClock(); setInterval(updateClock, 60000); updateVehicle(); checkBackend().then(pollVehicleAlerts); setInterval(pollVehicleAlerts, 1500);
+updateClock(); setInterval(updateClock, 60000); updateVehicle(); checkBackend().then(pollVehicleAlerts); setInterval(pollVehicleAlerts, 1500); setInterval(pollConnectivity, 2000);
 
 window.addEventListener('storage', event => {
   if (event.key !== 'vivi-history-reset') return;

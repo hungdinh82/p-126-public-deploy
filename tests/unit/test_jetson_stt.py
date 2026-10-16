@@ -113,3 +113,55 @@ def test_convert_browser_audio_to_gateway_format(tmp_path):
     with wave.open(str(converted), "rb") as wav:
         assert (wav.getnchannels(), wav.getsampwidth(), wav.getframerate()) == (1, 2, 16000)
         assert wav.getnframes() > 0
+
+
+def test_native_whisper_utterances_do_not_reuse_previous_decoder_context(monkeypatch):
+    from email.parser import BytesParser
+    from email.policy import default
+
+    from jetson_ai.speech import SpeechModels
+
+    models = SpeechModels()
+    models.stt_engine = "whisper_cpp"
+    seen = []
+
+    def respond(request):
+        message = BytesParser(policy=default).parsebytes(
+            ("Content-Type: " + request.headers["content-type"] + "\r\n\r\n").encode() + request.content
+        )
+        fields = {
+            part.get_param("name", header="content-disposition"): part.get_payload(decode=True)
+            for part in message.iter_parts()
+        }
+        assert fields["no_context"] == b"true"
+        assert fields["language"] == b"vi"
+        seen.append(fields["file"])
+        return httpx.Response(200, json={"text": " Xin chào "})
+
+    client = httpx.Client
+    monkeypatch.setattr(httpx, "Client", lambda **kwargs: client(transport=httpx.MockTransport(respond), **kwargs))
+    assert models.transcribe(b"first-utterance") == "Xin chào"
+    assert models.transcribe(b"second-utterance") == "Xin chào"
+    assert seen == [b"first-utterance", b"second-utterance"]
+
+
+def test_cpu_stt_selection_preserves_cuda_device_for_other_models(monkeypatch, tmp_path):
+    from jetson_ai.speech import SpeechModels
+
+    model = tmp_path / "ggml-base.bin"
+    model.write_bytes(b"model-path-fixture")
+    log = tmp_path / "whisper-server.log"
+    log.write_text("using CPU backend\n")
+    monkeypatch.setenv("JETSON_AI_DEVICE", "cuda")
+    monkeypatch.setenv("JETSON_AI_STT_DEVICE", "cpu")
+    monkeypatch.setenv("JETSON_AI_STT_ENGINE", "whisper_cpp")
+    monkeypatch.setenv("JETSON_AI_STT_MODEL", str(model))
+    monkeypatch.setenv("JETSON_AI_STT_LOG", str(log))
+    client = httpx.Client
+    monkeypatch.setattr(
+        httpx, "Client", lambda **kwargs: client(transport=httpx.MockTransport(lambda _: httpx.Response(200)), **kwargs)
+    )
+    speech = SpeechModels()
+    speech._load_stt()
+    assert speech.info["stt"]["device"] == "cpu"
+    assert speech.requested_device == "cuda"

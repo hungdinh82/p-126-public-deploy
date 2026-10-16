@@ -44,21 +44,15 @@ async def lifespan(app: FastAPI):
     config = runtime.settings
     background = []
     try:
+        await runtime.connectivity.start()
         if config.tts_provider != "off" and config.zerotts_preload:
             await runtime.tts.preload()
         if config.stt_provider != "off" and config.phowhisper_preload:
             await runtime.stt.preload()
         if config.stt_fallback_preload and hasattr(runtime.stt, "preload_fallback"):
             background.append(asyncio.create_task(_preload_stt_fallback()))
-        client = getattr(runtime.orchestrator, "local_semantic_client", None)
-        if client is not None and config.jetson_ai_url and config.jetson_ai_policy != "disabled":
-            from src.vivi.dialogue.planner import warmup_local_client
-
-            try:
-                await warmup_local_client(client)
-                logger.info("Đã warmup prompt cố định của SLM từ xa")
-            except Exception:
-                logger.exception("Warmup SLM từ xa chưa thành công; app vẫn nhận request")
+        # The gateway loads remote models; no extra model request may compete
+        # with a real turn or bypass the shared stage deadline during startup.
         yield
     finally:
         metrics.stop_gpu_sampler()

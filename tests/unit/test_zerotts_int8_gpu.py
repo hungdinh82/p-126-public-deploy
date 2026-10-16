@@ -134,7 +134,7 @@ def test_gpu_codec_is_promoted_only_after_tensor_rt_verification(tmp_path, monke
 
     ort = pytest.importorskip("onnxruntime")
     zerotts = pytest.importorskip("zerotts")
-    from jetson_ai import tensorrt_tts
+    from jetson_ai import speech, tensorrt_tts
     from jetson_ai.speech import SpeechModels
 
     base = tmp_path / "zerotts"
@@ -151,6 +151,7 @@ def test_gpu_codec_is_promoted_only_after_tensor_rt_verification(tmp_path, monke
         archive.writestr("VIVI/meta.json", "{}")
         archive.writestr("VIVI/voice.npz", data.getvalue())
     monkeypatch.setenv("JETSON_AI_TTS_MODEL", str(base))
+    monkeypatch.setattr(speech, "available_memory_mb", lambda: 16384)
     monkeypatch.setenv("JETSON_AI_TTS_PRECISION", "int8-gpu")
     monkeypatch.setenv("JETSON_AI_DEVICE", "cuda")
     monkeypatch.setenv("JETSON_AI_VOICE_PACK", str(voice))

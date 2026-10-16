@@ -322,7 +322,7 @@ class TTSRequest(BaseModel):
     session_id: str
     turn_id: str
     # Engine picked in the settings panel; None uses TTS_PROVIDER.
-    tts_provider: Literal["zerotts", "vieneu"] | None = None
+    tts_provider: Literal["auto", "zerotts", "vieneu"] | None = None
 
 
 class ConfirmationDecisionRequest(BaseModel):

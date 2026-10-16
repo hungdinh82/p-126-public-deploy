@@ -545,6 +545,8 @@ def create_langgraph_orchestrator(
     vehicle: VehicleSimulator,
     store: EventStore,
     config=None,
+    *,
+    connectivity=None,
 ) -> LangGraphOrchestrator:
     config = config or get_settings()
     from src.vivi.dialogue.planner import SemanticResolver
@@ -566,6 +568,10 @@ def create_langgraph_orchestrator(
         ],
     )
     services = create_services(config, provider="extractive")
+    if connectivity is not None and services.navigation is not None:
+        from src.vivi.navigation.connectivity import ConnectivityMapClient
+
+        services.navigation = ConnectivityMapClient(services.navigation, connectivity)
     services.action_gateway = gateway
     import json
 
@@ -609,13 +615,15 @@ def create_langgraph_orchestrator(
         primary=config.llm_provider,
         offline=config.jetson_ai_policy == "offline_only" or config.rag_local_only,
         breaker_seconds=config.provider_breaker_seconds,
+        provider_allowed=connectivity.provider_allowed if connectivity is not None else None,
+        result_recorder=connectivity.record_provider_result if connectivity is not None else None,
     )
     resolver = SemanticResolver(gateway=gateway_models, budget_seconds=config.semantic_budget_seconds)
     from src.vivi.conversation.service import ConversationService
     from src.vivi.information.service import InformationService
 
     services.conversation = ConversationService(gateway=gateway_models, enabled=config.conversation_enabled)
-    services.information = InformationService(config, services.conversation)
+    services.information = InformationService(config, services.conversation, connectivity=connectivity)
     saver = ThreadedSqliteSaver(config.data_dir / "runtime" / "conversation-v4.sqlite3")
     graph = build_assistant_graph(
         services,

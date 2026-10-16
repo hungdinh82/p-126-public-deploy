@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from src.vivi.config import Settings, settings
+from src.vivi.connectivity import ConnectivitySupervisor
 from src.vivi.orchestration import LangGraphOrchestrator, create_langgraph_orchestrator
 from src.vivi.persistence.event_store import EventStore
 from src.vivi.providers import llm_models
@@ -26,8 +27,10 @@ class Runtime:
     tts_engines: dict[str, Any]
     alerts: AlertEngine
     llm_models: dict[str, str]
+    connectivity: ConnectivitySupervisor
 
     def close(self) -> None:
+        self.connectivity.store.close()
         for graph in [self.orchestrator.graph]:
             if hasattr(graph, "close"):
                 graph.close()
@@ -36,6 +39,8 @@ class Runtime:
 
     async def aclose(self) -> None:
         await self.orchestrator.aclose()
+        await self.connectivity.stop()
+        self.connectivity.store.close()
         if isinstance(self.vehicle, MqttVehicleAdapter):
             self.vehicle.close()
 
@@ -53,17 +58,20 @@ def build_runtime(config: Settings = settings) -> Runtime:
     else:
         vehicle = VehicleSimulator()
     store = EventStore(config)
+    connectivity = ConnectivitySupervisor(config)
     tts = create_tts(config)
+    tts_engines = create_tts_engines(config, tts, connectivity)
     return Runtime(
         settings=config,
         store=store,
         vehicle=vehicle,
-        orchestrator=create_langgraph_orchestrator(vehicle, store, config),
-        stt=create_stt(config),
+        orchestrator=create_langgraph_orchestrator(vehicle, store, config, connectivity=connectivity),
+        stt=create_stt(config, connectivity),
         tts=tts,
-        tts_engines=create_tts_engines(config, tts),
+        tts_engines=tts_engines,
         alerts=AlertEngine(),
         llm_models=llm_models(config),
+        connectivity=connectivity,
     )
 
 

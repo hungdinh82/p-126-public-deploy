@@ -147,4 +147,4 @@ def test_stream_route_uses_engine_picked_in_settings(tmp_path):
     assert picked.content == b"\x01\x00"
     assert picked.headers["X-ViVi-Voice"] == "VIVI"
     assert unknown.status_code == 422
-    assert [item["provider"] for item in options] == ["zerotts", "vieneu"]
+    assert [item["provider"] for item in options] == ["auto", "zerotts", "vieneu"]

@@ -121,7 +121,7 @@ không phải bằng chứng model 1.7B đã đủ năng lực.
 - Benchmark voice hỗ trợ episode, bộ nhớ tạm riêng, p50/p95 mỗi lượt và error_count.
   Mạng bên ngoài bị chặn trong eval; xe dùng simulator.
 - Runner và kết quả LangGraph hiện tại: [eval](../eval/README.md),
-  [report](../eval/results/report.md). Các snapshot thử model cũ đã dọn;
+  report (file sinh tại máy chạy: `../eval/results/report.md`; không lưu trong Git). Các snapshot thử model cũ đã dọn;
   có thể tra lịch sử Git nếu cần đối chiếu.
 
 Các số liệu bên dưới là lịch sử, không phải benchmark revision hiện tại.

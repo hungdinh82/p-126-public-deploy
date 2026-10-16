@@ -123,3 +123,11 @@ rag_retrieval_k = 12
 rag_final_k = 5
 rag_history_turns = 6
 rag_prompt_max_characters = 6000
+
+# Adaptive gateway observations; manual provider choices remain preferences.
+internet_probe_url = "https://clients3.google.com/generate_204"
+internet_probe_timeout_seconds = 1.5
+connectivity_probe_interval_seconds = 2.0
+connectivity_failure_threshold = 2
+connectivity_success_threshold = 2
+connectivity_retention_days = 7

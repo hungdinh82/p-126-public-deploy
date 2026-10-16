@@ -113,7 +113,7 @@ cách xoá dữ liệu của workspace.
 
 ## Kiểm chứng và giới hạn
 
-[Báo cáo benchmark hiện tại](../eval/results/report.md) tách rules,
+Báo cáo benchmark hiện tại (file sinh tại máy chạy: `../eval/results/report.md`; không lưu trong Git) tách rules,
 model fixture và latency backend P/D; scope và giới hạn ghi theo từng phép đo.
 Các số đo API/cloud/MQTT/thoại của những đợt trước không được tính là đã nghiệm thu lại.
 Dataset là development regression, không phải held-out accuracy hoặc bảo đảm hiểu mọi

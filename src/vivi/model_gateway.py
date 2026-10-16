@@ -29,7 +29,17 @@ class ModelResult:
 
 
 class ModelGateway:
-    def __init__(self, providers=None, *, primary="google", offline=False, breaker_seconds=30, fallback_chains=None):
+    def __init__(
+        self,
+        providers=None,
+        *,
+        primary="google",
+        offline=False,
+        breaker_seconds=30,
+        fallback_chains=None,
+        provider_allowed=None,
+        result_recorder=None,
+    ):
         self.providers = {
             name: value
             if isinstance(value, ModelProvider)
@@ -39,6 +49,8 @@ class ModelGateway:
         self.primary, self.offline = primary, offline
         self.breaker_seconds = breaker_seconds
         self.fallback_chains = fallback_chains or {}
+        self.provider_allowed = provider_allowed
+        self.result_recorder = result_recorder
 
     def chain(self, requested=None):
         if self.offline:
@@ -92,6 +104,23 @@ class ModelGateway:
                     }
                 )
                 continue
+            # Connectivity can restrict eligibility, but cannot reorder the
+            # configured cloud -> local policy or create a second routing layer.
+            if self.provider_allowed is not None and not self.provider_allowed(name):
+                attempts.append(
+                    {
+                        "stage": stage,
+                        "requested_provider": requested,
+                        "provider": name,
+                        "outcome": "unavailable",
+                        "reason": "connectivity_or_profile",
+                        "calls": 0,
+                        "latency_ms": 0,
+                    }
+                )
+                if control:
+                    control.model_attempts.append(attempts[-1].copy())
+                continue
             if time.monotonic() < provider.unavailable_until:
                 attempts.append(
                     {
@@ -129,7 +158,10 @@ class ModelGateway:
                     attempt["schema_errors"] = [{"field": list(e["loc"]), "code": e["type"]} for e in exc.errors()]
                 # Bad content does not mean that the transport is unhealthy.
                 if not isinstance(exc, ValueError) and not limit.expired():
-                    provider.unavailable_until = time.monotonic() + self.breaker_seconds
+                    cooldown = self.breaker_seconds
+                    if name == "local" and attempt["http_status"] in {429, 503}:
+                        cooldown = min(1, cooldown)
+                    provider.unavailable_until = time.monotonic() + cooldown
             else:
                 if attempt["outcome"] == "started":
                     attempt["outcome"] = "served"
@@ -138,6 +170,8 @@ class ModelGateway:
                 attempt["latency_ms"] = round((time.monotonic() - started) * 1000, 2)
                 if control:
                     control.model_attempts = [*control.model_attempts, attempt.copy()]
+                if self.result_recorder is not None:
+                    self.result_recorder(name, attempt["outcome"], attempt["latency_ms"], attempt.get("reason"))
         return ModelResult(attempts=attempts)
 
 

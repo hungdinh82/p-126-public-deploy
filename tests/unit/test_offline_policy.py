@@ -7,6 +7,7 @@ from src.vivi.speech.tts import create_tts, create_tts_engines
 def test_offline_policy_excludes_all_cloud_ai_adapters():
     config = Settings(
         jetson_ai_policy="offline_only",
+        jetson_ai_url="",
         rag_local_only=False,
         google_api_key="configured",
         openai_api_key="configured",

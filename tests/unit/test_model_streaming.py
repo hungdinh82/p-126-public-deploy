@@ -12,6 +12,7 @@ from fastapi import Request
 from fastapi.testclient import TestClient
 
 from jetson_ai.app import ServiceConfig, create_app
+from jetson_ai.scheduler import InferenceScheduler
 from jetson_ai.speech import SpeechModels
 from jetson_ai.stream_routes import ModelStreams
 from jetson_ai.streaming import sse, worker
@@ -181,15 +182,15 @@ async def test_first_llm_chunk_arrives_before_backend_finishes_and_abort_release
     async def ready():
         return "ready"
 
-    slots = asyncio.Semaphore(1)
+    slots = InferenceScheduler()
     streams = ModelStreams(
         ServiceConfig(token=""), None, slots, ready, None, lambda *_: None, httpx.MockTransport(response)
     )
     result = await streams.chat(payload(), Request({"type": "http", "headers": []}))
     assert b"first" in await asyncio.wait_for(anext(result.body_iterator), 1)
-    assert not finish.is_set() and slots.locked()
+    assert not finish.is_set() and slots.snapshot("llm")["active_requests"]
     await result.body_iterator.aclose()
-    assert closed and not slots.locked()
+    assert closed and not slots.snapshot("llm")["active_requests"]
 
 
 @pytest.mark.asyncio
@@ -223,14 +224,14 @@ async def test_pcm_stream_is_incremental_and_releases_gpu_on_disconnect():
                 self.closed = True
 
     speech = Speech()
-    slots = asyncio.Semaphore(1)
+    slots = InferenceScheduler()
     streams = ModelStreams(ServiceConfig(token=""), speech, slots, None, None, None)
-    response = await streams.tts("hello", None)
+    response = await streams.tts("hello", Request({"type": "http", "headers": []}))
     assert response.headers["x-audio-format"] == "pcm_s16le"
     assert await anext(response.body_iterator) == b"\x01\x00"
-    assert slots.locked()
+    assert slots.snapshot("tts")["active_requests"]
     await response.body_iterator.aclose()
-    assert speech.closed and not slots.locked()
+    assert speech.closed and not slots.snapshot("tts")["active_requests"]
     assert speech.info["tts"]["status"] == "ready"
 
 

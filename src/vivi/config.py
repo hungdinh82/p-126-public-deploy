@@ -156,6 +156,19 @@ class Settings(BaseSettings):
         validation_alias=AliasChoices("AI_SERVER_TOKEN", "JETSON_AI_TOKEN", "ai_server_token", "jetson_ai_token"),
     )
     jetson_ai_probe_timeout_seconds: float = Field(default=0.75, gt=0, le=5)
+    # Speech transport only. ModelGateway retains the per-model and turn budgets.
+    ai_server_request_timeout_seconds: float = Field(default=180, ge=1, le=300)
+    internet_probe_url: str = "https://clients3.google.com/generate_204"
+    internet_probe_timeout_seconds: float = Field(default=1.5, gt=0, le=10)
+    connectivity_probe_interval_seconds: float = Field(default=2.0, ge=0.5, le=30)
+    connectivity_failure_threshold: int = Field(default=2, ge=1, le=10)
+    connectivity_success_threshold: int = Field(default=2, ge=1, le=10)
+    connectivity_retention_days: int = Field(default=7, ge=1, le=90)
+
+    @property
+    def connectivity_db_path(self) -> Path:
+        return self.data_dir / "runtime" / "connectivity.sqlite3"
+
     ai_server_auth_required: bool = Field(
         default=True,
         validation_alias=AliasChoices("AI_SERVER_AUTH_REQUIRED", "JETSON_AI_AUTH_REQUIRED", "ai_server_auth_required"),
