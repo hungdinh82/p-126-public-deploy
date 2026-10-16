@@ -1,3 +1,79 @@
 <!doctype html>
-<html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#04050a"><title>ViVi — Chọn không gian</title><link rel="stylesheet" href="/role.css?v=1"></head>
-<body class="role-page"><main class="role-card"><a class="role-brand" href="/">v<span>ı</span>v<span>ı</span></a><p class="kicker">VIVI / LOCAL PROTOTYPE</p><h1>Chọn không gian của bạn</h1><p class="role-copy">Đây là lựa chọn vai trò cho bản demo cục bộ, không phải xác thực production.</p><div class="role-actions"><button data-role="driver"><b>Tài xế</b><span>Không gian IVI · trợ lý ViVi</span></button><button data-role="engineer"><b>Kỹ sư hệ thống</b><span>Runtime · fleet · scenario lab</span></button></div><p id="role-status" role="status" aria-live="polite"></p></main><script src="/role.js?v=1"></script></body></html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#04050a">
+  <meta name="description" content="VIVI Cabin Copilot — prototype trợ lý cabin tiếng Việt an toàn và offline-first của nhóm P-126.">
+  <title>ViVi Cabin Copilot — Nhóm P-126</title>
+  <link rel="stylesheet" href="/role.css?v=2">
+</head>
+<body class="role-page">
+  <div class="role-ambient" aria-hidden="true">
+    <span class="ambient-orbit ambient-orbit-one"></span>
+    <span class="ambient-orbit ambient-orbit-two"></span>
+    <span class="ambient-glow"></span>
+  </div>
+
+  <main class="role-card">
+    <header class="role-header">
+      <a class="role-brand" href="/" aria-label="ViVi Cabin Copilot, trang chọn vai trò">
+        v<span>ı</span>v<span>ı</span>
+      </a>
+      <span class="team-mark">NHÓM P-126 <i></i> DEV-01</span>
+    </header>
+
+    <div class="role-layout">
+      <section class="project-intro" aria-labelledby="project-title">
+        <p class="kicker">VIVI CABIN COPILOT</p>
+        <h1 id="project-title">Trợ lý cabin tiếng Việt, <em>an toàn từ thiết kế.</em></h1>
+        <p class="project-copy">
+          VIVI phối hợp AI local, dịch vụ cloud và các quy tắc xác định trong một
+          workflow thống nhất để hội thoại, điều khiển cabin mô phỏng, tra cứu
+          cẩm nang có nguồn và hỗ trợ lập hành trình.
+        </p>
+        <p class="project-note">
+          Mọi thao tác trên xe đều đi qua chính sách an toàn, bước xác nhận và
+          kiểm chứng trạng thái trên Vehicle Digital Twin.
+        </p>
+
+        <ul class="project-pillars" aria-label="Đặc điểm nổi bật">
+          <li><i aria-hidden="true">01</i><span><b>Offline-first AI</b><small>Duy trì tác vụ thiết yếu khi mạng yếu</small></span></li>
+          <li><i aria-hidden="true">02</i><span><b>Grounded Knowledge</b><small>Tra cứu cẩm nang kèm nguồn kiểm chứng</small></span></li>
+          <li><i aria-hidden="true">03</i><span><b>Safe Vehicle Actions</b><small>Policy, xác nhận và kiểm chứng trạng thái</small></span></li>
+          <li><i aria-hidden="true">04</i><span><b>Observable Runtime</b><small>Theo dõi pipeline, độ trễ và kết nối</small></span></li>
+        </ul>
+      </section>
+
+      <section class="role-selection" aria-labelledby="role-title">
+        <div class="selection-heading">
+          <p class="kicker">BẮT ĐẦU TRẢI NGHIỆM</p>
+          <h2 id="role-title">Chọn không gian của bạn</h2>
+          <p>Khám phá sản phẩm từ góc nhìn người dùng hoặc đội ngũ vận hành hệ thống.</p>
+        </div>
+
+        <div class="role-actions">
+          <button type="button" data-role="driver">
+            <span class="role-number">01</span>
+            <span class="role-label"><b>Tài xế</b><small>Trợ lý ViVi và cabin mô phỏng</small></span>
+            <span class="role-arrow" aria-hidden="true">&#8599;</span>
+          </button>
+          <button type="button" data-role="engineer">
+            <span class="role-number">02</span>
+            <span class="role-label"><b>Kỹ sư hệ thống</b><small>Runtime, fleet và scenario lab</small></span>
+            <span class="role-arrow" aria-hidden="true">&#8599;</span>
+          </button>
+        </div>
+        <p id="role-status" role="status" aria-live="polite"></p>
+      </section>
+    </div>
+
+    <footer class="role-footer">
+      <span><i aria-hidden="true"></i> PROTOTYPE NGHIÊN CỨU</span>
+      <p>Vehicle Digital Twin · Không kết nối hoặc điều khiển xe thật</p>
+    </footer>
+  </main>
+
+  <script src="/role.js?v=2"></script>
+</body>
+</html>

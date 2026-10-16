@@ -308,7 +308,7 @@ def semantic_workspace_context(workspace):
 
 
 class SemanticResolver:
-    def __init__(self, providers=None, *, parser=None, breaker_seconds=30, fallback_chains=None, budget_seconds=2.5, requested_budgets=None, chain_provider=None, result_recorder=None):
+    def __init__(self, providers=None, *, parser=None, breaker_seconds=30, fallback_chains=None, budget_seconds=2.5, requested_budgets=None, chain_provider=None, result_recorder=None, attempt_recorder=None, provider_details=None):
         self.providers = providers or {}
         self.parser = parser or OfflineParser()
         self.breaker_seconds = breaker_seconds
@@ -317,6 +317,20 @@ class SemanticResolver:
         self.requested_budgets = requested_budgets or {}
         self.chain_provider = chain_provider
         self.result_recorder = result_recorder
+        self.attempt_recorder = attempt_recorder
+        self.provider_details = provider_details or {}
+
+    def _attempt_details(self, name, provider=None):
+        configured = self.provider_details.get(name, {})
+        client = getattr(provider, "client", None)
+        return {
+            "location": configured.get("location", "cloud" if name in {"google", "openai", "openrouter"} else "laptop"),
+            "requested_model": configured.get("model") or getattr(client, "model", None),
+        }
+
+    def _record_attempt(self, trace_context, attempt):
+        if self.attempt_recorder is not None and trace_context:
+            self.attempt_recorder({**trace_context, "stage": "llm", **attempt})
 
     def chain(self, requested):
         if requested == "rules":
@@ -327,7 +341,7 @@ class SemanticResolver:
             return list(self.fallback_chains[requested])
         return [requested] if requested == "local" else [requested, "local"]
 
-    async def resolve(self, text, session, *, requested="rules", history=None, memory=None, catalog=None, observation=None):
+    async def resolve(self, text, session, *, requested="rules", history=None, memory=None, catalog=None, observation=None, trace_context=None):
         attempts = []
         from src.vivi.dialogue.answers import AnswerResolver
         from src.vivi.dialogue.local_answers import resolve_location_component
@@ -409,17 +423,28 @@ class SemanticResolver:
                 for name in chain if name in self.providers)
         for index, name in enumerate(chain):
             provider = self.providers.get(name)
+            base_attempt = {
+                "attempt": index + 1,
+                "phase": "interpret",
+                "provider": name,
+                **self._attempt_details(name, provider),
+                "served_model": None,
+            }
             if provider is None:
-                attempts.append({"provider": name, "outcome": "not_configured", "latency_ms": 0})
+                attempts.append({**base_attempt, "outcome": "not_configured", "latency_ms": 0})
+                self._record_attempt(trace_context, {**attempts[-1], "status": "not_configured"})
                 continue
             if time.monotonic() < provider.unavailable_until:
-                attempts.append({"provider": name, "outcome": "circuit_open", "latency_ms": 0})
+                attempts.append({**base_attempt, "outcome": "circuit_open", "latency_ms": 0})
+                self._record_attempt(trace_context, {**attempts[-1], "status": "circuit_open"})
                 continue
             started = time.perf_counter()
             remaining = deadline - time.monotonic()
             if remaining <= 0:
-                attempts.append({"provider": name, "outcome": "turn_budget_exhausted", "latency_ms": 0})
+                attempts.append({**base_attempt, "outcome": "turn_budget_exhausted", "latency_ms": 0})
+                self._record_attempt(trace_context, {**attempts[-1], "status": "turn_budget_exhausted"})
                 continue
+            self._record_attempt(trace_context, {**base_attempt, "status": "calling", "outcome": "calling", "latency_ms": 0})
             try:
                 reserve = min(.5, remaining / 2) if index < len(chain) - 1 else 0
                 attempt_budget = provider.budget_seconds
@@ -449,13 +474,14 @@ class SemanticResolver:
                     provider.unavailable_until = time.monotonic() + cooldown
                 attempts.append(
                     {
-                        "provider": name,
+                        **base_attempt,
                         "outcome": "fallback",
                         "reason": type(exc).__name__,
                         "http_status": getattr(getattr(exc, "response", None), "status_code", None),
                         "latency_ms": round((time.perf_counter() - started) * 1000, 2),
                     }
                 )
+                self._record_attempt(trace_context, {**attempts[-1], "status": "fallback"})
                 if self.result_recorder:
                     self.result_recorder(name, "fallback", attempts[-1]["latency_ms"], type(exc).__name__)
                 if isinstance(exc, ValidationError):
@@ -465,9 +491,14 @@ class SemanticResolver:
                         {"field": list(error["loc"]), "code": error["type"]} for error in exc.errors()
                     ]
                 continue
-            attempts.append(
-                {"provider": name, "outcome": "served", "latency_ms": round((time.perf_counter() - started) * 1000, 2)}
-            )
+            served_model = getattr(provider.client, "served_model", None)
+            attempts.append({
+                **base_attempt,
+                "served_model": served_model if isinstance(served_model, str) and served_model else None,
+                "outcome": "served",
+                "latency_ms": round((time.perf_counter() - started) * 1000, 2),
+            })
+            self._record_attempt(trace_context, {**attempts[-1], "status": "served"})
             if tool_audit:
                 attempts[-1]["model_form_calls"] = tool_audit
             provider.consecutive_failures = 0

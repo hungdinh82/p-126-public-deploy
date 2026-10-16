@@ -286,8 +286,15 @@ class ConversationService:
             candidate = self.providers.get(name)
             if candidate is None:
                 continue
+            client = candidate.client
+            model_trace = {
+                "requested_model": getattr(client, "model", None),
+                "served_model": None,
+                "location": getattr(client, "execution_location", None)
+                or ("cloud" if name in {"google", "openai", "openrouter"} else "laptop"),
+            }
             if time.monotonic() < self.unavailable_until.get(name, 0):
-                attempts.append({"provider": name, "outcome": "circuit_open", "latency_ms": 0})
+                attempts.append({"provider": name, "outcome": "circuit_open", "latency_ms": 0, **model_trace})
                 continue
             started = time.monotonic()
             request_limit = None
@@ -295,7 +302,7 @@ class ConversationService:
             try:
                 remaining = deadline - time.monotonic() if deadline else candidate.budget_seconds
                 if remaining <= 0:
-                    attempts.append({"provider": name, "outcome": "budget_exhausted"})
+                    attempts.append({"provider": name, "outcome": "budget_exhausted", **model_trace})
                     break
                 reserve = min(.5, remaining / 2) if deadline and any(n in self.providers for n in chain[index+1:]) else 0
                 payload = json.dumps(
@@ -327,7 +334,6 @@ class ConversationService:
                 attempt_budget = min(candidate.budget_seconds, remaining - reserve)
                 request_limit = asyncio.timeout(attempt_budget)
                 async with request_limit:
-                    client = candidate.client
                     args = dict(
                         system=VOICE_PERSONA + INSTRUCTION + TOPIC_INSTRUCTION,
                         user=payload,
@@ -349,7 +355,8 @@ class ConversationService:
                                 if not grounded.evidence_ids:
                                     # Empty references mean abstention, never permission
                                     # to speak the model's unsupported factual text.
-                                    attempts.append({"provider": name, "outcome": "insufficient_evidence"})
+                                    attempts.append({"provider": name, "outcome": "insufficient_evidence", **model_trace,
+                                                     "served_model": getattr(client, "served_model", None)})
                                     return {
                                         "status": "blocked",
                                         "message": "Mình chưa tìm được thông tin đủ rõ để trả lời câu này. Bạn có thể xem các nguồn trên màn hình.",
@@ -383,7 +390,8 @@ class ConversationService:
                             if repair:
                                 raise
                             reason = str(exc) if str(exc) in VALIDATION_ERRORS else "invalid_answer_schema"
-                            attempts.append({"provider": name, "outcome": "repair", "validation_error": reason})
+                            attempts.append({"provider": name, "outcome": "repair", "validation_error": reason,
+                                             **model_trace, "served_model": getattr(client, "served_model", None)})
                             args["user"] = json.dumps(
                                 {
                                     **json.loads(payload),
@@ -400,7 +408,8 @@ class ConversationService:
                                 ensure_ascii=False,
                             )
                 cited = list(dict.fromkeys(s.source_id for s in answer.supports))
-                attempts.append({"provider": name, "outcome": "served", "latency_ms": round((time.monotonic()-started)*1000, 2), "budget_seconds": attempt_budget})
+                attempts.append({"provider": name, "outcome": "served", "latency_ms": round((time.monotonic()-started)*1000, 2), "budget_seconds": attempt_budget,
+                                 **model_trace, "served_model": getattr(client, "served_model", None)})
                 return {
                     "status": "completed",
                     "topic_guardrail": topic.metadata(),
@@ -420,7 +429,8 @@ class ConversationService:
                 attempts.append({"provider": name, "outcome": "fallback", "reason": type(exc).__name__,
                                  "budget_limited": budget_limited, "budget_seconds": attempt_budget,
                                  "latency_ms": round((time.monotonic()-started)*1000, 2),
-                                 "http_status": getattr(getattr(exc, "response", None), "status_code", None)})
+                                 "http_status": getattr(getattr(exc, "response", None), "status_code", None),
+                                 **model_trace})
                 if isinstance(exc, ValueError) and str(exc) in VALIDATION_ERRORS:
                     attempts[-1]["validation_error"] = str(exc)
         if any(a.get("validation_error") == "topic_output_violation" for a in attempts):

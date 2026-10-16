@@ -36,8 +36,14 @@ async def test_unified_semantic_tool_contract_through_authenticated_jetson_gatew
         assert payload["tool_choice"] == "required"
         names = [item['function']['name'] for item in payload['tools']]
         assert 'interpret_turn' not in names
-        name, arguments = ('climate_set_temperature', {'value_celsius': 24}) if 'climate_set_temperature' in names else (
-            'dialogue_find_tools', {'query': 'climate.set_temperature'})
+        name, arguments = (
+            ('form_create', {
+                'operation': 'climate_set_temperature',
+                'values': {'value_celsius': 24},
+            })
+            if 'form_create' in names
+            else ('dialogue_find_tools', {'query': 'climate.set_temperature'})
+        )
         return httpx.Response(200, json={"choices": [{"message": {"content": None, "tool_calls": [{
             "id": "proposal", "type": "function", "function": {"name": name,
             "arguments": json.dumps(arguments)},

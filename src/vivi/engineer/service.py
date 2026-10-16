@@ -157,6 +157,9 @@ class EngineerService:
             "connectivity": self.runtime.connectivity.snapshot(),
         }
 
+    def ai_routes(self) -> dict[str, Any]:
+        return {"routes": self.runtime.store.ai_route_snapshot()}
+
     async def _runtime_state(self) -> VehicleState | None:
         try:
             return await self.runtime.vehicle.get_state(ENGINEER_SESSION)

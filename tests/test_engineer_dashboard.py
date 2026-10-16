@@ -143,3 +143,19 @@ async def test_engineer_contract_contains_no_mqtt_secret(client):
     payload = (await client.get("/api/v1/engineer/overview")).text.lower()
     assert "mqtt_api_password" not in payload
     assert runtime.settings.mqtt_api_password.lower() not in payload if runtime.settings.mqtt_api_password else True
+
+
+@pytest.mark.asyncio
+async def test_engineer_ai_route_reports_only_confirmed_served_model(client):
+    await engineer_client(client)
+    runtime.store.start_ai_route("route-test", "turn-route", transcript="kiểm tra route", provider="google")
+    runtime.store.record_ai_attempt({
+        "session_id": "route-test", "turn_id": "turn-route", "stage": "llm", "attempt": 1,
+        "provider": "google", "location": "cloud", "requested_model": "requested-google",
+        "served_model": None, "status": "calling", "outcome": "calling", "latency_ms": 0,
+    })
+    payload = (await client.get("/api/v1/engineer/ai-routes")).json()
+    attempt = payload["routes"][0]["llm_attempts"][0]
+    assert attempt["requested_model"] == "requested-google"
+    assert attempt["served_model"] is None
+    runtime.store.clear_sessions(["route-test"])

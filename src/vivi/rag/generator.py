@@ -213,6 +213,11 @@ class LocalHandbookGenerator(StructuredAPIHandbookGenerator):
                 max_tokens=config.local_llm_max_tokens,
                 extra_body={"chat_template_kwargs": {"enable_thinking": False}},
                 max_attempts=1,
+                execution_location=(
+                    "jetson"
+                    if config.jetson_ai_policy != "disabled" and config.jetson_ai_url
+                    else "laptop"
+                ),
             ),
             max_evidence_characters=config.rag_prompt_max_characters,
         )

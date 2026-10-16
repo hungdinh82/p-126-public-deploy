@@ -37,6 +37,45 @@ function renderOverview(data) {
   $('#pipeline').classList.remove('loading');
   $('#pipeline').innerHTML = `<p>End-to-end: <b>${format(metrics.pipeline.end_to_end_ms)} ms</b> · STT: <b>${format(metrics.history.at(-1)?.stt_ms)} ms</b> · TTS first chunk: <b>${format(metrics.tts.time_to_first_chunk_ms)} ms</b></p><p>Stages: ${format(JSON.stringify(metrics.pipeline.timings_ms || {}))}</p>${history}`;
 }
+function routeModel(item) {
+  if (item.provider === 'rules') return 'không gọi model';
+  if (item.provider === 'orchestrator') return 'code router';
+  if (item.served_model) return escapeHtml(item.served_model);
+  if (item.status === 'calling' && item.requested_model) return `${escapeHtml(item.requested_model)} <span class="model-proof">đang yêu cầu</span>`;
+  return '<span class="model-unconfirmed">model chưa được response xác nhận</span>';
+}
+function serviceNode(label, item) {
+  if (!item) return '';
+  const detail = item.detail ? ` · ${escapeHtml(item.detail)}` : '';
+  return `<div class="route-node ${escapeHtml(item.status || 'unknown')}"><small>${escapeHtml(label)}</small><b>${escapeHtml(item.provider || 'unknown')}</b><span>${escapeHtml(item.location || 'unknown')} · ${escapeHtml(item.status || 'unknown')}${detail}</span></div>`;
+}
+function routeNode(label, item) {
+  if (!item) return '';
+  const latency = item.latency_ms === null || item.latency_ms === undefined ? '' : ` · ${escapeHtml(item.latency_ms)} ms`;
+  const requested = item.served_model && item.requested_model && item.served_model !== item.requested_model
+    ? `<div class="route-requested">Yêu cầu: ${escapeHtml(item.requested_model)}</div>` : '';
+  return `<div class="route-node ${escapeHtml(item.status || 'unknown')}"><small>${escapeHtml(label)}</small><b>${escapeHtml(item.provider || 'unknown')} · ${routeModel(item)}</b><span>${escapeHtml(item.location || 'unknown')} · ${escapeHtml(item.status || 'unknown')}${latency}</span>${requested}</div>`;
+}
+function renderAiRoutes(data) {
+  const target = $('#ai-route');
+  target.classList.remove('loading');
+  const route = data.routes?.[0];
+  if (!route) { target.innerHTML = '<p class="muted">Chưa có lượt xử lý.</p>'; return; }
+  const stages = route.stages || {};
+  const attempts = route.llm_attempts || [];
+  const llm = attempts.length
+    ? attempts.map((item, index) => routeNode(`LLM ${item.phase === 'generate' ? 'trả lời' : 'hiểu lệnh'} #${index + 1}`, item)).join('<span class="route-arrow">→</span>')
+    : route.effective_provider === 'rules'
+      ? routeNode('LLM', { provider: 'rules', location: 'laptop', status: 'served' })
+      : routeNode('LLM', { provider: route.requested_provider || 'pending', location: 'unknown', status: route.status === 'running' ? 'calling' : 'unknown' });
+  const stt = stages.stt ? `${routeNode('STT', stages.stt)}<span class="route-arrow">→</span>` : '';
+  const rag = stages.rag ? `<span class="route-arrow">→</span>${serviceNode('RAG', stages.rag)}` : '';
+  const tools = stages.tools ? `<span class="route-arrow">→</span>${serviceNode('Tools', stages.tools)}` : '';
+  const tts = stages.tts ? `<span class="route-arrow">→</span>${routeNode('TTS', stages.tts)}` : '';
+  const output = stages.output ? `<span class="route-arrow">→</span>${serviceNode('Output', stages.output)}` : '';
+  target.innerHTML = `<div class="route-head"><div><b>${escapeHtml(route.transcript || 'Yêu cầu không có transcript')}</b><br><span class="muted">${escapeHtml(route.turn_id)} · ${escapeHtml(route.status)}</span></div><span class="pill ${route.status === 'running' ? 'live' : ''}">${route.status === 'running' ? 'đang xử lý' : escapeHtml(route.status)}</span></div><div class="route-flow">${stt}${routeNode('Điều phối', { provider: 'orchestrator', location: 'laptop', status: route.status === 'running' ? 'calling' : 'served' })}<span class="route-arrow">→</span>${llm}${rag}${tools}${tts}${output}</div>`;
+}
+async function refreshAiRoutes() { renderAiRoutes(await api('/ai-routes')); }
 function renderFleet(data) {
   $('#fleet').classList.remove('loading');
   $('#fleet').innerHTML = data.vehicles.map((vehicle) => {
@@ -54,10 +93,11 @@ function renderConnectivity(data) { $('#connectivity-scenarios').innerHTML = dat
 function renderModels(data) { $('#models').classList.remove('loading'); $('#models').innerHTML = data.profiles.map((profile) => `<div class="profile"><div><b>${escapeHtml(profile.label)}</b><br><span class="muted">${escapeHtml(profile.detail)} · ${escapeHtml(profile.mode)} · ${profile.verified ? 'đã kiểm chứng' : 'Chưa kiểm chứng'}</span></div><button data-profile="${escapeHtml(profile.id)}">${profile.id === data.selected_profile ? 'Đang chọn' : 'Chọn'}</button></div>`).join(''); document.querySelectorAll('[data-profile]').forEach((button) => button.addEventListener('click', async () => { try { await api('/models/apply', { method: 'POST', body: JSON.stringify({ profile_id: button.dataset.profile }) }); await refresh(); } catch (error) { setNotice(error.message); } })); }
 function renderOta(data) { $('#ota-history').innerHTML = data.history.map((item) => `<div class="history"><b>${escapeHtml(item.result)}</b> · ${escapeHtml(item.states.join(' → '))} <span class="muted">simulation</span></div>`).join('') || '<p class="muted">Chưa có lượt OTA.</p>'; }
 function renderAudit(data) { $('#audit').classList.remove('loading'); $('#audit').innerHTML = data.events.map((item) => `<div class="audit-row"><b>${escapeHtml(item.action)}</b> · ${escapeHtml(item.target)}<br><span class="muted">${escapeHtml(item.occurred_at)} · ${escapeHtml(item.actor)} · ${escapeHtml(item.detail)}</span></div>`).join('') || '<p class="muted">Chưa có thao tác trong phiên Engineer.</p>'; }
-async function refresh() { setNotice('Đang đồng bộ runtime…'); try { const [overview, fleet, scenarios, connectivity, models, ota, audit] = await Promise.all([api('/overview'), api('/fleet'), api('/scenarios'), api('/connectivity/scenarios'), api('/models'), api('/ota'), api('/audit')]); renderOverview(overview); renderFleet(fleet); renderScenarios(scenarios); renderConnectivity(connectivity); renderModels(models); renderOta(ota); renderAudit(audit); setNotice(`Đã đồng bộ ${new Date().toLocaleTimeString('vi-VN')}`); } catch (error) { setNotice(error.message); } }
+async function refresh() { setNotice('Đang đồng bộ runtime…'); try { const [overview, routes, fleet, scenarios, connectivity, models, ota, audit] = await Promise.all([api('/overview'), api('/ai-routes'), api('/fleet'), api('/scenarios'), api('/connectivity/scenarios'), api('/models'), api('/ota'), api('/audit')]); renderOverview(overview); renderAiRoutes(routes); renderFleet(fleet); renderScenarios(scenarios); renderConnectivity(connectivity); renderModels(models); renderOta(ota); renderAudit(audit); setNotice(`Đã đồng bộ ${new Date().toLocaleTimeString('vi-VN')}`); } catch (error) { setNotice(error.message); } }
 $('#refresh').addEventListener('click', refresh);
 $('#switch-role').addEventListener('click', async () => { await fetch('/api/v1/session', { method: 'DELETE' }); window.location.assign('/'); });
 $('#scenario-form').addEventListener('submit', async (event) => { event.preventDefault(); const vehicleId = $('#scenario-vehicle').value; const scenario = document.querySelector('input[name="scenario"]:checked').value; try { const payload = await api(`/vehicles/${encodeURIComponent(vehicleId)}/scenario`, { method: 'POST', body: JSON.stringify({ scenario }) }); setNotice(`${payload.vehicle_id}: ${payload.scenario} (${payload.mode})`); await refresh(); } catch (error) { setNotice(error.message); } });
 $('#connectivity-form').addEventListener('submit', async (event) => { event.preventDefault(); const scenario = document.querySelector('input[name="connectivity-scenario"]:checked').value; try { await api('/connectivity/scenario', { method: 'POST', body: JSON.stringify({ scenario }) }); await refresh(); } catch (error) { setNotice(error.message); } });
 document.querySelectorAll('[data-ota]').forEach((button) => button.addEventListener('click', async () => { try { await api('/ota/deploy', { method: 'POST', body: JSON.stringify({ outcome: button.dataset.ota }) }); await refresh(); } catch (error) { setNotice(error.message); } }));
 refresh();
+setInterval(() => refreshAiRoutes().catch(() => {}), 1000);

@@ -18,6 +18,45 @@ router = APIRouter(prefix="/api/v1")
 _AUDIO_SUFFIXES = {".wav", ".webm", ".ogg", ".mp3", ".m4a"}
 
 
+def _stt_identity() -> dict:
+    engine = getattr(runtime.stt, "served_engine", None) or runtime.stt
+    provider = getattr(engine, "name", runtime.stt.name)
+    requested = getattr(engine, "model", None)
+    if provider == "phowhisper":
+        requested = runtime.settings.phowhisper_model
+    elif provider == "jetson":
+        requested = None
+    elif provider == "whisper.cpp":
+        requested = str(getattr(engine, "model", "")) or None
+    served = getattr(engine, "served_model", None)
+    device = getattr(engine, "device", "")
+    location = "cloud" if device == "cloud" else "jetson" if provider == "jetson" else "laptop"
+    if served is None and location == "laptop" and requested:
+        served = str(requested)
+    return {
+        "provider": provider,
+        "location": location,
+        "requested_model": str(requested) if requested else None,
+        "served_model": str(served) if served else None,
+    }
+
+
+def _tts_identity(tts) -> dict:
+    requested = getattr(tts, "model_id", None)
+    served = getattr(tts, "served_model", None)
+    device = getattr(tts, "device", "")
+    location = "cloud" if device == "cloud" else "jetson" if device == "jetson" else "laptop"
+    if served is None and location == "laptop" and requested:
+        served = requested
+    return {
+        "provider": tts.name,
+        "location": location,
+        "requested_model": requested,
+        "served_model": served,
+        "voice": getattr(tts, "voice", None),
+    }
+
+
 def _temporary_audio(content: bytes, suffix: str) -> Path:
     safe_suffix = suffix.lower() if suffix.lower() in _AUDIO_SUFFIXES else ".bin"
     with tempfile.NamedTemporaryFile(
@@ -43,9 +82,21 @@ async def transcribe(
     assert path is not None
     started = time.perf_counter()
     runtime.store.mark_input_start(session_id, turn_id, started, time.time())
+    runtime.store.start_ai_route(session_id, turn_id, transcript="Đầu vào giọng nói")
+    runtime.store.record_ai_stage({
+        "session_id": session_id, "turn_id": turn_id, "stage": "stt",
+        "status": "calling", "provider": "pending",
+        "requested_model": None, "served_model": None,
+    })
     try:
         transcript = await runtime.stt.transcribe(path)
     except Exception as exc:
+        runtime.store.record_ai_stage({
+            "session_id": session_id, "turn_id": turn_id, "stage": "stt",
+            "status": "error", "provider": "unknown",
+            "requested_model": None, "served_model": None,
+            "reason": type(exc).__name__,
+        })
         raise HTTPException(status_code=503, detail=f"STT chưa sẵn sàng: {exc}") from exc
     finally:
         if temporary_path is not None:
@@ -53,6 +104,10 @@ async def transcribe(
     if not transcript:
         raise HTTPException(status_code=422, detail="Không nhận diện được lời nói")
     latency = round((time.perf_counter() - started) * 1000, 2)
+    runtime.store.record_ai_stage({
+        "session_id": session_id, "turn_id": turn_id, "stage": "stt",
+        "status": "served", "latency_ms": latency, **_stt_identity(),
+    })
     audio_path = str(stored_path) if stored_path is not None else None
     runtime.store.append_event(
         {
@@ -95,6 +150,12 @@ async def transcribe_stream(socket: WebSocket, session_id: str, turn_id: str):
         await socket.close()
         return
     runtime.store.mark_input_start(session_id, turn_id, input_started, input_received_at)
+    runtime.store.start_ai_route(session_id, turn_id, transcript="Đầu vào giọng nói trực tiếp")
+    runtime.store.record_ai_stage({
+        "session_id": session_id, "turn_id": turn_id, "stage": "stt",
+        "status": "calling", "provider": "pending",
+        "requested_model": None, "served_model": None,
+    })
 
     received: list[bytes] = []
     # Latency is measured from the end of speech, not from the first chunk.
@@ -137,6 +198,10 @@ async def transcribe_stream(socket: WebSocket, session_id: str, turn_id: str):
             pass  # The browser closed it first, e.g. a follow-up window nobody spoke in.
         return
     stored_path = runtime.store.save_audio(session_id, turn_id, ".webm", b"".join(received))
+    runtime.store.record_ai_stage({
+        "session_id": session_id, "turn_id": turn_id, "stage": "stt",
+        "status": "served", "latency_ms": latency, **_stt_identity(),
+    })
     audio_path = str(stored_path) if stored_path is not None else None
     runtime.store.append_event(
         {
@@ -196,12 +261,24 @@ def _tts(request: TTSRequest):
 @router.post("/tts")
 async def synthesize(request: TTSRequest):
     for tts in _tts_candidates(request):
+        runtime.store.record_ai_stage({
+            "session_id": request.session_id, "turn_id": request.turn_id, "stage": "tts",
+            "status": "calling", **_tts_identity(tts),
+        })
         try:
             audio = await tts.synthesize(spoken_text(request.text))
             if not audio:
                 raise ValueError('Empty TTS audio')
+            runtime.store.record_ai_stage({
+                "session_id": request.session_id, "turn_id": request.turn_id, "stage": "tts",
+                "status": "served", **_tts_identity(tts),
+            })
             return Response(audio, media_type='audio/wav', headers={'X-ViVi-Voice': quote(tts.voice)})
         except Exception as exc:
+            runtime.store.record_ai_stage({
+                "session_id": request.session_id, "turn_id": request.turn_id, "stage": "tts",
+                "status": "fallback", "reason": type(exc).__name__, **_tts_identity(tts),
+            })
             runtime.connectivity.store.append('provider_result', 'tts', 'fallback', provider=tts.name, reason=type(exc).__name__)
     raise HTTPException(status_code=503, detail='TTS chưa sẵn sàng; dùng giọng trình duyệt')
 
@@ -217,6 +294,10 @@ async def synthesize_stream(request: TTSRequest):
     started, received_at = time.perf_counter(), time.time()
     iterator = None
     for tts in _tts_candidates(request):
+        runtime.store.record_ai_stage({
+            "session_id": request.session_id, "turn_id": request.turn_id, "stage": "tts",
+            "status": "calling", **_tts_identity(tts),
+        })
         try:
             ensure_loaded = getattr(tts, 'ensure_loaded', None)
             if ensure_loaded is not None:
@@ -227,6 +308,11 @@ async def synthesize_stream(request: TTSRequest):
                 first = await anext(iterator)
                 while not first:
                     first = await anext(iterator)
+            runtime.store.record_ai_stage({
+                "session_id": request.session_id, "turn_id": request.turn_id, "stage": "tts",
+                "status": "served", "latency_ms": round((time.perf_counter() - started) * 1000, 2),
+                **_tts_identity(tts),
+            })
             break
         except BaseException as exc:
             if iterator is not None:
@@ -234,6 +320,10 @@ async def synthesize_stream(request: TTSRequest):
                 iterator = None
             if not isinstance(exc, Exception):
                 raise
+            runtime.store.record_ai_stage({
+                "session_id": request.session_id, "turn_id": request.turn_id, "stage": "tts",
+                "status": "fallback", "reason": type(exc).__name__, **_tts_identity(tts),
+            })
             runtime.connectivity.store.append('provider_result', 'tts', 'fallback', provider=tts.name, reason=type(exc).__name__)
     else:
         raise HTTPException(status_code=503, detail='TTS chưa sẵn sàng; dùng giọng trình duyệt')

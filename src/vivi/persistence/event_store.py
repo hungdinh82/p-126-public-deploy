@@ -4,6 +4,7 @@ import json
 import threading
 import time
 from collections import OrderedDict
+from copy import deepcopy
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -21,6 +22,72 @@ class EventStore:
         self.recent_events: list[dict[str, Any]] = []
         self.tts_by_turn: OrderedDict[tuple[str, str], list[dict[str, Any]]] = OrderedDict()
         self.input_starts: OrderedDict[tuple[str, str], tuple[float, float]] = OrderedDict()
+        self.ai_routes: OrderedDict[tuple[str, str], dict[str, Any]] = OrderedDict()
+
+    def start_ai_route(self, session_id: str, turn_id: str, *, transcript: str = "", provider: str | None = None) -> None:
+        key = (session_id, turn_id)
+        with self._lock:
+            route = self.ai_routes.setdefault(key, {
+                "session_id": session_id,
+                "turn_id": turn_id,
+                "started_at": time.time(),
+                "status": "running",
+                "stages": {},
+                "llm_attempts": [],
+            })
+            if transcript:
+                route["transcript"] = transcript
+            if provider:
+                route["requested_provider"] = provider
+            route["updated_at"] = time.time()
+            self.ai_routes.move_to_end(key)
+            while len(self.ai_routes) > 20:
+                self.ai_routes.popitem(last=False)
+
+    def record_ai_stage(self, event: dict[str, Any]) -> None:
+        session_id, turn_id = str(event.get("session_id", "")), str(event.get("turn_id", ""))
+        stage = str(event.get("stage", ""))
+        if not session_id or not turn_id or not stage:
+            return
+        self.start_ai_route(session_id, turn_id)
+        key = (session_id, turn_id)
+        with self._lock:
+            route = self.ai_routes[key]
+            route["stages"][stage] = {**event, "updated_at": time.time()}
+            route["updated_at"] = time.time()
+
+    def record_ai_attempt(self, event: dict[str, Any]) -> None:
+        session_id, turn_id = str(event.get("session_id", "")), str(event.get("turn_id", ""))
+        attempt = event.get("attempt")
+        if not session_id or not turn_id or not isinstance(attempt, int):
+            return
+        self.start_ai_route(session_id, turn_id)
+        key = (session_id, turn_id)
+        with self._lock:
+            route = self.ai_routes[key]
+            value = {**event, "updated_at": time.time()}
+            for index, existing in enumerate(route["llm_attempts"]):
+                if (existing.get("phase", "interpret"), existing.get("attempt")) == (
+                    value.get("phase", "interpret"), attempt
+                ):
+                    route["llm_attempts"][index] = value
+                    break
+            else:
+                route["llm_attempts"].append(value)
+            route["updated_at"] = time.time()
+
+    def finish_ai_route(self, session_id: str, turn_id: str, *, status: str, provider: str | None = None) -> None:
+        self.start_ai_route(session_id, turn_id)
+        key = (session_id, turn_id)
+        with self._lock:
+            route = self.ai_routes[key]
+            route.update(status=status, finished_at=time.time(), updated_at=time.time())
+            if provider:
+                route["effective_provider"] = provider
+
+    def ai_route_snapshot(self, limit: int = 5) -> list[dict[str, Any]]:
+        with self._lock:
+            return deepcopy(list(self.ai_routes.values())[-limit:][::-1])
 
     def _day_dir(self) -> Path:
         path = self.config.data_dir / datetime.now(UTC).strftime("%Y-%m-%d")
@@ -120,6 +187,8 @@ class EventStore:
         sessions = set(session_ids)
         removed = 0
         with self._lock:
+            for key in [key for key in self.ai_routes if key[0] in sessions]:
+                del self.ai_routes[key]
             self._erased_turns.update(key for collection in (self.input_starts, self.tts_by_turn) for key in collection if key[0] in sessions)
             self._erased_turns.update((event.get("session_id"), event.get("turn_id")) for event in self.recent_events if event.get("session_id") in sessions)
             for path in self.config.data_dir.glob("????-??-??/turns.jsonl"):

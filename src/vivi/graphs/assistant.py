@@ -591,6 +591,7 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
                     observation=observation,
                     catalog=catalog(services.navigation is not None, conversation=services.conversation.enabled,
                                     information=services.information is not None and services.information.online),
+                    trace_context={"session_id": event.session_id, "turn_id": event.turn_id},
                 ),
                 fence=lambda resolved: (
                     resolved[0].act in {"confirm", "deny", "modify", "resume", "cancel"}
