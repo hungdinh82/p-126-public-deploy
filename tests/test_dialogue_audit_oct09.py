@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from src.vivi.dialogue.contracts import DialogueTask, SessionState, TaskStep
+from src.vivi.dialogue.contracts import ActionDraft, DialogueTask, SemanticTurn, SessionState, TaskStep
 from src.vivi.dialogue.parser import OfflineParser
 from src.vivi.text import normalize_text
 from tests.test_dialogue_v2 import build
@@ -66,11 +66,24 @@ class SemanticContractMock:
             navigation=context["navigation"],
             clarification=context["clarification"],
         )
-        return (
-            OfflineParser()
-            .interpret(data["utterance"], session, data["explicit_user_memory"], data["recent_turns"])
-            .model_dump_json()
+        parser = OfflineParser()
+        interpreted = parser.interpret(
+            data["utterance"], session, data["explicit_user_memory"], data["recent_turns"]
         )
+        # The local form projection intentionally omits completed tasks. Model
+        # the semantic instruction for context-free delegated climate changes;
+        # the rules path is independently covered by navigation workflow tests.
+        if interpreted.act == "clarify":
+            delegated = parser.lexer.normalize(data["utterance"])
+            if delegated in {"tang mot chut tuy ban", "tang tiep", "tang bao nhieu cung duoc"}:
+                interpreted = SemanticTurn(
+                    act="request",
+                    actions=[ActionDraft(
+                        capability="climate.set_temperature",
+                        arguments={"temperature_delta_celsius": 2},
+                    )],
+                )
+        return interpreted.model_dump_json()
 
 
 @pytest.mark.parametrize("tier", ["rules", "google", "local"])

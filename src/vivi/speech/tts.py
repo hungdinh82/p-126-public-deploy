@@ -8,6 +8,7 @@ import struct
 import unicodedata
 import wave
 import zipfile
+from contextvars import ContextVar
 from pathlib import Path
 
 import anyio
@@ -41,6 +42,7 @@ class DisabledTTSAdapter:
 
 class ZeroTTSAdapter:
     name = "zerotts"
+    model_id = "ZeroTTS"
 
     def __init__(self, config: Settings):
         self.config = config
@@ -233,6 +235,7 @@ class VieNeuTTSAdapter:
     """
 
     name = "vieneu"
+    model_id = None
     device = "cloud"
     execution_providers: list[str] = []
 
@@ -312,6 +315,11 @@ class JetsonTTSAdapter:
         self.config = config
         self.sample_rate = 24000
         self.transport = None
+        self._served_model = ContextVar("jetson_tts_served_model", default=None)
+
+    @property
+    def served_model(self):
+        return self._served_model.get()
 
     def availability(self) -> tuple[bool, str]:
         if not self.config.jetson_ai_url:
@@ -342,6 +350,8 @@ class JetsonTTSAdapter:
             ) as response:
                 response.raise_for_status()
                 self.sample_rate = int(response.headers.get("X-Audio-Sample-Rate", "24000"))
+                model_id = response.headers.get("X-Model-Id")
+                self._served_model.set(model_id if model_id else None)
                 async for chunk in response.aiter_bytes():
                     if chunk:
                         yield chunk

@@ -86,6 +86,7 @@ async def asset(asset_name: str):
         "monitor.js",
         "engineer.js",
         "engineer.css",
+        "engineer-route.css",
         "role.js",
         "role.css",
     }:

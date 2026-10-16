@@ -7,6 +7,7 @@ import subprocess
 import tempfile
 import time
 import wave
+from contextvars import ContextVar
 from pathlib import Path
 
 import httpx
@@ -24,6 +25,11 @@ class JetsonSTTAdapter:
         self.config = config
         self._availability_cache = None
         self._availability_until = 0.
+        self._served_model = ContextVar("jetson_stt_served_model", default=None)
+
+    @property
+    def served_model(self):
+        return self._served_model.get()
 
     def _headers(self):
         return {"Authorization": f"Bearer {self.config.jetson_ai_token}"} if self.config.ai_server_auth_required else {}
@@ -73,7 +79,10 @@ class JetsonSTTAdapter:
             response = await client.post(self.config.jetson_ai_url.rstrip('/') + '/v1/stt/transcriptions',
                                          headers=self._headers(), files={'file': ('input.wav', audio, 'audio/wav')})
             response.raise_for_status()
-            text = response.json()['text']
+            payload = response.json()
+            text = payload['text']
+            model_id = payload.get('model_id')
+            self._served_model.set(model_id if isinstance(model_id, str) and model_id else None)
         if not isinstance(text, str) or not text.strip():
             raise RuntimeError('STT Jetson trả về transcript rỗng')
         return text.strip()

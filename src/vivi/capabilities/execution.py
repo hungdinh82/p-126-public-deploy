@@ -127,14 +127,23 @@ class CapabilityRuntime:
             generator = self.generators.get(provider) or (ExtractiveHandbookGenerator() if provider == "rules" else None)
             if generator is None:
                 continue
+            client = getattr(generator, "client", None)
+            model_trace = {
+                "requested_model": getattr(client, "model", None),
+                "served_model": None,
+                "location": getattr(client, "execution_location", None)
+                or ("cloud" if provider in {"google", "openai", "openrouter"} else "laptop"),
+            }
             if time.monotonic() < self.generation_breakers.get(provider, 0):
-                attempts.append({"provider": provider, "outcome": "circuit_open"})
+                attempts.append({"provider": provider, "outcome": "circuit_open", **model_trace})
                 continue
             try:
                 async with asyncio.timeout(self.budgets.get(provider, 10 if provider != "local" else 12)):
                     answer = await generator.agenerate(query, chunks, history) if hasattr(generator, "agenerate") else await asyncio.to_thread(generator.generate, query, chunks, history)
                 served = provider
-                attempts.append({"provider": provider, "outcome": "served"})
+                confirmed = getattr(client, "served_model", None)
+                attempts.append({"provider": provider, "outcome": "served", **model_trace,
+                                 "served_model": confirmed if isinstance(confirmed, str) and confirmed else None})
                 self.generation_failures[provider] = 0
                 self.generation_breakers[provider] = 0
                 break
@@ -143,7 +152,8 @@ class CapabilityRuntime:
                 self.generation_failures[provider] = failures
                 cooldown = min(300, self.breaker_seconds * (2 ** (failures - 1)))
                 self.generation_breakers[provider] = time.monotonic() + cooldown
-                attempts.append({"provider": provider, "outcome": "fallback", "reason": type(exc).__name__})
+                attempts.append({"provider": provider, "outcome": "fallback", "reason": type(exc).__name__,
+                                 **model_trace})
         answer = normalize_answer(answer, chunks)
         grounded, reason = validate_grounding(answer, chunks)
         # Citations come from local metadata, never model-supplied URLs/titles.

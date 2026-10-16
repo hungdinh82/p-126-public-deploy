@@ -304,7 +304,11 @@ async def test_empty_evidence_ids_abstain_once_and_discard_unsupported_model_tex
     assert len(client.calls) == 1 and result["error_code"] == "insufficient_evidence"
     assert "999" not in result["message"] and "mở cửa" not in result["message"]
     assert result["citations"][0]["source_url"] == "https://example.org/news"
-    assert result["generation_attempts"] == [{"provider": "google", "outcome": "insufficient_evidence"}]
+    attempt = result["generation_attempts"][0]
+    assert (attempt["provider"], attempt["outcome"], attempt["location"]) == (
+        "google", "insufficient_evidence", "cloud"
+    )
+    assert attempt["requested_model"] is None and attempt["served_model"] is None
 
 
 @pytest.mark.parametrize(
