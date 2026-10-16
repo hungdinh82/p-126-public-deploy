@@ -165,7 +165,7 @@ body{--information-width:clamp(240px,24vw,300px);--information-gap:28px}
 .information-rail .information-heading{position:sticky;top:0;z-index:2;background:#11151ef5;border-radius:8px;padding:4px 0}
 .information-heading strong{font-size:13px;color:#e4e7ef;font-weight:500}
 .information-heading button,.information-tabs button{padding:8px 12px;border:1px solid #c1c8d82a;border-radius:10px;font-size:11px;color:#ccd3e3;background:#1e2430}
-.information-tabs{display:flex;gap:8px;flex-wrap:wrap}.information-tabs:empty,.mini-map-slot:empty{display:none}
+.information-tabs{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}.information-tabs:empty,.mini-map-slot:empty{display:none}
 .information-cancel{color:#ad9299;font-size:11px;padding:10px;text-align:left}
 .planning-controls{position:sticky;top:0;z-index:2;display:flex;gap:8px;flex-wrap:wrap;padding:2px 0 4px}
 .journey-toolbar{display:flex;flex-direction:column;gap:8px;padding:10px;border:1px solid var(--line);border-radius:12px;background:#11151eb8;backdrop-filter:blur(12px);font-size:11px;color:#c4cddc;line-height:1.5}.journey-toolbar>div{display:flex;gap:8px;flex-wrap:wrap}.journey-toolbar button{padding:7px 9px;border:1px solid var(--line);border-radius:8px;color:#c4cddc;background:#1e2430}.journey-toolbar button:disabled{opacity:.4;cursor:default}

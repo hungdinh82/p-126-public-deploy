@@ -97,3 +97,18 @@ def test_fallback_preserves_vietnamese_accents_for_stop_and_yes(text, stop):
     assert bool(result.actions) == stop
     if stop:
         assert result.actions[0].capability == "navigation.stop"
+
+
+@pytest.mark.asyncio
+async def test_schema_diagnostics_name_the_invariant_without_input_values():
+    malformed = {"act": "reply", "actions": [{"capability": "media.play"}], "text": "private user content"}
+    model = ScriptedModel([malformed, malformed])
+    resolver = SemanticResolver(gateway=ModelGateway({"google": ModelProvider("google", model)}))
+    _, provider, attempts = await resolver.resolve("yêu cầu", SessionState())
+    assert provider is None
+    error = attempts[0]["schema_errors"][0]
+    assert error["code"] == "value_error"
+    assert "action drafts" in error["message"]
+    assert "private user content" not in str(attempts)
+    assert "Invalid output to repair" in model.calls[1]["user"]
+    assert "private user content" in model.calls[1]["user"]

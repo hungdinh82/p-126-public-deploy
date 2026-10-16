@@ -63,7 +63,7 @@ async def test_timeout_does_not_interpret_a_new_command():
 
     resolver = SemanticResolver({"google": ModelProvider("google", Slow(), 0.01)})
     value, served, attempts = await resolver.resolve("phát nhạc", SessionState(), requested="google")
-    assert served is None and not value.actions and value.act == "reply"
+    assert served is None and not value.actions and value.act == "clarify"
     assert attempts[0]["reason"] == "TimeoutError"
 
 

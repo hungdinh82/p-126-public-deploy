@@ -106,7 +106,8 @@ async def test_local_timeout_has_one_attempt_and_parser_fallback():
         raise httpx.ReadTimeout("slow model", request=request)
 
     frame, tier, _ = await resolve(handler, "chào")
-    assert len(attempts) == 1 and tier is None and frame.act == "reply"
+    assert len(attempts) == 1 and tier is None and frame.act == "clarify"
+    assert not frame.actions
 
 
 @pytest.mark.parametrize("text", ["đừng mở nhạc", "không mở cửa sổ", "có"])

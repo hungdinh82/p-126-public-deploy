@@ -135,7 +135,12 @@ class StructuredAPIHandbookGenerator:
 
     @staticmethod
     def _restore(payload: str, aliases: dict[str, RetrievedChunk]) -> GroundedAnswer:
-        answer = GroundedAnswer.model_validate_json(payload)
+        data = json.loads(payload)
+        if isinstance(data, dict):
+            # Citation metadata is owned by retrieved evidence and rebuilt
+            # below; malformed model titles/URLs must not discard valid claims.
+            data["citations"] = []
+        answer = GroundedAnswer.model_validate(data)
         by_alias = {alias.lower(): chunk.source_id for alias, chunk in aliases.items()}
         chunks = {chunk.source_id: chunk for chunk in aliases.values()}
 

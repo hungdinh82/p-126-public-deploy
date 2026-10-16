@@ -13,7 +13,7 @@ function harness({withEnergy=false}={}) {
     command:(...args)=>commands.push(args),event:async value=>events.push(value),setDriving:value=>driving.push(value),announce:text=>announcements.push(text),
   };
   vm.createContext(sandbox);
-  for(const file of ['journey-map.js','journey-simulation.js','journey-renderer.js'])vm.runInContext(readFileSync(file,'utf8').replace(/export /g,''),sandbox);
+  for(const file of ['navigation-state.js','navigation-store.js','journey-map.js','journey-simulation.js','journey-renderer.js'])vm.runInContext(readFileSync(file,'utf8').replace(/^import .*$/gm,'').replace(/export /g,''),sandbox);
   vm.runInContext(readFileSync('journey.js','utf8').replace(/^import .*$/gm,'').replace(/export /g,''),sandbox);
   vm.runInContext(`map=stubMap; hooks={command,event,setDriving,announce,progress(){},route:reportRoute,travel(){},confirm:grant=>command('confirm',grant)}; realOpenJourney=openJourney; openJourney=async()=>{}; placeMarker=(name,point)=>{markers[name]={point,setRotation(){},remove(){}};return markers[name];}; planRoute=()=>{throw Error('Client must not recompute server route');};`,sandbox);
   return {sandbox,commands,events,driving,announcements,elements,sources,routes};
@@ -495,4 +495,70 @@ test('running snapshots never move interpolated distance backwards',async()=>{
   vm.runInContext('sim.traveled=route.length*.5',h.sandbox);
   await apply(h,{...nav('running',1,2),progress_m:1000});
   assert.equal(vm.runInContext('sim.traveled/route.length',h.sandbox),.5);
+});
+
+async function applyWorkspace(h,workspace,sequence=1,extra={}) {
+  h.sandbox.workspacePayload={runtime_epoch:'canonical',snapshot_sequence:sequence,navigation_workspace:workspace,...extra};
+  await vm.runInContext('globalThis.uiStore ||= new NavigationStore();uiStore.receive(workspacePayload,true);applyNavigation(uiStore.renderSnapshot())',h.sandbox);
+}
+
+test('Da Nang clarification and choice actions use the new draft beside an old Lang Bac journey',async()=>{
+  const h=harness();
+  const journey={...nav('paused',2),request_id:'old-request',selected:{name:'Lăng Bác',lat:21,lng:105.9}};
+  const draft={...nav('preview',7),id:'plan:da-nang',purpose:'navigate',selected:{name:'Đà Nẵng',lat:16.05,lng:108.2},
+    clarification:{revision:7,phase:'confirm_destination',question:'Dùng điểm đại diện Đà Nẵng?',choices:[{handle:'da-nang:center',label:'Đà Nẵng',kind:'representative'}]}};
+  await applyWorkspace(h,{revision:40,origin:journey.origin,draft:null,journey});
+  await applyWorkspace(h,{revision:41,origin:journey.origin,draft,journey},2);
+  const panel=h.elements.get('#destination-choices');
+  assert.equal(panel.hidden,false);
+  assert.equal(panel.children.find(node=>node.className==='default-destination').textContent,'Điểm đến mặc định: Đà Nẵng');
+  assert.equal(vm.runInContext('backendNavigation.selected.name',h.sandbox),'Lăng Bác');
+  await panel.children.find(node=>node.className==='destination-choice-card').listeners.click();
+  assert.equal(h.commands[0][1].capability,'navigation.refine');
+  assert.equal(h.commands[0][1].arguments.plan_id,'plan:da-nang');
+  assert.equal(h.commands[0][1].arguments.route_revision,7);
+  await panel.children.at(-1).listeners.click();
+  assert.equal(h.commands.at(-1)[1].capability,'navigation.cancel');
+  assert.equal(h.commands.at(-1)[1].arguments.plan_id,'plan:da-nang');
+  assert.equal(h.commands.at(-1)[1].arguments.route_revision,7);
+});
+
+test('canonical navigation plan cancel is sent once with its own ID and revision',async()=>{
+  const h=harness(),draft={...nav('preview',3),id:'plan:ready',purpose:'navigate',calculation_status:'ready'};
+  const workspace={revision:12,draft,journey:null};
+  await applyWorkspace(h,workspace);
+  const card=h.elements.get('#trip-plan-card'),cancel=card.children.at(-1);
+  assert.equal(card.hidden,false);
+  assert.equal(cancel.textContent,'Huỷ kế hoạch');
+  await Promise.all([cancel.listeners.click(),cancel.listeners.click()]);
+  assert.equal(h.commands.length,1);
+  assert.equal(h.commands[0][1].capability,'navigation.cancel');
+  assert.equal(h.commands[0][1].arguments.plan_id,'plan:ready');
+  assert.equal(h.commands[0][1].arguments.route_revision,3);
+  await applyWorkspace(h,{...workspace,revision:13,draft:null},2);
+  assert.equal(card.hidden,true);
+  await cancel.listeners.click();
+  assert.equal(h.commands.length,1);
+});
+
+test('canonical draft waiting for origin can be cancelled by its ID',async()=>{
+  const h=harness(),draft={...nav('idle',4),id:'plan:no-origin',purpose:'navigate',origin:null,route:null,selected:null};
+  await applyWorkspace(h,{revision:8,draft,journey:null},1,{steps:[{capability:'navigation.plan',status:'waiting_slot'}]});
+  const controls=h.elements.get('#planning-controls');
+  assert.equal(controls.hidden,false);
+  await controls.children[0].listeners.click();
+  assert.equal(h.commands[0][1].capability,'navigation.cancel');
+  assert.equal(h.commands[0][1].arguments.plan_id,'plan:no-origin');
+  assert.equal(h.commands[0][1].arguments.route_revision,4);
+});
+
+test('unchanged itinerary choice keeps its owner after a fresh snapshot object',async()=>{
+  const h=harness();
+  h.sandbox.plan={...nav('preview',2),id:'trip:stable',calculation_status:'ready',clarification:{revision:2,phase:'confirm_destination',choices:[{handle:'center',label:'Trung tâm',kind:'representative'}]}};
+  await vm.runInContext("applyNavigation({trip_plan:plan,ui_events:[{type:'trip.summary'}]})",h.sandbox);
+  const choice=h.elements.get('#destination-choices').children.find(node=>node.className==='destination-choice-card');
+  await vm.runInContext('applyNavigation({trip_plan:{...plan,event_sequence:2},ui_events:[]})',h.sandbox);
+  await choice.listeners.click();
+  assert.equal(h.commands[0][1].capability,'trip.refine');
+  assert.equal(h.commands[0][1].arguments.plan_id,'trip:stable');
 });

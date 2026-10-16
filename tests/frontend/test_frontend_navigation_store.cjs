@@ -24,3 +24,15 @@ test('10000 point routes interpolate and find maneuvers by binary search',()=>{
  const sample=DriveSimulation.position(route,5000.5,()=>90);
  assert.equal(sample.index,5000);assert.equal(sample.heading,90);assert.equal(DriveSimulation.step(route,sample.index),1);
 });
+
+test('a new draft never lends its clarification to the saved journey',()=>{
+ const store=new NavigationStore();
+ const journey={status:'paused',selected:{name:'Lăng Bác'},revision:2};
+ const draft={id:'plan:da-nang',purpose:'navigate',status:'preview',revision:7,selected:{name:'Đà Nẵng'},clarification:{phase:'confirm_destination'}};
+ store.receive({runtime_epoch:'one',snapshot_sequence:1,navigation_workspace:{revision:20,draft,journey}},true);
+ const view=store.renderSnapshot();
+ assert.equal(view.navigation.selected.name,'Lăng Bác');
+ assert.equal(view.navigation.clarification,undefined);
+ assert.equal(view.navigation.pending.navigation.selected.name,'Đà Nẵng');
+ assert.equal(view.navigation.pending.navigation.revision,7);
+});

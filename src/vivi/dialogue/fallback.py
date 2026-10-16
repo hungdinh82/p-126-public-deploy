@@ -8,10 +8,32 @@ from src.vivi.dialogue.contracts import QuestionReply, SemanticTurn
 from src.vivi.text import normalize_text
 
 
+def literal_question_reply(text, session):
+    """Recognize only a complete, short answer to the persisted question."""
+    question = session.dialogue_question
+    if question is None:
+        return None
+    raw = " ".join(unicodedata.normalize("NFC", text.casefold()).strip(" .,!?:;…").split())
+    value = normalize_text(raw)
+    option = None
+    if value in {"co", "ok", "okay", "dong y", "xac nhan", "u", "vang", "bat dau"} or raw in {
+        "đúng",
+        "đúng rồi",
+    }:
+        option = "yes"
+    elif value in {"khong", "chua", "khong dung", "de sau"}:
+        option = "no"
+    else:
+        index = re.fullmatch(r"(?:chon |cho |dia diem |ket qua )?(?:thu |so )?([1-9]\d*)", value)
+        if index and int(index[1]) <= len(question.options):
+            option = question.options[int(index[1]) - 1].id
+        elif text.strip() in {o.id for o in question.options}:
+            option = text.strip()
+    return QuestionReply(question_id=question.id, option_id=option) if option else None
+
+
 class LimitedFallback:
     def interpret(self, text, session, *_args):
-        from src.vivi.dialogue.answers import AnswerResolver
-
         raw = " ".join(unicodedata.normalize("NFC", text.casefold()).strip(" .,!?:;…").split())
         value = normalize_text(raw)
         question = session.dialogue_question
@@ -30,30 +52,16 @@ class LimitedFallback:
                 act="reply",
                 text="Bạn muốn dừng hành trình hay xác nhận câu hỏi hiện tại? Bạn dùng nút hoặc nói rõ lại nhé.",
             )
+        reply = literal_question_reply(text, session)
+        if reply:
+            # Return the bound answer so all tiers use the same resolver and
+            # preserve a question when its answer is rejected.
+            return SemanticTurn(act="answer", question_answer=reply)
         if question and question.expires_at > datetime.now(UTC):
-            option = None
-            if value in {"co", "ok", "okay", "dong y", "xac nhan", "u", "vang", "bat dau"} or raw in {
-                "đúng",
-                "đúng rồi",
-            }:
-                option = "yes"
-            elif value in {"khong", "chua", "khong dung", "de sau"}:
-                option = "no"
-            else:
-                index = re.fullmatch(r"(?:chon |cho |dia diem |ket qua )?(?:thu |so )?([1-9]\d*)", value)
-                if index:
-                    ordinal = int(index[1])
-                    if ordinal <= len(question.options):
-                        option = question.options[ordinal - 1].id
-                    else:
-                        return SemanticTurn(act="clarify", text="Số này không có trong danh sách. Bạn chọn lại nhé.")
-                elif text.strip() in {o.id for o in question.options}:
-                    option = text.strip()
-            if option:
-                return AnswerResolver().resolve(
-                    "", session, reply=QuestionReply(question_id=question.id, option_id=option)
-                )
+            index = re.fullmatch(r"(?:chon |cho |dia diem |ket qua )?(?:thu |so )?([1-9]\d*)", value)
+            if index and int(index[1]) > len(question.options):
+                return SemanticTurn(act="reply", text="Số này không có trong danh sách. Bạn chọn lại nhé.")
         return SemanticTurn(
-            act="reply",
-            text="Mình chưa kết nối được model để hiểu yêu cầu này. Yêu cầu đang chờ vẫn được giữ; bạn thử lại hoặc dùng nút trên màn hình nhé.",
+            act="clarify",
+            text="Mình chưa xử lý được yêu cầu này. Bạn nói lại yêu cầu hoặc dùng nút trên màn hình nhé.",
         )

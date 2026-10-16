@@ -1,4 +1,4 @@
-"""Network changes must not become semantic edits or execution consent."""
+"""Network changes never execute or rewrite requested operations."""
 
 import pytest
 
@@ -8,7 +8,7 @@ from tests.support.core import Harness, action
 
 
 @pytest.mark.asyncio
-async def test_lost_models_preserve_question_and_typed_consent_still_works(tmp_path):
+async def test_lost_models_keep_plan_but_revoke_ambiguous_execution_consent(tmp_path):
     h = Harness(tmp_path, [action("navigation.plan", {"query": "Tràng An", "purpose": "navigate"})])
     monitor = ConnectivitySupervisor(Settings(data_dir=tmp_path, jetson_ai_policy="disabled"))
     h.models.provider_allowed = monitor.provider_allowed
@@ -19,16 +19,19 @@ async def test_lost_models_preserve_question_and_typed_consent_still_works(tmp_p
         calls = len(h.model.calls)
         monitor.set_profile("fallback_only")
         unanswered = await h.turn("đúng, bắt đầu luôn rồi đổi sang điểm khác")
-        assert unanswered["pending_question"]["id"] == question["id"]
+        assert unanswered["status"] == "clarify"
+        assert unanswered["pending_question"] is None
+        assert unanswered["session"]["active"]["id"] == preview["session"]["active"]["id"]
+        assert unanswered["steps"][-1]["arguments"] == preview["steps"][-1]["arguments"]
         assert unanswered["navigation_workspace"]["draft"]["revision"] == plan["revision"]
         assert len(h.model.calls) == calls
         assert not h.vehicle.state_for("driver").driving
         confirmed = await h.turn(question_reply={"question_id": question["id"], "option_id": "yes"})
-        assert confirmed["navigation_workspace"]["journey"]["status"] == "running"
-        assert h.vehicle.state_for("driver").driving
+        assert confirmed["status"] == "clarify"
+        assert not h.vehicle.state_for("driver").driving
         assert len(h.model.calls) == calls
         with h.ledger.connect() as db:
-            assert db.execute("SELECT COUNT(*) FROM command_ledger").fetchone()[0] == 1
+            assert db.execute("SELECT COUNT(*) FROM command_ledger").fetchone()[0] == 0
     finally:
         await h.close()
         monitor.store.close()

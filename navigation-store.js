@@ -45,7 +45,6 @@ export class NavigationStore {
     const navigation={...(journey || (draft?.purpose!=='itinerary'?draft:null) || {status:'idle'}),
       revision:workspace.revision || 0,event_sequence:workspace.event_sequence || 0,origin:workspace.origin};
     if(journey && draft?.purpose!=='itinerary' && draft && !draft.started_revision){
-      navigation.candidates=draft.candidates;navigation.clarification=draft.clarification;
       navigation.pending={status:draft.status,navigation:draft};
     }
     return {...snapshot,navigation,trip_plan:draft?.purpose==='itinerary'?draft:null};

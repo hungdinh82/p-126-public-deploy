@@ -544,6 +544,7 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
             from src.vivi.dialogue.answers import AnswerResolver
 
             semantic = AnswerResolver().resolve("", session, reply=semantic.question_answer)
+            turn["rejected_question_reply"] = semantic.act == "clarify"
         if not guardrail:
             guardrail = terminal_decision(
                 [draft.arguments.model_dump(exclude_none=True) for draft in semantic.drafts()]
@@ -589,7 +590,10 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
         if update.get("clear_journey"):
             reducer_input = clear_journey(reducer_input)
         session, message = reduce_turn(
-            reducer_input, semantic, revoke_consent_on_clarify=state["event"]["kind"] == "utterance"
+            reducer_input,
+            semantic,
+            revoke_consent_on_clarify=state["event"]["kind"] == "utterance"
+            and not state["turn"].get("rejected_question_reply"),
         )
         for command in session.domain_commands:
             await domain.command(state["event"]["session_id"], command)

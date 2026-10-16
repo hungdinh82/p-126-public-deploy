@@ -72,7 +72,11 @@ async def test_fallback_does_not_parse_a_compound_or_replace_pending_task(tmp_pa
         quote = await h.turn("mở kính bên tài 50%")
         result = await h.turn("đồng ý rồi mở tất cả cửa")
         assert result["session"]["active"]["id"] == quote["session"]["active"]["id"]
-        assert result["pending_question"]["id"] == quote["pending_question"]["id"]
+        assert result["pending_question"] is None
+        assert result["status"] == "clarify"
+        assert result["steps"][0]["arguments"] == quote["steps"][0]["arguments"]
+        stale = await h.turn(question_reply={"question_id": quote["pending_question"]["id"], "option_id": "yes"})
+        assert stale["status"] == "clarify"
         assert h.vehicle.state_for("driver").window_positions.driver == 0
         assert not any(d.open for _, d in h.vehicle.state_for("driver").door_states)
     finally:

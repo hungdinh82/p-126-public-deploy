@@ -49,23 +49,39 @@ let searchTimer = 0;
 let searchToken = 0;
 
 function draftNavigation() {
+  if(backendWorkspace && Object.hasOwn(backendWorkspace,'draft')) {
+    const draft=backendWorkspace.draft;
+    return draft && draft.purpose!=='itinerary' && draft.calculation_status!=='cancelled'
+      && draft.started_revision!==draft.revision ? draft : null;
+  }
   const nav = backendNavigation;
   if (!nav) return null;
   return nav.pending?.navigation || (['preview','selecting'].includes(nav.status) ? nav : null);
 }
 function activeJourney() { return ['running','paused','charging'].includes(backendNavigation?.status); }
+function planOwner(plan) { return plan.id && plan.id===backendTripPlan?.id?'trip':'navigation'; }
 function planAction(plan, owner) {
-  return {owner, id:owner==='trip'?plan.id:backendNavigation?.request_id, revision:owner==='trip'?plan.revision:backendNavigation?.revision};
+  return {owner, id:plan.id || plan.request_id, revision:plan.revision};
 }
 function actionCurrent(target) {
-  return target && (target.owner==='trip' ? backendTripPlan?.id===target.id && backendTripPlan.revision===target.revision : backendNavigation?.request_id===target.id && backendNavigation.revision===target.revision);
+  if(!target)return false;
+  const plan=target.owner==='trip'?backendTripPlan:draftNavigation();
+  return !!plan && (plan.id || plan.request_id)===target.id && plan.revision===target.revision;
 }
 async function acceptPlan(target) {
   if (commandPending || !actionCurrent(target)) return;
   commandPending=true;renderInformation();renderMapAction();
   try {
     if(target.owner==='trip') await tripCommand('trip.start',backendTripPlan);
-    else await hooks.command?.('Bắt đầu tuyến đã chọn',{capability:'navigation.start',arguments:{route_revision:target.revision}});
+    else await hooks.command?.('Bắt đầu tuyến đã chọn',{capability:'navigation.start',arguments:identityArguments(draftNavigation())});
+  } finally {commandPending=false;renderInformation();renderMapAction();}
+}
+async function cancelPlan(target) {
+  if(commandPending || !actionCurrent(target))return;
+  const plan=target.owner==='trip'?backendTripPlan:draftNavigation();
+  commandPending=true;renderInformation();renderMapAction();
+  try {
+    return await hooks.command?.('Huỷ kế hoạch',{capability:`${target.owner}.cancel`,arguments:identityArguments(plan)});
   } finally {commandPending=false;renderInformation();renderMapAction();}
 }
 function renderMapAction() {
@@ -757,8 +773,8 @@ function hideInformation(key) {
   rememberHiddenInformation(key);
   renderInformation();
 }
-function currentChoice() { return choiceOwner === 'trip' ? backendTripPlan : backendNavigation; }
-function identityArguments(next) { return next.id ? {plan_id:next.id,route_revision:next.revision} : {}; }
+function currentChoice() { return choiceOwner === 'trip' ? backendTripPlan : draftNavigation() || backendNavigation; }
+function identityArguments(next) { return {...(next.id?{plan_id:next.id}:{}),route_revision:next.revision}; }
 function panelHeading(panel, text, key) {
   const head = document.createElement('div'); head.className='information-heading';
   const title=document.createElement('strong'); title.textContent=text;
@@ -775,6 +791,7 @@ function reopenButton(next,label) {
 function renderInformation() {
   const tabs=document.querySelector('#information-tabs');if(tabs)tabs.innerHTML='';
   const next=currentChoice();if(next) {renderDestinationChoices(next);if(next.clarification || next.status==='selecting'){reopenButton(next,'Địa điểm');if(view==='full')setJourneyDetails(true);}}
+  else for(const selector of ['#destination-choices','#journey-destination-choices']){const panel=document.querySelector(selector);if(panel)panel.hidden=true;}
   const draft=draftNavigation();
   const plan=choiceOwner==='trip' && backendTripPlan?.calculation_status!=='cancelled' && backendTripPlan?.started_revision!==backendTripPlan?.revision?backendTripPlan:draft;
   const card=document.querySelector('#trip-plan-card');if(card)card.hidden=true;
@@ -798,12 +815,14 @@ function renderPlanningControls() {
   const panel=document.querySelector('#planning-controls');if(!panel)return;
   panel.hidden=true;panel.innerHTML='';
   const missing=planningSteps.find(step=>step.status==='waiting_slot' && step.capability?.startsWith('navigation.'));
-  if(missing && !draftNavigation() && !journeyInformationHidden) {
+  const draft=draftNavigation();
+  if(missing && (!draft || !draft.route && !draft.clarification && draft.status!=='selecting') && !journeyInformationHidden) {
     panel.hidden=false;const label=document.createElement('span');
     label.textContent='Đang chờ điểm xuất phát';
     const revision=backendNavigation?.revision || 0;
-    const cancel=document.createElement('button');cancel.textContent='Huỷ yêu cầu';cancel.className='planning-cancel';
-    cancel.addEventListener('click',()=>{if(backendNavigation?.revision===revision)hooks.command?.('Huỷ tuyến',{capability:'navigation.cancel',arguments:{route_revision:revision}});});panel.append(cancel,label);
+    const cancel=document.createElement('button');cancel.textContent='Huỷ yêu cầu';cancel.className='planning-cancel';cancel.disabled=commandPending;
+    const target=draft && planAction(draft,'navigation');
+    cancel.addEventListener('click',()=>{if(target)return cancelPlan(target);if(backendNavigation?.revision===revision)return hooks.command?.('Huỷ tuyến',{capability:'navigation.cancel',arguments:{route_revision:revision}});});panel.append(cancel,label);
   }
 }
 let destinationChoiceBusy = false;
@@ -818,7 +837,7 @@ function renderDestinationChoices(next) {
     panel.hidden = !selecting || hiddenInformation.has(key);
     if(panel.hidden)continue;
     // Preserve scroll, focus and typed input across progress/event renders.
-    const signature=JSON.stringify([key,next.revision,clarification,next.candidates,destinationChoiceBusy]);
+    const signature=JSON.stringify([key,next.revision,clarification,next.candidates,destinationChoiceBusy,commandPending]);
     if(panel.renderSignature===signature)continue;panel.renderSignature=signature;
     const oldScroll=panel.scrollTop;panel.innerHTML='';
     panelHeading(panel,'Địa điểm',key);
@@ -837,7 +856,7 @@ function renderDestinationChoices(next) {
         const current=currentChoice();
         if(destinationChoiceBusy || !current || informationKey(current,'Địa điểm')!==key || current.revision!==next.revision || current.clarification?.revision!==clarification?.revision)return;
         destinationChoiceBusy=true;renderInformation();
-        try{await hooks.command?.('Chọn điểm đến',{capability:`${next.id?'trip':'navigation'}.${clarification?'refine':'select'}`,arguments:{...identityArguments(next),...(clarification?{choice_handle:entry.handle}:{place_handle:entry.handle})}});}
+        try{await hooks.command?.('Chọn điểm đến',{capability:`${planOwner(next)}.${clarification?'refine':'select'}`,arguments:{...identityArguments(next),...(clarification?{choice_handle:entry.handle}:{place_handle:entry.handle})}});}
         finally{destinationChoiceBusy=false;renderInformation();}
       });panel.append(button);
     }
@@ -845,7 +864,7 @@ function renderDestinationChoices(next) {
       const other=document.createElement('button');other.type='button';other.className='information-cancel';other.textContent='Tìm địa điểm khác';other.disabled=destinationChoiceBusy;
       other.addEventListener('click',async()=>{const current=currentChoice();if(destinationChoiceBusy || !current || current.revision!==next.revision || informationKey(current,'Địa điểm')!==key)return;
         destinationChoiceBusy=true;renderInformation();
-        try{await hooks.command?.('Tìm địa điểm khác',{capability:`${next.id?'trip':'navigation'}.refine`,arguments:{...identityArguments(next),reject_candidates:true}});}
+        try{await hooks.command?.('Tìm địa điểm khác',{capability:`${planOwner(next)}.refine`,arguments:{...identityArguments(next),reject_candidates:true}});}
         finally{destinationChoiceBusy=false;renderInformation();}});panel.append(other);
     }
     if(clarification?.phase==='specific') {
@@ -853,11 +872,12 @@ function renderDestinationChoices(next) {
       const input=document.createElement('input');input.placeholder='Tên địa điểm…';input.maxLength=200;input.setAttribute('aria-label','Địa điểm cụ thể');
       const button=document.createElement('button');button.type='submit';button.textContent='Tìm';button.disabled=destinationChoiceBusy;form.append(input,button);
       form.addEventListener('submit',async event=>{event.preventDefault();const current=currentChoice();if(destinationChoiceBusy || current?.revision!==next.revision || informationKey(current,'Địa điểm')!==key || input.value.trim().length<2)return;destinationChoiceBusy=true;
-        try{await hooks.command?.('Tìm điểm đến',{capability:`${next.id?'trip':'navigation'}.refine`,arguments:{...identityArguments(next),query:input.value.trim()}});}
+        try{await hooks.command?.('Tìm điểm đến',{capability:`${planOwner(next)}.refine`,arguments:{...identityArguments(next),query:input.value.trim()}});}
         finally{destinationChoiceBusy=false;renderInformation();}});panel.append(form);
     }
-    const cancel=document.createElement('button');cancel.type='button';cancel.className='information-cancel';cancel.textContent='Huỷ yêu cầu';
-    cancel.addEventListener('click',()=>{const current=currentChoice();if(current?.revision!==next.revision || informationKey(current,'Địa điểm')!==key)return;next.id ? tripCommand('trip.cancel',next) : hooks.command?.('Huỷ tìm địa điểm',{capability:'navigation.cancel',arguments:{route_revision:next.revision}});});panel.append(cancel);
+    const cancel=document.createElement('button');cancel.type='button';cancel.className='information-cancel';cancel.textContent='Huỷ yêu cầu';cancel.disabled=commandPending;
+    const target=planAction(next,planOwner(next));
+    cancel.addEventListener('click',()=>cancelPlan(target));panel.append(cancel);
     panel.scrollTop=oldScroll;
   }
 }
@@ -868,7 +888,7 @@ function tripCommand(capability,plan,extra={}) {
 }
 function renderTripCard(plan) {
   const panel=document.querySelector('#trip-plan-card');if(!panel)return;
-  const owner=plan.id?'trip':'navigation',target=planAction(plan,owner);
+  const owner=planOwner(plan),target=planAction(plan,owner);
   const key=informationKey(plan,'Kế hoạch');
   panel.hidden= !plan.route || !!plan.clarification || plan.calculation_status==='cancelled' || hiddenInformation.has(key);
   if(panel.hidden)return;
@@ -888,14 +908,14 @@ function renderTripCard(plan) {
   for(const [label,handler] of [['Xem bản đồ',()=>showPlanMap(plan,owner)],['Chỉnh kế hoạch',()=>editTripPlan(plan)],['Bắt đầu',()=>acceptPlan(target)]]) {
     const button=document.createElement('button');button.type='button';button.textContent=label==='Bắt đầu' && activeJourney()?`Thay tuyến sang ${plan.selected?.spoken_label || plan.selected?.name}`:label;button.disabled=commandPending || label==='Bắt đầu' && (!plan.energy?.selected_plan || !!plan.clarification || plan.started_revision===plan.revision);button.addEventListener('click',handler);actions.append(button);
   }panel.append(actions);
-  if(plan.started_revision!==plan.revision){const cancel=document.createElement('button');cancel.type='button';cancel.className='information-cancel';cancel.textContent='Huỷ kế hoạch';cancel.addEventListener('click',()=>{if(!actionCurrent(target))return;return owner==='trip'?tripCommand('trip.cancel',plan):hooks.command?.('Huỷ tuyến đang lập',{capability:'navigation.cancel',arguments:{route_revision:target.revision}});});panel.append(cancel);}panel.scrollTop=oldScroll;presentation.finish(panel);
+  if(plan.started_revision!==plan.revision){const cancel=document.createElement('button');cancel.type='button';cancel.className='information-cancel';cancel.textContent='Huỷ kế hoạch';cancel.disabled=commandPending;cancel.addEventListener('click',()=>cancelPlan(target));panel.append(cancel);}panel.scrollTop=oldScroll;presentation.finish(panel);
 }
 function editTripPlan(plan) {
   const panel=document.querySelector('#trip-plan-card');if(!panel || panel.querySelector?.('form'))return;
   const form=document.createElement('form');form.className='destination-choice-input';
   const input=document.createElement('input');input.placeholder='Điểm đến mới…';input.setAttribute('aria-label','Điểm đến mới');input.maxLength=200;
   const button=document.createElement('button');button.textContent='Tính lại';button.type='submit';form.append(input,button);panel.append(form);input.focus?.();
-  form.addEventListener('submit',event=>{event.preventDefault();if(input.value.trim().length>=2){const args={query:input.value.trim(),trip_kind:plan.trip_kind};if(plan.id)tripCommand('trip.plan',plan,args);else hooks.command?.('Chỉnh tuyến',{capability:'navigation.plan',arguments:args});}});
+  form.addEventListener('submit',event=>{event.preventDefault();if(!actionCurrent(planAction(plan,planOwner(plan))))return;if(input.value.trim().length>=2){const args={query:input.value.trim(),trip_kind:plan.trip_kind};if(planOwner(plan)==='trip')tripCommand('trip.plan',plan,args);else hooks.command?.('Chỉnh tuyến',{capability:'navigation.plan',arguments:args});}});
 }
 async function showTripMap(plan) {return showPlanMap(plan,'trip');}
 async function showPlanMap(plan,owner,open=true) {
@@ -920,7 +940,10 @@ function restoreNavigationView() {
 export async function applyNavigation(payload) {
   const incoming=payload.navigation;
   if(incoming && backendNavigation && (incoming.revision<backendNavigation.revision || incoming.revision===backendNavigation.revision && (incoming.event_sequence || 0)<(backendNavigation.event_sequence || 0)))return;
-  if(payload.navigation_workspace)backendWorkspace=payload.navigation_workspace;
+  if(payload.navigation_workspace){
+    backendWorkspace=payload.navigation_workspace;
+    if(Object.hasOwn(backendWorkspace,'draft'))choiceOwner=backendWorkspace.draft?.purpose==='itinerary'?'trip':'navigation';
+  }
   if(payload.steps && !payload.navigation && !payload.trip_plan)planningSteps=payload.steps;
   if(Object.hasOwn(payload,'trip_plan') && payload.trip_plan===null){
     if(backendTripPlan)retiredTripPlans.add(backendTripPlan.id);

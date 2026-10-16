@@ -155,7 +155,10 @@ class ModelGateway:
                     http_status=getattr(getattr(exc, "response", None), "status_code", None),
                 )
                 if isinstance(exc, ValidationError):
-                    attempt["schema_errors"] = [{"field": list(e["loc"]), "code": e["type"]} for e in exc.errors()]
+                    attempt["schema_errors"] = [
+                        {"field": list(e["loc"]), "code": e["type"], "message": e["msg"][:300]}
+                        for e in exc.errors(include_input=False, include_context=False, include_url=False)
+                    ]
                 # Bad content does not mean that the transport is unhealthy.
                 if not isinstance(exc, ValueError) and not limit.expired():
                     cooldown = self.breaker_seconds

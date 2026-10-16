@@ -76,3 +76,24 @@ def test_structured_generator_maps_short_labels_back_to_sources():
     assert answer.claims[0].source_ids == ["vf-bbb"]
     assert [citation.source_id for citation in answer.citations] == ["vf-bbb"]
     assert validate_grounding(answer, chunks) == (True, None)
+
+
+def test_malformed_model_citations_are_rebuilt_from_evidence():
+    import json
+
+    from src.vivi.rag.generator import StructuredAPIHandbookGenerator
+
+    chunk = _chunk("vf-aaa")
+    payload = {
+        "answer": "Dừng xe an toàn.",
+        "claims": [{"text": "Dừng xe an toàn.", "source_ids": ["S1"]}],
+        "citations": [{"source_id": "S1", "source_url": "https://untrusted.invalid"}],
+    }
+    answer = StructuredAPIHandbookGenerator._restore(json.dumps(payload), {"S1": chunk})
+    assert answer.citations[0].title == chunk.chapter
+    assert answer.citations[0].source_url == chunk.source_url
+    assert validate_grounding(answer, [chunk]) == (True, None)
+
+    payload["claims"][0]["source_ids"] = ["invented"]
+    answer = StructuredAPIHandbookGenerator._restore(json.dumps(payload), {"S1": chunk})
+    assert not validate_grounding(answer, [chunk])[0]
