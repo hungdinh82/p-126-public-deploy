@@ -13,6 +13,22 @@ from scripts import check_jetson_runtime, prepare_ort_metadata, prepare_ort_plat
 from scripts.smoke_jetson_profile import stop
 
 
+def test_smoke_cleanup_import_does_not_require_scipy():
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            'import sys; sys.modules["scipy"] = None; '
+            "from scripts.smoke_jetson_profile import stop; assert callable(stop)",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+
+
 def test_sdk_activation_includes_jetpack_cudla_without_interactive_shell():
     script = Path(__file__).resolve().parents[2] / "scripts/jetson_profile.sh"
     result = subprocess.run(

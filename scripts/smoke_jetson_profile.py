@@ -15,7 +15,6 @@ from pathlib import Path
 
 import httpx
 import numpy as np
-from scipy.signal import resample_poly
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from jetson_ai.speech import SpeechModels  # noqa: E402
@@ -51,6 +50,8 @@ def wait_ready(client, process, url, timeout=180):
 
 
 def smoke(args):
+    from scipy.signal import resample_poly
+
     unused_port(args.backend_port)
     unused_port(args.stt_port)
     if args.backend_port == args.stt_port:
