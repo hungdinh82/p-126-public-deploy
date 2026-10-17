@@ -6,6 +6,7 @@ from typing import Any
 
 from src.vivi.config import Settings, settings
 from src.vivi.connectivity import ConnectivitySupervisor
+from src.vivi.identity import SessionStore
 from src.vivi.orchestration import LangGraphOrchestrator, create_langgraph_orchestrator
 from src.vivi.persistence.event_store import EventStore
 from src.vivi.providers import llm_models
@@ -28,6 +29,7 @@ class Runtime:
     alerts: AlertEngine
     llm_models: dict[str, str]
     connectivity: ConnectivitySupervisor
+    sessions: SessionStore
 
     def close(self) -> None:
         self.connectivity.store.close()
@@ -61,6 +63,8 @@ def build_runtime(config: Settings = settings) -> Runtime:
     connectivity = ConnectivitySupervisor(config)
     tts = create_tts(config)
     tts_engines = create_tts_engines(config, tts, connectivity)
+    sessions = SessionStore(config.auth_db_path, session_hours=config.auth_session_hours)
+    sessions.provision_engineer(config.engineer_phone, config.engineer_pin)
     return Runtime(
         settings=config,
         store=store,
@@ -72,6 +76,7 @@ def build_runtime(config: Settings = settings) -> Runtime:
         alerts=AlertEngine(),
         llm_models=llm_models(config),
         connectivity=connectivity,
+        sessions=sessions,
     )
 
 

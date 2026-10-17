@@ -21,6 +21,7 @@ svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.5;stroke
 .hud-top{position:fixed;inset:0 0 auto;z-index:3;display:flex;align-items:center;gap:22px;padding:22px 34px}
 .brand{position:relative;font-weight:600;font-size:23px;letter-spacing:-2px;text-decoration:none;color:#f7f8fb}.brand span{color:var(--teal)}.brand i{position:absolute;right:-6px;top:4px;width:4px;height:4px;border-radius:50%;background:var(--teal);box-shadow:0 0 12px var(--teal)}
 .hud-top-right{margin-left:auto;display:flex;align-items:center;gap:22px;font-size:13px;color:#cbcdd3;font-variant-numeric:tabular-nums}.weather{display:flex;gap:8px;align-items:center;color:#9c9fa8}.weather span{font-size:16px}
+.session-exit{padding:7px 10px;color:#aeb4c0;border:1px solid rgba(190,195,208,.18);border-radius:9px;background:rgba(16,18,23,.6);font:inherit;font-size:10px;cursor:pointer}.session-exit:hover,.session-exit:focus-visible{color:#fff;border-color:rgba(190,195,208,.45);outline:none}
 
 .hud-status{position:fixed;left:44px;top:50%;transform:translateY(-50%);z-index:3;display:flex;flex-direction:column;gap:6px;pointer-events:none}
 .mode-label{display:flex;align-items:center;gap:10px;font-size:10px;letter-spacing:2.4px;color:#a1a6b2;max-width:300px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.mode-label b{width:24px;height:24px;display:grid;place-items:center;border-radius:7px;border:1px solid #76829f66;color:var(--teal);font-size:12px;letter-spacing:0;flex:none}

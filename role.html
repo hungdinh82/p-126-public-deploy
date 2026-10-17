@@ -48,22 +48,16 @@
       <section class="role-selection" aria-labelledby="role-title">
         <div class="selection-heading">
           <p class="kicker">BẮT ĐẦU TRẢI NGHIỆM</p>
-          <h2 id="role-title">Chọn không gian của bạn</h2>
-          <p>Khám phá sản phẩm từ góc nhìn người dùng hoặc đội ngũ vận hành hệ thống.</p>
+          <h2 id="role-title">Đăng nhập phiên riêng</h2>
+          <p>Số điện thoại và PIN tách lịch sử, hành trình và dữ liệu thử nghiệm của từng người.</p>
         </div>
 
-        <div class="role-actions">
-          <button type="button" data-role="driver">
-            <span class="role-number">01</span>
-            <span class="role-label"><b>Tài xế</b><small>Trợ lý ViVi và cabin mô phỏng</small></span>
-            <span class="role-arrow" aria-hidden="true">&#8599;</span>
-          </button>
-          <button type="button" data-role="engineer">
-            <span class="role-number">02</span>
-            <span class="role-label"><b>Kỹ sư hệ thống</b><small>Runtime, fleet và scenario lab</small></span>
-            <span class="role-arrow" aria-hidden="true">&#8599;</span>
-          </button>
-        </div>
+        <form id="login-form" class="login-form">
+          <label><span>Số điện thoại</span><input name="phone" type="tel" autocomplete="tel" placeholder="0901 234 567" required minlength="8" maxlength="30"></label>
+          <label><span>PIN</span><input name="pin" type="password" inputmode="numeric" autocomplete="current-password" placeholder="4–12 chữ số" required minlength="4" maxlength="12" pattern="[0-9]{4,12}"></label>
+          <button type="submit"><span>Đăng nhập / Tạo tài khoản</span><span class="role-arrow" aria-hidden="true">&#8599;</span></button>
+          <small>Tài khoản mới được tạo với quyền Tài xế. Quyền Kỹ sư do người vận hành cấu hình.</small>
+        </form>
         <p id="role-status" role="status" aria-live="polite"></p>
       </section>
     </div>
@@ -74,6 +68,6 @@
     </footer>
   </main>
 
-  <script src="/role.js?v=2"></script>
+  <script src="/role.js?v=3"></script>
 </body>
 </html>
