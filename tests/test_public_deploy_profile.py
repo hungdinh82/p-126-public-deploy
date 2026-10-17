@@ -26,3 +26,12 @@ def test_public_image_publishes_to_current_repository_namespace():
     assert "IMAGE_NAME: ghcr.io/${{ github.repository }}" in workflow
     assert "ghcr.io/ai20k-build-phase-cohort-4/p-126" not in workflow
     assert "packages: write" in workflow
+
+
+def test_public_deploy_fetches_merge_history_before_validation():
+    workflow = (ROOT / ".github/workflows/deploy-render.yml").read_text(encoding="utf-8")
+
+    checkout_step = workflow.split("- name: Check out source", 1)[1].split(
+        "- name: Set up Python", 1
+    )[0]
+    assert "fetch-depth: 0" in checkout_step

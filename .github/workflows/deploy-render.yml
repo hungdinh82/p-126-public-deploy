@@ -25,6 +25,11 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v4
+        with:
+          # check_local.sh validates HEAD with git show --check. Merge commits
+          # need their parents present or a shallow checkout treats the whole
+          # repository as newly added and reports historical whitespace.
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
