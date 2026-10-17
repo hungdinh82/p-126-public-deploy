@@ -12,8 +12,9 @@ import threading
 import time
 from collections import deque
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, Request
 
+from src.vivi.api.routes.roles import role_for
 from src.vivi.api.runtime import runtime
 
 router = APIRouter(prefix="/api/v1")
@@ -234,7 +235,9 @@ def _components() -> dict[str, dict[str, str]]:
 
 
 @router.get("/metrics")
-def metrics():
+def metrics(request: Request = None):
+    if request is not None and runtime.settings.app_env != "test" and role_for(request) != "engineer":
+        raise HTTPException(status_code=403, detail="Chỉ kỹ sư được xem dữ liệu giám sát.")
     events, tts_by_turn, last_tts = runtime.store.metrics_snapshot()
     usage = resource.getrusage(resource.RUSAGE_SELF)
     disk = shutil.disk_usage(".")

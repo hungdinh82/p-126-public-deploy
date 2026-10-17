@@ -247,6 +247,7 @@ class TurnRequest(BaseModel):
     transcript: str = Field(min_length=1, max_length=500)
     session_id: str = Field(min_length=1, max_length=100)
     turn_id: str = Field(min_length=1, max_length=100)
+    profile_id: str = Field(default="default", pattern=r"^[a-zA-Z0-9_-]{1,64}$")
     vehicle_state: VehicleState | None = Field(
         default=None,
         deprecated=True,

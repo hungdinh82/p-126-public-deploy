@@ -71,7 +71,7 @@ class LangGraphOrchestrator:
         self._reset_task = None
 
     def session_key(self, request):
-        return f"{self.profile_id}:{request.session_id}"
+        return f"{request.profile_id}:{request.session_id}"
 
     @asynccontextmanager
     async def turn_scope(self, request, provider):
@@ -94,7 +94,10 @@ class LangGraphOrchestrator:
                             self.ledger.reserve_turn,
                             session,
                             request.turn_id,
-                            {**request.model_dump(mode="json", exclude={"vehicle_state"}), "provider": provider},
+                            {
+                                **request.model_dump(mode="json", exclude={"vehicle_state", "profile_id"}),
+                                "provider": provider,
+                            },
                         )
                         if self.ledger
                         else None
@@ -218,6 +221,7 @@ class LangGraphOrchestrator:
         self.store.record_ai_stage({
             "session_id": request.session_id,
             "turn_id": request.turn_id,
+            "profile_id": request.profile_id,
             "stage": "response",
             "status": response.status,
             "provider": "turn-response",
@@ -248,6 +252,7 @@ class LangGraphOrchestrator:
             "input_text": strip_address(request.transcript),
             "session_id": request.session_id,
             "turn_id": request.turn_id,
+            "profile_id": request.profile_id,
             "vehicle_model": "VF8",
             "model_year": 2026,
             "locale": "vi_vn",
@@ -551,21 +556,21 @@ class LangGraphOrchestrator:
             self.store.append_event({"event_type": "turn", **response.model_dump(mode="json")})
         return response
 
-    async def reset_history(self, session_id=None):
+    async def reset_history(self, session_id=None, profile_id=None):
         if self._closing or self._resetting or self._in_scope:
             raise ValueError("Đợi lượt đang xử lý hoàn tất rồi xoá lịch sử.")
         self._resetting = True
-        self._reset_task = asyncio.create_task(self._reset_history(session_id))
+        self._reset_task = asyncio.create_task(self._reset_history(session_id, profile_id or self.profile_id))
         return await asyncio.shield(self._reset_task)
 
-    async def _reset_history(self, session_id):
+    async def _reset_history(self, session_id, profile_id):
         try:
             graphs = {self.graph}
             history = next(iter(graphs)).navigation.workflow.services.history
-            sessions = set(await asyncio.to_thread(history.sessions, self.profile_id))
+            sessions = set(await asyncio.to_thread(history.sessions, profile_id))
             if self.ledger:
-                sessions.update(await asyncio.to_thread(self.ledger.sessions, self.profile_id))
-            sessions.update(key.split(":", 1)[1] for key in self._sessions if key.startswith(self.profile_id + ":"))
+                sessions.update(await asyncio.to_thread(self.ledger.sessions, profile_id))
+            sessions.update(key.split(":", 1)[1] for key in self._sessions if key.startswith(profile_id + ":"))
             if session_id:
                 sessions.add(session_id)
             for graph in graphs:
@@ -584,13 +589,13 @@ class LangGraphOrchestrator:
                     thread_id = graph.config({"session_id": sid})["configurable"]["thread_id"]
                     await graph.saver.adelete_thread(thread_id)
                     graph._dialogue_sessions.pop(thread_id, None)
-            deleted = await asyncio.to_thread(history.clear, sessions, self.profile_id)
+            deleted = await asyncio.to_thread(history.clear, sessions, profile_id)
             if self.ledger:
-                await asyncio.to_thread(self.ledger.clear_history, self.profile_id, sessions)
-            await asyncio.to_thread(clear_backups, history, self.ledger, graphs, sessions, self.profile_id)
+                await asyncio.to_thread(self.ledger.clear_history, profile_id, sessions)
+            await asyncio.to_thread(clear_backups, history, self.ledger, graphs, sessions, profile_id)
             records = await asyncio.to_thread(self.store.clear_sessions, sessions)
             return {
-                "profile_id": self.profile_id,
+                "profile_id": profile_id,
                 "sessions": len(sessions),
                 "deleted_turns": deleted,
                 "deleted_log_records": records,

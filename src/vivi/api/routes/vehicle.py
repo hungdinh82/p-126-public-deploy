@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 
+from src.vivi.api.routes.roles import require_conversation
 from src.vivi.api.runtime import runtime
 from src.vivi.domain.models import DemoDrivingRequest, TurnRequest, VehicleState
 from src.vivi.vehicle.alerts import AlertSnapshot
@@ -17,7 +18,8 @@ class VehicleAlertsResponse(AlertSnapshot):
 
 
 @router.get("/vehicle/state")
-async def vehicle_state(session_id: str = Query(default="api-read", min_length=1, max_length=100)):
+async def vehicle_state(request: Request, session_id: str = Query(default="api-read", min_length=1, max_length=100)):
+    require_conversation(request, session_id)
     try:
         return await runtime.vehicle.get_state(session_id)
     except Exception as exc:
@@ -25,7 +27,8 @@ async def vehicle_state(session_id: str = Query(default="api-read", min_length=1
 
 
 @router.get("/vehicle/alerts", response_model=VehicleAlertsResponse)
-async def vehicle_alerts(session_id: str = Query(default="api-read", min_length=1, max_length=100)):
+async def vehicle_alerts(request: Request, session_id: str = Query(default="api-read", min_length=1, max_length=100)):
+    require_conversation(request, session_id)
     try:
         state = await runtime.vehicle.get_state(session_id)
         snapshot = runtime.alerts.evaluate(state)
@@ -35,7 +38,8 @@ async def vehicle_alerts(session_id: str = Query(default="api-read", min_length=
 
 
 @router.put("/demo/vehicle/driving", response_model=VehicleState)
-async def set_demo_driving(request: DemoDrivingRequest):
+async def set_demo_driving(request: DemoDrivingRequest, http_request: Request):
+    principal = require_conversation(http_request, request.session_id)
     if not isinstance(runtime.vehicle, VehicleSimulator):
         raise HTTPException(
             status_code=409,
@@ -46,6 +50,7 @@ async def set_demo_driving(request: DemoDrivingRequest):
             TurnRequest(
                 session_id=request.session_id,
                 turn_id=str(uuid4()),
+                profile_id=principal.account_id,
                 transcript="Đổi chế độ lái",
                 navigation_event={
                     "kind": "gear",

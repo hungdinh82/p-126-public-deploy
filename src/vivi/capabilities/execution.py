@@ -95,7 +95,7 @@ class CapabilityRuntime:
         }
 
     async def memory(self, event, step, arguments, command_id):
-        memory, profile = self.services.memory, self.services.memory_profile_id
+        memory, profile = self.services.memory, event.profile_id
         if memory is None:
             return {"status": "blocked", "message": "Bộ nhớ dài hạn đang tắt hoặc chưa sẵn sàng."}
         name = step.draft.capability

@@ -3,10 +3,11 @@
 import asyncio
 import json
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from src.vivi.api.contracts import TurnInput, envelope
+from src.vivi.api.routes.roles import require_conversation
 from src.vivi.api.routes.turns import _provider
 from src.vivi.api.runtime import runtime
 
@@ -14,12 +15,14 @@ router = APIRouter(prefix="/api/v2")
 
 
 @router.post("/turn")
-async def turn(value: TurnInput):
+async def turn(value: TurnInput, request: Request):
+    principal = require_conversation(request, value.session_id)
     provider = (
         await _provider(value.provider) if value.input.kind == "utterance" else runtime.orchestrator.default_provider
     )
     try:
-        return envelope(await runtime.orchestrator.run(value.request(), provider=provider))
+        turn_request = value.request().model_copy(update={"profile_id": principal.account_id})
+        return envelope(await runtime.orchestrator.run(turn_request, provider=provider))
     except ValueError as exc:
         raise HTTPException(409, str(exc)) from exc
     except TimeoutError as exc:
@@ -27,14 +30,16 @@ async def turn(value: TurnInput):
 
 
 @router.post("/turn/stream")
-async def turn_stream(value: TurnInput):
+async def turn_stream(value: TurnInput, request: Request):
+    principal = require_conversation(request, value.session_id)
     provider = (
         await _provider(value.provider) if value.input.kind == "utterance" else runtime.orchestrator.default_provider
     )
 
     async def events():
         try:
-            async for event in runtime.orchestrator.run_stream(value.request(), provider=provider):
+            turn_request = value.request().model_copy(update={"profile_id": principal.account_id})
+            async for event in runtime.orchestrator.run_stream(turn_request, provider=provider):
                 if event.get("type") == "final":
                     event = {**event, "response": envelope(event["response"])}
                 yield json.dumps(event, ensure_ascii=False) + "\n"

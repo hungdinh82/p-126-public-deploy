@@ -52,6 +52,11 @@ class Settings(BaseSettings):
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
     cors_origins: str = "http://127.0.0.1:8787,http://localhost:8787"
 
+    auth_required: bool = Field(default=True, validation_alias="VIVI_AUTH_REQUIRED")
+    auth_session_hours: int = Field(default=8, ge=1, le=168, validation_alias="VIVI_AUTH_SESSION_HOURS")
+    engineer_phone: str = Field(default="", validation_alias="VIVI_ENGINEER_PHONE")
+    engineer_pin: str = Field(default="", validation_alias="VIVI_ENGINEER_PIN")
+
     data_dir: Path = Field(default=Path("./data"), validation_alias="VIVI_DATA_DIR")
     turn_timeout_seconds: float = Field(default=120, ge=1, le=180)
     cloud_budget_seconds: float = Field(default=10, ge=0.1, le=60)
@@ -91,6 +96,10 @@ class Settings(BaseSettings):
     @property
     def memory_path(self) -> Path:
         return self.memory_db or self.data_dir / "memory" / "long_term.sqlite3"
+
+    @property
+    def auth_db_path(self) -> Path:
+        return self.data_dir / "runtime" / "auth.sqlite3"
 
     vehicle_provider: Literal["memory", "mqtt"] = Field(default="memory", validation_alias="VIVI_VEHICLE_PROVIDER")
     vehicle_id: str = Field(default="demo-car-1", validation_alias="VIVI_VEHICLE_ID")

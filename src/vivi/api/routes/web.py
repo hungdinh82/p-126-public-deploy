@@ -66,8 +66,10 @@ async def wake_asset(asset_name: str):
 
 
 @router.get("/{asset_name}")
-async def asset(asset_name: str):
+async def asset(asset_name: str, request: Request):
     if asset_name == "monitor":
+        if role_for(request) != "engineer":
+            return RedirectResponse("/", status_code=303)
         return FileResponse(PROJECT_ROOT / "monitor.html", headers={"Cache-Control": "no-store"})
     if asset_name not in {
         "app.js",

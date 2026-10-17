@@ -146,6 +146,23 @@ Trên Homebrew macOS, có thể cần dùng `/opt/homebrew/opt/mosquitto/sbin/mo
 
 Mở http://127.0.0.1:8787 và thử “Đặt nhiệt độ 25 độ”, “Phát nhạc” hoặc “Trạng thái xe”. Backend lấy state qua MQTT trước khi ra quyết định, kiểm tra ACK đúng command rồi chủ động đọc state thêm lần nữa trước khi báo thành công. Khi ACK mất hoặc service ngắt, kết quả là “chưa xác minh”, không báo đã làm. Nếu backend offline, giao diện cũng không tự giả lập thao tác cabin. Giao diện không cho bật trạng thái lái khi dùng MQTT; muốn thử các fixture/fault, khởi động simulator thêm `--enable-test-control` và dùng HTTP test API.
 
+Trang đầu yêu cầu SĐT và PIN. Lần đăng nhập đầu tiên tạo tài khoản Tài xế;
+conversation được server cấp riêng cho từng tab và được kiểm tra ownership ở API.
+Để cấp tài khoản Kỹ sư, cấu hình cả hai biến sau rồi restart backend:
+
+```sh
+VIVI_ENGINEER_PHONE=0908111222
+VIVI_ENGINEER_PIN=2468
+```
+
+Không commit PIN vào Git. Token đăng nhập chỉ nằm trong cookie HttpOnly và bản hash
+trong `data/runtime/auth.sqlite3`; PIN được hash bằng scrypt. Năm lần nhập sai liên
+tiếp khóa đăng nhập trong năm phút.
+
+Đây là nhận diện tester cho prototype, chưa xác minh quyền sở hữu SĐT bằng OTP.
+Nếu cần rollback tạm thời cho API client cũ, đặt `VIVI_AUTH_REQUIRED=false`; dữ liệu
+tài khoản và conversation vẫn được giữ nguyên để bật lại sau đó.
+
 Nếu muốn chạy service HTTP độc lập mà chưa bật MQTT:
 
 ```sh
