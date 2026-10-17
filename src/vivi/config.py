@@ -55,8 +55,8 @@ class Settings(BaseSettings):
     data_dir: Path = Field(default=Path("./data"), validation_alias="VIVI_DATA_DIR")
     turn_timeout_seconds: float = Field(default=120, ge=1, le=180)
     cloud_budget_seconds: float = Field(default=10, ge=0.1, le=60)
-    local_budget_seconds: float = Field(default=10, ge=0.1, le=60)
-    semantic_budget_seconds: float = Field(default=20, ge=0.1, le=60)
+    local_budget_seconds: float = Field(default=30, ge=0.1, le=60)
+    semantic_budget_seconds: float = Field(default=40, ge=0.1, le=60)
     provider_breaker_seconds: float = Field(default=30, ge=0, le=300)
     planner_max_tokens: int = Field(default=2048, ge=512, le=8192)
     conversation_enabled: bool = True

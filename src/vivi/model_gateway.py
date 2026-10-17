@@ -172,7 +172,7 @@ class ModelGateway:
                 "outcome": "started",
                 "calls": 0,
                 "latency_ms": 0,
-                "budget_seconds": min(10, provider.budget_seconds, remaining / max(1, available)),
+                "budget_seconds": min(provider.budget_seconds, remaining / max(1, available)),
             }
             attempts.append(attempt)
             record_attempt(attempt)
@@ -205,6 +205,9 @@ class ModelGateway:
                 attempt["served_model"] = served_model if isinstance(served_model, str) and served_model else None
                 return ModelResult(value, name, attempts)
             finally:
+                metadata = getattr(provider.client, "completion_metadata", None)
+                if isinstance(metadata, dict):
+                    attempt["completion"] = metadata.copy()
                 attempt["latency_ms"] = round((time.monotonic() - started) * 1000, 2)
                 record_attempt(attempt)
                 if control:

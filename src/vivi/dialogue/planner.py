@@ -12,10 +12,16 @@ from src.vivi.conversation.context import conversation_view
 from src.vivi.conversation.guardrails import TOPIC_INSTRUCTION
 from src.vivi.dialogue.contracts import SemanticTurn, SessionState, semantic_schema
 from src.vivi.dialogue.fallback import LimitedFallback, literal_question_reply
+from src.vivi.dialogue.local_schema import (
+    LOCAL_EXAMPLES,
+    LOCAL_INSTRUCTION,
+    compact_local_prompt,
+    local_semantic_schema,
+)
 from src.vivi.dialogue.validation import validate_semantic
 from src.vivi.model_gateway import ModelGateway, record_model_call
 from src.vivi.model_gateway import ModelProvider as ModelProvider
-from src.vivi.structured_llm import strict_schema
+from src.vivi.structured_llm import TruncatedCompletionError
 
 PROMPT_VERSION = "semantic-core-3"
 SEMANTIC_INSTRUCTION = """
@@ -94,6 +100,17 @@ Only greeting/thanks/clarification/unsupported may use short direct Vietnamese t
 """
 
 
+def semantic_system_prompt(*, local=False):
+    if local:
+        return LOCAL_INSTRUCTION + TOPIC_INSTRUCTION + LOCAL_EXAMPLES
+    return (
+        VOICE_PERSONA
+        + SEMANTIC_INSTRUCTION
+        + TOPIC_INSTRUCTION
+        + "\nFor a disallowed intent return unsupported with a brief safe alternative, no drafts. For emergencies return reply with immediate safe support, no drafts. Return compact JSON: omit null argument slots and unused optional fields; include only the operations and slots needed for this turn."
+    )
+
+
 def semantic_tools():
     return [
         {
@@ -101,7 +118,7 @@ def semantic_tools():
             "function": {
                 "name": "interpret_turn",
                 "description": "Interpret the complete turn into semantic events.",
-                "parameters": strict_schema(semantic_schema()),
+                "parameters": local_semantic_schema(),
             },
         }
     ]
@@ -111,7 +128,7 @@ async def warmup_local_client(client):
     # Use exactly the real system/tools prefix; one output token primes KV cache
     # without interpreting or executing the generated proposal.
     payload = client._tool_payload(
-        VOICE_PERSONA + SEMANTIC_INSTRUCTION,
+        semantic_system_prompt(local=True),
         '{"utterance":"Xin chào","tasks":{},"recent_turns":[],"explicit_user_memory":[],"capabilities":[]}',
         semantic_tools(),
     )
@@ -353,12 +370,10 @@ class SemanticResolver:
 
     @staticmethod
     async def interpret(provider, prompt, attempts=None, *, literal_reply=None):
-        instruction = (
-            VOICE_PERSONA
-            + SEMANTIC_INSTRUCTION
-            + TOPIC_INSTRUCTION
-            + "\nFor a disallowed intent return unsupported with a brief safe alternative, no drafts. For emergencies return reply with immediate safe support, no drafts. Return compact JSON: omit null argument slots and unused optional fields; include only the operations and slots needed for this turn."
-        )
+        local = provider.name == "local" and hasattr(provider.client, "agenerate_tool")
+        instruction = semantic_system_prompt(local=local)
+        if local:
+            prompt = compact_local_prompt(prompt)
         for attempt in range(2):
             payload = None
             try:
@@ -395,6 +410,9 @@ class SemanticResolver:
                         attempts[-1]["literal_question_reply"] = True
                     return SemanticTurn(act="answer", question_answer=literal_reply)
                 return SemanticTurn.model_validate_json(payload)
+            except TruncatedCompletionError:
+                # Appending repair text to an exhausted context makes it worse.
+                raise
             except (ValidationError, ValueError) as exc:
                 if attempt:
                     raise

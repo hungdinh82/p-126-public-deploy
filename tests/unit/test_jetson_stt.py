@@ -62,8 +62,7 @@ def test_remote_error_is_not_hidden(monkeypatch, tmp_path):
 
 
 def test_warmup_uses_real_prompt_and_tools_without_executing():
-    from src.vivi.agents.prompts import VOICE_PERSONA
-    from src.vivi.dialogue.planner import SEMANTIC_INSTRUCTION, semantic_tools, warmup_local_client
+    from src.vivi.dialogue.planner import semantic_system_prompt, semantic_tools, warmup_local_client
     from src.vivi.structured_llm import StructuredChatClient
 
     class Client(StructuredChatClient):
@@ -73,7 +72,7 @@ def test_warmup_uses_real_prompt_and_tools_without_executing():
 
     client = Client(base_url="http://jetson/v1", api_key="", model="qwen", timeout_seconds=60)
     asyncio.run(warmup_local_client(client))
-    assert client.payload["messages"][0]["content"] == VOICE_PERSONA + SEMANTIC_INSTRUCTION
+    assert client.payload["messages"][0]["content"] == semantic_system_prompt(local=True)
     assert client.payload["tools"] == semantic_tools()
     assert client.payload["max_tokens"] == 1
     assert client.payload["cache_prompt"] is True
