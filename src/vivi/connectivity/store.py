@@ -32,7 +32,8 @@ class ConnectivityEventStore:
 
     def append(self, kind: str, component: str, outcome: str, **metadata: Any) -> None:
         safe = {
-            key: value for key, value in metadata.items()
+            key: value
+            for key, value in metadata.items()
             if key in {"provider", "reason", "latency_ms", "previous", "profile", "override", "status"}
         }
         with self._lock:

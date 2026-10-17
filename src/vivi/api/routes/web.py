@@ -71,6 +71,7 @@ async def asset(asset_name: str):
         return FileResponse(PROJECT_ROOT / "monitor.html", headers={"Cache-Control": "no-store"})
     if asset_name not in {
         "app.js",
+        "assistant-client.js",
         "journey.js",
         "wake.js",
         "navigation-state.js",

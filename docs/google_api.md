@@ -42,5 +42,5 @@ với endpoint và API key riêng của Google. Model mặc định theo
 Kiểm tra hồi quy không gọi dịch vụ cloud:
 
 ```bash
-LLM_PROVIDER=rules VIVI_RAG_LOCAL_ONLY=true .venv/bin/python -m pytest -q
+LLM_PROVIDER=google VIVI_RAG_LOCAL_ONLY=true .venv/bin/python -m pytest -q
 ```

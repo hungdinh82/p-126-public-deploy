@@ -1,6 +1,6 @@
 # ViVi Space Concept
 
-Contract LangGraph/navigation, migration và kết quả kiểm chứng hiện tại: [Navigation runtime unified-6](docs/navigation_runtime.md).
+Contract LangGraph/navigation, migration và kết quả kiểm chứng hiện tại: [Lõi hội thoại Core v2](docs/langgraph_core_v2.md).
 
 Hỏi–đáp UI/voice, slot địa điểm và phân giải POI dùng chung: [Conversation generalization](docs/conversation_generalization_runtime.md).
 
@@ -37,7 +37,7 @@ bash scripts/setup.sh
 Mở http://127.0.0.1:8787, sau đó chạy smoke test ở terminal khác:
 
 ```bash
-.venv/bin/python scripts/smoke_runtime.py --provider rules
+.venv/bin/python scripts/smoke_runtime.py --provider google
 ```
 
 Trang `/monitor` xem tài nguyên máy, trạng thái STT/TTS/RAG/vehicle, lịch sử lượt và
@@ -76,9 +76,9 @@ Thiết lập provider/model trong `config.toml`; khóa API và ghi đè riêng 
 
 | Component | Biến | Lựa chọn |
 | --- | --- | --- |
-| Text input | luôn bật | gửi thẳng transcript tới `/api/v1/turn` |
+| Text input | luôn bật | gửi thẳng transcript tới `/api/v2/turn` |
 | STT | `stt_provider` trong `config.toml` | `off`, `phowhisper`, `whisper_cpp`, `soniox` |
-| LLM/router | `llm_provider` trong `config.toml` | `rules`, `local`, `google`, `openai`, `openrouter` |
+| LLM/router | `llm_provider` trong `config.toml` | `google`, `local`, `openai`, `openrouter` |
 | TTS | `tts_provider` trong `config.toml` | `off`, `zerotts` |
 | Handbook retrieval | `rag_retrieval_mode` trong `config.toml` | `sqlite_local` (mặc định), `sqlite`, `lexical` |
 | Vehicle | `vehicle_provider` trong `config.toml` | `memory`, `mqtt` |
@@ -87,7 +87,7 @@ Profile text-only nhẹ nhất cho dev/test:
 
 ```toml
 stt_provider = "off"
-llm_provider = "rules"
+llm_provider = "google"
 tts_provider = "off"
 rag_retrieval_mode = "sqlite"
 vehicle_provider = "memory"
@@ -184,7 +184,7 @@ monitor không xoá SQLite history hay long-term memory.
 
 Đặt `llm_provider` trong `config.toml`, sau đó restart backend:
 
-- `rules`: parser có grammar và trả lời bằng trích đoạn handbook, chạy offline.
+- Mặc định cloud → local → fallback giới hạn; offline chỉ local. Handbook có fallback trích xuất riêng.
 - `local`: SLM tự host, cấu hình `local_llm_base_url` và `local_llm_model`.
 
 - `google`, `openai`, `openrouter`: semantic planner qua API, cần khóa tương ứng và
@@ -196,7 +196,7 @@ một lần và áp dụng guard/policy trước khi chạy capability. Các đ�
 tục dùng structured output.
 
 Mọi provider và nút điều khiển có kiểu đi qua cùng reducer/scheduler/policy.
-Cloud → local → parser chỉ khi tầng trước lỗi; câu hỏi làm rõ hay policy từ chối
+Cloud → local → fallback giới hạn chỉ khi tầng trước lỗi; câu hỏi làm rõ hay policy từ chối
 không gây fallback. Đổi provider giữ nguyên session và pending task. Local chỉ
 được gọi khi đã cấu hình model; đợt refactor này không tải Qwen. Xem
 [workflow, checkpoints và evaluation](docs/langgraph_unified_runtime.md).
@@ -211,10 +211,10 @@ Xem [RAG local](docs/rag_local.md) và [benchmark](eval/README.md).
 - `GET/DELETE /api/v1/memory` — xem/reset long-term memory
 - `PUT/DELETE /api/v1/memory/{key}` — ghi/sửa/xoá một mục memory
 - `POST /api/v1/stt` — multipart audio, `session_id`, `turn_id`
-- `POST /api/v1/turn` — transcript → LangGraph/RAG hoặc action → response thống nhất
-- `POST /api/v1/confirmations/{confirmation_id}` — approve/deny đúng một action R2 đang chờ
+- `POST /api/v2/turn` — tagged input → LangGraph/RAG hoặc action → response thống nhất
+- `POST /api/v2/turn` với `input.kind=question_reply` — trả lời đúng câu hỏi có ID/revision đang chờ
 - `POST /api/v1/tts` — text sang WAV Mai Chi
-- `POST /api/v1/turn/stream` — NDJSON gồm các mệnh đề hội thoại có thể đọc sớm và một sự kiện `final` chứa kết quả chính thức. Lệnh điều khiển xe không phát trước khi qua safety/acknowledgement.
+- `POST /api/v2/turn/stream` — NDJSON gồm các mệnh đề hội thoại có thể đọc sớm và một sự kiện `final` chứa kết quả chính thức. Lệnh điều khiển xe không phát trước khi qua safety/acknowledgement.
 - `POST /api/v1/tts/stream` — PCM mono 16-bit little-endian theo luồng; sample rate ở header `X-ViVi-Sample-Rate`, giọng ở `X-ViVi-Voice`. Frontend nhận các chunk để đệm và phát liên tục.
 
 Frontend giữ khoảng 1 giây audio trong bộ đệm trước khi phát để tránh hụt tiếng giữa các chunk đầu của ZeroTTS. Câu trả lời ngắn hơn được phát ngay khi tổng hợp xong; tắt giọng vẫn hủy luồng và playback.
@@ -248,15 +248,15 @@ powershell -ExecutionPolicy Bypass -File scripts\setup_hooks.ps1
 ```
 
 Trước mỗi lần push, hook chạy quality gate dùng chung rồi mới gửi AI log. Gate gồm
-whitespace, Ruff, JavaScript syntax, core tests và MQTT integration tests. Có thể chạy
+whitespace, Ruff, JavaScript syntax/behavior và Python tests offline. Có thể chạy
 trực tiếp để lấy evidence điền vào pull request:
 
 ```sh
 bash scripts/check_local.sh
 ```
 
-Script dùng profile deterministic `rules + memory + SQLite`, xóa API key khỏi môi
-trường test và yêu cầu Mosquitto được cài trên máy. Khi thay đổi Dockerfile, dependency
+Script dùng dependency giả và SQLite tạm, xóa API key khỏi môi trường test.
+MQTT chạy riêng với `bash scripts/check_local.sh --run-mqtt`, cần Mosquitto. Khi thay đổi Dockerfile, dependency
 runtime hoặc startup, chạy thêm:
 
 ```sh
@@ -314,7 +314,7 @@ qua Git. Trọng số embedding, crawl snapshot và SQLite history nằm ngoài 
 Restart backend sau khi build index mới.
 
 Output handbook được ánh xạ vào `TurnResponse.evidence`; UI hiển thị câu trả lời cùng link
-nguồn trong panel Cẩm nang. `/api/v1/turn/stream` chỉ phát câu trả lời sau khi grounding,
+nguồn trong panel Cẩm nang. `/api/v2/turn/stream` chỉ phát câu trả lời sau khi grounding,
 safety và verify tương ứng đã hoàn tất—không stream sớm nội dung chưa được kiểm chứng.
 
 ## Hội thoại và thông tin internet

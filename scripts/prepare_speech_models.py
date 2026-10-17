@@ -1,4 +1,5 @@
 """Download pinned speech artifacts during setup, never during inference."""
+
 import argparse
 import hashlib
 import json
@@ -25,14 +26,25 @@ def ensure_original_tts(root):
     # A prior compatibility patch must not be reused by the new profile.
     path = root / "zerotts" / "onnx" / "local_frame_decode.onnx"
     if not path.is_file() or sha256(path) != TTS_FRAME_SHA256:
-        hf_hub_download("zeroweight-ai/ZeroTTS", filename="onnx/local_frame_decode.onnx",
-                        revision=TTS_REV, local_dir=root / "zerotts", force_download=True)
+        hf_hub_download(
+            "zeroweight-ai/ZeroTTS",
+            filename="onnx/local_frame_decode.onnx",
+            revision=TTS_REV,
+            local_dir=root / "zerotts",
+            force_download=True,
+        )
     if sha256(path) != TTS_FRAME_SHA256:
         raise RuntimeError("Original ZeroTTS frame decoder SHA256 mismatch")
 
 
-def prepare(root: Path, engine: str, tts_precision: str = "fp32", local_only: bool = False,
-            calibration_texts: Path | None = None, activate: bool = True):
+def prepare(
+    root: Path,
+    engine: str,
+    tts_precision: str = "fp32",
+    local_only: bool = False,
+    calibration_texts: Path | None = None,
+    activate: bool = True,
+):
     if tts_precision not in ("fp32", "fp16", "int8", "int8-gpu"):
         raise ValueError("TTS precision must be fp32, fp16 (CUDA), int8 (CPU) or int8-gpu")
     root.mkdir(parents=True, exist_ok=True)
@@ -42,29 +54,43 @@ def prepare(root: Path, engine: str, tts_precision: str = "fp32", local_only: bo
         if sha256(root / "zerotts/onnx/local_frame_decode.onnx") != TTS_FRAME_SHA256:
             raise RuntimeError("Original ZeroTTS frame decoder SHA256 mismatch")
     elif engine == "whisper_cpp":
-        hf_hub_download("ggerganov/whisper.cpp", filename="ggml-base.bin",
-                        revision=WHISPER_CPP_REV, local_dir=root / "whisper")
+        hf_hub_download(
+            "ggerganov/whisper.cpp", filename="ggml-base.bin", revision=WHISPER_CPP_REV, local_dir=root / "whisper"
+        )
     else:
-        snapshot_download("openai/whisper-base", revision=WHISPER_REV,
-                          local_dir=root / "whisper", allow_patterns=[
-                              "*.json", "*.txt", "model.safetensors", "pytorch_model.bin"])
+        snapshot_download(
+            "openai/whisper-base",
+            revision=WHISPER_REV,
+            local_dir=root / "whisper",
+            allow_patterns=["*.json", "*.txt", "model.safetensors", "pytorch_model.bin"],
+        )
     if not local_only:
-        snapshot_download("zeroweight-ai/ZeroTTS", revision=TTS_REV, local_dir=root / "zerotts",
-                          allow_patterns=["*.json", "*.onnx", "*.data", "*.npy", "*.txt", "*.npz"])
+        snapshot_download(
+            "zeroweight-ai/ZeroTTS",
+            revision=TTS_REV,
+            local_dir=root / "zerotts",
+            allow_patterns=["*.json", "*.onnx", "*.data", "*.npy", "*.txt", "*.npz"],
+        )
         ensure_original_tts(root)
     if tts_precision == "fp16":
         sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
         from scripts.convert_zerotts_fp16 import convert
+
         convert(root / "zerotts", root / "zerotts-fp16")
     elif tts_precision == "int8":
         sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
         from scripts.quantize_zerotts import quantize_zerotts
+
         quantize_zerotts(root / "zerotts", root / "zerotts-int8", TTS_REV)
     elif tts_precision == "int8-gpu":
         sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
         from scripts.quantize_zerotts_gpu import CORPUS, quantize_zerotts_gpu
-        corpus = tuple(line.strip() for line in calibration_texts.read_text().splitlines() if line.strip()) \
-            if calibration_texts else CORPUS
+
+        corpus = (
+            tuple(line.strip() for line in calibration_texts.read_text().splitlines() if line.strip())
+            if calibration_texts
+            else CORPUS
+        )
         quantize_zerotts_gpu(root / "zerotts", root / "zerotts-int8-gpu", TTS_REV, corpus=corpus)
     if activate:
         select_profile(root, tts_precision)
@@ -75,6 +101,7 @@ def select_profile(root: Path, precision: str):
     # Xavier setup defers this until real TensorRT inference/inspection passes.
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     from jetson_ai.tts_profile import resolve_tts_model
+
     path, _ = resolve_tts_model(root / "zerotts", precision)
     if not path.is_dir():
         raise FileNotFoundError(f"TTS artifact missing: {path}")
@@ -97,5 +124,11 @@ if __name__ == "__main__":
     if args.select_only:
         select_profile(args.root, args.tts_precision)
     else:
-        prepare(args.root, args.engine, args.tts_precision, args.local_only, args.calibration_texts,
-                activate=not args.defer_selection)
+        prepare(
+            args.root,
+            args.engine,
+            args.tts_precision,
+            args.local_only,
+            args.calibration_texts,
+            activate=not args.defer_selection,
+        )

@@ -10,11 +10,7 @@ router = APIRouter()
 
 async def _local_llm_available() -> tuple[bool, str | None]:
     config = runtime.settings
-    headers = (
-        {"Authorization": f"Bearer {config.local_llm_api_key}"}
-        if config.local_llm_api_key
-        else {}
-    )
+    headers = {"Authorization": f"Bearer {config.local_llm_api_key}"} if config.local_llm_api_key else {}
     try:
         async with httpx.AsyncClient(timeout=0.75) as client:
             response = await client.get(
@@ -28,15 +24,13 @@ async def _local_llm_available() -> tuple[bool, str | None]:
 
 
 async def _llm_options() -> list[dict]:
-    options = [
-        {"provider": "auto", "model": "Adaptive gateway", "available": True,
-         "fallback_available": True, "detail": "Tự chọn Cloud → Jetson → Rules"}
-    ]
+    options = []
     for provider, model in runtime.llm_models.items():
-        available = provider in getattr(runtime.orchestrator, "semantic_providers", runtime.orchestrator.graph_providers)
+        available = provider in getattr(
+            runtime.orchestrator, "semantic_providers", runtime.orchestrator.graph_providers
+        )
         detail = runtime.orchestrator.provider_errors.get(provider)
-        location = ("device" if runtime.settings.jetson_ai_policy == "disabled" else "jetson") if provider == "local" else "cloud"
-        if provider != "rules" and runtime.connectivity.routing_active and not runtime.connectivity.capability_available("llm", location):
+        if not runtime.connectivity.provider_allowed(provider):
             available = False
             detail = "Không khả dụng theo trạng thái kết nối/profile hiện tại"
         elif provider == "local" and available:
@@ -48,12 +42,7 @@ async def _llm_options() -> list[dict]:
 
 
 def _fallback_chain(config):
-    if config.jetson_ai_policy == "offline_only" or config.rag_local_only:
-        return ["rules"] if config.llm_provider == "rules" else ["local", "rules"]
-    configured = getattr(runtime.orchestrator, "provider_fallbacks", {})
-    if config.llm_provider in configured:
-        return list(dict.fromkeys([*configured[config.llm_provider], "rules"]))
-    return ["rules"] if config.llm_provider == "rules" else ["local", "rules"] if config.llm_provider == "local" else [config.llm_provider, "local", "rules"]
+    return runtime.orchestrator.graph.navigation.workflow.resolver.gateway.chain(config.llm_provider)
 
 
 @router.get("/api/v1/health")
@@ -68,27 +57,31 @@ async def health():
     for name, engine in runtime.tts_engines.items():
         ok, detail = engine.availability()
         location = "cloud" if name == "vieneu" else "jetson" if engine.device == "jetson" else "device"
-        if runtime.connectivity.routing_active and not runtime.connectivity.capability_available("tts", location):
+        if not runtime.connectivity.capability_available("tts", location):
             ok, detail = False, "Không khả dụng theo trạng thái kết nối/profile hiện tại"
-        tts_options.append({
-            "provider": name, "voice": engine.voice, "device": engine.device,
-            "available": ok, "detail": detail,
-        })
-    selected_tts = next((item for item in tts_options if item['provider'] == runtime.tts.name), None)
+        tts_options.append(
+            {
+                "provider": name,
+                "voice": engine.voice,
+                "device": engine.device,
+                "available": ok,
+                "detail": detail,
+            }
+        )
+    selected_tts = next((item for item in tts_options if item["provider"] == runtime.tts.name), None)
     if selected_tts is not None:
-        tts_ok, tts_detail = selected_tts['available'], selected_tts['detail']
+        tts_ok, tts_detail = selected_tts["available"], selected_tts["detail"]
     return {
         "status": "ok",
         "connectivity": connectivity,
         "runtime": "local",
         "orchestration": {
             "engine": "langgraph",
-            "workflow_version": "unified-5",
+            "workflow_version": "core-2",
             "fallback_chain": _fallback_chain(config),
             "cloud_budget_seconds": config.cloud_budget_seconds,
-            "local_budget_seconds": config.local_request_budget_seconds,
+            "local_budget_seconds": config.local_budget_seconds,
             "turn_timeout_seconds": config.turn_timeout_seconds,
-            "local_turn_timeout_seconds": config.effective_turn_timeout_seconds,
             "durable_tasks": True,
             "graph_providers": sorted(runtime.orchestrator.graph_providers),
             "retrieval": {
@@ -103,7 +96,8 @@ async def health():
         },
         "llm": {
             "provider": active_provider,
-            "configured": config.llm_provider in getattr(runtime.orchestrator, "semantic_providers", runtime.orchestrator.graph_providers),
+            "configured": config.llm_provider
+            in getattr(runtime.orchestrator, "semantic_providers", runtime.orchestrator.graph_providers),
             "detail": runtime.orchestrator.provider_errors.get(config.llm_provider),
             "options": llm_options,
         },
@@ -124,9 +118,14 @@ async def health():
             "device": runtime.tts.device,
             "execution_providers": runtime.tts.execution_providers,
             "options": [
-                {"provider": "auto", "voice": "Tự động", "device": "adaptive",
-                 "available": any(item["available"] for item in tts_options),
-                 "detail": "Tự chọn VieNeu → ZeroTTS → giọng trình duyệt"}, *tts_options
+                {
+                    "provider": "auto",
+                    "voice": "Tự động",
+                    "device": "adaptive",
+                    "available": any(item["available"] for item in tts_options),
+                    "detail": "Tự chọn VieNeu → ZeroTTS → giọng trình duyệt",
+                },
+                *tts_options,
             ],
         },
         "storage": {
@@ -151,3 +150,9 @@ async def health():
 @router.get("/health", include_in_schema=False)
 async def legacy_health():
     return await health()
+
+
+@router.get("/api/v1/connectivity")
+async def connectivity():
+    """Read background observations without probing any model or speech engine."""
+    return runtime.connectivity.snapshot()

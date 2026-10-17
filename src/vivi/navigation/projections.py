@@ -17,7 +17,7 @@ def dialogue_navigation(value):
 
 def dialogue_result(result):
     return {
-        key: dialogue_navigation(value) if key in {"navigation_update", "trip_plan_update"} else value
+        key: dialogue_navigation(value) if key in {"navigation_update", "draft_update", "journey_update"} else value
         for key, value in result.items()
     }
 

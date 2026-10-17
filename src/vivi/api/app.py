@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.vivi.api.routes import (
+    core,
     engineer,
     health,
     history,
@@ -18,10 +19,10 @@ from src.vivi.api.routes import (
     speech,
     turns,
     vehicle,
-    voice_inputs,
     web,
 )
-from src.vivi.api.runtime import runtime
+from src.vivi.api.runtime import active_runtime, build_runtime, runtime
+from src.vivi.config import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -36,15 +37,13 @@ async def _preload_stt_fallback() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    del app
+    if not hasattr(app.state, "runtime"):
+        app.state.runtime = app.state.runtime_factory(app.state.settings)
+    token = active_runtime.set(app.state.runtime)
     metrics.start_gpu_sampler()
     config = runtime.settings
     background = []
     try:
-        if config.local_voice_buffering_enabled:
-            from src.vivi.speech.input_service import VoiceInputService
-            runtime.voice = VoiceInputService(runtime)
-            await runtime.voice.start()
         await runtime.connectivity.start()
         if config.tts_provider != "off" and config.zerotts_preload:
             await runtime.tts.preload()
@@ -52,38 +51,56 @@ async def lifespan(app: FastAPI):
             await runtime.stt.preload()
         if config.stt_fallback_preload and hasattr(runtime.stt, "preload_fallback"):
             background.append(asyncio.create_task(_preload_stt_fallback()))
-        # Local tool documentation is selected per input. A full-catalog warmup
-        # primes a different prefix and can delay an actual turn or its repair.
-        # The AI server already loads the model; let the first real request
-        # prime its own documentation prefix instead of scheduling extra work.
+        # The gateway loads remote models; no extra model request may compete
+        # with a real turn or bypass the shared stage deadline during startup.
         yield
     finally:
         metrics.stop_gpu_sampler()
-        if runtime.voice is not None:
-            await runtime.voice.close()
         for task in background:
             task.cancel()
         await asyncio.gather(*background, return_exceptions=True)
         await runtime.aclose()
+        active_runtime.reset(token)
 
 
-def create_app() -> FastAPI:
+class RuntimeBindingMiddleware:
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] not in {"http", "websocket"}:
+            return await self.app(scope, receive, send)
+        application = scope["app"]
+        if not hasattr(application.state, "runtime"):
+            application.state.runtime = application.state.runtime_factory(application.state.settings)
+        token = active_runtime.set(application.state.runtime)
+        try:
+            await self.app(scope, receive, send)
+        finally:
+            active_runtime.reset(token)
+
+
+def create_app(*, config=None, runtime=None, runtime_factory=build_runtime) -> FastAPI:
     application = FastAPI(
         title="ViVi Local API",
         version="0.1.0",
         lifespan=lifespan,
     )
+    application.state.settings = config or get_settings()
+    application.state.runtime_factory = runtime_factory
+    if runtime is not None:
+        application.state.runtime = runtime
+    application.add_middleware(RuntimeBindingMiddleware)
     application.add_middleware(
         CORSMiddleware,
         allow_origins=[
-            origin.strip()
-            for origin in runtime.settings.cors_origins.split(",")
-            if origin.strip()
+            origin.strip() for origin in application.state.settings.cors_origins.split(",") if origin.strip()
         ],
         allow_methods=["*"],
         allow_headers=["*"],
     )
     for router in (
+        core.router,
         health.router,
         memory.router,
         history.router,
@@ -92,7 +109,6 @@ def create_app() -> FastAPI:
         navigation.router,
         turns.router,
         speech.router,
-        voice_inputs.router,
         roles.router,
         engineer.router,
         web.router,  # last: it has a catch-all /{asset_name} route

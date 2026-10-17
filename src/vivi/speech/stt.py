@@ -56,9 +56,16 @@ class PhoWhisperAdapter:
             return self._pipeline
         import torch
         from transformers import pipeline
+
         requested = self.config.phowhisper_device.lower()
         if requested == "auto":
-            device = "cuda:0" if torch.cuda.is_available() else "mps" if hasattr(torch.backends, "mps") and torch.backends.mps.is_available() else "cpu"
+            device = (
+                "cuda:0"
+                if torch.cuda.is_available()
+                else "mps"
+                if hasattr(torch.backends, "mps") and torch.backends.mps.is_available()
+                else "cpu"
+            )
         else:
             device = requested
         requested_dtype = self.config.phowhisper_dtype.lower()
@@ -190,10 +197,8 @@ class AdaptiveSTTAdapter(FallbackSTTAdapter):
         return engine.name
 
     def _eligible(self, engine):
-        if not self.connectivity.routing_active:
-            return engine.availability()[0]
-        location = 'cloud' if engine.name == 'soniox' else 'jetson' if engine.name == 'jetson' else 'device'
-        return self.connectivity.capability_available('stt', location) and engine.availability()[0]
+        location = "cloud" if engine.name == "soniox" else "jetson" if engine.name == "jetson" else "device"
+        return self.connectivity.capability_available("stt", location) and engine.availability()[0]
 
     def _active(self):
         return self.primary if self._eligible(self.primary) else self.fallback
@@ -201,13 +206,13 @@ class AdaptiveSTTAdapter(FallbackSTTAdapter):
     @property
     def streaming(self):
         active = self._active()
-        return self._eligible(active) and hasattr(active, 'stream')
+        return self._eligible(active) and getattr(active, "streaming", True) and hasattr(active, "stream")
 
     def availability(self):
         for engine in (self.primary, self.fallback):
             if self._eligible(engine):
                 return engine.availability()
-        return False, 'STT không khả dụng theo trạng thái kết nối/profile hiện tại'
+        return False, "STT không khả dụng theo trạng thái kết nối/profile hiện tại"
 
     async def transcribe(self, path):
         last_error = None
@@ -220,23 +225,23 @@ class AdaptiveSTTAdapter(FallbackSTTAdapter):
                 return transcript
             except Exception as exc:
                 last_error = exc
-                logger.warning('STT provider %s failed: %s', engine.name, type(exc).__name__)
-        raise RuntimeError('Không có STT khả dụng') from last_error
+                logger.warning("STT provider %s failed: %s", engine.name, type(exc).__name__)
+        raise RuntimeError("Không có STT khả dụng") from last_error
 
     async def stream(self, audio_chunks, on_update=None):
         active = self._active()
-        if not self._eligible(active) or not hasattr(active, 'stream'):
-            raise RuntimeError('STT streaming không khả dụng; gửi bản ghi audio qua batch endpoint')
+        if not self._eligible(active) or not getattr(active, "streaming", True) or not hasattr(active, "stream"):
+            raise RuntimeError("STT streaming không khả dụng; gửi bản ghi audio qua batch endpoint")
         transcript = await active.stream(audio_chunks, on_update)
         self._served_engine.set(active)
         return transcript
 
 
-def _create_single(provider: str, config: Settings):
+def _create_single(provider: str, config: Settings, connectivity=None):
     if provider == "jetson":
         from src.vivi.speech.jetson import JetsonSTTAdapter
 
-        return JetsonSTTAdapter(config)
+        return JetsonSTTAdapter(config, connectivity)
     if provider == "off":
         return DisabledSTTAdapter()
     if provider == "phowhisper":
@@ -253,18 +258,21 @@ def _create_single(provider: str, config: Settings):
 
 
 def create_stt(config: Settings, connectivity=None):
-    primary = _create_single(config.stt_provider, config)
-    if config.stt_provider == 'off':
+    primary = _create_single(config.stt_provider, config, connectivity)
+    if config.stt_provider == "off":
         return primary
-    remote = bool(config.jetson_ai_url and config.jetson_ai_policy != 'disabled'
-                  and (not config.ai_server_auth_required or config.jetson_ai_token))
-    if config.jetson_ai_policy == 'offline_only' and config.stt_provider == 'soniox':
-        primary = _create_single('jetson' if remote else config.stt_fallback_provider, config)
-    fallback = _create_single(config.stt_fallback_provider, config)
-    if remote and connectivity is not None and config.stt_provider == 'soniox':
-        fallback = _create_single('jetson', config)
+    remote = bool(
+        config.jetson_ai_url
+        and config.jetson_ai_policy != "disabled"
+        and (not config.ai_server_auth_required or config.jetson_ai_token)
+    )
+    if config.jetson_ai_policy == "offline_only" and config.stt_provider == "soniox":
+        primary = _create_single("jetson" if remote else config.stt_fallback_provider, config, connectivity)
+    fallback = _create_single(config.stt_fallback_provider, config, connectivity)
+    if remote and connectivity is not None and config.stt_provider == "soniox":
+        fallback = _create_single("jetson", config, connectivity)
     if connectivity is not None:
         return AdaptiveSTTAdapter(primary, fallback, connectivity)
-    if config.stt_provider == config.stt_fallback_provider or config.stt_fallback_provider == 'off':
+    if config.stt_provider == config.stt_fallback_provider or config.stt_fallback_provider == "off":
         return primary
     return FallbackSTTAdapter(primary, fallback)

@@ -1,3 +1,5 @@
+> Báo cáo lịch sử của nhánh main ngày 15/10/2026. Các phần local forms, voice inbox và budget cũ không thuộc runtime v2 hiện tại. Xem [tích hợp hiện tại](JETSON_MAIN_INTEGRATION.md); số đo dưới đây không phải nghiệm thu bản merge.
+
 # ZeroTTS precision comparison on AGX Xavier — 2026-10-15
 
 FP16 CUDA is a useful optional memory compromise: the measured process RSS is

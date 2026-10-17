@@ -1,3 +1,5 @@
+> Tài liệu trước cutover Core v2. Contract và kiến trúc hiện hành: [langgraph_core_v2.md](langgraph_core_v2.md).
+
 # Runtime contracts
 
 Đây là contract khóa giữa bốn workstream. Thay đổi field hoặc semantics cần review của

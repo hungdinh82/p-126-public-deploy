@@ -59,9 +59,7 @@ def _tts_identity(tts) -> dict:
 
 def _temporary_audio(content: bytes, suffix: str) -> Path:
     safe_suffix = suffix.lower() if suffix.lower() in _AUDIO_SUFFIXES else ".bin"
-    with tempfile.NamedTemporaryFile(
-        prefix="vivi-upload-", suffix=safe_suffix, delete=False
-    ) as handle:
+    with tempfile.NamedTemporaryFile(prefix="vivi-upload-", suffix=safe_suffix, delete=False) as handle:
         handle.write(content)
         return Path(handle.name)
 
@@ -83,20 +81,32 @@ async def transcribe(
     started = time.perf_counter()
     runtime.store.mark_input_start(session_id, turn_id, started, time.time())
     runtime.store.start_ai_route(session_id, turn_id, transcript="Đầu vào giọng nói")
-    runtime.store.record_ai_stage({
-        "session_id": session_id, "turn_id": turn_id, "stage": "stt",
-        "status": "calling", "provider": "pending",
-        "requested_model": None, "served_model": None,
-    })
+    runtime.store.record_ai_stage(
+        {
+            "session_id": session_id,
+            "turn_id": turn_id,
+            "stage": "stt",
+            "status": "calling",
+            "provider": "pending",
+            "requested_model": None,
+            "served_model": None,
+        }
+    )
     try:
         transcript = await runtime.stt.transcribe(path)
     except Exception as exc:
-        runtime.store.record_ai_stage({
-            "session_id": session_id, "turn_id": turn_id, "stage": "stt",
-            "status": "error", "provider": "unknown",
-            "requested_model": None, "served_model": None,
-            "reason": type(exc).__name__,
-        })
+        runtime.store.record_ai_stage(
+            {
+                "session_id": session_id,
+                "turn_id": turn_id,
+                "stage": "stt",
+                "status": "error",
+                "provider": "unknown",
+                "requested_model": None,
+                "served_model": None,
+                "reason": type(exc).__name__,
+            }
+        )
         raise HTTPException(status_code=503, detail=f"STT chưa sẵn sàng: {exc}") from exc
     finally:
         if temporary_path is not None:
@@ -104,10 +114,16 @@ async def transcribe(
     if not transcript:
         raise HTTPException(status_code=422, detail="Không nhận diện được lời nói")
     latency = round((time.perf_counter() - started) * 1000, 2)
-    runtime.store.record_ai_stage({
-        "session_id": session_id, "turn_id": turn_id, "stage": "stt",
-        "status": "served", "latency_ms": latency, **_stt_identity(),
-    })
+    runtime.store.record_ai_stage(
+        {
+            "session_id": session_id,
+            "turn_id": turn_id,
+            "stage": "stt",
+            "status": "served",
+            "latency_ms": latency,
+            **_stt_identity(),
+        }
+    )
     audio_path = str(stored_path) if stored_path is not None else None
     runtime.store.append_event(
         {
@@ -151,11 +167,17 @@ async def transcribe_stream(socket: WebSocket, session_id: str, turn_id: str):
         return
     runtime.store.mark_input_start(session_id, turn_id, input_started, input_received_at)
     runtime.store.start_ai_route(session_id, turn_id, transcript="Đầu vào giọng nói trực tiếp")
-    runtime.store.record_ai_stage({
-        "session_id": session_id, "turn_id": turn_id, "stage": "stt",
-        "status": "calling", "provider": "pending",
-        "requested_model": None, "served_model": None,
-    })
+    runtime.store.record_ai_stage(
+        {
+            "session_id": session_id,
+            "turn_id": turn_id,
+            "stage": "stt",
+            "status": "calling",
+            "provider": "pending",
+            "requested_model": None,
+            "served_model": None,
+        }
+    )
 
     received: list[bytes] = []
     # Latency is measured from the end of speech, not from the first chunk.
@@ -198,10 +220,16 @@ async def transcribe_stream(socket: WebSocket, session_id: str, turn_id: str):
             pass  # The browser closed it first, e.g. a follow-up window nobody spoke in.
         return
     stored_path = runtime.store.save_audio(session_id, turn_id, ".webm", b"".join(received))
-    runtime.store.record_ai_stage({
-        "session_id": session_id, "turn_id": turn_id, "stage": "stt",
-        "status": "served", "latency_ms": latency, **_stt_identity(),
-    })
+    runtime.store.record_ai_stage(
+        {
+            "session_id": session_id,
+            "turn_id": turn_id,
+            "stage": "stt",
+            "status": "served",
+            "latency_ms": latency,
+            **_stt_identity(),
+        }
+    )
     audio_path = str(stored_path) if stored_path is not None else None
     runtime.store.append_event(
         {
@@ -228,24 +256,32 @@ async def transcribe_stream(socket: WebSocket, session_id: str, turn_id: str):
 
 
 def _tts_candidates(request: TTSRequest):
-    if request.tts_provider is None and runtime.tts.name == 'off':
-        raise HTTPException(status_code=503, detail='TTS đang tắt')
-    preference = runtime.tts.name if request.tts_provider is None else (None if request.tts_provider == 'auto' else request.tts_provider)
+    if request.tts_provider is None and runtime.tts.name == "off":
+        raise HTTPException(status_code=503, detail="TTS đang tắt")
+    preference = (
+        runtime.tts.name
+        if request.tts_provider is None
+        else (None if request.tts_provider == "auto" else request.tts_provider)
+    )
     if preference is not None and preference not in runtime.tts_engines:
-        raise HTTPException(status_code=400, detail='TTS provider không khả dụng trong profile này')
-    cloud_ok = not runtime.connectivity.routing_active or runtime.connectivity.capability_available("tts", "cloud")
-    jetson_ok = not runtime.connectivity.routing_active or runtime.connectivity.capability_available("tts", "jetson")
-    order = ["vieneu", "zerotts"] if preference is None else [preference, "zerotts" if preference == "vieneu" else "vieneu"]
+        raise HTTPException(status_code=400, detail="TTS provider không khả dụng trong profile này")
+    order = (
+        ["vieneu", "zerotts"] if preference is None else [preference, "zerotts" if preference == "vieneu" else "vieneu"]
+    )
     candidates = []
     for name in order:
-        if name == "vieneu" and not cloud_ok:
-            continue
-        engine = runtime.tts if request.tts_provider is None and name == runtime.tts.name else runtime.tts_engines.get(name)
-        if name == "zerotts" and getattr(engine, 'device', '') == 'jetson' and not jetson_ok:
+        engine = (
+            runtime.tts if request.tts_provider is None and name == runtime.tts.name else runtime.tts_engines.get(name)
+        )
+        location = "cloud" if name == "vieneu" else "jetson" if getattr(engine, "device", "") == "jetson" else "device"
+        if not runtime.connectivity.capability_available("tts", location):
             continue
         if engine is not None and engine.availability()[0]:
             runtime.connectivity.store.append(
-                "selection", "tts", "selected", provider=name,
+                "selection",
+                "tts",
+                "selected",
+                provider=name,
                 reason=f"preference={preference or 'auto'}",
             )
             candidates.append(engine)
@@ -261,30 +297,48 @@ def _tts(request: TTSRequest):
 @router.post("/tts")
 async def synthesize(request: TTSRequest):
     for tts in _tts_candidates(request):
-        runtime.store.record_ai_stage({
-            "session_id": request.session_id, "turn_id": request.turn_id, "stage": "tts",
-            "status": "calling", **_tts_identity(tts),
-        })
+        runtime.store.record_ai_stage(
+            {
+                "session_id": request.session_id,
+                "turn_id": request.turn_id,
+                "stage": "tts",
+                "status": "calling",
+                **_tts_identity(tts),
+            }
+        )
         try:
             audio = await tts.synthesize(spoken_text(request.text))
             if not audio:
-                raise ValueError('Empty TTS audio')
-            runtime.store.record_ai_stage({
-                "session_id": request.session_id, "turn_id": request.turn_id, "stage": "tts",
-                "status": "served", **_tts_identity(tts),
-            })
-            return Response(audio, media_type='audio/wav', headers={'X-ViVi-Voice': quote(tts.voice)})
+                raise ValueError("Empty TTS audio")
+            runtime.store.record_ai_stage(
+                {
+                    "session_id": request.session_id,
+                    "turn_id": request.turn_id,
+                    "stage": "tts",
+                    "status": "served",
+                    **_tts_identity(tts),
+                }
+            )
+            return Response(audio, media_type="audio/wav", headers={"X-ViVi-Voice": quote(tts.voice)})
         except Exception as exc:
-            runtime.store.record_ai_stage({
-                "session_id": request.session_id, "turn_id": request.turn_id, "stage": "tts",
-                "status": "fallback", "reason": type(exc).__name__, **_tts_identity(tts),
-            })
-            runtime.connectivity.store.append('provider_result', 'tts', 'fallback', provider=tts.name, reason=type(exc).__name__)
-    raise HTTPException(status_code=503, detail='TTS chưa sẵn sàng; dùng giọng trình duyệt')
+            runtime.store.record_ai_stage(
+                {
+                    "session_id": request.session_id,
+                    "turn_id": request.turn_id,
+                    "stage": "tts",
+                    "status": "fallback",
+                    "reason": type(exc).__name__,
+                    **_tts_identity(tts),
+                }
+            )
+            runtime.connectivity.store.append(
+                "provider_result", "tts", "fallback", provider=tts.name, reason=type(exc).__name__
+            )
+    raise HTTPException(status_code=503, detail="TTS chưa sẵn sàng; dùng giọng trình duyệt")
 
 
 async def _close_audio(iterator):
-    close = getattr(iterator, 'aclose', None)
+    close = getattr(iterator, "aclose", None)
     if close is not None:
         await close()
 
@@ -294,25 +348,38 @@ async def synthesize_stream(request: TTSRequest):
     started, received_at = time.perf_counter(), time.time()
     iterator = None
     for tts in _tts_candidates(request):
-        runtime.store.record_ai_stage({
-            "session_id": request.session_id, "turn_id": request.turn_id, "stage": "tts",
-            "status": "calling", **_tts_identity(tts),
-        })
+        runtime.store.record_ai_stage(
+            {
+                "session_id": request.session_id,
+                "turn_id": request.turn_id,
+                "stage": "tts",
+                "status": "calling",
+                **_tts_identity(tts),
+            }
+        )
         try:
-            ensure_loaded = getattr(tts, 'ensure_loaded', None)
+            ensure_loaded = getattr(tts, "ensure_loaded", None)
             if ensure_loaded is not None:
                 await ensure_loaded()
             iterator = tts.stream(spoken_text(request.text)).__aiter__()
-            async with asyncio.timeout(runtime.settings.local_request_budget_seconds if tts.device == 'jetson'
-                                       else runtime.settings.vieneu_timeout_seconds):
+            async with asyncio.timeout(
+                runtime.settings.ai_server_request_timeout_seconds
+                if tts.device == "jetson"
+                else runtime.settings.vieneu_timeout_seconds
+            ):
                 first = await anext(iterator)
                 while not first:
                     first = await anext(iterator)
-            runtime.store.record_ai_stage({
-                "session_id": request.session_id, "turn_id": request.turn_id, "stage": "tts",
-                "status": "served", "latency_ms": round((time.perf_counter() - started) * 1000, 2),
-                **_tts_identity(tts),
-            })
+            runtime.store.record_ai_stage(
+                {
+                    "session_id": request.session_id,
+                    "turn_id": request.turn_id,
+                    "stage": "tts",
+                    "status": "served",
+                    "latency_ms": round((time.perf_counter() - started) * 1000, 2),
+                    **_tts_identity(tts),
+                }
+            )
             break
         except BaseException as exc:
             if iterator is not None:
@@ -320,13 +387,21 @@ async def synthesize_stream(request: TTSRequest):
                 iterator = None
             if not isinstance(exc, Exception):
                 raise
-            runtime.store.record_ai_stage({
-                "session_id": request.session_id, "turn_id": request.turn_id, "stage": "tts",
-                "status": "fallback", "reason": type(exc).__name__, **_tts_identity(tts),
-            })
-            runtime.connectivity.store.append('provider_result', 'tts', 'fallback', provider=tts.name, reason=type(exc).__name__)
+            runtime.store.record_ai_stage(
+                {
+                    "session_id": request.session_id,
+                    "turn_id": request.turn_id,
+                    "stage": "tts",
+                    "status": "fallback",
+                    "reason": type(exc).__name__,
+                    **_tts_identity(tts),
+                }
+            )
+            runtime.connectivity.store.append(
+                "provider_result", "tts", "fallback", provider=tts.name, reason=type(exc).__name__
+            )
     else:
-        raise HTTPException(status_code=503, detail='TTS chưa sẵn sàng; dùng giọng trình duyệt')
+        raise HTTPException(status_code=503, detail="TTS chưa sẵn sàng; dùng giọng trình duyệt")
     first_chunk = round((time.perf_counter() - started) * 1000, 2)
     closed = False
 
@@ -343,19 +418,32 @@ async def synthesize_stream(request: TTSRequest):
             async for chunk in iterator:
                 audio_duration_ms += len(chunk) / 2 / tts.sample_rate * 1000
                 yield chunk
-            runtime.store.record_tts(request.session_id, request.turn_id, {
-                'session_id': request.session_id, 'turn_id': request.turn_id,
-                'received_at': received_at, 'text': request.text,
-                'time_to_first_chunk_ms': first_chunk,
-                'synthesis_ms': round((time.perf_counter() - started) * 1000, 2),
-                'audio_duration_ms': round(audio_duration_ms, 2),
-            })
+            runtime.store.record_tts(
+                request.session_id,
+                request.turn_id,
+                {
+                    "session_id": request.session_id,
+                    "turn_id": request.turn_id,
+                    "received_at": received_at,
+                    "text": request.text,
+                    "time_to_first_chunk_ms": first_chunk,
+                    "synthesis_ms": round((time.perf_counter() - started) * 1000, 2),
+                    "audio_duration_ms": round(audio_duration_ms, 2),
+                },
+            )
         finally:
             await cleanup()
 
     # No server failover after PCM is emitted. The browser may retry this
     # sentence only; inference, retrieval and vehicle effects are never replayed.
-    return StreamingResponse(timed_stream(), media_type='application/octet-stream', headers={
-        'X-ViVi-Voice': quote(tts.voice), 'X-ViVi-Audio-Format': 'pcm_s16le',
-        'X-ViVi-Sample-Rate': str(tts.sample_rate), 'Cache-Control': 'no-store',
-    }, background=BackgroundTask(cleanup))
+    return StreamingResponse(
+        timed_stream(),
+        media_type="application/octet-stream",
+        headers={
+            "X-ViVi-Voice": quote(tts.voice),
+            "X-ViVi-Audio-Format": "pcm_s16le",
+            "X-ViVi-Sample-Rate": str(tts.sample_rate),
+            "Cache-Control": "no-store",
+        },
+        background=BackgroundTask(cleanup),
+    )

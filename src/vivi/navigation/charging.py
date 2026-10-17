@@ -8,8 +8,8 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from hashlib import sha256
 
-from src.vivi.dialogue.parser import charging_poi_info, normalize_text, rest_area_poi
 from src.vivi.navigation.energy import ChargingStation
+from src.vivi.navigation.poi import charging_poi_info, normalize_text, rest_area_poi
 
 MAP_SOURCE = "https://maps.vietmap.vn/docs/map-api/place-v4/"
 

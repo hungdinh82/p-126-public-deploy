@@ -1,0 +1,10 @@
+{"id": "nav-short", "text": "đi Tràng An", "expect": {"actions.0.capability": "navigation.plan", "actions.0.arguments.purpose": {"one_of": [null, "navigate"]}}}
+{"id": "nav-verb", "text": "dẫn đường đến Tràng An", "expect": {"actions.0.capability": "navigation.plan"}}
+{"id": "nav-paraphrase", "text": "cho xe tới khu du lịch Tràng An nhé", "expect": {"actions.0.capability": "navigation.plan"}}
+{"id": "itinerary", "text": "lập kế hoạch đi Tràng An rồi mở nhạc", "expect": {"actions.0.capability": "navigation.plan", "actions.0.arguments.purpose": "itinerary", "actions.1.capability": "media.play"}}
+{"id": "navigate-music", "text": "dẫn đường đi Tràng An rồi bật nhạc", "expect": {"actions.0.capability": "navigation.plan", "actions.1.capability": "media.play"}}
+{"id": "climate", "text": "chỉnh điều hoà về 24 độ", "expect": {"actions.0.capability": "climate.set_temperature", "actions.0.arguments.value_celsius": 24}}
+{"id": "window", "text": "hạ kính bên ghế phụ xuống một nửa", "expect": {"actions.0.capability": "window.set_position", "actions.0.arguments.zone": "front_passenger", "actions.0.arguments.position_percent": 50}}
+{"id": "round-trip", "text": "tính lộ trình đi Sầm Sơn và quay về", "expect": {"actions.0.capability": "navigation.plan", "actions.0.arguments.trip_kind": "round_trip"}}
+{"id": "stop", "text": "dừng hành trình hiện tại", "expect": {"actions.0.capability": "navigation.stop"}}
+{"id": "unknown", "text": "xyz123 !??", "expect": {"act": {"one_of": ["clarify", "unsupported", "reply"]}, "actions": {"length": 0}}}

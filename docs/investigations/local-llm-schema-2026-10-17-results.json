@@ -1,0 +1,583 @@
+[
+  {
+    "case": "greeting",
+    "variant": "current",
+    "request_bytes": 50938,
+    "seconds": 41.474,
+    "http": 200,
+    "usage": {
+      "completion_tokens": 431,
+      "prompt_tokens": 11857,
+      "total_tokens": 12288,
+      "prompt_tokens_details": {
+        "cached_tokens": 1
+      }
+    },
+    "timings": {
+      "cache_n": 1,
+      "prompt_n": 11856,
+      "prompt_ms": 24039.396,
+      "prompt_per_token_ms": 2.027614372469636,
+      "prompt_per_second": 493.19042791258147,
+      "predicted_n": 431,
+      "predicted_ms": 15509.815,
+      "predicted_per_token_ms": 36.069337209302326,
+      "predicted_per_second": 27.724379691182648
+    },
+    "finish": "length",
+    "output_chars": 1460,
+    "error": "JSONDecodeError: Unterminated string starting at: line 1 column 1447 (char 1446)",
+    "expected_semantics_correct": false
+  },
+  {
+    "case": "greeting",
+    "variant": "optional",
+    "request_bytes": 49937,
+    "seconds": 23.579,
+    "http": 200,
+    "usage": {
+      "completion_tokens": 82,
+      "prompt_tokens": 11595,
+      "total_tokens": 11677,
+      "prompt_tokens_details": {
+        "cached_tokens": 2337
+      }
+    },
+    "timings": {
+      "cache_n": 2337,
+      "prompt_n": 9258,
+      "prompt_ms": 20189.844,
+      "prompt_per_token_ms": 2.180799740764744,
+      "prompt_per_second": 458.5473765919142,
+      "predicted_n": 82,
+      "predicted_ms": 2919.512,
+      "predicted_per_token_ms": 36.04335802469136,
+      "predicted_per_second": 27.74436275651547
+    },
+    "finish": "tool_calls",
+    "output_chars": 215,
+    "nulls": 0,
+    "valid": false,
+    "expected_semantics_correct": false
+  },
+  {
+    "case": "climate",
+    "variant": "current",
+    "request_bytes": 51012,
+    "seconds": 36.647,
+    "http": 200,
+    "usage": {
+      "completion_tokens": 422,
+      "prompt_tokens": 11866,
+      "total_tokens": 12288,
+      "prompt_tokens_details": {
+        "cached_tokens": 2337
+      }
+    },
+    "timings": {
+      "cache_n": 2337,
+      "prompt_n": 9529,
+      "prompt_ms": 21016.251,
+      "prompt_per_token_ms": 2.205504355126456,
+      "prompt_per_second": 453.4110293981548,
+      "predicted_n": 422,
+      "predicted_ms": 15218.009,
+      "predicted_per_token_ms": 36.147289786223276,
+      "predicted_per_second": 27.664591340430935
+    },
+    "finish": "length",
+    "output_chars": 1425,
+    "error": "JSONDecodeError: Unterminated string starting at: line 1 column 1400 (char 1399)",
+    "expected_semantics_correct": false
+  },
+  {
+    "case": "climate",
+    "variant": "optional",
+    "request_bytes": 50011,
+    "seconds": 24.298,
+    "http": 200,
+    "usage": {
+      "completion_tokens": 104,
+      "prompt_tokens": 11604,
+      "total_tokens": 11708,
+      "prompt_tokens_details": {
+        "cached_tokens": 2337
+      }
+    },
+    "timings": {
+      "cache_n": 2337,
+      "prompt_n": 9267,
+      "prompt_ms": 20206.962,
+      "prompt_per_token_ms": 2.1805289737779217,
+      "prompt_per_second": 458.60431667066035,
+      "predicted_n": 104,
+      "predicted_ms": 3662.814,
+      "predicted_per_token_ms": 35.56130097087379,
+      "predicted_per_second": 28.120456020971854
+    },
+    "finish": "tool_calls",
+    "output_chars": 295,
+    "nulls": 0,
+    "valid": false,
+    "expected_semantics_correct": false
+  },
+  {
+    "case": "window",
+    "variant": "current",
+    "request_bytes": 50976,
+    "seconds": 36.548,
+    "http": 200,
+    "usage": {
+      "completion_tokens": 424,
+      "prompt_tokens": 11864,
+      "total_tokens": 12288,
+      "prompt_tokens_details": {
+        "cached_tokens": 2337
+      }
+    },
+    "timings": {
+      "cache_n": 2337,
+      "prompt_n": 9527,
+      "prompt_ms": 21030.91,
+      "prompt_per_token_ms": 2.2075060354781146,
+      "prompt_per_second": 452.99989396559636,
+      "predicted_n": 424,
+      "predicted_ms": 15126.256,
+      "predicted_per_token_ms": 35.759470449172575,
+      "predicted_per_second": 27.964619929743357
+    },
+    "finish": "length",
+    "output_chars": 1433,
+    "error": "JSONDecodeError: Unterminated string starting at: line 1 column 1412 (char 1411)",
+    "expected_semantics_correct": false
+  },
+  {
+    "case": "window",
+    "variant": "optional",
+    "request_bytes": 49975,
+    "seconds": 28.798,
+    "http": 200,
+    "usage": {
+      "completion_tokens": 217,
+      "prompt_tokens": 11602,
+      "total_tokens": 11819,
+      "prompt_tokens_details": {
+        "cached_tokens": 2337
+      }
+    },
+    "timings": {
+      "cache_n": 2337,
+      "prompt_n": 9265,
+      "prompt_ms": 20188.917,
+      "prompt_per_token_ms": 2.179052023745278,
+      "prompt_per_second": 458.91515627113625,
+      "predicted_n": 217,
+      "predicted_ms": 7922.55,
+      "predicted_per_token_ms": 36.678472222222226,
+      "predicted_per_second": 27.263949107295
+    },
+    "finish": "tool_calls",
+    "output_chars": 686,
+    "nulls": 0,
+    "valid": false,
+    "expected_semantics_correct": false
+  },
+  {
+    "case": "compound",
+    "variant": "current",
+    "request_bytes": 51038,
+    "seconds": 36.466,
+    "http": 200,
+    "usage": {
+      "completion_tokens": 416,
+      "prompt_tokens": 11872,
+      "total_tokens": 12288,
+      "prompt_tokens_details": {
+        "cached_tokens": 2337
+      }
+    },
+    "timings": {
+      "cache_n": 2337,
+      "prompt_n": 9535,
+      "prompt_ms": 21036.557,
+      "prompt_per_token_ms": 2.20624614577871,
+      "prompt_per_second": 453.25858219099257,
+      "predicted_n": 416,
+      "predicted_ms": 14896.915,
+      "predicted_per_token_ms": 35.89618072289157,
+      "predicted_per_second": 27.85811693226416
+    },
+    "finish": "length",
+    "output_chars": 1460,
+    "error": "JSONDecodeError: Expecting ',' delimiter: line 1 column 1461 (char 1460)",
+    "expected_semantics_correct": false
+  },
+  {
+    "case": "compound",
+    "variant": "optional",
+    "request_bytes": 50037,
+    "seconds": 31.361,
+    "http": 200,
+    "usage": {
+      "completion_tokens": 299,
+      "prompt_tokens": 11610,
+      "total_tokens": 11909,
+      "prompt_tokens_details": {
+        "cached_tokens": 2337
+      }
+    },
+    "timings": {
+      "cache_n": 2337,
+      "prompt_n": 9273,
+      "prompt_ms": 20235.358,
+      "prompt_per_token_ms": 2.1821803084223013,
+      "prompt_per_second": 458.257274222675,
+      "predicted_n": 299,
+      "predicted_ms": 10756.461,
+      "predicted_per_token_ms": 36.09550671140939,
+      "predicted_per_second": 27.704279316403415
+    },
+    "finish": "tool_calls",
+    "output_chars": 950,
+    "nulls": 0,
+    "valid": false,
+    "expected_semantics_correct": false
+  },
+  {
+    "case": "greeting",
+    "variant": "compact",
+    "request_bytes": 32059,
+    "seconds": 6.254,
+    "http": 200,
+    "usage": {
+      "completion_tokens": 63,
+      "prompt_tokens": 6975,
+      "total_tokens": 7038,
+      "prompt_tokens_details": {
+        "cached_tokens": 5074
+      }
+    },
+    "timings": {
+      "cache_n": 5074,
+      "prompt_n": 1901,
+      "prompt_ms": 3949.341,
+      "prompt_per_token_ms": 2.0775071015255127,
+      "prompt_per_second": 481.3461283793929,
+      "predicted_n": 63,
+      "predicted_ms": 1837.864,
+      "predicted_per_token_ms": 29.642967741935486,
+      "predicted_per_second": 33.73481389264929
+    },
+    "finish": "tool_calls",
+    "output_chars": 164,
+    "nulls": 0,
+    "valid": false,
+    "expected_semantics_correct": false
+  },
+  {
+    "case": "climate",
+    "variant": "compact",
+    "request_bytes": 32133,
+    "seconds": 6.306,
+    "http": 200,
+    "usage": {
+      "completion_tokens": 59,
+      "prompt_tokens": 6984,
+      "total_tokens": 7043,
+      "prompt_tokens_details": {
+        "cached_tokens": 5074
+      }
+    },
+    "timings": {
+      "cache_n": 5074,
+      "prompt_n": 1910,
+      "prompt_ms": 3787.92,
+      "prompt_per_token_ms": 1.9832041884816753,
+      "prompt_per_second": 504.23451392848847,
+      "predicted_n": 59,
+      "predicted_ms": 1758.774,
+      "predicted_per_token_ms": 30.323689655172412,
+      "predicted_per_second": 32.97751729329635
+    },
+    "finish": "tool_calls",
+    "output_chars": 148,
+    "nulls": 0,
+    "valid": false,
+    "expected_semantics_correct": false
+  },
+  {
+    "case": "window",
+    "variant": "compact",
+    "request_bytes": 32097,
+    "seconds": 8.35,
+    "http": 200,
+    "usage": {
+      "completion_tokens": 132,
+      "prompt_tokens": 6982,
+      "total_tokens": 7114,
+      "prompt_tokens_details": {
+        "cached_tokens": 5074
+      }
+    },
+    "timings": {
+      "cache_n": 5074,
+      "prompt_n": 1908,
+      "prompt_ms": 3785.228,
+      "prompt_per_token_ms": 1.9838721174004192,
+      "prompt_per_second": 504.0647485435488,
+      "predicted_n": 132,
+      "predicted_ms": 4255.922,
+      "predicted_per_token_ms": 32.48795419847328,
+      "predicted_per_second": 30.780639306829404
+    },
+    "finish": "tool_calls",
+    "output_chars": 393,
+    "nulls": 0,
+    "valid": false,
+    "expected_semantics_correct": false
+  },
+  {
+    "case": "compound",
+    "variant": "compact",
+    "request_bytes": 32159,
+    "seconds": 7.171,
+    "http": 200,
+    "usage": {
+      "completion_tokens": 98,
+      "prompt_tokens": 6990,
+      "total_tokens": 7088,
+      "prompt_tokens_details": {
+        "cached_tokens": 5074
+      }
+    },
+    "timings": {
+      "cache_n": 5074,
+      "prompt_n": 1916,
+      "prompt_ms": 3787.842,
+      "prompt_per_token_ms": 1.9769530271398748,
+      "prompt_per_second": 505.8289126103993,
+      "predicted_n": 98,
+      "predicted_ms": 3049.3,
+      "predicted_per_token_ms": 31.436082474226804,
+      "predicted_per_second": 31.810579477257072
+    },
+    "finish": "tool_calls",
+    "output_chars": 294,
+    "nulls": 0,
+    "valid": false,
+    "expected_semantics_correct": false
+  },
+  {
+    "case": "greeting",
+    "variant": "examples",
+    "request_bytes": 32799,
+    "seconds": 10.059,
+    "http": 200,
+    "usage": {
+      "completion_tokens": 29,
+      "prompt_tokens": 7116,
+      "total_tokens": 7145,
+      "prompt_tokens_details": {
+        "cached_tokens": 1953
+      }
+    },
+    "timings": {
+      "cache_n": 1953,
+      "prompt_n": 5163,
+      "prompt_ms": 8764.474,
+      "prompt_per_token_ms": 1.6975545225644006,
+      "prompt_per_second": 589.082699087247,
+      "predicted_n": 29,
+      "predicted_ms": 862.131,
+      "predicted_per_token_ms": 30.790392857142855,
+      "predicted_per_second": 32.47766290737719
+    },
+    "finish": "tool_calls",
+    "output_chars": 37,
+    "nulls": 0,
+    "valid": true,
+    "semantic": {
+      "act": "reply",
+      "text": "Chào bạn!"
+    },
+    "expected_semantics_correct": true
+  },
+  {
+    "case": "climate",
+    "variant": "examples",
+    "request_bytes": 32873,
+    "seconds": 5.566,
+    "http": 200,
+    "usage": {
+      "completion_tokens": 45,
+      "prompt_tokens": 7125,
+      "total_tokens": 7170,
+      "prompt_tokens_details": {
+        "cached_tokens": 5215
+      }
+    },
+    "timings": {
+      "cache_n": 5215,
+      "prompt_n": 1910,
+      "prompt_ms": 3861.549,
+      "prompt_per_token_ms": 2.021753403141361,
+      "prompt_per_second": 494.62016408441275,
+      "predicted_n": 45,
+      "predicted_ms": 1356.84,
+      "predicted_per_token_ms": 30.837272727272726,
+      "predicted_per_second": 32.42828926034021
+    },
+    "finish": "tool_calls",
+    "output_chars": 110,
+    "nulls": 0,
+    "valid": true,
+    "semantic": {
+      "act": "request",
+      "actions": [
+        {
+          "capability": "climate.set_temperature",
+          "arguments": {
+            "value_celsius": 24.0
+          }
+        }
+      ]
+    },
+    "expected_semantics_correct": true
+  },
+  {
+    "case": "window",
+    "variant": "examples",
+    "request_bytes": 32837,
+    "seconds": 7.788,
+    "http": 200,
+    "usage": {
+      "completion_tokens": 105,
+      "prompt_tokens": 7123,
+      "total_tokens": 7228,
+      "prompt_tokens_details": {
+        "cached_tokens": 5215
+      }
+    },
+    "timings": {
+      "cache_n": 5215,
+      "prompt_n": 1908,
+      "prompt_ms": 3858.171,
+      "prompt_per_token_ms": 2.0221022012578613,
+      "prompt_per_second": 494.5348456561413,
+      "predicted_n": 105,
+      "predicted_ms": 3458.45,
+      "predicted_per_token_ms": 33.254326923076924,
+      "predicted_per_second": 30.071274703985893
+    },
+    "finish": "tool_calls",
+    "output_chars": 310,
+    "nulls": 0,
+    "valid": false,
+    "expected_semantics_correct": false
+  },
+  {
+    "case": "compound",
+    "variant": "examples",
+    "request_bytes": 32899,
+    "seconds": 7.315,
+    "http": 200,
+    "usage": {
+      "completion_tokens": 102,
+      "prompt_tokens": 7131,
+      "total_tokens": 7233,
+      "prompt_tokens_details": {
+        "cached_tokens": 5215
+      }
+    },
+    "timings": {
+      "cache_n": 5215,
+      "prompt_n": 1916,
+      "prompt_ms": 3861.23,
+      "prompt_per_token_ms": 2.0152557411273486,
+      "prompt_per_second": 496.214936691158,
+      "predicted_n": 102,
+      "predicted_ms": 3119.225,
+      "predicted_per_token_ms": 30.883415841584156,
+      "predicted_per_second": 32.37983794051407
+    },
+    "finish": "tool_calls",
+    "output_chars": 298,
+    "nulls": 0,
+    "valid": true,
+    "semantic": {
+      "act": "request",
+      "actions": [
+        {
+          "capability": "climate.set_temperature",
+          "arguments": {
+            "value_celsius": 24.0
+          }
+        }
+      ],
+      "text": "Đặt điều hòa 24 độ và mở kính ghế phụ xuống 50%."
+    },
+    "expected_semantics_correct": false
+  },
+  {
+    "case": "climate",
+    "variant": "google",
+    "seconds": 1.079,
+    "http": 200,
+    "usage": {
+      "completion_tokens": 33,
+      "prompt_tokens": 10834,
+      "total_tokens": 10867
+    },
+    "finish": "stop",
+    "output_chars": 110,
+    "valid": true,
+    "semantic": {
+      "act": "request",
+      "actions": [
+        {
+          "capability": "climate.set_temperature",
+          "arguments": {
+            "value_celsius": 24.0
+          }
+        }
+      ]
+    },
+    "expected_semantics_correct": true
+  },
+  {
+    "case": "compound",
+    "variant": "google",
+    "seconds": 1.1,
+    "http": 200,
+    "usage": {
+      "completion_tokens": 63,
+      "prompt_tokens": 10840,
+      "prompt_tokens_details": {
+        "cached_tokens": 4057
+      },
+      "total_tokens": 10903
+    },
+    "finish": "stop",
+    "output_chars": 215,
+    "valid": true,
+    "semantic": {
+      "act": "request",
+      "actions": [
+        {
+          "capability": "climate.set_temperature",
+          "arguments": {
+            "value_celsius": 24.0
+          }
+        },
+        {
+          "capability": "window.set_position",
+          "arguments": {
+            "position_percent": 50,
+            "zone": "front_passenger"
+          }
+        }
+      ]
+    },
+    "expected_semantics_correct": true
+  }
+]

@@ -4,19 +4,18 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-from contextlib import nullcontext
 import json
 import os
-from pathlib import Path
-import sys
 import subprocess
+import sys
 import tomllib
+from contextlib import nullcontext
+from pathlib import Path
 from tempfile import TemporaryDirectory
 from uuid import uuid4
 
 import httpx
 from dotenv import dotenv_values
-
 
 ROOT = Path(__file__).resolve().parents[1]
 HELP = """Nhập câu hỏi/lệnh xe; Enter để gửi.
@@ -44,9 +43,9 @@ def configure(args: argparse.Namespace, directory: Path) -> None:
         "ZEROTTS_PRELOAD": "false", "RAG_RETRIEVAL_MODE": args.retrieval,
         "LLM_TIMEOUT_SECONDS": str(args.timeout),
     })
-    if args.mode == "rules":
+    if args.mode == "fallback":
         os.environ.update({
-            "LLM_PROVIDER": "rules", "JETSON_AI_POLICY": "disabled",
+            "LLM_PROVIDER": "google", "JETSON_AI_POLICY": "disabled",
             "VIVI_RAG_LOCAL_ONLY": "true", "LOCAL_LLM_MODEL": "",
             "OPENAI_API_KEY": "", "GOOGLE_API_KEY": "", "GEMINI_API_KEY": "",
             "OPENROUTER_API_KEY": "",
@@ -92,8 +91,8 @@ class Playground:
 
     def show(self, result: dict) -> None:
         self.state = result.get("vehicle_state", self.state)
-        confirmation = result.get("confirmation")
-        self.pending = confirmation.get("confirmation_id") if confirmation else None
+        confirmation = result.get("pending_question")
+        self.pending = confirmation.get("id") if confirmation else None
         if self.args.json:
             print(json.dumps(result, ensure_ascii=False, indent=2))
             return
@@ -143,16 +142,17 @@ class Playground:
             if not self.pending:
                 print("Không có thao tác đang chờ xác nhận.")
                 return False
-            result = await self.request("POST", f"/api/v1/confirmations/{self.pending}", {
+            result = await self.request("POST", "/api/v2/turn", {
                 "session_id": self.session_id, "turn_id": uuid4().hex,
-                "decision": "approve" if command == "/approve" else "deny",
+                "input": {"kind": "question_reply", "answer": {"question_id": self.pending,
+                    "option_id": "yes" if command == "/approve" else "no"}},
             })
         elif command.startswith("/"):
             print("Lệnh chưa biết; nhập /help.")
             return False
         else:
-            result = await self.request("POST", "/api/v1/turn", {
-                "transcript": text.strip(), "session_id": self.session_id, "turn_id": uuid4().hex,
+            result = await self.request("POST", "/api/v2/turn", {
+                "input": {"kind": "utterance", "text": text.strip()}, "session_id": self.session_id, "turn_id": uuid4().hex,
             })
         self.show(result)
         return result.get("status") != "error"
@@ -160,8 +160,11 @@ class Playground:
 
 async def run(args: argparse.Namespace) -> int:
     # Import after env overrides: exercise the existing /api/v1 composition root.
-    from src.vivi.api.app import app
-    from src.vivi.api.runtime import runtime
+    from src.vivi.api.app import create_app
+    from src.vivi.api.runtime import build_runtime
+
+    runtime = build_runtime()
+    app = create_app(runtime=runtime)
 
     failures = 0
     try:
@@ -197,7 +200,7 @@ async def run(args: argparse.Namespace) -> int:
                     failures += 1
                     break
     finally:
-        runtime.close()
+        await runtime.aclose()
     return 1 if failures else 0
 
 
@@ -265,7 +268,7 @@ async def run_llm(args: argparse.Namespace) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--mode", choices=("rules", "local", "jetson"), default="rules")
+    parser.add_argument("--mode", choices=("fallback", "local", "jetson"), default="fallback")
     parser.add_argument("--target", choices=("pipeline", "llm"), default="pipeline",
                         help="pipeline: RAG/tool; llm: hỏi trực tiếp model API")
     parser.add_argument("--jetson-url", help="URL AI server; mặc định lấy từ config.toml hoặc .env")
@@ -277,7 +280,7 @@ def main() -> int:
     args = parser.parse_args()
     if args.timeout <= 0:
         parser.error("--timeout phải lớn hơn 0")
-    if args.target == "llm" and args.mode == "rules":
+    if args.target == "llm" and args.mode == "fallback":
         parser.error("--target llm cần --mode local hoặc --mode jetson")
     sys.path.insert(0, str(ROOT))
     os.chdir(ROOT)

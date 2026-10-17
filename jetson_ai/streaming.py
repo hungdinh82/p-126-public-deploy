@@ -12,6 +12,7 @@ class ClientDisconnectedError(Exception):
 
 async def while_connected(request, operation):
     """Cancel queued/upstream async inference when its HTTP caller disconnects."""
+
     async def disconnected():
         # Call after the request body has been consumed. A blocking receive is
         # necessary here: is_disconnected's immediate cancellation can miss

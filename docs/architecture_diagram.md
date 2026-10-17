@@ -1,3 +1,5 @@
+> Tài liệu trước cutover Core v2. Contract và kiến trúc hiện hành: [langgraph_core_v2.md](langgraph_core_v2.md).
+
 # VIVI Cabin Copilot - Architecture
 
 > **Topic:** DEV-01 - VIVI Cabin Copilot

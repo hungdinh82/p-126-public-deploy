@@ -21,22 +21,8 @@ if ! command -v node >/dev/null 2>&1; then
   exit 1
 fi
 
-if ! command -v mosquitto >/dev/null 2>&1 && \
-   [ ! -x /opt/homebrew/opt/mosquitto/sbin/mosquitto ] && \
-   [ ! -x /usr/local/sbin/mosquitto ]; then
-  echo "Mosquitto is required for MQTT integration tests." >&2
-  echo "macOS: brew install mosquitto" >&2
-  echo "Ubuntu: sudo apt-get install mosquitto mosquitto-clients" >&2
-  exit 1
-fi
-
-if ! command -v mosquitto_passwd >/dev/null 2>&1; then
-  echo "mosquitto_passwd is required for MQTT integration tests." >&2
-  exit 1
-fi
-
 export APP_ENV=test
-export LLM_PROVIDER=rules
+export LLM_PROVIDER=google
 export STT_PROVIDER=off
 export TTS_PROVIDER=off
 export VIVI_VEHICLE_PROVIDER=memory
@@ -47,17 +33,20 @@ export OPENAI_API_KEY=""
 export GOOGLE_API_KEY=""
 export LOCAL_LLM_MODEL=""
 
-echo "[1/4] Checking whitespace"
+echo "[1/5] Checking whitespace"
 git diff --check
 git show --check --format= HEAD
 
-echo "[2/4] Linting Python"
-"$PYTHON" -m ruff check src vehicle_simulator tests
+echo "[2/5] Linting Python"
+"$PYTHON" -m ruff check src vehicle_simulator tests fixtures eval/workflow_benchmark.py eval/navigation_controls_benchmark.py eval/semantic_benchmark.py
 
-echo "[3/4] Checking frontend syntax"
-node --check app.js
+echo "[3/5] Checking JavaScript syntax"
+for source in *.js; do node --check "$source"; done
 
-echo "[4/4] Running core and MQTT tests"
-"$PYTHON" -m pytest tests -q --tb=short
+echo "[4/5] Running JavaScript behavior tests"
+node --test tests/frontend/*.cjs
+
+echo "[5/5] Running isolated Python tests"
+"$PYTHON" -m pytest tests -q --tb=short "$@"
 
 echo "ViVi local quality checks passed."

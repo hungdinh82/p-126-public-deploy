@@ -138,11 +138,9 @@ def result_messages(results):
     """Suppress a repeated choice list by its typed POI identities, not text."""
 
     def choices(result):
-        if not any(
-            event.get("type") in {"navigation.results", "trip.results"} for event in result.get("ui_events", [])
-        ):
+        if not any(event.get("type") == "navigation.results" for event in result.get("ui_events", [])):
             return None
-        candidates = (result.get("navigation_update") or result.get("trip_plan_update") or {}).get("candidates", [])
+        candidates = (result.get("draft_update") or result.get("navigation_update") or {}).get("candidates", [])
         return tuple(place["handle"] for place in candidates) or None
 
     messages = []
