@@ -58,3 +58,29 @@ phiên trống và phiên có draft/journey tổng hợp. Có oracle cho số ac
 Runner nhận `session`/`history` từ từng fixture và `--repeats N`, dùng budget cấu hình
 production. Corpus này đã được dùng phát triển, không phải held-out. Bằng chứng và
 các lỗi chưa đạt: [Jetson runtime 17/10](../docs/investigations/local-model-runtime-2026-10-17.md).
+
+Adapter tools/forms từ nhánh Jetson có thể đánh giá riêng, không đổi cấu hình đang chạy:
+
+```bash
+.venv/bin/python -m eval.semantic_benchmark --provider local \
+  --contract operations_v1 --transport json_schema \
+  --dataset eval/local_tool_regression_cases.jsonl --output /tmp/local-tools.json
+# Thay bằng --contract legacy hoặc --transport native để so sánh.
+```
+
+`local_tool_regression_cases.jsonl` có 28 ca development, gồm câu đã báo lỗi và
+trạng thái hội thoại cũ tổng hợp; không phải holdout. Runner ghi calls nguyên bản,
+schema/prompt/example hashes từng lượt, lỗi validation, repairs/discoveries và
+`passed_first_call`. Điểm pass cuối không được gộp với pass ngay lần đầu.
+[Luồng, catalog và live workflow test](../docs/local_tool_pipeline.md) mô tả cách
+thử với xe bộ nhớ/SQLite tạm và các giới hạn còn lại.
+
+[Review tool/binding và đối chứng Jetson tiếp theo](../docs/investigations/local-tool-review-2026-10-17.md)
+ghi rõ các lỗi host, raw model calls, probe cửa còn lại và các biến thể không được
+giữ. Corpus context/regression chỉ có 13/14 câu khác nhau, mỗi câu ở hai context;
+không tính thành 54 câu độc lập hoặc dùng lại để tuyên bố đạt holdout.
+
+`local_tool_probe_cases.jsonl` có 36 câu mới (polarity, thiếu vị trí, từ lịch sự, câu
+ghép, phủ định/điều kiện/hẹn giờ, vế không hỗ trợ, câu hỏi thông tin), viết trước vòng
+sửa `local-operations-3` nhưng chưa được người review; không phải holdout. Kết quả:
+[tool/schema vòng 2](../docs/investigations/local-tool-schema-v3-2026-10-17.md).

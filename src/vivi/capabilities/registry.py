@@ -42,7 +42,20 @@ class Capability:
             and not args.get("charging_mode")
         ):
             return None, "Bạn muốn hỏi thời gian sạc AC hay sạc nhanh DC?"
+        direction = args.pop("temperature_direction", None)
         delta = args.pop("temperature_delta_celsius", None)
+        if direction is not None and delta is None and args.get("value_celsius") is not None:
+            # Answering "how many degrees" with a number below the cabin range
+            # ("tăng thêm 3 độ") is a change, not a target of 3°C.
+            answered = args["value_celsius"]
+            if answered < 16:
+                delta = answered if direction == "increase" else -answered
+                args.pop("value_celsius")
+        if direction is not None and args.get("value_celsius") is None and delta is None:
+            # A comfort complaint without a number: ask how many degrees to
+            # change, keeping the spoken direction, rather than guessing a step.
+            verb = "tăng thêm" if direction == "increase" else "giảm bớt"
+            return None, f"Bạn muốn {verb} bao nhiêu độ?"
         if delta is not None:
             if self.name != "climate.set_temperature" or "value_celsius" in args:
                 return None, "Bạn nói rõ nhiệt độ muốn đặt nhé."

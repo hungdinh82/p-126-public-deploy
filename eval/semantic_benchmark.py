@@ -4,6 +4,7 @@ import argparse
 import asyncio
 import hashlib
 import json
+import statistics
 from pathlib import Path
 
 from eval.workflow_benchmark import ROOT, checks, latency, metadata
@@ -27,11 +28,44 @@ GENERATORS = {
 }
 
 
+def inference_breakdown(rows):
+    """Use every response once; gateway completion repeats the final response."""
+    responses = []
+    for row in rows:
+        for attempt in row["attempts"]:
+            proposals = attempt.get("proposal_attempts")
+            candidates = [p.get("completion") for p in proposals] if proposals else [attempt.get("completion")]
+            responses.extend(c for c in candidates if c and c.get("prompt_tokens"))
+    if not responses:
+        return {"responses_with_metadata": 0}
+    prompt_total = sum(c["prompt_tokens"] for c in responses)
+    return {
+        "responses_with_metadata": len(responses),
+        "prompt_tokens_median": statistics.median(c["prompt_tokens"] for c in responses),
+        "output_tokens_median": statistics.median(c.get("completion_tokens", 0) for c in responses),
+        "output_tokens_total": sum(c.get("completion_tokens", 0) for c in responses),
+        "cached_prompt_fraction": round(sum(c.get("cached_tokens") or 0 for c in responses) / prompt_total, 4),
+        "prefill_ms_total": round(sum((c.get("timings") or {}).get("prompt_ms", 0) for c in responses), 2),
+        "decode_ms_total": round(sum((c.get("timings") or {}).get("predicted_ms", 0) for c in responses), 2),
+    }
+
+
 async def evaluate(args):
     config = Settings()
+    overrides = {}
+    if getattr(args, "contract", None):
+        overrides["local_semantic_contract"] = args.contract
+    if getattr(args, "transport", None):
+        overrides["local_semantic_transport"] = args.transport
+    config = config.model_copy(update=overrides)
     generator = GENERATORS[args.provider](config)
     client = generator.client
-    client.max_attempts, client.max_tokens = 1, config.planner_max_tokens
+    client.max_attempts = 1
+    client.max_tokens = (
+        min(config.planner_max_tokens, config.local_llm_max_tokens)
+        if args.provider == "local"
+        else config.planner_max_tokens
+    )
     provider_budget = config.local_budget_seconds if args.provider == "local" else config.cloud_budget_seconds
     gateway = ModelGateway(
         {args.provider: ModelProvider(args.provider, client, provider_budget)},
@@ -60,12 +94,16 @@ async def evaluate(args):
             or semantic.unresolved
         )
         assertions = checks(case["expect"], actual)
+        passed = provider == args.provider and all(c["passed"] for c in assertions.values())
         rows.append(
             {
                 "id": case["id"],
                 "repeat": repeat + 1,
-                "passed": provider == args.provider and all(c["passed"] for c in assertions.values()),
-                "semantic": semantic.model_dump(mode="json"),
+                "passed": passed,
+                "passed_first_call": passed
+                and sum(a.get("calls", 0) for a in attempts) <= 1
+                and all(a.get("semantic_validation", "accepted") == "accepted" for a in attempts),
+                "semantic": semantic.model_dump(mode="json", exclude_none=True, exclude_defaults=True),
                 "model_served": provider == args.provider,
                 "checks": assertions,
                 "attempts": attempts,
@@ -73,15 +111,20 @@ async def evaluate(args):
         )
     if not rows:
         raise ValueError("Semantic dataset is empty")
+    from src.vivi.dialogue.local_operations import CONTRACT_VERSION, INSTRUCTION
+
+    operations = args.provider == "local" and getattr(client, "local_semantic_contract", "legacy") == "operations_v1"
     return {
         **metadata(),
         "profile": "live_semantic",
-        "prompt_version": PROMPT_VERSION,
+        "semantic_representation": "sparse_domain_projection; raw model calls are in attempts[].proposal_attempts[].calls",
+        "prompt_version": CONTRACT_VERSION if operations else PROMPT_VERSION,
+        "local_semantic_contract": "operations_v1" if operations else "legacy" if args.provider == "local" else None,
         "semantic_instruction_sha256": hashlib.sha256(
-            semantic_system_prompt(local=args.provider == "local").encode()
+            (INSTRUCTION if operations else semantic_system_prompt(local=args.provider == "local")).encode()
         ).hexdigest(),
         "semantic_schema_sha256": hashlib.sha256(json.dumps(semantic_tools(), sort_keys=True).encode()).hexdigest()
-        if args.provider == "local"
+        if args.provider == "local" and not operations
         else None,
         "transport": "json_schema"
         if getattr(client, "tools_as_json", False)
@@ -96,7 +139,11 @@ async def evaluate(args):
         "cases": len(rows),
         "passed": sum(r["passed"] for r in rows),
         "fallbacks": sum(not r["model_served"] for r in rows),
+        "passed_first_call": sum(r["passed_first_call"] for r in rows),
+        "repairs": sum(a.get("repairs", 0) for r in rows for a in r["attempts"]),
+        "discoveries": sum(bool(a.get("discovery")) for r in rows for a in r["attempts"]),
         "model_latency": latency([sum(a.get("latency_ms", 0) for a in r["attempts"]) for r in rows]),
+        "inference_breakdown": inference_breakdown(rows),
         "limitations": [
             "Authored language cases; a separately reviewed held-out corpus is still required.",
             "Measures interpreter only; no map, vehicle, speech or response-generation evaluation.",
@@ -111,6 +158,8 @@ def main():
     parser.add_argument("--dataset", type=Path, default=ROOT / "eval/semantic_cases.jsonl")
     parser.add_argument("--output", type=Path, default=ROOT / "eval/results/semantic-v2.json")
     parser.add_argument("--repeats", type=int, default=1)
+    parser.add_argument("--contract", choices=("legacy", "operations_v1"))
+    parser.add_argument("--transport", choices=("json_schema", "native"))
     args = parser.parse_args()
     if args.repeats < 1:
         parser.error("--repeats must be positive")

@@ -126,6 +126,10 @@ def semantic_tools(context=None):
 
 
 async def warmup_local_client(client):
+    if getattr(client, "local_semantic_contract", "legacy") == "operations_v1":
+        # Selected form/tool prefixes vary by turn; full-catalog warmup competes
+        # with live requests without priming their actual prefix.
+        return
     # Use exactly the real system/tools prefix; one output token primes KV cache
     # without interpreting or executing the generated proposal.
     system = semantic_system_prompt(local=True)
@@ -215,13 +219,42 @@ class SemanticResolver:
         return self.gateway.chain(requested)
 
     async def resolve(
-        self, text, session, *, requested=None, history=None, memory=None, catalog=None, trace_context=None
+        self,
+        text,
+        session,
+        *,
+        requested=None,
+        history=None,
+        memory=None,
+        catalog=None,
+        trace_context=None,
+        observation_loader=None,
     ):
         reply = literal_question_reply(text, session)
+        requested_provider = self.providers.get(self.chain(requested)[0])
+        operations = (
+            getattr(getattr(requested_provider, "client", None), "local_semantic_contract", "legacy") == "operations_v1"
+        )
+        if operations and reply:
+            return (
+                SemanticTurn(act="answer", question_answer=reply),
+                None,
+                [
+                    {
+                        "provider": None,
+                        "source": "literal_question_reply",
+                        "outcome": "served",
+                        "calls": 0,
+                        "latency_ms": 0,
+                        "question_id": reply.question_id,
+                    }
+                ],
+            )
+        task_context = self.context(session)
         prompt = json.dumps(
             {
                 "utterance": text,
-                "tasks": self.context(session),
+                "tasks": task_context,
                 "conversation_context": conversation_view(session),
                 "recent_turns": [{k: t.get(k) for k in ("query", "answer")} for t in (history or [])[-6:]],
                 "explicit_user_memory": memory or [],
@@ -231,7 +264,22 @@ class SemanticResolver:
         )
 
         async def operation(provider, attempts):
-            proposed = await self.interpret(provider, prompt, attempts, literal_reply=reply)
+            operation_prompt = prompt
+            if (
+                provider.name == "local"
+                and getattr(provider.client, "local_semantic_contract", "legacy") == "operations_v1"
+            ):
+                data = json.loads(prompt)
+                if session.active and data["tasks"].get("active"):
+                    data["tasks"]["active"]["form_identity"] = session.active.id
+                if observation_loader:
+                    try:
+                        async with asyncio.timeout(1):
+                            data["vehicle_observation"] = await observation_loader()
+                    except (TimeoutError, OSError, RuntimeError):
+                        attempts[-1]["observation_unavailable"] = True
+                operation_prompt = json.dumps(data, ensure_ascii=False)
+            proposed = await self.interpret(provider, operation_prompt, attempts, literal_reply=reply)
             try:
                 value = self.destination_slots(proposed, text, session)
             except ValueError:
@@ -376,6 +424,13 @@ class SemanticResolver:
 
     @staticmethod
     async def interpret(provider, prompt, attempts=None, *, literal_reply=None):
+        if (
+            provider.name == "local"
+            and getattr(provider.client, "local_semantic_contract", "legacy") == "operations_v1"
+        ):
+            from src.vivi.dialogue.local_operations import interpret_operations
+
+            return await interpret_operations(provider.client, json.loads(prompt), attempts)
         local = provider.name == "local" and hasattr(provider.client, "agenerate_tool")
         instruction = semantic_system_prompt(local=local)
         context = None

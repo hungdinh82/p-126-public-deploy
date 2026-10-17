@@ -193,7 +193,7 @@ def semantic_argument_names(name: str) -> set[str]:
         return set()
     allowed = set(spec.parameters.model_fields)
     if name == "climate.set_temperature":
-        allowed.add("temperature_delta_celsius")
+        allowed.update({"temperature_delta_celsius", "temperature_direction"})
     if name in {"door.set_open", "door.set_lock", "window.set_position", "seat.set_heat_level"}:
         allowed.update({"target_side", "target_row"})
     return allowed

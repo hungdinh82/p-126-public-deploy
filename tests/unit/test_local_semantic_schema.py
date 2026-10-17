@@ -28,6 +28,7 @@ def test_capability_branches_allow_sparse_arguments_but_not_cross_domain_slots()
     ) == {
         "value_celsius",
         "temperature_delta_celsius",
+        "temperature_direction",
     }
     assert "Arguments" not in schema["$defs"]
     SemanticTurn.model_validate({"act": "request", "actions": [{"capability": "window.set_position"}]})

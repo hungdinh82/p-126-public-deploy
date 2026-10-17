@@ -88,3 +88,38 @@ async def test_semantic_evaluator_uses_production_budgets_context_and_local_prom
     )
     assert report["transport"] == "json_schema" and report["semantic_schema_sha256"]
     assert dataset.read_bytes() == before
+
+
+def test_inference_breakdown_counts_each_response_once_including_repairs():
+    from eval.semantic_benchmark import inference_breakdown
+
+    first = {
+        "prompt_tokens": 100,
+        "completion_tokens": 10,
+        "cached_tokens": 80,
+        "timings": {"prompt_ms": 20, "predicted_ms": 100},
+    }
+    second = {
+        "prompt_tokens": 120,
+        "completion_tokens": 12,
+        "cached_tokens": 90,
+        "timings": {"prompt_ms": 30, "predicted_ms": 120},
+    }
+    result = inference_breakdown(
+        [
+            {
+                "attempts": [
+                    {
+                        "completion": second,
+                        "proposal_attempts": [
+                            {"completion": first},
+                            {"completion": second},
+                        ],
+                    }
+                ]
+            }
+        ]
+    )
+    assert result["responses_with_metadata"] == 2
+    assert result["output_tokens_total"] == 22
+    assert result["prefill_ms_total"] == 50 and result["decode_ms_total"] == 220

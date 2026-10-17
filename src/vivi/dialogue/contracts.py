@@ -33,7 +33,11 @@ from src.vivi.navigation.models import (
 
 
 class Arguments(BaseModel):
-    """Nullable capability slots; schemas in the registry validate execution."""
+    """Normalized domain slots; registry schemas validate execution.
+
+    The local operations model receives small per-tool schemas, not this union.
+    Null defaults in a serialized SemanticTurn can be host-added values.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -73,6 +77,9 @@ class Arguments(BaseModel):
     question_kind: Literal["charging_duration"] | None = None
     charging_mode: Literal["AC", "DC"] | None = None
     temperature_delta_celsius: StrictFloat | None = Field(default=None, ge=-30, le=30)
+    # Direction of an amountless comfort request ("tôi lạnh"); the host asks the
+    # target rather than guessing a step, and ignores it once value_celsius is set.
+    temperature_direction: Literal["increase", "decrease"] | None = None
 
 
 class ActionDraft(BaseModel):

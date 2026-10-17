@@ -82,6 +82,7 @@ class StructuredChatClient:
         json_object_schema_names: frozenset[str] = frozenset(),
         execution_location: str | None = None,
         tools_as_json: bool = False,
+        local_semantic_contract: str = "legacy",
     ) -> None:
         if not model:
             raise RuntimeError("A model name is required for structured generation")
@@ -101,6 +102,7 @@ class StructuredChatClient:
         self.json_object_schema_names = json_object_schema_names
         self.execution_location = execution_location
         self.tools_as_json = tools_as_json
+        self.local_semantic_contract = local_semantic_contract
         self._completion_metadata = ContextVar(f"completion_metadata_{id(self)}", default=None)
         self._served_model: ContextVar[str | None] = ContextVar(f"served_model_{id(self)}", default=None)
 
@@ -253,6 +255,83 @@ class StructuredChatClient:
     async def agenerate_tool(self, *, system: str, user: str, tools: list[dict]) -> tuple[str, dict]:
         response = await self._acomplete(self._tool_payload(system, user, tools))
         return self._interpretation_result(response, tools)
+
+    async def agenerate_proposals(
+        self, *, system: str, user: str, tools: list[dict], examples=None
+    ) -> list[tuple[str, dict]]:
+        """Same typed proposal tools over JSON grammar or native function calls."""
+        if self.tools_as_json:
+            schema = self.proposal_schema(tools)
+            wrapper = [{"type": "function", "function": {"name": "local_proposals", "parameters": schema}}]
+            payload = self._tool_payload(system, user, wrapper)
+            if examples:
+                payload["messages"][1:1] = examples
+            response = await self._acomplete(payload)
+            value = json.loads(self._response_content(response))
+            if (
+                not isinstance(value, dict)
+                or set(value) != {"calls"}
+                or not isinstance(value["calls"], list)
+                or not 1 <= len(value["calls"]) <= 5
+            ):
+                raise ValueError("Invalid proposal envelope")
+            if any(
+                not isinstance(call, dict)
+                or set(call) != {"name", "arguments"}
+                or not isinstance(call["name"], str)
+                or not isinstance(call["arguments"], dict)
+                for call in value["calls"]
+            ):
+                raise ValueError("Each proposal needs a name and argument object")
+            # Preserve raw proposals for audit; the adapter checks every tool's
+            # schema before translating anything into a domain event.
+            return [(call["name"], call["arguments"]) for call in value["calls"]]
+        wire_tools = [{"type": t["type"], "function": t["function"]} for t in tools]
+        payload = self._tool_payload(system, user, wire_tools)
+        if examples:
+            payload["messages"][1:1] = examples
+        payload["parallel_tool_calls"] = True
+        message = checked_choice(await self._acomplete(payload))["message"]
+        calls = message.get("tool_calls") or []
+        if not 1 <= len(calls) <= 5:
+            raise ValueError("Expected one to five proposal calls")
+        result = []
+        for call in calls:
+            function = call["function"]
+            arguments = json.loads(function["arguments"])
+            if not isinstance(arguments, dict):
+                raise ValueError("Proposal arguments must be an object")
+            result.append((function["name"], arguments))
+        return result
+
+    @staticmethod
+    def proposal_schema(tools: list[dict]) -> dict:
+        return {
+            "type": "object",
+            "properties": {
+                "calls": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 5,
+                    "items": {
+                        "anyOf": [
+                            {
+                                "type": "object",
+                                "properties": {
+                                    "name": {"type": "string", "const": tool["function"]["name"]},
+                                    "arguments": tool["function"]["parameters"],
+                                },
+                                "required": ["name", "arguments"],
+                                "additionalProperties": False,
+                            }
+                            for tool in tools
+                        ]
+                    },
+                }
+            },
+            "required": ["calls"],
+            "additionalProperties": False,
+        }
 
     def _interpretation_result(self, response: httpx.Response, tools: list[dict]) -> tuple[str, dict]:
         if not self.tools_as_json:
