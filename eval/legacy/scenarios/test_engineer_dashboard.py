@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import pytest
 
 from src.vivi.api.routes.engineer import service
 from src.vivi.api.runtime import runtime
+from src.vivi.config import Settings
 from src.vivi.engineer.service import SimulatorControlAdapter
+from src.vivi.orchestration import LangGraphOrchestrator
+from src.vivi.persistence.event_store import EventStore
 
 
 async def engineer_client(client):
@@ -159,3 +164,34 @@ async def test_engineer_ai_route_reports_only_confirmed_served_model(client):
     assert attempt["requested_model"] == "requested-google"
     assert attempt["served_model"] is None
     runtime.store.clear_sessions(["route-test"])
+
+
+@pytest.mark.asyncio
+async def test_completed_handbook_route_records_the_missing_verification_and_response_stages(tmp_path):
+    store = EventStore(Settings(data_dir=tmp_path, runtime_profile="test", app_env="test"))
+    orchestrator = LangGraphOrchestrator({}, None, store)
+    request = SimpleNamespace(session_id="route-test", turn_id="turn-handbook")
+    response = SimpleNamespace(
+        route="handbook",
+        status="verified",
+        grounding_status="supported",
+        evidence=[object(), object(), object()],
+        steps=[{"capability": "manual.search"}],
+        diagnostics={
+            "effective_provider": "openrouter",
+            "generation_attempts": [{
+                "provider": "openrouter",
+                "location": "cloud",
+                "served_model": "qwen",
+                "outcome": "served",
+            }],
+        },
+    )
+
+    await orchestrator.complete(request, response)
+
+    stages = store.ai_route_snapshot()[0]["stages"]
+    assert stages["tools"]["provider"] == "manual.search"
+    assert stages["rag"]["detail"] == "3 nguồn"
+    assert stages["grounding"]["status"] == "served"
+    assert stages["response"]["status"] == "verified"

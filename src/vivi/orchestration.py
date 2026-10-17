@@ -157,6 +157,29 @@ class LangGraphOrchestrator:
         return {"cancelled": True, "dispatched": dispatched}
 
     async def complete(self, request, response):
+        if response.steps:
+            capabilities = [
+                str(step.get("capability") or step.get("intent") or step.get("step_id") or "tool")
+                for step in response.steps
+            ]
+            self.store.record_ai_stage({
+                "session_id": request.session_id,
+                "turn_id": request.turn_id,
+                "stage": "tools",
+                "status": "served",
+                "provider": ", ".join(dict.fromkeys(capabilities)),
+                "location": "laptop",
+            })
+        if response.route == "handbook":
+            self.store.record_ai_stage({
+                "session_id": request.session_id,
+                "turn_id": request.turn_id,
+                "stage": "rag",
+                "status": "served" if response.grounding_status == "supported" else "blocked",
+                "provider": self.store.config.rag_retrieval_mode,
+                "location": "laptop",
+                "detail": f"{len(response.evidence)} nguồn",
+            })
         for index, attempt in enumerate(response.diagnostics.get("generation_attempts") or [], start=1):
             outcome = attempt.get("outcome", "unknown")
             self.store.record_ai_attempt(
@@ -175,26 +198,11 @@ class LangGraphOrchestrator:
                 {
                     "session_id": request.session_id,
                     "turn_id": request.turn_id,
-                    "stage": "rag",
+                    "stage": "grounding",
                     "status": "served" if response.grounding_status == "supported" else "blocked",
-                    "provider": self.store.config.rag_retrieval_mode,
+                    "provider": "citation-validator",
                     "location": "laptop",
-                    "detail": f"{len(response.evidence)} nguồn",
-                }
-            )
-        if response.steps:
-            capabilities = [
-                str(step.get("capability") or step.get("intent") or step.get("step_id") or "tool")
-                for step in response.steps
-            ]
-            self.store.record_ai_stage(
-                {
-                    "session_id": request.session_id,
-                    "turn_id": request.turn_id,
-                    "stage": "tools",
-                    "status": "served",
-                    "provider": ", ".join(dict.fromkeys(capabilities)),
-                    "location": "laptop",
+                    "detail": f"{len(response.evidence)} nguồn đã kiểm chứng",
                 }
             )
         self.store.record_ai_stage(
@@ -207,6 +215,14 @@ class LangGraphOrchestrator:
                 "location": "laptop",
             }
         )
+        self.store.record_ai_stage({
+            "session_id": request.session_id,
+            "turn_id": request.turn_id,
+            "stage": "response",
+            "status": response.status,
+            "provider": "turn-response",
+            "location": "laptop",
+        })
         self.store.finish_ai_route(
             request.session_id,
             request.turn_id,
