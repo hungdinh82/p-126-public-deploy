@@ -56,24 +56,47 @@ function routeNode(label, item) {
     ? `<div class="route-requested">Yêu cầu: ${escapeHtml(item.requested_model)}</div>` : '';
   return `<div class="route-node ${escapeHtml(item.status || 'unknown')}"><small>${escapeHtml(label)}</small><b>${escapeHtml(item.provider || 'unknown')} · ${routeModel(item)}</b><span>${escapeHtml(item.location || 'unknown')} · ${escapeHtml(item.status || 'unknown')}${latency}</span>${requested}</div>`;
 }
+function connectRouteNodes(nodes) {
+  return nodes.filter(Boolean).join('<span class="route-arrow">→</span>');
+}
+function renderDelivery(stages) {
+  const consumers = [
+    stages.tts ? routeNode('TTS', stages.tts) : '',
+    stages.output ? serviceNode('Driver UI', stages.output) : '',
+  ].filter(Boolean);
+  if (!consumers.length) return '';
+  return `<div class="route-delivery"><small>Phân phối phản hồi</small><div class="route-branches">${consumers.join('')}</div></div>`;
+}
 function renderAiRoutes(data) {
   const target = $('#ai-route');
   target.classList.remove('loading');
+  const previousScrollLeft = target.querySelector('.route-flow')?.scrollLeft || 0;
   const route = data.routes?.[0];
   if (!route) { target.innerHTML = '<p class="muted">Chưa có lượt xử lý.</p>'; return; }
   const stages = route.stages || {};
   const attempts = route.llm_attempts || [];
-  const llm = attempts.length
-    ? attempts.map((item, index) => routeNode(`LLM ${item.phase === 'generate' ? 'trả lời' : 'hiểu lệnh'} #${index + 1}`, item)).join('<span class="route-arrow">→</span>')
-    : route.effective_provider === 'rules'
-      ? routeNode('LLM', { provider: 'rules', location: 'laptop', status: 'served' })
-      : routeNode('LLM', { provider: route.requested_provider || 'pending', location: 'unknown', status: route.status === 'running' ? 'calling' : 'unknown' });
-  const stt = stages.stt ? `${routeNode('STT', stages.stt)}<span class="route-arrow">→</span>` : '';
-  const rag = stages.rag ? `<span class="route-arrow">→</span>${serviceNode('RAG', stages.rag)}` : '';
-  const tools = stages.tools ? `<span class="route-arrow">→</span>${serviceNode('Tools', stages.tools)}` : '';
-  const tts = stages.tts ? `<span class="route-arrow">→</span>${routeNode('TTS', stages.tts)}` : '';
-  const output = stages.output ? `<span class="route-arrow">→</span>${serviceNode('Output', stages.output)}` : '';
-  target.innerHTML = `<div class="route-head"><div><b>${escapeHtml(route.transcript || 'Yêu cầu không có transcript')}</b><br><span class="muted">${escapeHtml(route.turn_id)} · ${escapeHtml(route.status)}</span></div><span class="pill ${route.status === 'running' ? 'live' : ''}">${route.status === 'running' ? 'đang xử lý' : escapeHtml(route.status)}</span></div><div class="route-flow">${stt}${routeNode('Điều phối', { provider: 'orchestrator', location: 'laptop', status: route.status === 'running' ? 'calling' : 'served' })}<span class="route-arrow">→</span>${llm}${rag}${tools}${tts}${output}</div>`;
+  const interpretAttempts = attempts.filter((item) => item.phase !== 'generate');
+  const generationAttempts = attempts.filter((item) => item.phase === 'generate');
+  const interpretation = interpretAttempts.length
+    ? interpretAttempts.map((item, index) => routeNode(`LLM hiểu lệnh #${index + 1}`, item))
+    : [route.effective_provider === 'rules'
+      ? routeNode('Hiểu lệnh', { provider: 'rules', location: 'laptop', status: 'served' })
+      : routeNode('LLM hiểu lệnh', { provider: route.requested_provider || 'pending', location: 'unknown', status: route.status === 'running' ? 'calling' : 'unknown' })];
+  const generation = generationAttempts.map((item, index) => routeNode(`LLM sinh câu trả lời #${index + 1}`, item));
+  const coreNodes = [
+    stages.stt ? routeNode('STT', stages.stt) : '',
+    routeNode('Điều phối', { provider: 'orchestrator', location: 'laptop', status: route.status === 'running' ? 'calling' : 'served' }),
+    ...interpretation,
+    stages.tools ? serviceNode('Tools', stages.tools) : '',
+    stages.rag ? serviceNode('RAG', stages.rag) : '',
+    ...generation,
+    stages.grounding ? serviceNode('Kiểm chứng nguồn', stages.grounding) : '',
+    stages.response ? serviceNode('Response', stages.response) : '',
+  ];
+  const delivery = renderDelivery(stages);
+  const flow = `${connectRouteNodes(coreNodes)}${delivery ? `<span class="route-arrow">→</span>${delivery}` : ''}`;
+  target.innerHTML = `<div class="route-head"><div><b>${escapeHtml(route.transcript || 'Yêu cầu không có transcript')}</b><br><span class="muted">${escapeHtml(route.turn_id)} · ${escapeHtml(route.status)}</span></div><span class="pill ${route.status === 'running' ? 'live' : ''}">${route.status === 'running' ? 'đang xử lý' : escapeHtml(route.status)}</span></div><div class="route-flow">${flow}</div>`;
+  target.querySelector('.route-flow').scrollLeft = previousScrollLeft;
 }
 async function refreshAiRoutes() { renderAiRoutes(await api('/ai-routes')); }
 function renderFleet(data) {
