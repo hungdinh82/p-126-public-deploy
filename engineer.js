@@ -56,12 +56,18 @@ function routeNode(label, item) {
     ? `<div class="route-requested">Yêu cầu: ${escapeHtml(item.requested_model)}</div>` : '';
   return `<div class="route-node ${escapeHtml(item.status || 'unknown')}"><small>${escapeHtml(label)}</small><b>${escapeHtml(item.provider || 'unknown')} · ${routeModel(item)}</b><span>${escapeHtml(item.location || 'unknown')} · ${escapeHtml(item.status || 'unknown')}${latency}</span>${requested}</div>`;
 }
+function ttsNode(item) {
+  if (!item) return '';
+  const voice = item.voice ? ` · ${escapeHtml(item.voice)}` : '';
+  const latency = item.latency_ms === null || item.latency_ms === undefined ? '' : ` · ${escapeHtml(item.latency_ms)} ms`;
+  return `<div class="route-node ${escapeHtml(item.status || 'unknown')}"><small>TTS</small><b>${escapeHtml(item.provider || 'unknown')}${voice}</b><span>${escapeHtml(item.location || 'unknown')} · ${escapeHtml(item.status || 'unknown')}${latency}</span></div>`;
+}
 function connectRouteNodes(nodes) {
   return nodes.filter(Boolean).join('<span class="route-arrow">→</span>');
 }
 function renderDelivery(stages) {
   const consumers = [
-    stages.tts ? routeNode('TTS', stages.tts) : '',
+    ttsNode(stages.tts),
     stages.output ? serviceNode('Driver UI', stages.output) : '',
   ].filter(Boolean);
   if (!consumers.length) return '';
