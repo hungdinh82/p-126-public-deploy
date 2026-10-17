@@ -18,3 +18,11 @@ def test_hardware_default_keeps_local_vector_retrieval():
     config = (ROOT / "config.toml").read_text(encoding="utf-8")
 
     assert 'rag_retrieval_mode = "sqlite_local"' in config
+
+
+def test_public_image_publishes_to_current_repository_namespace():
+    workflow = (ROOT / ".github/workflows/deploy-render.yml").read_text(encoding="utf-8")
+
+    assert "IMAGE_NAME: ghcr.io/${{ github.repository }}" in workflow
+    assert "ghcr.io/ai20k-build-phase-cohort-4/p-126" not in workflow
+    assert "packages: write" in workflow
