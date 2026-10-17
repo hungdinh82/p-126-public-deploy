@@ -81,6 +81,7 @@ class StructuredChatClient:
         schema_subset: bool = False,
         json_object_schema_names: frozenset[str] = frozenset(),
         execution_location: str | None = None,
+        tools_as_json: bool = False,
     ) -> None:
         if not model:
             raise RuntimeError("A model name is required for structured generation")
@@ -99,6 +100,7 @@ class StructuredChatClient:
         self.schema_subset = schema_subset
         self.json_object_schema_names = json_object_schema_names
         self.execution_location = execution_location
+        self.tools_as_json = tools_as_json
         self._completion_metadata = ContextVar(f"completion_metadata_{id(self)}", default=None)
         self._served_model: ContextVar[str | None] = ContextVar(f"served_model_{id(self)}", default=None)
 
@@ -127,6 +129,13 @@ class StructuredChatClient:
                         key: usage[key]
                         for key in ("prompt_tokens", "completion_tokens", "total_tokens")
                         if key in usage
+                    },
+                    "cached_tokens": (usage.get("prompt_tokens_details") or {}).get("cached_tokens"),
+                    "timings": {
+                        key: value
+                        for key, value in (body.get("timings") or {}).items()
+                        if key in {"cache_n", "prompt_n", "prompt_ms", "predicted_n", "predicted_ms"}
+                        and isinstance(value, (int, float))
                     },
                 }
             )
@@ -196,6 +205,24 @@ class StructuredChatClient:
         raise RuntimeError("structured generation failed")
 
     def _tool_payload(self, system: str, user: str, tools: list[dict]) -> dict:
+        if self.tools_as_json:
+            if len(tools) != 1:
+                raise ValueError("JSON tool transport requires exactly one interpretation tool")
+            function = tools[0]["function"]
+            # llama.cpp constrains generation with this schema without injecting
+            # it into the chat template. Preserve sparse optional slots: provider
+            # strict_schema would force every irrelevant field into the output.
+            return {
+                **self.extra_body,
+                "model": self.model,
+                "messages": [{"role": "system", "content": system}, {"role": "user", "content": user}],
+                "response_format": {
+                    "type": "json_schema",
+                    "json_schema": {"name": function["name"], "strict": False, "schema": function["parameters"]},
+                },
+                "temperature": 0,
+                "max_tokens": self.max_tokens,
+            }
         return {
             **self.extra_body,
             "model": self.model,
@@ -220,10 +247,20 @@ class StructuredChatClient:
         return call["name"], arguments
 
     def generate_tool(self, *, system: str, user: str, tools: list[dict]) -> tuple[str, dict]:
-        return self._tool_result(self._complete(self._tool_payload(system, user, tools)))
+        response = self._complete(self._tool_payload(system, user, tools))
+        return self._interpretation_result(response, tools)
 
     async def agenerate_tool(self, *, system: str, user: str, tools: list[dict]) -> tuple[str, dict]:
-        return self._tool_result(await self._acomplete(self._tool_payload(system, user, tools)))
+        response = await self._acomplete(self._tool_payload(system, user, tools))
+        return self._interpretation_result(response, tools)
+
+    def _interpretation_result(self, response: httpx.Response, tools: list[dict]) -> tuple[str, dict]:
+        if not self.tools_as_json:
+            return self._tool_result(response)
+        arguments = json.loads(self._response_content(response))
+        if not isinstance(arguments, dict):
+            raise ValueError("Tool arguments must be an object")
+        return tools[0]["function"]["name"], arguments
 
     def _request_payload(
         self,

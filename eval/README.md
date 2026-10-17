@@ -51,3 +51,10 @@ Các report live đã chạy nằm ở `results/semantic-holdout-v2.json`,
 điểm đo. Bộ dependencies đo sau cùng đạt 5/6, còn nhầm purpose ở `deps-new-5`.
 Không gộp điểm giữa các phiên bản prompt hoặc tính lại bộ đã dùng sửa như held-out.
 [Evidence và giới hạn nghiệm thu](../docs/core_v2_acceptance.md) ghi rõ phạm vi.
+
+Bộ `local_semantic_context_cases.jsonl` kiểm local interpreter trên cùng câu nói ở
+phiên trống và phiên có draft/journey tổng hợp. Có oracle cho số action, slot và
+`blocked` (clarify/unsupported hoặc cờ chặn toàn bộ compound); không có hiệu ứng xe.
+Runner nhận `session`/`history` từ từng fixture và `--repeats N`, dùng budget cấu hình
+production. Corpus này đã được dùng phát triển, không phải held-out. Bằng chứng và
+các lỗi chưa đạt: [Jetson runtime 17/10](../docs/investigations/local-model-runtime-2026-10-17.md).

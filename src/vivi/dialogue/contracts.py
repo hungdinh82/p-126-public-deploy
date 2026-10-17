@@ -85,7 +85,7 @@ class ActionDraft(BaseModel):
 
     @model_validator(mode="after")
     def capability_arguments(self):
-        from src.vivi.agents.tools import TOOL_REGISTRY
+        from src.vivi.agents.tools import TOOL_REGISTRY, semantic_argument_names
 
         spec = TOOL_REGISTRY.get(self.capability)
         if spec is not None:
@@ -95,11 +95,7 @@ class ActionDraft(BaseModel):
                 and not self.arguments.query
             ):
                 self.arguments.query = self.arguments.destination.query() or None
-            allowed = set(spec.parameters.model_fields)
-            if self.capability == "climate.set_temperature":
-                allowed.add("temperature_delta_celsius")
-            if self.capability in {"door.set_open", "door.set_lock", "window.set_position", "seat.set_heat_level"}:
-                allowed.update({"target_side", "target_row"})
+            allowed = semantic_argument_names(self.capability)
             supplied = set(self.arguments.model_dump(exclude_none=True))
             if supplied - allowed:
                 raise ValueError(f"Unsupported arguments for {self.capability}: {sorted(supplied - allowed)}")

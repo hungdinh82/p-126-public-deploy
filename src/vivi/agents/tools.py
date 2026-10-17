@@ -186,6 +186,19 @@ class ToolSpec:
         }
 
 
+def semantic_argument_names(name: str) -> set[str]:
+    """Slots accepted at interpretation time, including unresolved targets."""
+    spec = TOOL_REGISTRY.get(name)
+    if spec is None:
+        return set()
+    allowed = set(spec.parameters.model_fields)
+    if name == "climate.set_temperature":
+        allowed.add("temperature_delta_celsius")
+    if name in {"door.set_open", "door.set_lock", "window.set_position", "seat.set_heat_level"}:
+        allowed.update({"target_side", "target_row"})
+    return allowed
+
+
 class ConversationQuery(SearchQuery):
     mode: Literal["chat", "general", "creative"] = "general"
 

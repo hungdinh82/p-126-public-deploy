@@ -1,0 +1,3503 @@
+{
+  "created_at": "2026-10-17T08:28:40.203762+00:00",
+  "revision": "9a724215d7609a6bac03445f87219bfa06ebe319",
+  "working_tree_dirty": true,
+  "environment": {
+    "platform": "Linux-6.18.54.1-microsoft-standard-WSL2-x86_64-with-glibc2.43",
+    "python": "3.12.12"
+  },
+  "profile": "live_semantic",
+  "prompt_version": "semantic-core-4",
+  "semantic_instruction_sha256": "2caa083a659add3e8818a7811638c5b523da4405b7e712a115a4d984619e2d41",
+  "semantic_schema_sha256": "8bcf28cee339c1293e7fc1b2c1e0a6865c13c656d4236b93bd52e4b5276c80a9",
+  "transport": "json_schema",
+  "provider_budget_seconds": 30.0,
+  "semantic_budget_seconds": 40.0,
+  "provider": "local",
+  "model": "vivi-qwen3-1.7b",
+  "dataset_sha256": "8582b1f274f233947a18a7e84cb35f492fc0501a1253876a331702233a8822df",
+  "cases": 26,
+  "passed": 15,
+  "fallbacks": 0,
+  "model_latency": {
+    "samples": 26,
+    "p50_ms": 1591.01,
+    "p95_ms": 2505.74
+  },
+  "limitations": [
+    "Authored language cases; a separately reviewed held-out corpus is still required.",
+    "Measures interpreter only; no map, vehicle, speech or response-generation evaluation."
+  ],
+  "results": [
+    {
+      "id": "fresh-music",
+      "repeat": 1,
+      "passed": false,
+      "semantic": {
+        "act": "reply",
+        "task_ref": null,
+        "step_index": null,
+        "actions": [],
+        "step_updates": [],
+        "append_actions": [],
+        "question_answer": null,
+        "consent_question_id": null,
+        "clarification_drafts": [],
+        "text": "Chào bạn! Bạn muốn bật nhạc nào?",
+        "negated": false,
+        "conditional": false,
+        "scheduled": false,
+        "conflicting": false,
+        "unresolved": []
+      },
+      "model_served": true,
+      "checks": {
+        "act": {
+          "passed": false,
+          "expected": "request",
+          "actual": "reply"
+        },
+        "actions:length": {
+          "passed": false,
+          "expected": 1,
+          "actual": 0
+        },
+        "actions.0.capability": {
+          "passed": false,
+          "expected": "media.play",
+          "actual": null
+        },
+        "actions.0.arguments.media_query": {
+          "passed": true,
+          "expected": null,
+          "actual": null
+        }
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "requested_model": "vivi-qwen3-1.7b",
+          "served_model": "vivi-qwen3-1.7b",
+          "location": "jetson",
+          "stage": "semantic",
+          "requested_provider": "local",
+          "provider": "local",
+          "outcome": "served",
+          "calls": 1,
+          "latency_ms": 4220.81,
+          "budget_seconds": 30.0,
+          "completion": {
+            "finish_reason": "stop",
+            "prompt_tokens": 2836,
+            "completion_tokens": 19,
+            "total_tokens": 2855,
+            "cached_tokens": 2,
+            "timings": {
+              "cache_n": 2,
+              "prompt_n": 2834,
+              "prompt_ms": 3412.984,
+              "predicted_n": 19,
+              "predicted_ms": 478.697
+            }
+          },
+          "proposed_act": "reply",
+          "proposed_capabilities": [],
+          "semantic_validation": "accepted"
+        }
+      ]
+    },
+    {
+      "id": "fresh-climate",
+      "repeat": 1,
+      "passed": true,
+      "semantic": {
+        "act": "request",
+        "task_ref": null,
+        "step_index": null,
+        "actions": [
+          {
+            "capability": "climate.set_temperature",
+            "arguments": {
+              "query": null,
+              "destination": null,
+              "mode": null,
+              "location": null,
+              "forecast_day": null,
+              "gear": null,
+              "value_celsius": 25.0,
+              "position_percent": null,
+              "open": null,
+              "locked": null,
+              "level": null,
+              "zone": null,
+              "zones": null,
+              "media_query": null,
+              "memory_key": null,
+              "memory_value": null,
+              "target_side": null,
+              "target_row": null,
+              "place_handle": null,
+              "choice_handle": null,
+              "reject_candidates": null,
+              "use_search_results": null,
+              "category": null,
+              "nearest": null,
+              "destination_scope": null,
+              "trip_kind": null,
+              "purpose": null,
+              "origin_query": null,
+              "plan_id": null,
+              "route_revision": null,
+              "requested_vehicle_model": null,
+              "requested_model_year": null,
+              "question_kind": null,
+              "charging_mode": null,
+              "temperature_delta_celsius": null
+            },
+            "excluded_zones": null,
+            "exclusion_mode": "add",
+            "referenced_target": false
+          }
+        ],
+        "step_updates": [],
+        "append_actions": [],
+        "question_answer": null,
+        "consent_question_id": null,
+        "clarification_drafts": [],
+        "text": "",
+        "negated": false,
+        "conditional": false,
+        "scheduled": false,
+        "conflicting": false,
+        "unresolved": []
+      },
+      "model_served": true,
+      "checks": {
+        "act": {
+          "passed": true,
+          "expected": "request",
+          "actual": "request"
+        },
+        "actions:length": {
+          "passed": true,
+          "expected": 1,
+          "actual": 1
+        },
+        "actions.0.capability": {
+          "passed": true,
+          "expected": "climate.set_temperature",
+          "actual": "climate.set_temperature"
+        },
+        "actions.0.arguments.value_celsius": {
+          "passed": true,
+          "expected": 25,
+          "actual": 25.0
+        },
+        "actions.0.arguments.temperature_delta_celsius": {
+          "passed": true,
+          "expected": null,
+          "actual": null
+        }
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "requested_model": "vivi-qwen3-1.7b",
+          "served_model": "vivi-qwen3-1.7b",
+          "location": "jetson",
+          "stage": "semantic",
+          "requested_provider": "local",
+          "provider": "local",
+          "outcome": "served",
+          "calls": 1,
+          "latency_ms": 1366.6,
+          "budget_seconds": 30.0,
+          "completion": {
+            "finish_reason": "stop",
+            "prompt_tokens": 2843,
+            "completion_tokens": 47,
+            "total_tokens": 2890,
+            "cached_tokens": 2823,
+            "timings": {
+              "cache_n": 2823,
+              "prompt_n": 20,
+              "prompt_ms": 80.386,
+              "predicted_n": 47,
+              "predicted_ms": 1107.565
+            }
+          },
+          "proposed_act": "request",
+          "proposed_capabilities": [
+            "climate.set_temperature"
+          ],
+          "semantic_validation": "accepted"
+        }
+      ]
+    },
+    {
+      "id": "fresh-window",
+      "repeat": 1,
+      "passed": true,
+      "semantic": {
+        "act": "request",
+        "task_ref": null,
+        "step_index": null,
+        "actions": [
+          {
+            "capability": "window.set_position",
+            "arguments": {
+              "query": null,
+              "destination": null,
+              "mode": null,
+              "location": null,
+              "forecast_day": null,
+              "gear": null,
+              "value_celsius": null,
+              "position_percent": 65,
+              "open": null,
+              "locked": null,
+              "level": null,
+              "zone": "front_passenger",
+              "zones": null,
+              "media_query": null,
+              "memory_key": null,
+              "memory_value": null,
+              "target_side": null,
+              "target_row": null,
+              "place_handle": null,
+              "choice_handle": null,
+              "reject_candidates": null,
+              "use_search_results": null,
+              "category": null,
+              "nearest": null,
+              "destination_scope": null,
+              "trip_kind": null,
+              "purpose": null,
+              "origin_query": null,
+              "plan_id": null,
+              "route_revision": null,
+              "requested_vehicle_model": null,
+              "requested_model_year": null,
+              "question_kind": null,
+              "charging_mode": null,
+              "temperature_delta_celsius": null
+            },
+            "excluded_zones": null,
+            "exclusion_mode": "add",
+            "referenced_target": false
+          }
+        ],
+        "step_updates": [],
+        "append_actions": [],
+        "question_answer": null,
+        "consent_question_id": null,
+        "clarification_drafts": [],
+        "text": "",
+        "negated": false,
+        "conditional": false,
+        "scheduled": false,
+        "conflicting": false,
+        "unresolved": []
+      },
+      "model_served": true,
+      "checks": {
+        "act": {
+          "passed": true,
+          "expected": "request",
+          "actual": "request"
+        },
+        "actions:length": {
+          "passed": true,
+          "expected": 1,
+          "actual": 1
+        },
+        "actions.0.capability": {
+          "passed": true,
+          "expected": "window.set_position",
+          "actual": "window.set_position"
+        },
+        "actions.0.arguments.position_percent": {
+          "passed": true,
+          "expected": 65,
+          "actual": 65
+        },
+        "actions.0.arguments.zone": {
+          "passed": true,
+          "expected": "front_passenger",
+          "actual": "front_passenger"
+        }
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "requested_model": "vivi-qwen3-1.7b",
+          "served_model": "vivi-qwen3-1.7b",
+          "location": "jetson",
+          "stage": "semantic",
+          "requested_provider": "local",
+          "provider": "local",
+          "outcome": "served",
+          "calls": 1,
+          "latency_ms": 1567.53,
+          "budget_seconds": 30.0,
+          "completion": {
+            "finish_reason": "stop",
+            "prompt_tokens": 2843,
+            "completion_tokens": 55,
+            "total_tokens": 2898,
+            "cached_tokens": 2823,
+            "timings": {
+              "cache_n": 2823,
+              "prompt_n": 20,
+              "prompt_ms": 80.032,
+              "predicted_n": 55,
+              "predicted_ms": 1301.164
+            }
+          },
+          "proposed_act": "request",
+          "proposed_capabilities": [
+            "window.set_position"
+          ],
+          "semantic_validation": "accepted"
+        }
+      ]
+    },
+    {
+      "id": "fresh-compound",
+      "repeat": 1,
+      "passed": true,
+      "semantic": {
+        "act": "request",
+        "task_ref": null,
+        "step_index": null,
+        "actions": [
+          {
+            "capability": "climate.set_temperature",
+            "arguments": {
+              "query": null,
+              "destination": null,
+              "mode": null,
+              "location": null,
+              "forecast_day": null,
+              "gear": null,
+              "value_celsius": 26.0,
+              "position_percent": null,
+              "open": null,
+              "locked": null,
+              "level": null,
+              "zone": null,
+              "zones": null,
+              "media_query": null,
+              "memory_key": null,
+              "memory_value": null,
+              "target_side": null,
+              "target_row": null,
+              "place_handle": null,
+              "choice_handle": null,
+              "reject_candidates": null,
+              "use_search_results": null,
+              "category": null,
+              "nearest": null,
+              "destination_scope": null,
+              "trip_kind": null,
+              "purpose": null,
+              "origin_query": null,
+              "plan_id": null,
+              "route_revision": null,
+              "requested_vehicle_model": null,
+              "requested_model_year": null,
+              "question_kind": null,
+              "charging_mode": null,
+              "temperature_delta_celsius": null
+            },
+            "excluded_zones": null,
+            "exclusion_mode": "add",
+            "referenced_target": false
+          },
+          {
+            "capability": "window.set_position",
+            "arguments": {
+              "query": null,
+              "destination": null,
+              "mode": null,
+              "location": null,
+              "forecast_day": null,
+              "gear": null,
+              "value_celsius": null,
+              "position_percent": 35,
+              "open": null,
+              "locked": null,
+              "level": null,
+              "zone": "rear_right",
+              "zones": null,
+              "media_query": null,
+              "memory_key": null,
+              "memory_value": null,
+              "target_side": null,
+              "target_row": null,
+              "place_handle": null,
+              "choice_handle": null,
+              "reject_candidates": null,
+              "use_search_results": null,
+              "category": null,
+              "nearest": null,
+              "destination_scope": null,
+              "trip_kind": null,
+              "purpose": null,
+              "origin_query": null,
+              "plan_id": null,
+              "route_revision": null,
+              "requested_vehicle_model": null,
+              "requested_model_year": null,
+              "question_kind": null,
+              "charging_mode": null,
+              "temperature_delta_celsius": null
+            },
+            "excluded_zones": null,
+            "exclusion_mode": "add",
+            "referenced_target": false
+          }
+        ],
+        "step_updates": [],
+        "append_actions": [],
+        "question_answer": null,
+        "consent_question_id": null,
+        "clarification_drafts": [],
+        "text": "",
+        "negated": false,
+        "conditional": false,
+        "scheduled": false,
+        "conflicting": false,
+        "unresolved": []
+      },
+      "model_served": true,
+      "checks": {
+        "act": {
+          "passed": true,
+          "expected": "request",
+          "actual": "request"
+        },
+        "actions:length": {
+          "passed": true,
+          "expected": 2,
+          "actual": 2
+        },
+        "actions.0.capability": {
+          "passed": true,
+          "expected": "climate.set_temperature",
+          "actual": "climate.set_temperature"
+        },
+        "actions.0.arguments.value_celsius": {
+          "passed": true,
+          "expected": 26,
+          "actual": 26.0
+        },
+        "actions.0.arguments.temperature_delta_celsius": {
+          "passed": true,
+          "expected": null,
+          "actual": null
+        },
+        "actions.1.capability": {
+          "passed": true,
+          "expected": "window.set_position",
+          "actual": "window.set_position"
+        },
+        "actions.1.arguments.position_percent": {
+          "passed": true,
+          "expected": 35,
+          "actual": 35
+        },
+        "actions.1.arguments.zone": {
+          "passed": true,
+          "expected": "rear_right",
+          "actual": "rear_right"
+        }
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "requested_model": "vivi-qwen3-1.7b",
+          "served_model": "vivi-qwen3-1.7b",
+          "location": "jetson",
+          "stage": "semantic",
+          "requested_provider": "local",
+          "provider": "local",
+          "outcome": "served",
+          "calls": 1,
+          "latency_ms": 2259.43,
+          "budget_seconds": 30.0,
+          "completion": {
+            "finish_reason": "stop",
+            "prompt_tokens": 2851,
+            "completion_tokens": 84,
+            "total_tokens": 2935,
+            "cached_tokens": 2823,
+            "timings": {
+              "cache_n": 2823,
+              "prompt_n": 28,
+              "prompt_ms": 89.597,
+              "predicted_n": 84,
+              "predicted_ms": 1992.36
+            }
+          },
+          "proposed_act": "request",
+          "proposed_capabilities": [
+            "climate.set_temperature",
+            "window.set_position"
+          ],
+          "semantic_validation": "accepted"
+        }
+      ]
+    },
+    {
+      "id": "fresh-relative",
+      "repeat": 1,
+      "passed": true,
+      "semantic": {
+        "act": "request",
+        "task_ref": null,
+        "step_index": null,
+        "actions": [
+          {
+            "capability": "climate.set_temperature",
+            "arguments": {
+              "query": null,
+              "destination": null,
+              "mode": null,
+              "location": null,
+              "forecast_day": null,
+              "gear": null,
+              "value_celsius": null,
+              "position_percent": null,
+              "open": null,
+              "locked": null,
+              "level": null,
+              "zone": null,
+              "zones": null,
+              "media_query": null,
+              "memory_key": null,
+              "memory_value": null,
+              "target_side": null,
+              "target_row": null,
+              "place_handle": null,
+              "choice_handle": null,
+              "reject_candidates": null,
+              "use_search_results": null,
+              "category": null,
+              "nearest": null,
+              "destination_scope": null,
+              "trip_kind": null,
+              "purpose": null,
+              "origin_query": null,
+              "plan_id": null,
+              "route_revision": null,
+              "requested_vehicle_model": null,
+              "requested_model_year": null,
+              "question_kind": null,
+              "charging_mode": null,
+              "temperature_delta_celsius": 2.0
+            },
+            "excluded_zones": null,
+            "exclusion_mode": "add",
+            "referenced_target": false
+          }
+        ],
+        "step_updates": [],
+        "append_actions": [],
+        "question_answer": null,
+        "consent_question_id": null,
+        "clarification_drafts": [],
+        "text": "",
+        "negated": false,
+        "conditional": false,
+        "scheduled": false,
+        "conflicting": false,
+        "unresolved": []
+      },
+      "model_served": true,
+      "checks": {
+        "act": {
+          "passed": true,
+          "expected": "request",
+          "actual": "request"
+        },
+        "actions:length": {
+          "passed": true,
+          "expected": 1,
+          "actual": 1
+        },
+        "actions.0.capability": {
+          "passed": true,
+          "expected": "climate.set_temperature",
+          "actual": "climate.set_temperature"
+        },
+        "actions.0.arguments.temperature_delta_celsius": {
+          "passed": true,
+          "expected": 2,
+          "actual": 2.0
+        },
+        "actions.0.arguments.value_celsius": {
+          "passed": true,
+          "expected": null,
+          "actual": null
+        }
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "requested_model": "vivi-qwen3-1.7b",
+          "served_model": "vivi-qwen3-1.7b",
+          "location": "jetson",
+          "stage": "semantic",
+          "requested_provider": "local",
+          "provider": "local",
+          "outcome": "served",
+          "calls": 1,
+          "latency_ms": 1473.63,
+          "budget_seconds": 30.0,
+          "completion": {
+            "finish_reason": "stop",
+            "prompt_tokens": 2837,
+            "completion_tokens": 47,
+            "total_tokens": 2884,
+            "cached_tokens": 2823,
+            "timings": {
+              "cache_n": 2823,
+              "prompt_n": 14,
+              "prompt_ms": 55.769,
+              "predicted_n": 47,
+              "predicted_ms": 1109.892
+            }
+          },
+          "proposed_act": "request",
+          "proposed_capabilities": [
+            "climate.set_temperature"
+          ],
+          "semantic_validation": "accepted"
+        }
+      ]
+    },
+    {
+      "id": "fresh-missing",
+      "repeat": 1,
+      "passed": true,
+      "semantic": {
+        "act": "request",
+        "task_ref": null,
+        "step_index": null,
+        "actions": [
+          {
+            "capability": "door.set_open",
+            "arguments": {
+              "query": null,
+              "destination": null,
+              "mode": null,
+              "location": null,
+              "forecast_day": null,
+              "gear": null,
+              "value_celsius": null,
+              "position_percent": null,
+              "open": true,
+              "locked": null,
+              "level": null,
+              "zone": null,
+              "zones": null,
+              "media_query": null,
+              "memory_key": null,
+              "memory_value": null,
+              "target_side": null,
+              "target_row": null,
+              "place_handle": null,
+              "choice_handle": null,
+              "reject_candidates": null,
+              "use_search_results": null,
+              "category": null,
+              "nearest": null,
+              "destination_scope": null,
+              "trip_kind": null,
+              "purpose": null,
+              "origin_query": null,
+              "plan_id": null,
+              "route_revision": null,
+              "requested_vehicle_model": null,
+              "requested_model_year": null,
+              "question_kind": null,
+              "charging_mode": null,
+              "temperature_delta_celsius": null
+            },
+            "excluded_zones": null,
+            "exclusion_mode": "add",
+            "referenced_target": false
+          }
+        ],
+        "step_updates": [],
+        "append_actions": [],
+        "question_answer": null,
+        "consent_question_id": null,
+        "clarification_drafts": [],
+        "text": "",
+        "negated": false,
+        "conditional": false,
+        "scheduled": false,
+        "conflicting": false,
+        "unresolved": []
+      },
+      "model_served": true,
+      "checks": {
+        "act": {
+          "passed": true,
+          "expected": "request",
+          "actual": "request"
+        },
+        "actions:length": {
+          "passed": true,
+          "expected": 1,
+          "actual": 1
+        },
+        "actions.0.capability": {
+          "passed": true,
+          "expected": "door.set_open",
+          "actual": "door.set_open"
+        },
+        "actions.0.arguments.open": {
+          "passed": true,
+          "expected": true,
+          "actual": true
+        },
+        "actions.0.arguments.zone": {
+          "passed": true,
+          "expected": null,
+          "actual": null
+        },
+        "actions.0.arguments.zones": {
+          "passed": true,
+          "expected": null,
+          "actual": null
+        },
+        "actions.0.arguments.target_row": {
+          "passed": true,
+          "expected": null,
+          "actual": null
+        },
+        "actions.0.arguments.target_side": {
+          "passed": true,
+          "expected": null,
+          "actual": null
+        }
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "requested_model": "vivi-qwen3-1.7b",
+          "served_model": "vivi-qwen3-1.7b",
+          "location": "jetson",
+          "stage": "semantic",
+          "requested_provider": "local",
+          "provider": "local",
+          "outcome": "served",
+          "calls": 1,
+          "latency_ms": 1248.76,
+          "budget_seconds": 30.0,
+          "completion": {
+            "finish_reason": "stop",
+            "prompt_tokens": 2837,
+            "completion_tokens": 43,
+            "total_tokens": 2880,
+            "cached_tokens": 2823,
+            "timings": {
+              "cache_n": 2823,
+              "prompt_n": 14,
+              "prompt_ms": 55.664,
+              "predicted_n": 43,
+              "predicted_ms": 1014.923
+            }
+          },
+          "proposed_act": "request",
+          "proposed_capabilities": [
+            "door.set_open"
+          ],
+          "semantic_validation": "accepted"
+        }
+      ]
+    },
+    {
+      "id": "fresh-lock",
+      "repeat": 1,
+      "passed": true,
+      "semantic": {
+        "act": "request",
+        "task_ref": null,
+        "step_index": null,
+        "actions": [
+          {
+            "capability": "door.set_lock",
+            "arguments": {
+              "query": null,
+              "destination": null,
+              "mode": null,
+              "location": null,
+              "forecast_day": null,
+              "gear": null,
+              "value_celsius": null,
+              "position_percent": null,
+              "open": null,
+              "locked": true,
+              "level": null,
+              "zone": "all",
+              "zones": null,
+              "media_query": null,
+              "memory_key": null,
+              "memory_value": null,
+              "target_side": null,
+              "target_row": null,
+              "place_handle": null,
+              "choice_handle": null,
+              "reject_candidates": null,
+              "use_search_results": null,
+              "category": null,
+              "nearest": null,
+              "destination_scope": null,
+              "trip_kind": null,
+              "purpose": null,
+              "origin_query": null,
+              "plan_id": null,
+              "route_revision": null,
+              "requested_vehicle_model": null,
+              "requested_model_year": null,
+              "question_kind": null,
+              "charging_mode": null,
+              "temperature_delta_celsius": null
+            },
+            "excluded_zones": null,
+            "exclusion_mode": "add",
+            "referenced_target": false
+          }
+        ],
+        "step_updates": [],
+        "append_actions": [],
+        "question_answer": null,
+        "consent_question_id": null,
+        "clarification_drafts": [],
+        "text": "",
+        "negated": false,
+        "conditional": false,
+        "scheduled": false,
+        "conflicting": false,
+        "unresolved": []
+      },
+      "model_served": true,
+      "checks": {
+        "act": {
+          "passed": true,
+          "expected": "request",
+          "actual": "request"
+        },
+        "actions:length": {
+          "passed": true,
+          "expected": 1,
+          "actual": 1
+        },
+        "actions.0.capability": {
+          "passed": true,
+          "expected": "door.set_lock",
+          "actual": "door.set_lock"
+        },
+        "actions.0.arguments.locked": {
+          "passed": true,
+          "expected": true,
+          "actual": true
+        },
+        "actions.0.arguments.zone": {
+          "passed": true,
+          "expected": "all",
+          "actual": "all"
+        }
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "requested_model": "vivi-qwen3-1.7b",
+          "served_model": "vivi-qwen3-1.7b",
+          "location": "jetson",
+          "stage": "semantic",
+          "requested_provider": "local",
+          "provider": "local",
+          "outcome": "served",
+          "calls": 1,
+          "latency_ms": 1404.55,
+          "budget_seconds": 30.0,
+          "completion": {
+            "finish_reason": "stop",
+            "prompt_tokens": 2839,
+            "completion_tokens": 50,
+            "total_tokens": 2889,
+            "cached_tokens": 2823,
+            "timings": {
+              "cache_n": 2823,
+              "prompt_n": 16,
+              "prompt_ms": 56.02,
+              "predicted_n": 50,
+              "predicted_ms": 1177.197
+            }
+          },
+          "proposed_act": "request",
+          "proposed_capabilities": [
+            "door.set_lock"
+          ],
+          "semantic_validation": "accepted"
+        }
+      ]
+    },
+    {
+      "id": "fresh-stop_music",
+      "repeat": 1,
+      "passed": false,
+      "semantic": {
+        "act": "reply",
+        "task_ref": null,
+        "step_index": null,
+        "actions": [],
+        "step_updates": [],
+        "append_actions": [],
+        "question_answer": null,
+        "consent_question_id": null,
+        "clarification_drafts": [],
+        "text": "Cảm ơn bạn! Hãy cho tôi biết câu hỏi của bạn để tôi có thể hỗ trợ bạn tốt hơn.",
+        "negated": false,
+        "conditional": false,
+        "scheduled": false,
+        "conflicting": false,
+        "unresolved": []
+      },
+      "model_served": true,
+      "checks": {
+        "act": {
+          "passed": false,
+          "expected": "request",
+          "actual": "reply"
+        },
+        "actions:length": {
+          "passed": false,
+          "expected": 1,
+          "actual": 0
+        },
+        "actions.0.capability": {
+          "passed": false,
+          "expected": "media.pause",
+          "actual": null
+        }
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "requested_model": "vivi-qwen3-1.7b",
+          "served_model": "vivi-qwen3-1.7b",
+          "location": "jetson",
+          "stage": "semantic",
+          "requested_provider": "local",
+          "provider": "local",
+          "outcome": "served",
+          "calls": 1,
+          "latency_ms": 1045.82,
+          "budget_seconds": 30.0,
+          "completion": {
+            "finish_reason": "stop",
+            "prompt_tokens": 2838,
+            "completion_tokens": 33,
+            "total_tokens": 2871,
+            "cached_tokens": 2823,
+            "timings": {
+              "cache_n": 2823,
+              "prompt_n": 15,
+              "prompt_ms": 56.384,
+              "predicted_n": 33,
+              "predicted_ms": 815.804
+            }
+          },
+          "proposed_act": "reply",
+          "proposed_capabilities": [],
+          "semantic_validation": "accepted"
+        }
+      ]
+    },
+    {
+      "id": "fresh-seat",
+      "repeat": 1,
+      "passed": true,
+      "semantic": {
+        "act": "request",
+        "task_ref": null,
+        "step_index": null,
+        "actions": [
+          {
+            "capability": "seat.set_heat_level",
+            "arguments": {
+              "query": null,
+              "destination": null,
+              "mode": null,
+              "location": null,
+              "forecast_day": null,
+              "gear": null,
+              "value_celsius": null,
+              "position_percent": null,
+              "open": null,
+              "locked": null,
+              "level": 2,
+              "zone": "rear_left",
+              "zones": null,
+              "media_query": null,
+              "memory_key": null,
+              "memory_value": null,
+              "target_side": null,
+              "target_row": null,
+              "place_handle": null,
+              "choice_handle": null,
+              "reject_candidates": null,
+              "use_search_results": null,
+              "category": null,
+              "nearest": null,
+              "destination_scope": null,
+              "trip_kind": null,
+              "purpose": null,
+              "origin_query": null,
+              "plan_id": null,
+              "route_revision": null,
+              "requested_vehicle_model": null,
+              "requested_model_year": null,
+              "question_kind": null,
+              "charging_mode": null,
+              "temperature_delta_celsius": null
+            },
+            "excluded_zones": null,
+            "exclusion_mode": "add",
+            "referenced_target": false
+          }
+        ],
+        "step_updates": [],
+        "append_actions": [],
+        "question_answer": null,
+        "consent_question_id": null,
+        "clarification_drafts": [],
+        "text": "",
+        "negated": false,
+        "conditional": false,
+        "scheduled": false,
+        "conflicting": false,
+        "unresolved": []
+      },
+      "model_served": true,
+      "checks": {
+        "act": {
+          "passed": true,
+          "expected": "request",
+          "actual": "request"
+        },
+        "actions:length": {
+          "passed": true,
+          "expected": 1,
+          "actual": 1
+        },
+        "actions.0.capability": {
+          "passed": true,
+          "expected": "seat.set_heat_level",
+          "actual": "seat.set_heat_level"
+        },
+        "actions.0.arguments.level": {
+          "passed": true,
+          "expected": 2,
+          "actual": 2
+        },
+        "actions.0.arguments.zone": {
+          "passed": true,
+          "expected": "rear_left",
+          "actual": "rear_left"
+        }
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "requested_model": "vivi-qwen3-1.7b",
+          "served_model": "vivi-qwen3-1.7b",
+          "location": "jetson",
+          "stage": "semantic",
+          "requested_provider": "local",
+          "provider": "local",
+          "outcome": "served",
+          "calls": 1,
+          "latency_ms": 1634.34,
+          "budget_seconds": 30.0,
+          "completion": {
+            "finish_reason": "stop",
+            "prompt_tokens": 2845,
+            "completion_tokens": 53,
+            "total_tokens": 2898,
+            "cached_tokens": 2823,
+            "timings": {
+              "cache_n": 2823,
+              "prompt_n": 22,
+              "prompt_ms": 80.843,
+              "predicted_n": 53,
+              "predicted_ms": 1247.678
+            }
+          },
+          "proposed_act": "request",
+          "proposed_capabilities": [
+            "seat.set_heat_level"
+          ],
+          "semantic_validation": "accepted"
+        }
+      ]
+    },
+    {
+      "id": "fresh-weather",
+      "repeat": 1,
+      "passed": false,
+      "semantic": {
+        "act": "request",
+        "task_ref": null,
+        "step_index": null,
+        "actions": [
+          {
+            "capability": "weather.get_forecast",
+            "arguments": {
+              "query": null,
+              "destination": null,
+              "mode": null,
+              "location": null,
+              "forecast_day": "tomorrow",
+              "gear": null,
+              "value_celsius": null,
+              "position_percent": null,
+              "open": null,
+              "locked": null,
+              "level": null,
+              "zone": null,
+              "zones": null,
+              "media_query": null,
+              "memory_key": null,
+              "memory_value": null,
+              "target_side": null,
+              "target_row": null,
+              "place_handle": null,
+              "choice_handle": null,
+              "reject_candidates": null,
+              "use_search_results": null,
+              "category": null,
+              "nearest": null,
+              "destination_scope": null,
+              "trip_kind": null,
+              "purpose": null,
+              "origin_query": null,
+              "plan_id": null,
+              "route_revision": null,
+              "requested_vehicle_model": null,
+              "requested_model_year": null,
+              "question_kind": null,
+              "charging_mode": null,
+              "temperature_delta_celsius": null
+            },
+            "excluded_zones": null,
+            "exclusion_mode": "add",
+            "referenced_target": false
+          },
+          {
+            "capability": "weather.get_forecast",
+            "arguments": {
+              "query": null,
+              "destination": null,
+              "mode": null,
+              "location": "Huế",
+              "forecast_day": "tomorrow",
+              "gear": null,
+              "value_celsius": null,
+              "position_percent": null,
+              "open": null,
+              "locked": null,
+              "level": null,
+              "zone": null,
+              "zones": null,
+              "media_query": null,
+              "memory_key": null,
+              "memory_value": null,
+              "target_side": null,
+              "target_row": null,
+              "place_handle": null,
+              "choice_handle": null,
+              "reject_candidates": null,
+              "use_search_results": null,
+              "category": null,
+              "nearest": null,
+              "destination_scope": null,
+              "trip_kind": null,
+              "purpose": null,
+              "origin_query": null,
+              "plan_id": null,
+              "route_revision": null,
+              "requested_vehicle_model": null,
+              "requested_model_year": null,
+              "question_kind": null,
+              "charging_mode": null,
+              "temperature_delta_celsius": null
+            },
+            "excluded_zones": null,
+            "exclusion_mode": "add",
+            "referenced_target": false
+          }
+        ],
+        "step_updates": [],
+        "append_actions": [],
+        "question_answer": null,
+        "consent_question_id": null,
+        "clarification_drafts": [],
+        "text": "",
+        "negated": false,
+        "conditional": false,
+        "scheduled": false,
+        "conflicting": false,
+        "unresolved": []
+      },
+      "model_served": true,
+      "checks": {
+        "act": {
+          "passed": false,
+          "expected": "question",
+          "actual": "request"
+        },
+        "actions:length": {
+          "passed": false,
+          "expected": 1,
+          "actual": 2
+        },
+        "actions.0.capability": {
+          "passed": true,
+          "expected": "weather.get_forecast",
+          "actual": "weather.get_forecast"
+        },
+        "actions.0.arguments.forecast_day": {
+          "passed": true,
+          "expected": "tomorrow",
+          "actual": "tomorrow"
+        },
+        "actions.0.arguments.location": {
+          "passed": false,
+          "expected": "Huế",
+          "actual": null
+        },
+        "actions.0.arguments.query:contains": {
+          "passed": false,
+          "expected": "Huế",
+          "actual": null
+        }
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "requested_model": "vivi-qwen3-1.7b",
+          "served_model": "vivi-qwen3-1.7b",
+          "location": "jetson",
+          "stage": "semantic",
+          "requested_provider": "local",
+          "provider": "local",
+          "outcome": "served",
+          "calls": 1,
+          "latency_ms": 1353.07,
+          "budget_seconds": 30.0,
+          "completion": {
+            "finish_reason": "stop",
+            "prompt_tokens": 2843,
+            "completion_tokens": 45,
+            "total_tokens": 2888,
+            "cached_tokens": 2823,
+            "timings": {
+              "cache_n": 2823,
+              "prompt_n": 20,
+              "prompt_ms": 80.078,
+              "predicted_n": 45,
+              "predicted_ms": 1098.479
+            }
+          },
+          "proposed_act": "request",
+          "proposed_capabilities": [
+            "weather.get_forecast",
+            "weather.get_forecast"
+          ],
+          "semantic_validation": "accepted"
+        }
+      ]
+    },
+    {
+      "id": "fresh-navigation",
+      "repeat": 1,
+      "passed": false,
+      "semantic": {
+        "act": "clarify",
+        "task_ref": null,
+        "step_index": null,
+        "actions": [],
+        "step_updates": [],
+        "append_actions": [],
+        "question_answer": null,
+        "consent_question_id": null,
+        "clarification_drafts": [],
+        "text": "Kế hoạch đã thay đổi. Bạn chọn lại nhé.",
+        "negated": false,
+        "conditional": false,
+        "scheduled": false,
+        "conflicting": false,
+        "unresolved": []
+      },
+      "model_served": true,
+      "checks": {
+        "act": {
+          "passed": false,
+          "expected": "request",
+          "actual": "clarify"
+        },
+        "actions:length": {
+          "passed": false,
+          "expected": 1,
+          "actual": 0
+        },
+        "actions.0.capability": {
+          "passed": false,
+          "expected": "navigation.plan",
+          "actual": null
+        },
+        "actions.0.arguments.query:contains": {
+          "passed": false,
+          "expected": "Huế",
+          "actual": null
+        },
+        "actions.0.arguments.purpose": {
+          "passed": false,
+          "expected": "navigate",
+          "actual": null
+        },
+        "actions.0.arguments.category": {
+          "passed": true,
+          "expected": null,
+          "actual": null
+        }
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "requested_model": "vivi-qwen3-1.7b",
+          "served_model": "vivi-qwen3-1.7b",
+          "location": "jetson",
+          "stage": "semantic",
+          "requested_provider": "local",
+          "provider": "local",
+          "outcome": "served",
+          "calls": 1,
+          "latency_ms": 2121.32,
+          "budget_seconds": 30.0,
+          "completion": {
+            "finish_reason": "stop",
+            "prompt_tokens": 2839,
+            "completion_tokens": 67,
+            "total_tokens": 2906,
+            "cached_tokens": 2823,
+            "timings": {
+              "cache_n": 2823,
+              "prompt_n": 16,
+              "prompt_ms": 56.245,
+              "predicted_n": 67,
+              "predicted_ms": 1891.397
+            }
+          },
+          "proposed_act": "request",
+          "proposed_capabilities": [
+            "navigation.search"
+          ],
+          "semantic_validation": "rejected"
+        }
+      ]
+    },
+    {
+      "id": "fresh-negated",
+      "repeat": 1,
+      "passed": false,
+      "semantic": {
+        "act": "request",
+        "task_ref": null,
+        "step_index": null,
+        "actions": [
+          {
+            "capability": "window.set_position",
+            "arguments": {
+              "query": null,
+              "destination": null,
+              "mode": null,
+              "location": null,
+              "forecast_day": null,
+              "gear": null,
+              "value_celsius": null,
+              "position_percent": 100,
+              "open": null,
+              "locked": null,
+              "level": null,
+              "zone": "driver",
+              "zones": null,
+              "media_query": null,
+              "memory_key": null,
+              "memory_value": null,
+              "target_side": null,
+              "target_row": null,
+              "place_handle": null,
+              "choice_handle": null,
+              "reject_candidates": null,
+              "use_search_results": null,
+              "category": null,
+              "nearest": null,
+              "destination_scope": null,
+              "trip_kind": null,
+              "purpose": null,
+              "origin_query": null,
+              "plan_id": null,
+              "route_revision": null,
+              "requested_vehicle_model": null,
+              "requested_model_year": null,
+              "question_kind": null,
+              "charging_mode": null,
+              "temperature_delta_celsius": null
+            },
+            "excluded_zones": null,
+            "exclusion_mode": "add",
+            "referenced_target": false
+          },
+          {
+            "capability": "media.pause",
+            "arguments": {
+              "query": null,
+              "destination": null,
+              "mode": null,
+              "location": null,
+              "forecast_day": null,
+              "gear": null,
+              "value_celsius": null,
+              "position_percent": null,
+              "open": null,
+              "locked": null,
+              "level": null,
+              "zone": null,
+              "zones": null,
+              "media_query": null,
+              "memory_key": null,
+              "memory_value": null,
+              "target_side": null,
+              "target_row": null,
+              "place_handle": null,
+              "choice_handle": null,
+              "reject_candidates": null,
+              "use_search_results": null,
+              "category": null,
+              "nearest": null,
+              "destination_scope": null,
+              "trip_kind": null,
+              "purpose": null,
+              "origin_query": null,
+              "plan_id": null,
+              "route_revision": null,
+              "requested_vehicle_model": null,
+              "requested_model_year": null,
+              "question_kind": null,
+              "charging_mode": null,
+              "temperature_delta_celsius": null
+            },
+            "excluded_zones": null,
+            "exclusion_mode": "add",
+            "referenced_target": false
+          }
+        ],
+        "step_updates": [],
+        "append_actions": [],
+        "question_answer": null,
+        "consent_question_id": null,
+        "clarification_drafts": [],
+        "text": "",
+        "negated": false,
+        "conditional": false,
+        "scheduled": false,
+        "conflicting": false,
+        "unresolved": []
+      },
+      "model_served": true,
+      "checks": {
+        "blocked": {
+          "passed": false,
+          "expected": true,
+          "actual": false
+        }
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "requested_model": "vivi-qwen3-1.7b",
+          "served_model": "vivi-qwen3-1.7b",
+          "location": "jetson",
+          "stage": "semantic",
+          "requested_provider": "local",
+          "provider": "local",
+          "outcome": "served",
+          "calls": 1,
+          "latency_ms": 1942.93,
+          "budget_seconds": 30.0,
+          "completion": {
+            "finish_reason": "stop",
+            "prompt_tokens": 2843,
+            "completion_tokens": 71,
+            "total_tokens": 2914,
+            "cached_tokens": 2823,
+            "timings": {
+              "cache_n": 2823,
+              "prompt_n": 20,
+              "prompt_ms": 80.101,
+              "predicted_n": 71,
+              "predicted_ms": 1684.204
+            }
+          },
+          "proposed_act": "request",
+          "proposed_capabilities": [
+            "window.set_position",
+            "media.pause"
+          ],
+          "semantic_validation": "accepted"
+        }
+      ]
+    },
+    {
+      "id": "fresh-unsupported",
+      "repeat": 1,
+      "passed": false,
+      "semantic": {
+        "act": "request",
+        "task_ref": null,
+        "step_index": null,
+        "actions": [
+          {
+            "capability": "media.play",
+            "arguments": {
+              "query": null,
+              "destination": null,
+              "mode": null,
+              "location": null,
+              "forecast_day": null,
+              "gear": null,
+              "value_celsius": null,
+              "position_percent": null,
+              "open": null,
+              "locked": null,
+              "level": null,
+              "zone": null,
+              "zones": null,
+              "media_query": "bật nhạc",
+              "memory_key": null,
+              "memory_value": null,
+              "target_side": null,
+              "target_row": null,
+              "place_handle": null,
+              "choice_handle": null,
+              "reject_candidates": null,
+              "use_search_results": null,
+              "category": null,
+              "nearest": null,
+              "destination_scope": null,
+              "trip_kind": null,
+              "purpose": null,
+              "origin_query": null,
+              "plan_id": null,
+              "route_revision": null,
+              "requested_vehicle_model": null,
+              "requested_model_year": null,
+              "question_kind": null,
+              "charging_mode": null,
+              "temperature_delta_celsius": null
+            },
+            "excluded_zones": null,
+            "exclusion_mode": "add",
+            "referenced_target": false
+          },
+          {
+            "capability": "navigation.set_gear",
+            "arguments": {
+              "query": null,
+              "destination": null,
+              "mode": null,
+              "location": null,
+              "forecast_day": null,
+              "gear": "D",
+              "value_celsius": null,
+              "position_percent": null,
+              "open": null,
+              "locked": null,
+              "level": null,
+              "zone": null,
+              "zones": null,
+              "media_query": null,
+              "memory_key": null,
+              "memory_value": null,
+              "target_side": null,
+              "target_row": null,
+              "place_handle": null,
+              "choice_handle": null,
+              "reject_candidates": null,
+              "use_search_results": null,
+              "category": null,
+              "nearest": null,
+              "destination_scope": null,
+              "trip_kind": null,
+              "purpose": null,
+              "origin_query": null,
+              "plan_id": null,
+              "route_revision": null,
+              "requested_vehicle_model": null,
+              "requested_model_year": null,
+              "question_kind": null,
+              "charging_mode": null,
+              "temperature_delta_celsius": null
+            },
+            "excluded_zones": null,
+            "exclusion_mode": "add",
+            "referenced_target": false
+          }
+        ],
+        "step_updates": [],
+        "append_actions": [],
+        "question_answer": null,
+        "consent_question_id": null,
+        "clarification_drafts": [],
+        "text": "",
+        "negated": false,
+        "conditional": false,
+        "scheduled": false,
+        "conflicting": false,
+        "unresolved": []
+      },
+      "model_served": true,
+      "checks": {
+        "blocked": {
+          "passed": false,
+          "expected": true,
+          "actual": false
+        }
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "requested_model": "vivi-qwen3-1.7b",
+          "served_model": "vivi-qwen3-1.7b",
+          "location": "jetson",
+          "stage": "semantic",
+          "requested_provider": "local",
+          "provider": "local",
+          "outcome": "served",
+          "calls": 1,
+          "latency_ms": 2015.37,
+          "budget_seconds": 30.0,
+          "completion": {
+            "finish_reason": "stop",
+            "prompt_tokens": 2841,
+            "completion_tokens": 74,
+            "total_tokens": 2915,
+            "cached_tokens": 2823,
+            "timings": {
+              "cache_n": 2823,
+              "prompt_n": 18,
+              "prompt_ms": 79.753,
+              "predicted_n": 74,
+              "predicted_ms": 1751.344
+            }
+          },
+          "proposed_act": "request",
+          "proposed_capabilities": [
+            "media.play",
+            "navigation.set_gear"
+          ],
+          "semantic_validation": "accepted"
+        }
+      ]
+    },
+    {
+      "id": "navigation-music",
+      "repeat": 1,
+      "passed": false,
+      "semantic": {
+        "act": "request",
+        "task_ref": null,
+        "step_index": null,
+        "actions": [
+          {
+            "capability": "media.play",
+            "arguments": {
+              "query": null,
+              "destination": null,
+              "mode": null,
+              "location": null,
+              "forecast_day": null,
+              "gear": null,
+              "value_celsius": null,
+              "position_percent": null,
+              "open": null,
+              "locked": null,
+              "level": null,
+              "zone": null,
+              "zones": null,
+              "media_query": "bật nhạc",
+              "memory_key": null,
+              "memory_value": null,
+              "target_side": null,
+              "target_row": null,
+              "place_handle": null,
+              "choice_handle": null,
+              "reject_candidates": null,
+              "use_search_results": null,
+              "category": null,
+              "nearest": null,
+              "destination_scope": null,
+              "trip_kind": null,
+              "purpose": null,
+              "origin_query": null,
+              "plan_id": null,
+              "route_revision": null,
+              "requested_vehicle_model": null,
+              "requested_model_year": null,
+              "question_kind": null,
+              "charging_mode": null,
+              "temperature_delta_celsius": null
+            },
+            "excluded_zones": null,
+            "exclusion_mode": "add",
+            "referenced_target": false
+          }
+        ],
+        "step_updates": [],
+        "append_actions": [],
+        "question_answer": null,
+        "consent_question_id": null,
+        "clarification_drafts": [],
+        "text": "",
+        "negated": false,
+        "conditional": false,
+        "scheduled": false,
+        "conflicting": false,
+        "unresolved": []
+      },
+      "model_served": true,
+      "checks": {
+        "act": {
+          "passed": true,
+          "expected": "request",
+          "actual": "request"
+        },
+        "actions:length": {
+          "passed": true,
+          "expected": 1,
+          "actual": 1
+        },
+        "actions.0.capability": {
+          "passed": true,
+          "expected": "media.play",
+          "actual": "media.play"
+        },
+        "actions.0.arguments.media_query": {
+          "passed": false,
+          "expected": null,
+          "actual": "bật nhạc"
+        }
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "requested_model": "vivi-qwen3-1.7b",
+          "served_model": "vivi-qwen3-1.7b",
+          "location": "jetson",
+          "stage": "semantic",
+          "requested_provider": "local",
+          "provider": "local",
+          "outcome": "served",
+          "calls": 1,
+          "latency_ms": 1681.49,
+          "budget_seconds": 30.0,
+          "completion": {
+            "finish_reason": "stop",
+            "prompt_tokens": 3047,
+            "completion_tokens": 46,
+            "total_tokens": 3093,
+            "cached_tokens": 2808,
+            "timings": {
+              "cache_n": 2808,
+              "prompt_n": 239,
+              "prompt_ms": 391.347,
+              "predicted_n": 46,
+              "predicted_ms": 1100.323
+            }
+          },
+          "proposed_act": "request",
+          "proposed_capabilities": [
+            "media.play"
+          ],
+          "semantic_validation": "accepted"
+        }
+      ]
+    },
+    {
+      "id": "navigation-climate",
+      "repeat": 1,
+      "passed": true,
+      "semantic": {
+        "act": "request",
+        "task_ref": null,
+        "step_index": null,
+        "actions": [
+          {
+            "capability": "climate.set_temperature",
+            "arguments": {
+              "query": null,
+              "destination": null,
+              "mode": null,
+              "location": null,
+              "forecast_day": null,
+              "gear": null,
+              "value_celsius": 25.0,
+              "position_percent": null,
+              "open": null,
+              "locked": null,
+              "level": null,
+              "zone": null,
+              "zones": null,
+              "media_query": null,
+              "memory_key": null,
+              "memory_value": null,
+              "target_side": null,
+              "target_row": null,
+              "place_handle": null,
+              "choice_handle": null,
+              "reject_candidates": null,
+              "use_search_results": null,
+              "category": null,
+              "nearest": null,
+              "destination_scope": null,
+              "trip_kind": null,
+              "purpose": null,
+              "origin_query": null,
+              "plan_id": null,
+              "route_revision": null,
+              "requested_vehicle_model": null,
+              "requested_model_year": null,
+              "question_kind": null,
+              "charging_mode": null,
+              "temperature_delta_celsius": null
+            },
+            "excluded_zones": null,
+            "exclusion_mode": "add",
+            "referenced_target": false
+          }
+        ],
+        "step_updates": [],
+        "append_actions": [],
+        "question_answer": null,
+        "consent_question_id": null,
+        "clarification_drafts": [],
+        "text": "",
+        "negated": false,
+        "conditional": false,
+        "scheduled": false,
+        "conflicting": false,
+        "unresolved": []
+      },
+      "model_served": true,
+      "checks": {
+        "act": {
+          "passed": true,
+          "expected": "request",
+          "actual": "request"
+        },
+        "actions:length": {
+          "passed": true,
+          "expected": 1,
+          "actual": 1
+        },
+        "actions.0.capability": {
+          "passed": true,
+          "expected": "climate.set_temperature",
+          "actual": "climate.set_temperature"
+        },
+        "actions.0.arguments.value_celsius": {
+          "passed": true,
+          "expected": 25,
+          "actual": 25.0
+        },
+        "actions.0.arguments.temperature_delta_celsius": {
+          "passed": true,
+          "expected": null,
+          "actual": null
+        }
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "requested_model": "vivi-qwen3-1.7b",
+          "served_model": "vivi-qwen3-1.7b",
+          "location": "jetson",
+          "stage": "semantic",
+          "requested_provider": "local",
+          "provider": "local",
+          "outcome": "served",
+          "calls": 1,
+          "latency_ms": 1514.68,
+          "budget_seconds": 30.0,
+          "completion": {
+            "finish_reason": "stop",
+            "prompt_tokens": 3054,
+            "completion_tokens": 47,
+            "total_tokens": 3101,
+            "cached_tokens": 3034,
+            "timings": {
+              "cache_n": 3034,
+              "prompt_n": 20,
+              "prompt_ms": 80.12,
+              "predicted_n": 47,
+              "predicted_ms": 1128.766
+            }
+          },
+          "proposed_act": "request",
+          "proposed_capabilities": [
+            "climate.set_temperature"
+          ],
+          "semantic_validation": "accepted"
+        }
+      ]
+    },
+    {
+      "id": "navigation-window",
+      "repeat": 1,
+      "passed": true,
+      "semantic": {
+        "act": "request",
+        "task_ref": null,
+        "step_index": null,
+        "actions": [
+          {
+            "capability": "window.set_position",
+            "arguments": {
+              "query": null,
+              "destination": null,
+              "mode": null,
+              "location": null,
+              "forecast_day": null,
+              "gear": null,
+              "value_celsius": null,
+              "position_percent": 65,
+              "open": null,
+              "locked": null,
+              "level": null,
+              "zone": "front_passenger",
+              "zones": null,
+              "media_query": null,
+              "memory_key": null,
+              "memory_value": null,
+              "target_side": null,
+              "target_row": null,
+              "place_handle": null,
+              "choice_handle": null,
+              "reject_candidates": null,
+              "use_search_results": null,
+              "category": null,
+              "nearest": null,
+              "destination_scope": null,
+              "trip_kind": null,
+              "purpose": null,
+              "origin_query": null,
+              "plan_id": null,
+              "route_revision": null,
+              "requested_vehicle_model": null,
+              "requested_model_year": null,
+              "question_kind": null,
+              "charging_mode": null,
+              "temperature_delta_celsius": null
+            },
+            "excluded_zones": null,
+            "exclusion_mode": "add",
+            "referenced_target": false
+          }
+        ],
+        "step_updates": [],
+        "append_actions": [],
+        "question_answer": null,
+        "consent_question_id": null,
+        "clarification_drafts": [],
+        "text": "",
+        "negated": false,
+        "conditional": false,
+        "scheduled": false,
+        "conflicting": false,
+        "unresolved": []
+      },
+      "model_served": true,
+      "checks": {
+        "act": {
+          "passed": true,
+          "expected": "request",
+          "actual": "request"
+        },
+        "actions:length": {
+          "passed": true,
+          "expected": 1,
+          "actual": 1
+        },
+        "actions.0.capability": {
+          "passed": true,
+          "expected": "window.set_position",
+          "actual": "window.set_position"
+        },
+        "actions.0.arguments.position_percent": {
+          "passed": true,
+          "expected": 65,
+          "actual": 65
+        },
+        "actions.0.arguments.zone": {
+          "passed": true,
+          "expected": "front_passenger",
+          "actual": "front_passenger"
+        }
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "requested_model": "vivi-qwen3-1.7b",
+          "served_model": "vivi-qwen3-1.7b",
+          "location": "jetson",
+          "stage": "semantic",
+          "requested_provider": "local",
+          "provider": "local",
+          "outcome": "served",
+          "calls": 1,
+          "latency_ms": 1614.5,
+          "budget_seconds": 30.0,
+          "completion": {
+            "finish_reason": "stop",
+            "prompt_tokens": 3054,
+            "completion_tokens": 55,
+            "total_tokens": 3109,
+            "cached_tokens": 3034,
+            "timings": {
+              "cache_n": 3034,
+              "prompt_n": 20,
+              "prompt_ms": 80.029,
+              "predicted_n": 55,
+              "predicted_ms": 1319.035
+            }
+          },
+          "proposed_act": "request",
+          "proposed_capabilities": [
+            "window.set_position"
+          ],
+          "semantic_validation": "accepted"
+        }
+      ]
+    },
+    {
+      "id": "navigation-compound",
+      "repeat": 1,
+      "passed": true,
+      "semantic": {
+        "act": "request",
+        "task_ref": null,
+        "step_index": null,
+        "actions": [
+          {
+            "capability": "climate.set_temperature",
+            "arguments": {
+              "query": null,
+              "destination": null,
+              "mode": null,
+              "location": null,
+              "forecast_day": null,
+              "gear": null,
+              "value_celsius": 26.0,
+              "position_percent": null,
+              "open": null,
+              "locked": null,
+              "level": null,
+              "zone": null,
+              "zones": null,
+              "media_query": null,
+              "memory_key": null,
+              "memory_value": null,
+              "target_side": null,
+              "target_row": null,
+              "place_handle": null,
+              "choice_handle": null,
+              "reject_candidates": null,
+              "use_search_results": null,
+              "category": null,
+              "nearest": null,
+              "destination_scope": null,
+              "trip_kind": null,
+              "purpose": null,
+              "origin_query": null,
+              "plan_id": null,
+              "route_revision": null,
+              "requested_vehicle_model": null,
+              "requested_model_year": null,
+              "question_kind": null,
+              "charging_mode": null,
+              "temperature_delta_celsius": null
+            },
+            "excluded_zones": null,
+            "exclusion_mode": "add",
+            "referenced_target": false
+          },
+          {
+            "capability": "window.set_position",
+            "arguments": {
+              "query": null,
+              "destination": null,
+              "mode": null,
+              "location": null,
+              "forecast_day": null,
+              "gear": null,
+              "value_celsius": null,
+              "position_percent": 35,
+              "open": null,
+              "locked": null,
+              "level": null,
+              "zone": "rear_right",
+              "zones": null,
+              "media_query": null,
+              "memory_key": null,
+              "memory_value": null,
+              "target_side": null,
+              "target_row": null,
+              "place_handle": null,
+              "choice_handle": null,
+              "reject_candidates": null,
+              "use_search_results": null,
+              "category": null,
+              "nearest": null,
+              "destination_scope": null,
+              "trip_kind": null,
+              "purpose": null,
+              "origin_query": null,
+              "plan_id": null,
+              "route_revision": null,
+              "requested_vehicle_model": null,
+              "requested_model_year": null,
+              "question_kind": null,
+              "charging_mode": null,
+              "temperature_delta_celsius": null
+            },
+            "excluded_zones": null,
+            "exclusion_mode": "add",
+            "referenced_target": false
+          }
+        ],
+        "step_updates": [],
+        "append_actions": [],
+        "question_answer": null,
+        "consent_question_id": null,
+        "clarification_drafts": [],
+        "text": "",
+        "negated": false,
+        "conditional": false,
+        "scheduled": false,
+        "conflicting": false,
+        "unresolved": []
+      },
+      "model_served": true,
+      "checks": {
+        "act": {
+          "passed": true,
+          "expected": "request",
+          "actual": "request"
+        },
+        "actions:length": {
+          "passed": true,
+          "expected": 2,
+          "actual": 2
+        },
+        "actions.0.capability": {
+          "passed": true,
+          "expected": "climate.set_temperature",
+          "actual": "climate.set_temperature"
+        },
+        "actions.0.arguments.value_celsius": {
+          "passed": true,
+          "expected": 26,
+          "actual": 26.0
+        },
+        "actions.0.arguments.temperature_delta_celsius": {
+          "passed": true,
+          "expected": null,
+          "actual": null
+        },
+        "actions.1.capability": {
+          "passed": true,
+          "expected": "window.set_position",
+          "actual": "window.set_position"
+        },
+        "actions.1.arguments.position_percent": {
+          "passed": true,
+          "expected": 35,
+          "actual": 35
+        },
+        "actions.1.arguments.zone": {
+          "passed": true,
+          "expected": "rear_right",
+          "actual": "rear_right"
+        }
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "requested_model": "vivi-qwen3-1.7b",
+          "served_model": "vivi-qwen3-1.7b",
+          "location": "jetson",
+          "stage": "semantic",
+          "requested_provider": "local",
+          "provider": "local",
+          "outcome": "served",
+          "calls": 1,
+          "latency_ms": 2308.75,
+          "budget_seconds": 30.0,
+          "completion": {
+            "finish_reason": "stop",
+            "prompt_tokens": 3062,
+            "completion_tokens": 84,
+            "total_tokens": 3146,
+            "cached_tokens": 3034,
+            "timings": {
+              "cache_n": 3034,
+              "prompt_n": 28,
+              "prompt_ms": 90.026,
+              "predicted_n": 84,
+              "predicted_ms": 2029.291
+            }
+          },
+          "proposed_act": "request",
+          "proposed_capabilities": [
+            "climate.set_temperature",
+            "window.set_position"
+          ],
+          "semantic_validation": "accepted"
+        }
+      ]
+    },
+    {
+      "id": "navigation-relative",
+      "repeat": 1,
+      "passed": true,
+      "semantic": {
+        "act": "request",
+        "task_ref": null,
+        "step_index": null,
+        "actions": [
+          {
+            "capability": "climate.set_temperature",
+            "arguments": {
+              "query": null,
+              "destination": null,
+              "mode": null,
+              "location": null,
+              "forecast_day": null,
+              "gear": null,
+              "value_celsius": null,
+              "position_percent": null,
+              "open": null,
+              "locked": null,
+              "level": null,
+              "zone": null,
+              "zones": null,
+              "media_query": null,
+              "memory_key": null,
+              "memory_value": null,
+              "target_side": null,
+              "target_row": null,
+              "place_handle": null,
+              "choice_handle": null,
+              "reject_candidates": null,
+              "use_search_results": null,
+              "category": null,
+              "nearest": null,
+              "destination_scope": null,
+              "trip_kind": null,
+              "purpose": null,
+              "origin_query": null,
+              "plan_id": null,
+              "route_revision": null,
+              "requested_vehicle_model": null,
+              "requested_model_year": null,
+              "question_kind": null,
+              "charging_mode": null,
+              "temperature_delta_celsius": 2.0
+            },
+            "excluded_zones": null,
+            "exclusion_mode": "add",
+            "referenced_target": false
+          }
+        ],
+        "step_updates": [],
+        "append_actions": [],
+        "question_answer": null,
+        "consent_question_id": null,
+        "clarification_drafts": [],
+        "text": "",
+        "negated": false,
+        "conditional": false,
+        "scheduled": false,
+        "conflicting": false,
+        "unresolved": []
+      },
+      "model_served": true,
+      "checks": {
+        "act": {
+          "passed": true,
+          "expected": "request",
+          "actual": "request"
+        },
+        "actions:length": {
+          "passed": true,
+          "expected": 1,
+          "actual": 1
+        },
+        "actions.0.capability": {
+          "passed": true,
+          "expected": "climate.set_temperature",
+          "actual": "climate.set_temperature"
+        },
+        "actions.0.arguments.temperature_delta_celsius": {
+          "passed": true,
+          "expected": 2,
+          "actual": 2.0
+        },
+        "actions.0.arguments.value_celsius": {
+          "passed": true,
+          "expected": null,
+          "actual": null
+        }
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "requested_model": "vivi-qwen3-1.7b",
+          "served_model": "vivi-qwen3-1.7b",
+          "location": "jetson",
+          "stage": "semantic",
+          "requested_provider": "local",
+          "provider": "local",
+          "outcome": "served",
+          "calls": 1,
+          "latency_ms": 1387.87,
+          "budget_seconds": 30.0,
+          "completion": {
+            "finish_reason": "stop",
+            "prompt_tokens": 3048,
+            "completion_tokens": 47,
+            "total_tokens": 3095,
+            "cached_tokens": 3034,
+            "timings": {
+              "cache_n": 3034,
+              "prompt_n": 14,
+              "prompt_ms": 55.881,
+              "predicted_n": 47,
+              "predicted_ms": 1123.051
+            }
+          },
+          "proposed_act": "request",
+          "proposed_capabilities": [
+            "climate.set_temperature"
+          ],
+          "semantic_validation": "accepted"
+        }
+      ]
+    },
+    {
+      "id": "navigation-missing",
+      "repeat": 1,
+      "passed": true,
+      "semantic": {
+        "act": "request",
+        "task_ref": null,
+        "step_index": null,
+        "actions": [
+          {
+            "capability": "door.set_open",
+            "arguments": {
+              "query": null,
+              "destination": null,
+              "mode": null,
+              "location": null,
+              "forecast_day": null,
+              "gear": null,
+              "value_celsius": null,
+              "position_percent": null,
+              "open": true,
+              "locked": null,
+              "level": null,
+              "zone": null,
+              "zones": null,
+              "media_query": null,
+              "memory_key": null,
+              "memory_value": null,
+              "target_side": null,
+              "target_row": null,
+              "place_handle": null,
+              "choice_handle": null,
+              "reject_candidates": null,
+              "use_search_results": null,
+              "category": null,
+              "nearest": null,
+              "destination_scope": null,
+              "trip_kind": null,
+              "purpose": null,
+              "origin_query": null,
+              "plan_id": null,
+              "route_revision": null,
+              "requested_vehicle_model": null,
+              "requested_model_year": null,
+              "question_kind": null,
+              "charging_mode": null,
+              "temperature_delta_celsius": null
+            },
+            "excluded_zones": null,
+            "exclusion_mode": "add",
+            "referenced_target": false
+          }
+        ],
+        "step_updates": [],
+        "append_actions": [],
+        "question_answer": null,
+        "consent_question_id": null,
+        "clarification_drafts": [],
+        "text": "",
+        "negated": false,
+        "conditional": false,
+        "scheduled": false,
+        "conflicting": false,
+        "unresolved": []
+      },
+      "model_served": true,
+      "checks": {
+        "act": {
+          "passed": true,
+          "expected": "request",
+          "actual": "request"
+        },
+        "actions:length": {
+          "passed": true,
+          "expected": 1,
+          "actual": 1
+        },
+        "actions.0.capability": {
+          "passed": true,
+          "expected": "door.set_open",
+          "actual": "door.set_open"
+        },
+        "actions.0.arguments.open": {
+          "passed": true,
+          "expected": true,
+          "actual": true
+        },
+        "actions.0.arguments.zone": {
+          "passed": true,
+          "expected": null,
+          "actual": null
+        },
+        "actions.0.arguments.zones": {
+          "passed": true,
+          "expected": null,
+          "actual": null
+        },
+        "actions.0.arguments.target_row": {
+          "passed": true,
+          "expected": null,
+          "actual": null
+        },
+        "actions.0.arguments.target_side": {
+          "passed": true,
+          "expected": null,
+          "actual": null
+        }
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "requested_model": "vivi-qwen3-1.7b",
+          "served_model": "vivi-qwen3-1.7b",
+          "location": "jetson",
+          "stage": "semantic",
+          "requested_provider": "local",
+          "provider": "local",
+          "outcome": "served",
+          "calls": 1,
+          "latency_ms": 1264.82,
+          "budget_seconds": 30.0,
+          "completion": {
+            "finish_reason": "stop",
+            "prompt_tokens": 3048,
+            "completion_tokens": 43,
+            "total_tokens": 3091,
+            "cached_tokens": 3034,
+            "timings": {
+              "cache_n": 3034,
+              "prompt_n": 14,
+              "prompt_ms": 55.841,
+              "predicted_n": 43,
+              "predicted_ms": 1031.845
+            }
+          },
+          "proposed_act": "request",
+          "proposed_capabilities": [
+            "door.set_open"
+          ],
+          "semantic_validation": "accepted"
+        }
+      ]
+    },
+    {
+      "id": "navigation-lock",
+      "repeat": 1,
+      "passed": true,
+      "semantic": {
+        "act": "request",
+        "task_ref": null,
+        "step_index": null,
+        "actions": [
+          {
+            "capability": "door.set_lock",
+            "arguments": {
+              "query": null,
+              "destination": null,
+              "mode": null,
+              "location": null,
+              "forecast_day": null,
+              "gear": null,
+              "value_celsius": null,
+              "position_percent": null,
+              "open": null,
+              "locked": true,
+              "level": null,
+              "zone": "all",
+              "zones": null,
+              "media_query": null,
+              "memory_key": null,
+              "memory_value": null,
+              "target_side": null,
+              "target_row": null,
+              "place_handle": null,
+              "choice_handle": null,
+              "reject_candidates": null,
+              "use_search_results": null,
+              "category": null,
+              "nearest": null,
+              "destination_scope": null,
+              "trip_kind": null,
+              "purpose": null,
+              "origin_query": null,
+              "plan_id": null,
+              "route_revision": null,
+              "requested_vehicle_model": null,
+              "requested_model_year": null,
+              "question_kind": null,
+              "charging_mode": null,
+              "temperature_delta_celsius": null
+            },
+            "excluded_zones": null,
+            "exclusion_mode": "add",
+            "referenced_target": false
+          }
+        ],
+        "step_updates": [],
+        "append_actions": [],
+        "question_answer": null,
+        "consent_question_id": null,
+        "clarification_drafts": [],
+        "text": "",
+        "negated": false,
+        "conditional": false,
+        "scheduled": false,
+        "conflicting": false,
+        "unresolved": []
+      },
+      "model_served": true,
+      "checks": {
+        "act": {
+          "passed": true,
+          "expected": "request",
+          "actual": "request"
+        },
+        "actions:length": {
+          "passed": true,
+          "expected": 1,
+          "actual": 1
+        },
+        "actions.0.capability": {
+          "passed": true,
+          "expected": "door.set_lock",
+          "actual": "door.set_lock"
+        },
+        "actions.0.arguments.locked": {
+          "passed": true,
+          "expected": true,
+          "actual": true
+        },
+        "actions.0.arguments.zone": {
+          "passed": true,
+          "expected": "all",
+          "actual": "all"
+        }
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "requested_model": "vivi-qwen3-1.7b",
+          "served_model": "vivi-qwen3-1.7b",
+          "location": "jetson",
+          "stage": "semantic",
+          "requested_provider": "local",
+          "provider": "local",
+          "outcome": "served",
+          "calls": 1,
+          "latency_ms": 1480.94,
+          "budget_seconds": 30.0,
+          "completion": {
+            "finish_reason": "stop",
+            "prompt_tokens": 3050,
+            "completion_tokens": 50,
+            "total_tokens": 3100,
+            "cached_tokens": 3034,
+            "timings": {
+              "cache_n": 3034,
+              "prompt_n": 16,
+              "prompt_ms": 56.151,
+              "predicted_n": 50,
+              "predicted_ms": 1245.249
+            }
+          },
+          "proposed_act": "request",
+          "proposed_capabilities": [
+            "door.set_lock"
+          ],
+          "semantic_validation": "accepted"
+        }
+      ]
+    },
+    {
+      "id": "navigation-stop_music",
+      "repeat": 1,
+      "passed": true,
+      "semantic": {
+        "act": "request",
+        "task_ref": null,
+        "step_index": null,
+        "actions": [
+          {
+            "capability": "media.pause",
+            "arguments": {
+              "query": null,
+              "destination": null,
+              "mode": null,
+              "location": null,
+              "forecast_day": null,
+              "gear": null,
+              "value_celsius": null,
+              "position_percent": null,
+              "open": null,
+              "locked": null,
+              "level": null,
+              "zone": null,
+              "zones": null,
+              "media_query": null,
+              "memory_key": null,
+              "memory_value": null,
+              "target_side": null,
+              "target_row": null,
+              "place_handle": null,
+              "choice_handle": null,
+              "reject_candidates": null,
+              "use_search_results": null,
+              "category": null,
+              "nearest": null,
+              "destination_scope": null,
+              "trip_kind": null,
+              "purpose": null,
+              "origin_query": null,
+              "plan_id": null,
+              "route_revision": null,
+              "requested_vehicle_model": null,
+              "requested_model_year": null,
+              "question_kind": null,
+              "charging_mode": null,
+              "temperature_delta_celsius": null
+            },
+            "excluded_zones": null,
+            "exclusion_mode": "add",
+            "referenced_target": false
+          }
+        ],
+        "step_updates": [],
+        "append_actions": [],
+        "question_answer": null,
+        "consent_question_id": null,
+        "clarification_drafts": [],
+        "text": "",
+        "negated": false,
+        "conditional": false,
+        "scheduled": false,
+        "conflicting": false,
+        "unresolved": []
+      },
+      "model_served": true,
+      "checks": {
+        "act": {
+          "passed": true,
+          "expected": "request",
+          "actual": "request"
+        },
+        "actions:length": {
+          "passed": true,
+          "expected": 1,
+          "actual": 1
+        },
+        "actions.0.capability": {
+          "passed": true,
+          "expected": "media.pause",
+          "actual": "media.pause"
+        }
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "requested_model": "vivi-qwen3-1.7b",
+          "served_model": "vivi-qwen3-1.7b",
+          "location": "jetson",
+          "stage": "semantic",
+          "requested_provider": "local",
+          "provider": "local",
+          "outcome": "served",
+          "calls": 1,
+          "latency_ms": 1047.77,
+          "budget_seconds": 30.0,
+          "completion": {
+            "finish_reason": "stop",
+            "prompt_tokens": 3049,
+            "completion_tokens": 34,
+            "total_tokens": 3083,
+            "cached_tokens": 3034,
+            "timings": {
+              "cache_n": 3034,
+              "prompt_n": 15,
+              "prompt_ms": 56.656,
+              "predicted_n": 34,
+              "predicted_ms": 815.479
+            }
+          },
+          "proposed_act": "request",
+          "proposed_capabilities": [
+            "media.pause"
+          ],
+          "semantic_validation": "accepted"
+        }
+      ]
+    },
+    {
+      "id": "navigation-seat",
+      "repeat": 1,
+      "passed": true,
+      "semantic": {
+        "act": "request",
+        "task_ref": null,
+        "step_index": null,
+        "actions": [
+          {
+            "capability": "seat.set_heat_level",
+            "arguments": {
+              "query": null,
+              "destination": null,
+              "mode": null,
+              "location": null,
+              "forecast_day": null,
+              "gear": null,
+              "value_celsius": null,
+              "position_percent": null,
+              "open": null,
+              "locked": null,
+              "level": 2,
+              "zone": "rear_left",
+              "zones": null,
+              "media_query": null,
+              "memory_key": null,
+              "memory_value": null,
+              "target_side": null,
+              "target_row": null,
+              "place_handle": null,
+              "choice_handle": null,
+              "reject_candidates": null,
+              "use_search_results": null,
+              "category": null,
+              "nearest": null,
+              "destination_scope": null,
+              "trip_kind": null,
+              "purpose": null,
+              "origin_query": null,
+              "plan_id": null,
+              "route_revision": null,
+              "requested_vehicle_model": null,
+              "requested_model_year": null,
+              "question_kind": null,
+              "charging_mode": null,
+              "temperature_delta_celsius": null
+            },
+            "excluded_zones": null,
+            "exclusion_mode": "add",
+            "referenced_target": false
+          }
+        ],
+        "step_updates": [],
+        "append_actions": [],
+        "question_answer": null,
+        "consent_question_id": null,
+        "clarification_drafts": [],
+        "text": "",
+        "negated": false,
+        "conditional": false,
+        "scheduled": false,
+        "conflicting": false,
+        "unresolved": []
+      },
+      "model_served": true,
+      "checks": {
+        "act": {
+          "passed": true,
+          "expected": "request",
+          "actual": "request"
+        },
+        "actions:length": {
+          "passed": true,
+          "expected": 1,
+          "actual": 1
+        },
+        "actions.0.capability": {
+          "passed": true,
+          "expected": "seat.set_heat_level",
+          "actual": "seat.set_heat_level"
+        },
+        "actions.0.arguments.level": {
+          "passed": true,
+          "expected": 2,
+          "actual": 2
+        },
+        "actions.0.arguments.zone": {
+          "passed": true,
+          "expected": "rear_left",
+          "actual": "rear_left"
+        }
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "requested_model": "vivi-qwen3-1.7b",
+          "served_model": "vivi-qwen3-1.7b",
+          "location": "jetson",
+          "stage": "semantic",
+          "requested_provider": "local",
+          "provider": "local",
+          "outcome": "served",
+          "calls": 1,
+          "latency_ms": 1665.55,
+          "budget_seconds": 30.0,
+          "completion": {
+            "finish_reason": "stop",
+            "prompt_tokens": 3056,
+            "completion_tokens": 53,
+            "total_tokens": 3109,
+            "cached_tokens": 3034,
+            "timings": {
+              "cache_n": 3034,
+              "prompt_n": 22,
+              "prompt_ms": 80.414,
+              "predicted_n": 53,
+              "predicted_ms": 1274.781
+            }
+          },
+          "proposed_act": "request",
+          "proposed_capabilities": [
+            "seat.set_heat_level"
+          ],
+          "semantic_validation": "accepted"
+        }
+      ]
+    },
+    {
+      "id": "navigation-weather",
+      "repeat": 1,
+      "passed": false,
+      "semantic": {
+        "act": "request",
+        "task_ref": null,
+        "step_index": null,
+        "actions": [
+          {
+            "capability": "weather.get_forecast",
+            "arguments": {
+              "query": null,
+              "destination": null,
+              "mode": null,
+              "location": null,
+              "forecast_day": "tomorrow",
+              "gear": null,
+              "value_celsius": null,
+              "position_percent": null,
+              "open": null,
+              "locked": null,
+              "level": null,
+              "zone": null,
+              "zones": null,
+              "media_query": null,
+              "memory_key": null,
+              "memory_value": null,
+              "target_side": null,
+              "target_row": null,
+              "place_handle": null,
+              "choice_handle": null,
+              "reject_candidates": null,
+              "use_search_results": null,
+              "category": null,
+              "nearest": null,
+              "destination_scope": null,
+              "trip_kind": null,
+              "purpose": null,
+              "origin_query": null,
+              "plan_id": null,
+              "route_revision": null,
+              "requested_vehicle_model": null,
+              "requested_model_year": null,
+              "question_kind": null,
+              "charging_mode": null,
+              "temperature_delta_celsius": null
+            },
+            "excluded_zones": null,
+            "exclusion_mode": "add",
+            "referenced_target": false
+          }
+        ],
+        "step_updates": [],
+        "append_actions": [],
+        "question_answer": null,
+        "consent_question_id": null,
+        "clarification_drafts": [],
+        "text": "",
+        "negated": false,
+        "conditional": false,
+        "scheduled": false,
+        "conflicting": false,
+        "unresolved": []
+      },
+      "model_served": true,
+      "checks": {
+        "act": {
+          "passed": false,
+          "expected": "question",
+          "actual": "request"
+        },
+        "actions:length": {
+          "passed": true,
+          "expected": 1,
+          "actual": 1
+        },
+        "actions.0.capability": {
+          "passed": true,
+          "expected": "weather.get_forecast",
+          "actual": "weather.get_forecast"
+        },
+        "actions.0.arguments.forecast_day": {
+          "passed": true,
+          "expected": "tomorrow",
+          "actual": "tomorrow"
+        },
+        "actions.0.arguments.location": {
+          "passed": false,
+          "expected": "Huế",
+          "actual": null
+        },
+        "actions.0.arguments.query:contains": {
+          "passed": false,
+          "expected": "Huế",
+          "actual": null
+        }
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "requested_model": "vivi-qwen3-1.7b",
+          "served_model": "vivi-qwen3-1.7b",
+          "location": "jetson",
+          "stage": "semantic",
+          "requested_provider": "local",
+          "provider": "local",
+          "outcome": "served",
+          "calls": 1,
+          "latency_ms": 1431.81,
+          "budget_seconds": 30.0,
+          "completion": {
+            "finish_reason": "stop",
+            "prompt_tokens": 3054,
+            "completion_tokens": 47,
+            "total_tokens": 3101,
+            "cached_tokens": 3034,
+            "timings": {
+              "cache_n": 3034,
+              "prompt_n": 20,
+              "prompt_ms": 80.011,
+              "predicted_n": 47,
+              "predicted_ms": 1172.72
+            }
+          },
+          "proposed_act": "request",
+          "proposed_capabilities": [
+            "weather.get_forecast"
+          ],
+          "semantic_validation": "accepted"
+        }
+      ]
+    },
+    {
+      "id": "navigation-navigation",
+      "repeat": 1,
+      "passed": false,
+      "semantic": {
+        "act": "request",
+        "task_ref": null,
+        "step_index": null,
+        "actions": [
+          {
+            "capability": "navigation.plan",
+            "arguments": {
+              "query": null,
+              "destination": null,
+              "mode": null,
+              "location": null,
+              "forecast_day": null,
+              "gear": null,
+              "value_celsius": null,
+              "position_percent": null,
+              "open": null,
+              "locked": null,
+              "level": null,
+              "zone": null,
+              "zones": null,
+              "media_query": null,
+              "memory_key": null,
+              "memory_value": null,
+              "target_side": null,
+              "target_row": null,
+              "place_handle": null,
+              "choice_handle": null,
+              "reject_candidates": null,
+              "use_search_results": null,
+              "category": "pharmacy",
+              "nearest": null,
+              "destination_scope": "place",
+              "trip_kind": null,
+              "purpose": null,
+              "origin_query": "Chỉ đường tới Huế",
+              "plan_id": "plan:synthetic",
+              "route_revision": 8,
+              "requested_vehicle_model": null,
+              "requested_model_year": null,
+              "question_kind": null,
+              "charging_mode": null,
+              "temperature_delta_celsius": null
+            },
+            "excluded_zones": null,
+            "exclusion_mode": "add",
+            "referenced_target": false
+          }
+        ],
+        "step_updates": [],
+        "append_actions": [],
+        "question_answer": null,
+        "consent_question_id": null,
+        "clarification_drafts": [],
+        "text": "",
+        "negated": false,
+        "conditional": false,
+        "scheduled": false,
+        "conflicting": false,
+        "unresolved": []
+      },
+      "model_served": true,
+      "checks": {
+        "act": {
+          "passed": true,
+          "expected": "request",
+          "actual": "request"
+        },
+        "actions:length": {
+          "passed": true,
+          "expected": 1,
+          "actual": 1
+        },
+        "actions.0.capability": {
+          "passed": true,
+          "expected": "navigation.plan",
+          "actual": "navigation.plan"
+        },
+        "actions.0.arguments.query:contains": {
+          "passed": false,
+          "expected": "Huế",
+          "actual": null
+        },
+        "actions.0.arguments.purpose": {
+          "passed": false,
+          "expected": "navigate",
+          "actual": null
+        },
+        "actions.0.arguments.category": {
+          "passed": false,
+          "expected": null,
+          "actual": "pharmacy"
+        }
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "requested_model": "vivi-qwen3-1.7b",
+          "served_model": "vivi-qwen3-1.7b",
+          "location": "jetson",
+          "stage": "semantic",
+          "requested_provider": "local",
+          "provider": "local",
+          "outcome": "served",
+          "calls": 1,
+          "latency_ms": 2505.74,
+          "budget_seconds": 30.0,
+          "completion": {
+            "finish_reason": "stop",
+            "prompt_tokens": 3050,
+            "completion_tokens": 84,
+            "total_tokens": 3134,
+            "cached_tokens": 3034,
+            "timings": {
+              "cache_n": 3034,
+              "prompt_n": 16,
+              "prompt_ms": 56.811,
+              "predicted_n": 84,
+              "predicted_ms": 2267.518
+            }
+          },
+          "proposed_act": "request",
+          "proposed_capabilities": [
+            "navigation.plan"
+          ],
+          "semantic_validation": "accepted"
+        }
+      ]
+    },
+    {
+      "id": "navigation-negated",
+      "repeat": 1,
+      "passed": false,
+      "semantic": {
+        "act": "request",
+        "task_ref": null,
+        "step_index": null,
+        "actions": [
+          {
+            "capability": "window.set_position",
+            "arguments": {
+              "query": null,
+              "destination": null,
+              "mode": null,
+              "location": null,
+              "forecast_day": null,
+              "gear": null,
+              "value_celsius": null,
+              "position_percent": 40,
+              "open": null,
+              "locked": null,
+              "level": null,
+              "zone": "driver",
+              "zones": null,
+              "media_query": null,
+              "memory_key": null,
+              "memory_value": null,
+              "target_side": null,
+              "target_row": null,
+              "place_handle": null,
+              "choice_handle": null,
+              "reject_candidates": null,
+              "use_search_results": null,
+              "category": null,
+              "nearest": null,
+              "destination_scope": null,
+              "trip_kind": null,
+              "purpose": null,
+              "origin_query": null,
+              "plan_id": null,
+              "route_revision": null,
+              "requested_vehicle_model": null,
+              "requested_model_year": null,
+              "question_kind": null,
+              "charging_mode": null,
+              "temperature_delta_celsius": null
+            },
+            "excluded_zones": null,
+            "exclusion_mode": "add",
+            "referenced_target": false
+          },
+          {
+            "capability": "media.pause",
+            "arguments": {
+              "query": null,
+              "destination": null,
+              "mode": null,
+              "location": null,
+              "forecast_day": null,
+              "gear": null,
+              "value_celsius": null,
+              "position_percent": null,
+              "open": null,
+              "locked": null,
+              "level": null,
+              "zone": null,
+              "zones": null,
+              "media_query": null,
+              "memory_key": null,
+              "memory_value": null,
+              "target_side": null,
+              "target_row": null,
+              "place_handle": null,
+              "choice_handle": null,
+              "reject_candidates": null,
+              "use_search_results": null,
+              "category": null,
+              "nearest": null,
+              "destination_scope": null,
+              "trip_kind": null,
+              "purpose": null,
+              "origin_query": null,
+              "plan_id": null,
+              "route_revision": null,
+              "requested_vehicle_model": null,
+              "requested_model_year": null,
+              "question_kind": null,
+              "charging_mode": null,
+              "temperature_delta_celsius": null
+            },
+            "excluded_zones": null,
+            "exclusion_mode": "add",
+            "referenced_target": false
+          }
+        ],
+        "step_updates": [],
+        "append_actions": [],
+        "question_answer": null,
+        "consent_question_id": null,
+        "clarification_drafts": [],
+        "text": "",
+        "negated": false,
+        "conditional": false,
+        "scheduled": false,
+        "conflicting": false,
+        "unresolved": []
+      },
+      "model_served": true,
+      "checks": {
+        "blocked": {
+          "passed": false,
+          "expected": true,
+          "actual": false
+        }
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "requested_model": "vivi-qwen3-1.7b",
+          "served_model": "vivi-qwen3-1.7b",
+          "location": "jetson",
+          "stage": "semantic",
+          "requested_provider": "local",
+          "provider": "local",
+          "outcome": "served",
+          "calls": 1,
+          "latency_ms": 1949.1,
+          "budget_seconds": 30.0,
+          "completion": {
+            "finish_reason": "stop",
+            "prompt_tokens": 3054,
+            "completion_tokens": 70,
+            "total_tokens": 3124,
+            "cached_tokens": 3034,
+            "timings": {
+              "cache_n": 3034,
+              "prompt_n": 20,
+              "prompt_ms": 80.158,
+              "predicted_n": 70,
+              "predicted_ms": 1686.493
+            }
+          },
+          "proposed_act": "request",
+          "proposed_capabilities": [
+            "window.set_position",
+            "media.pause"
+          ],
+          "semantic_validation": "accepted"
+        }
+      ]
+    },
+    {
+      "id": "navigation-unsupported",
+      "repeat": 1,
+      "passed": false,
+      "semantic": {
+        "act": "request",
+        "task_ref": null,
+        "step_index": null,
+        "actions": [
+          {
+            "capability": "media.play",
+            "arguments": {
+              "query": null,
+              "destination": null,
+              "mode": null,
+              "location": null,
+              "forecast_day": null,
+              "gear": null,
+              "value_celsius": null,
+              "position_percent": null,
+              "open": null,
+              "locked": null,
+              "level": null,
+              "zone": null,
+              "zones": null,
+              "media_query": "bật nhạc và bật chế độ bay",
+              "memory_key": null,
+              "memory_value": null,
+              "target_side": null,
+              "target_row": null,
+              "place_handle": null,
+              "choice_handle": null,
+              "reject_candidates": null,
+              "use_search_results": null,
+              "category": null,
+              "nearest": null,
+              "destination_scope": null,
+              "trip_kind": null,
+              "purpose": null,
+              "origin_query": null,
+              "plan_id": null,
+              "route_revision": null,
+              "requested_vehicle_model": null,
+              "requested_model_year": null,
+              "question_kind": null,
+              "charging_mode": null,
+              "temperature_delta_celsius": null
+            },
+            "excluded_zones": null,
+            "exclusion_mode": "add",
+            "referenced_target": false
+          },
+          {
+            "capability": "navigation.set_gear",
+            "arguments": {
+              "query": null,
+              "destination": null,
+              "mode": null,
+              "location": null,
+              "forecast_day": null,
+              "gear": "D",
+              "value_celsius": null,
+              "position_percent": null,
+              "open": null,
+              "locked": null,
+              "level": null,
+              "zone": null,
+              "zones": null,
+              "media_query": null,
+              "memory_key": null,
+              "memory_value": null,
+              "target_side": null,
+              "target_row": null,
+              "place_handle": null,
+              "choice_handle": null,
+              "reject_candidates": null,
+              "use_search_results": null,
+              "category": null,
+              "nearest": null,
+              "destination_scope": null,
+              "trip_kind": null,
+              "purpose": null,
+              "origin_query": null,
+              "plan_id": null,
+              "route_revision": null,
+              "requested_vehicle_model": null,
+              "requested_model_year": null,
+              "question_kind": null,
+              "charging_mode": null,
+              "temperature_delta_celsius": null
+            },
+            "excluded_zones": null,
+            "exclusion_mode": "add",
+            "referenced_target": false
+          }
+        ],
+        "step_updates": [],
+        "append_actions": [],
+        "question_answer": null,
+        "consent_question_id": null,
+        "clarification_drafts": [],
+        "text": "",
+        "negated": false,
+        "conditional": false,
+        "scheduled": false,
+        "conflicting": false,
+        "unresolved": []
+      },
+      "model_served": true,
+      "checks": {
+        "blocked": {
+          "passed": false,
+          "expected": true,
+          "actual": false
+        }
+      },
+      "attempts": [
+        {
+          "attempt": 1,
+          "requested_model": "vivi-qwen3-1.7b",
+          "served_model": "vivi-qwen3-1.7b",
+          "location": "jetson",
+          "stage": "semantic",
+          "requested_provider": "local",
+          "provider": "local",
+          "outcome": "served",
+          "calls": 1,
+          "latency_ms": 2185.06,
+          "budget_seconds": 30.0,
+          "completion": {
+            "finish_reason": "stop",
+            "prompt_tokens": 3052,
+            "completion_tokens": 79,
+            "total_tokens": 3131,
+            "cached_tokens": 3034,
+            "timings": {
+              "cache_n": 3034,
+              "prompt_n": 18,
+              "prompt_ms": 79.888,
+              "predicted_n": 79,
+              "predicted_ms": 1898.03
+            }
+          },
+          "proposed_act": "request",
+          "proposed_capabilities": [
+            "media.play",
+            "navigation.set_gear"
+          ],
+          "semantic_validation": "accepted"
+        }
+      ]
+    }
+  ]
+}

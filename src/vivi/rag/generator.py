@@ -218,6 +218,7 @@ class LocalHandbookGenerator(StructuredAPIHandbookGenerator):
                 max_tokens=config.local_llm_max_tokens,
                 extra_body={"chat_template_kwargs": {"enable_thinking": False}},
                 max_attempts=1,
+                tools_as_json=config.local_semantic_transport == "json_schema",
                 execution_location=(
                     "jetson"
                     if config.jetson_ai_policy != "disabled" and config.jetson_ai_url
