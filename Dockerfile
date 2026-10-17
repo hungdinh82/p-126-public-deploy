@@ -17,16 +17,18 @@ WORKDIR /app
 # execute their console scripts.
 COPY --from=builder /opt/venv /opt/venv
 ENV PATH=/opt/venv/bin:$PATH
-ENV PHOWHISPER_PRELOAD=false ZEROTTS_PRELOAD=false
+# Public web and hardware profiles both use the pinned local E5 retriever.
+ENV PHOWHISPER_PRELOAD=false ZEROTTS_PRELOAD=false RAG_RETRIEVAL_MODE=sqlite_local
 
 # Security: run as non-root user
 RUN useradd -m appuser
 
 # Copy application code
 COPY . .
-RUN test -f models/multilingual-e5-small-int8/manifest.json \
-    && test -f models/multilingual-e5-small-int8/tokenizer.json \
-    && test -f models/multilingual-e5-small-int8/model_quantized.onnx
+RUN python -m src.vivi.cli.prepare_embeddings \
+        --revision 761b726dd34fb83930e26aab4e9ac3899aa1fa78 \
+    && echo "0b44a9d7b51c3c62626640cda0e2c2f70fdacdc25bbbd68038369d14ebdf4c39  models/multilingual-e5-small-int8/tokenizer.json" | sha256sum -c - \
+    && echo "f80102d3f2a1229f387d3c81909990d8945513e347b0eab049f7de3c6f98c193  models/multilingual-e5-small-int8/model_quantized.onnx" | sha256sum -c -
 
 # Create data directory with correct ownership
 RUN mkdir -p /app/data && chown -R appuser:appuser /app
