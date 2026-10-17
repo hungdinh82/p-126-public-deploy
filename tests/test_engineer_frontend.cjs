@@ -36,7 +36,7 @@ const routeFixture = {
       rag: { provider: 'sqlite', location: 'laptop', status: 'served', detail: '3 nguồn' },
       grounding: { provider: 'citation-validator', location: 'laptop', status: 'served', detail: '3 nguồn đã kiểm chứng' },
       response: { provider: 'turn-response', location: 'laptop', status: 'verified' },
-      tts: { provider: 'vieneu', location: 'cloud', status: 'served' },
+      tts: { provider: 'vieneu', voice: 'Tưởng Vy', location: 'cloud', status: 'served' },
       output: { provider: 'driver-ui', location: 'laptop', status: 'verified' },
     },
   }],
@@ -66,6 +66,8 @@ for (const label of orderedLabels) {
 }
 assert.match(target.innerHTML, /route-delivery/);
 assert.match(target.innerHTML, /TTS/);
+assert.match(target.innerHTML, /vieneu · Tưởng Vy/);
+assert.doesNotMatch(target.innerHTML, /TTS[\s\S]*?model chưa được response xác nhận[\s\S]*?Driver UI/);
 assert.match(target.innerHTML, /Driver UI/);
 
 routeFlow.scrollLeft = 240;
