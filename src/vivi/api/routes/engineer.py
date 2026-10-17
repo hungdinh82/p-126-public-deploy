@@ -59,9 +59,7 @@ async def connectivity_scenarios(_: str = Depends(engineer_role)):
 
 
 @router.post("/connectivity/scenario")
-async def apply_connectivity_scenario(
-    request: ConnectivityScenarioRequest, actor: str = Depends(engineer_role)
-):
+async def apply_connectivity_scenario(request: ConnectivityScenarioRequest, actor: str = Depends(engineer_role)):
     try:
         return await service.apply_connectivity_scenario(request, actor)
     except ValueError as exc:

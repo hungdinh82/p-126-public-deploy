@@ -1,5 +1,3 @@
-import asyncio
-
 from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -16,16 +14,7 @@ class HistoryReset(BaseModel):
 @router.post("/reset")
 async def reset_history(request: HistoryReset, response: Response):
     response.headers["Cache-Control"] = "no-store"
-    voice = getattr(runtime, "voice", None)
-    if voice is not None:
-        await voice.close()
     try:
-        result = await runtime.orchestrator.reset_history(request.session_id)
-        if voice is not None:
-            await asyncio.to_thread(voice.inbox.clear, request.session_id)
-        return result
+        return await runtime.orchestrator.reset_history(request.session_id)
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-    finally:
-        if voice is not None:
-            await voice.start()

@@ -32,6 +32,10 @@ class Settings(BaseSettings):
     ):
         # Secrets and per-machine overrides stay in .env; shared runtime defaults
         # live in config.toml so changing providers does not clutter .env.
+        if __import__("os").environ.get("APP_ENV") == "test" and dotenv_settings.env_file == cls.model_config.get(
+            "env_file"
+        ):
+            return (init_settings, env_settings, file_secret_settings, TomlConfigSettingsSource(settings_cls))
         return (
             init_settings,
             env_settings,
@@ -40,9 +44,7 @@ class Settings(BaseSettings):
             TomlConfigSettingsSource(settings_cls),
         )
 
-    runtime_profile: Literal["pc", "nano", "test"] = Field(
-        default="pc", validation_alias="VIVI_RUNTIME_PROFILE"
-    )
+    runtime_profile: Literal["pc", "nano", "test"] = Field(default="pc", validation_alias="VIVI_RUNTIME_PROFILE")
     app_name: str = "VIVI Cabin Copilot"
     app_env: Literal["development", "production", "test"] = "development"
     host: str = Field(default="127.0.0.1", validation_alias="VIVI_HOST")
@@ -51,10 +53,10 @@ class Settings(BaseSettings):
     cors_origins: str = "http://127.0.0.1:8787,http://localhost:8787"
 
     data_dir: Path = Field(default=Path("./data"), validation_alias="VIVI_DATA_DIR")
-    turn_timeout_seconds: float = Field(default=45, ge=1, le=180)
+    turn_timeout_seconds: float = Field(default=120, ge=1, le=180)
     cloud_budget_seconds: float = Field(default=10, ge=0.1, le=60)
-    local_budget_seconds: float = Field(default=12, ge=0.1, le=60)
-    semantic_budget_seconds: float = Field(default=2.5, ge=0.1, le=60)
+    local_budget_seconds: float = Field(default=30, ge=0.1, le=60)
+    semantic_budget_seconds: float = Field(default=40, ge=0.1, le=60)
     provider_breaker_seconds: float = Field(default=30, ge=0, le=300)
     planner_max_tokens: int = Field(default=2048, ge=512, le=8192)
     conversation_enabled: bool = True
@@ -80,8 +82,9 @@ class Settings(BaseSettings):
     store_transcripts: bool = Field(default=False, validation_alias="VIVI_STORE_TRANSCRIPTS")
     memory_enabled: bool = Field(default=True, validation_alias="VIVI_MEMORY_ENABLED")
     memory_db: Path | None = Field(default=None, validation_alias="VIVI_MEMORY_DB")
-    memory_profile_id: str = Field(default="default", pattern=r"^[a-zA-Z0-9_-]{1,64}$",
-                                   validation_alias="VIVI_MEMORY_PROFILE_ID")
+    memory_profile_id: str = Field(
+        default="default", pattern=r"^[a-zA-Z0-9_-]{1,64}$", validation_alias="VIVI_MEMORY_PROFILE_ID"
+    )
     memory_context_limit: int = Field(default=8, ge=1, le=20)
     memory_context_max_characters: int = Field(default=2000, ge=200, le=6000)
 
@@ -89,18 +92,14 @@ class Settings(BaseSettings):
     def memory_path(self) -> Path:
         return self.memory_db or self.data_dir / "memory" / "long_term.sqlite3"
 
-    vehicle_provider: Literal["memory", "mqtt"] = Field(
-        default="memory", validation_alias="VIVI_VEHICLE_PROVIDER"
-    )
+    vehicle_provider: Literal["memory", "mqtt"] = Field(default="memory", validation_alias="VIVI_VEHICLE_PROVIDER")
     vehicle_id: str = Field(default="demo-car-1", validation_alias="VIVI_VEHICLE_ID")
     mqtt_host: str = "127.0.0.1"
     mqtt_port: int = 1883
     mqtt_api_username: str = ""
     mqtt_api_password: str = ""
     mqtt_timeout_seconds: float = 3.0
-    vehicle_simulator_url: str = Field(
-        default="http://127.0.0.1:8788", validation_alias="VIVI_VEHICLE_SIMULATOR_URL"
-    )
+    vehicle_simulator_url: str = Field(default="http://127.0.0.1:8788", validation_alias="VIVI_VEHICLE_SIMULATOR_URL")
 
     stt_provider: Literal["off", "phowhisper", "whisper_cpp", "soniox", "jetson"] = "soniox"
     # Local STT used when the primary (cloud) provider is missing or fails.
@@ -126,7 +125,7 @@ class Settings(BaseSettings):
     soniox_timeout_seconds: float = 30
     soniox_stream_max_seconds: float = 60
 
-    llm_provider: Literal["rules", "openai", "google", "local", "openrouter"] = "google"
+    llm_provider: Literal["openai", "google", "local", "openrouter"] = "google"
     llm_timeout_seconds: float = 30
     openai_api_key: str = ""
     openai_base_url: str = "https://api.openai.com/v1"
@@ -149,30 +148,16 @@ class Settings(BaseSettings):
     local_llm_max_tokens: int = Field(default=512, ge=64, le=4096)
     # Opt-in Laptop router for the private Jetson inference gateway.
     jetson_ai_policy: Literal["disabled", "offline_only", "prefer_local", "allow_cloud"] = "disabled"
-    jetson_ai_url: str = Field(default="", validation_alias=AliasChoices(
-        "AI_SERVER_URL", "JETSON_AI_URL", "ai_server_url", "jetson_ai_url"
-    ))
-    jetson_ai_token: str = Field(default="", validation_alias=AliasChoices(
-        "AI_SERVER_TOKEN", "JETSON_AI_TOKEN", "ai_server_token", "jetson_ai_token"
-    ))
+    jetson_ai_url: str = Field(
+        default="", validation_alias=AliasChoices("AI_SERVER_URL", "JETSON_AI_URL", "ai_server_url", "jetson_ai_url")
+    )
+    jetson_ai_token: str = Field(
+        default="",
+        validation_alias=AliasChoices("AI_SERVER_TOKEN", "JETSON_AI_TOKEN", "ai_server_token", "jetson_ai_token"),
+    )
     jetson_ai_probe_timeout_seconds: float = Field(default=0.75, gt=0, le=5)
+    # Speech transport only. ModelGateway retains the per-model and turn budgets.
     ai_server_request_timeout_seconds: float = Field(default=180, ge=1, le=300)
-    # Main UI uses direct turns. Durable voice intake is an explicit local-only API.
-    local_voice_buffering_enabled: bool = False
-
-    @property
-    def local_request_budget_seconds(self) -> float:
-        return self.ai_server_request_timeout_seconds if self.jetson_ai_policy != "disabled" and self.jetson_ai_url else self.local_budget_seconds
-
-    @property
-    def effective_turn_timeout_seconds(self) -> float:
-        # Semantic analysis and answer generation can each need a long prefill.
-        if self.jetson_ai_policy != "disabled" and self.jetson_ai_url:
-            return max(self.turn_timeout_seconds, 2 * self.local_request_budget_seconds + 15)
-        return self.turn_timeout_seconds
-    ai_server_auth_required: bool = Field(default=True, validation_alias=AliasChoices(
-        "AI_SERVER_AUTH_REQUIRED", "JETSON_AI_AUTH_REQUIRED", "ai_server_auth_required"
-    ))
     internet_probe_url: str = "https://clients3.google.com/generate_204"
     internet_probe_timeout_seconds: float = Field(default=1.5, gt=0, le=10)
     connectivity_probe_interval_seconds: float = Field(default=2.0, ge=0.5, le=30)
@@ -184,6 +169,11 @@ class Settings(BaseSettings):
     def connectivity_db_path(self) -> Path:
         return self.data_dir / "runtime" / "connectivity.sqlite3"
 
+    ai_server_auth_required: bool = Field(
+        default=True,
+        validation_alias=AliasChoices("AI_SERVER_AUTH_REQUIRED", "JETSON_AI_AUTH_REQUIRED", "ai_server_auth_required"),
+    )
+
     @model_validator(mode="after")
     def configure_ai_server(self) -> Settings:
         # Gateway capabilities and inference must use the same server/token.
@@ -193,8 +183,14 @@ class Settings(BaseSettings):
             if url.endswith("/v1"):
                 url = url[:-3]
             parsed = urlsplit(url)
-            if (parsed.scheme not in {"http", "https"} or not parsed.hostname
-                    or parsed.username or parsed.password or parsed.query or parsed.fragment):
+            if (
+                parsed.scheme not in {"http", "https"}
+                or not parsed.hostname
+                or parsed.username
+                or parsed.password
+                or parsed.query
+                or parsed.fragment
+            ):
                 raise ValueError("AI_SERVER_URL must be an HTTP(S) gateway URL without credentials, query or fragment")
             self.jetson_ai_url = url
             self.local_llm_base_url = url + "/v1"
@@ -212,9 +208,7 @@ class Settings(BaseSettings):
     zerotts_voice: str = "VIVI"
     zerotts_device: str = "auto"
     zerotts_preload: bool = False
-    vieneu_api_key: str = Field(
-        default="", validation_alias=AliasChoices("VIENEU_API_KEY", "VIETNEUTTS_API_KEY")
-    )
+    vieneu_api_key: str = Field(default="", validation_alias=AliasChoices("VIENEU_API_KEY", "VIETNEUTTS_API_KEY"))
     vieneu_base_url: str = "https://api.vieneu.io/api/v1"
     vieneu_voice: str = "Mai Bé Phương"
     # PCM at 24 kHz is VieNeu's default rate and half the bytes of 48 kHz.
@@ -224,9 +218,7 @@ class Settings(BaseSettings):
     vietmap_api_key: str = ""
     # VietMap issues separate consumers: the API key (search/route) stays on the
     # backend, the Tilemap key is embedded in the browser to draw the base map.
-    vietmap_tile_key: str = Field(
-        default="", validation_alias=AliasChoices("VIETMAP_TILE_KEY", "TILEMAP_API_KEY")
-    )
+    vietmap_tile_key: str = Field(default="", validation_alias=AliasChoices("VIETMAP_TILE_KEY", "TILEMAP_API_KEY"))
     vietmap_base_url: str = "https://maps.vietmap.vn"
     # tm = street, lm = light, dm = dark (matches the ViVi night theme).
     vietmap_map_style: str = "dm"

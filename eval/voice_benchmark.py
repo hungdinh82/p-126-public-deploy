@@ -18,7 +18,7 @@ from src.vivi.rag.runtime import create_services
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dataset", type=Path, default=Path("eval/voice_cases.jsonl"))
-    parser.add_argument("--provider", choices=("rules", "local"), default="rules")
+    parser.add_argument("--provider", choices=("local",), default="local")
     parser.add_argument("--output", type=Path, default=Path("eval/results/voice-dev.json"))
     parser.add_argument("--max-cases", type=int, default=None, help="Optional smoke subset; report records the selected size.")
     args = parser.parse_args()
@@ -67,10 +67,12 @@ def main():
                     memory_checks = ("expected_memory_count" not in turn or
                                      len(services.memory.list(services.memory_profile_id)) == turn["expected_memory_count"])
                     status_checks = "expected_status" not in turn or output["status"] == turn["expected_status"]
-                    route_checks = output["route"] == turn["expected_route"] and output["intent"] == turn["expected_intent"]
+                    model_served = output.get("diagnostics", {}).get("semantic_source") == "llm"
+                    route_checks = model_served and output["route"] == turn["expected_route"] and output["intent"] == turn["expected_intent"]
                     turn_results.append(
                         {
                             **turn,
+                            "model_served": model_served,
                             "route": output["route"],
                             "intent": output["intent"],
                             "status": output["status"],

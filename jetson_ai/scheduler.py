@@ -4,6 +4,7 @@ One LLM request and one speech request may execute together. STT and TTS
 share the speech lane; a long LLM prefill cannot consume that lane. Queues
 are bounded per model, with ageing to prevent TTS starvation.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -45,8 +46,7 @@ class Lease:
     @asynccontextmanager
     async def step(self, timeout=None):
         """Keep exclusive model ownership while yielding GPU between TTS chunks."""
-        job = _Job(self.job.model, time.monotonic(), asyncio.get_running_loop().create_future(),
-                   self.job.call_id, self)
+        job = _Job(self.job.model, time.monotonic(), asyncio.get_running_loop().create_future(), self.job.call_id, self)
         self.scheduler._pending.append(job)
         self.scheduler._dispatch()
         await self.scheduler._wait(job, timeout)
@@ -61,9 +61,13 @@ class Lease:
         self.released = True
         self.scheduler._active.pop(self.job.model, None)
         self.scheduler._last_queue_ms[self.job.model] = self.queue_ms
-        logger.info("inference_complete capability=%s call_id=%s queue_ms=%d execution_ms=%d",
-                    self.job.model, self.job.call_id, self.queue_ms,
-                    round((time.monotonic() - self.started) * 1000))
+        logger.info(
+            "inference_complete capability=%s call_id=%s queue_ms=%d execution_ms=%d",
+            self.job.model,
+            self.job.call_id,
+            self.queue_ms,
+            round((time.monotonic() - self.started) * 1000),
+        )
         self.scheduler._dispatch()
 
     async def __aenter__(self):
@@ -79,7 +83,7 @@ class InferenceScheduler:
             raise ValueError("Scheduling policy must be independent, speech_reserved or serialized")
         self.policy = policy
         self.queue_limits = queue_limits or {"llm": 4, "stt": 8, "tts": 8}
-        self.queue_timeouts = queue_timeouts or {"llm": 90., "stt": 15., "tts": 30.}
+        self.queue_timeouts = queue_timeouts or {"llm": 90.0, "stt": 15.0, "tts": 30.0}
         self._pending: list[_Job] = []
         self._active: dict[str, Lease] = {}
         self._last_queue_ms = {name: None for name in self.queue_limits}
@@ -92,21 +96,25 @@ class InferenceScheduler:
 
     def snapshot(self, model):
         depth = sum(job.model == model and job.lease is None for job in self._pending)
-        return {"active_requests": int(model in self._active), "queue_depth": depth,
-                "queue_capacity": self.queue_limits[model],
-                "accepting_requests": depth < self.queue_limits[model],
-                "queue_timeout_seconds": self.queue_timeouts[model],
-                "last_queue_ms": self._last_queue_ms[model], "rejected_requests": self._rejected[model],
-                "resource_group": self._resource(model)}
+        return {
+            "active_requests": int(model in self._active),
+            "queue_depth": depth,
+            "queue_capacity": self.queue_limits[model],
+            "accepting_requests": depth < self.queue_limits[model],
+            "queue_timeout_seconds": self.queue_timeouts[model],
+            "last_queue_ms": self._last_queue_ms[model],
+            "rejected_requests": self._rejected[model],
+            "resource_group": self._resource(model),
+        }
 
     def _dispatch(self):
         occupied = {self._resource(model) for model, lease in self._active.items() if lease.running}
         now = time.monotonic()
         # A TTS request waiting 5 s outranks newly arriving STT work. Equal
         # priority requests retain FIFO order; running native work is not preempted.
-        ordered = sorted(self._pending, key=lambda job:
-                         ((0 if job.model == "stt" else 1) - (now-job.created)/5,
-                          job.created))
+        ordered = sorted(
+            self._pending, key=lambda job: ((0 if job.model == "stt" else 1) - (now - job.created) / 5, job.created)
+        )
         for job in ordered:
             if job.future.cancelled():
                 self._pending.remove(job)

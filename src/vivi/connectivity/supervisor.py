@@ -13,10 +13,15 @@ from src.vivi.connectivity.store import ConnectivityEventStore
 Connectivity = Literal["checking", "online", "offline", "not_configured"]
 Capability = Literal["stt", "llm", "tts", "rag"]
 
-PROFILES = {"auto", "cloud_only", "jetson_only", "rules_only"}
+PROFILES = {"auto", "cloud_only", "jetson_only", "fallback_only"}
 OVERRIDES = {
-    "actual", "internet_down", "jetson_down", "both_down",
-    "stt_down", "llm_down", "tts_down",
+    "actual",
+    "internet_down",
+    "jetson_down",
+    "both_down",
+    "stt_down",
+    "llm_down",
+    "tts_down",
 }
 
 
@@ -33,8 +38,7 @@ class ConnectivitySupervisor:
         self.internet: Connectivity = "checking"
         self.jetson: Connectivity = "checking" if config.jetson_ai_url else "not_configured"
         self.capabilities: dict[str, str] = {
-            name: "checking" if config.jetson_ai_url else "not_configured"
-            for name in ("stt", "llm", "tts")
+            name: "checking" if config.jetson_ai_url else "not_configured" for name in ("stt", "llm", "tts")
         }
         self.accepting_requests = {name: True for name in self.capabilities}
         self.profile = "auto"
@@ -46,9 +50,7 @@ class ConnectivitySupervisor:
         self._has_observation = False
         self._closed = False
         self._last_cleanup = time.monotonic()
-        self.store = ConnectivityEventStore(
-            config.connectivity_db_path, config.connectivity_retention_days
-        )
+        self.store = ConnectivityEventStore(config.connectivity_db_path, config.connectivity_retention_days)
 
     async def start(self) -> None:
         if self._task is not None:
@@ -66,9 +68,9 @@ class ConnectivitySupervisor:
         # A stopped monitor has no current observations. Reusing the lifecycle
         # must probe again instead of routing with stale readiness.
         self._has_observation = False
-        self.internet = 'checking'
-        self.jetson = 'checking' if self.config.jetson_ai_url else 'not_configured'
-        self.capabilities = {name: 'checking' for name in self.capabilities}
+        self.internet = "checking"
+        self.jetson = "checking" if self.config.jetson_ai_url else "not_configured"
+        self.capabilities = {name: "checking" for name in self.capabilities}
 
     async def wait_ready(self, timeout: float = 2.0) -> None:
         deadline = time.monotonic() + timeout
@@ -84,9 +86,7 @@ class ConnectivitySupervisor:
                 self._last_cleanup = time.monotonic()
 
     async def probe_once(self) -> None:
-        internet, jetson = await asyncio.gather(
-            self._probe_internet(), self._probe_jetson(), return_exceptions=True
-        )
+        internet, jetson = await asyncio.gather(self._probe_internet(), self._probe_jetson(), return_exceptions=True)
         self._apply_observation("internet", internet is True)
         if self.config.jetson_ai_url:
             self._apply_observation("jetson", isinstance(jetson, dict))
@@ -96,8 +96,8 @@ class ConnectivitySupervisor:
                     payload = values.get(name, {})
                     status = str(payload.get("status", "unavailable"))
                     self.capabilities[name] = status
-                    self.accepting_requests[name] = bool(payload.get('accepting_requests', status == 'ready'))
-                    if name == 'llm' and payload.get('model_id') not in {None, self.config.local_llm_model}:
+                    self.accepting_requests[name] = bool(payload.get("accepting_requests", status == "ready"))
+                    if name == "llm" and payload.get("model_id") not in {None, self.config.local_llm_model}:
                         self.accepting_requests[name] = False
             elif self.jetson == "offline":
                 self.capabilities = {name: "unavailable" for name in self.capabilities}
@@ -146,9 +146,9 @@ class ConnectivitySupervisor:
                 follow_redirects=False,
             ) as client:
                 urls = [self.config.internet_probe_url]
-                for provider in ('google', 'openai', 'openrouter'):
-                    if getattr(self.config, provider + '_api_key', ''):
-                        urls.append(getattr(self.config, provider + '_base_url'))
+                for provider in ("google", "openai", "openrouter"):
+                    if getattr(self.config, provider + "_api_key", ""):
+                        urls.append(getattr(self.config, provider + "_base_url"))
                 ok = False
                 for index, url in enumerate(dict.fromkeys(urls)):
                     try:
@@ -163,7 +163,9 @@ class ConnectivitySupervisor:
         except httpx.HTTPError:
             ok = False
         self.store.append(
-            "probe", "internet", "success" if ok else "failure",
+            "probe",
+            "internet",
+            "success" if ok else "failure",
             latency_ms=round((time.perf_counter() - started) * 1000, 2),
         )
         return ok
@@ -179,20 +181,22 @@ class ConnectivitySupervisor:
             async with httpx.AsyncClient(
                 timeout=self.config.jetson_ai_probe_timeout_seconds, transport=self.transport
             ) as client:
-                response = await client.get(
-                    self.config.jetson_ai_url.rstrip("/") + "/v1/capabilities", headers=headers
-                )
+                response = await client.get(self.config.jetson_ai_url.rstrip("/") + "/v1/capabilities", headers=headers)
             response.raise_for_status()
             payload = response.json()
             if not isinstance(payload, dict) or payload.get("contract_version") != "1.0":
                 raise ValueError("unsupported capability contract")
-            values = payload.get('capabilities')
-            if not isinstance(values, dict) or any(not isinstance(values.get(name, {}), dict) for name in self.capabilities):
-                raise ValueError('invalid capabilities payload')
+            values = payload.get("capabilities")
+            if not isinstance(values, dict) or any(
+                not isinstance(values.get(name, {}), dict) for name in self.capabilities
+            ):
+                raise ValueError("invalid capabilities payload")
         except (httpx.HTTPError, ValueError, TypeError):
             payload = None
         self.store.append(
-            "probe", "jetson", "success" if payload else "failure",
+            "probe",
+            "jetson",
+            "success" if payload else "failure",
             latency_ms=round((time.perf_counter() - started) * 1000, 2),
         )
         return payload
@@ -203,20 +207,23 @@ class ConnectivitySupervisor:
         previous, self.profile = self.profile, profile
         self.store.append("profile", "gateway", "changed", previous=previous, profile=profile)
 
-    def record_provider_result(
-        self, provider: str, outcome: str, latency_ms: float, reason: str | None
-    ) -> None:
+    def record_provider_result(self, provider: str, outcome: str, latency_ms: float, reason: str | None) -> None:
         if provider in {"google", "openai", "openrouter"} and outcome == "served":
             previous = self.internet
             self.internet = "online"
             self._failures["internet"] = 0
             self._successes["internet"] = self.config.connectivity_success_threshold
             if previous != "online":
-                self.store.append("state_change", "internet", "online", previous=previous,
-                                  reason="cloud_provider_success")
+                self.store.append(
+                    "state_change", "internet", "online", previous=previous, reason="cloud_provider_success"
+                )
         self.store.append(
-            "provider_result", "llm", outcome, provider=provider,
-            latency_ms=latency_ms, reason=reason,
+            "provider_result",
+            "llm",
+            outcome,
+            provider=provider,
+            latency_ms=latency_ms,
+            reason=reason,
         )
 
     def set_override(self, override: str) -> None:
@@ -240,55 +247,35 @@ class ConnectivitySupervisor:
 
     def capability_available(self, capability: Capability, location: str) -> bool:
         internet, jetson, capabilities = self._effective()
+        if self.profile == "fallback_only":
+            return location == "device" and capability != "llm"
         if location == "cloud":
-            return (internet == "online" and self.profile not in {"jetson_only", "rules_only"}
-                    and self.config.jetson_ai_policy != 'offline_only'
-                    and (capability != 'llm' or not self.config.rag_local_only))
-        if location == "jetson":
             return (
-                jetson == "online"
-                and capabilities.get(capability) in {"ready", "busy"}
+                internet != "offline"
+                and self.profile != "jetson_only"
+                and self.config.jetson_ai_policy != "offline_only"
+                and not self.config.rag_local_only
+            )
+        if self.profile == "cloud_only":
+            return False
+        if location == "jetson":
+            # Before the first observation, let the actual request establish
+            # availability. A monitor starting up must not suppress all models.
+            return (
+                jetson not in {"offline", "not_configured"}
+                and capabilities.get(capability) in {"checking", "ready", "busy"}
                 and self.accepting_requests.get(capability, False)
-                and self.profile not in {"cloud_only", "rules_only"}
             )
         return True
 
-    def llm_chain(self, requested: str | None, available: set[str]) -> list[str]:
-        cloud = [name for name in ("google", "openai", "openrouter") if name in available]
-        standalone = (self.config.jetson_ai_policy == 'disabled' and self.profile not in {'cloud_only', 'rules_only'})
-        local = ["local"] if "local" in available and (standalone or self.capability_available("llm", "jetson")) else []
-        if self.profile == "rules_only":
-            return []
-        preference = None if requested in {None, "auto"} else requested
-        if preference == "rules":
-            return []
-        ordered: list[str]
-        if preference == "local":
-            ordered = [*local, *cloud]
-        elif preference in cloud:
-            ordered = [preference, *[name for name in cloud if name != preference], *local]
-        else:
-            internet, _, _ = self._effective()
-            ordered = [*cloud, *local] if internet == "online" else [*local, *cloud]
-        if not self.capability_available("llm", "cloud"):
-            ordered = [name for name in ordered if name == "local"]
-        return list(dict.fromkeys(ordered))
-
-    async def select_llm(self, requested: str | None, available: set[str]) -> str:
-        if requested not in {None, "auto"}:
-            # A manual preference remains a preference, then the resolver uses
-            # the dynamic chain for safe fallback.
-            if requested == "rules":
-                return "rules"
-        elif self._task is not None:
-            await self.wait_ready()
-        chain = self.llm_chain(requested, available)
-        selected = chain[0] if chain else "rules"
-        self.store.append(
-            "selection", "llm", "selected", provider=selected,
-            reason=f"profile={self.profile}; override={self.override}",
-        )
-        return selected
+    def provider_allowed(self, provider: str) -> bool:
+        """Eligibility only; ordering and offline policy belong to ModelGateway."""
+        location = "cloud"
+        if provider == "local":
+            location = (
+                "jetson" if self.config.jetson_ai_policy != "disabled" and self.config.jetson_ai_url else "device"
+            )
+        return self.capability_available("llm", location)
 
     @property
     def observed(self):
@@ -296,14 +283,20 @@ class ConnectivitySupervisor:
 
     @property
     def routing_active(self):
-        return self.observed or self.profile != 'auto' or self.override != 'actual'
+        return self.observed or self.profile != "auto" or self.override != "actual"
 
     def snapshot(self) -> dict[str, Any]:
         effective_internet, effective_jetson, capabilities = self._effective()
         mode = (
-            "cloud" if self.capability_available('llm', 'cloud')
-            else "jetson" if self.capability_available('llm', 'jetson')
-            else "rules"
+            "cloud"
+            if self.capability_available("llm", "cloud")
+            else "jetson"
+            if self.capability_available("llm", "jetson")
+            else "local"
+            if self.config.jetson_ai_policy == "disabled"
+            and self.config.local_llm_model
+            and self.provider_allowed("local")
+            else "fallback"
         )
         return {
             "actual": {

@@ -10,12 +10,6 @@ Route = Literal["handbook", "action", "conversation", "clarify", "unsupported"]
 class ActionProposal(BaseModel):
     intent: Literal[
         "memory.reset",
-        "trip.plan",
-        "trip.select",
-        "trip.refine",
-        "trip.start",
-        "trip.decline",
-        "trip.cancel",
         "navigation.search",
         "navigation.plan",
         "navigation.select",

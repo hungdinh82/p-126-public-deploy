@@ -40,7 +40,7 @@ echo "[2/4] Starting the deterministic runtime"
 test "$(docker run --rm "$IMAGE" id -u)" != "0"
 docker run --detach --name "$CONTAINER" \
   --env APP_ENV=test \
-  --env LLM_PROVIDER=rules \
+  --env LLM_PROVIDER=google \
   --env STT_PROVIDER=off \
   --env TTS_PROVIDER=off \
   --env VIVI_VEHICLE_PROVIDER=memory \
@@ -59,7 +59,7 @@ for attempt in $(seq 1 30); do
   fi
   sleep 2
 done
-docker exec "$CONTAINER" python scripts/smoke_runtime.py --provider rules --timeout 30
+docker exec "$CONTAINER" python scripts/smoke_runtime.py --typed-only --timeout 30
 
 echo "[4/4] Checking runtime isolation"
 docker exec "$CONTAINER" sh -lc '

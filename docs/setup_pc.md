@@ -21,7 +21,7 @@ Mở `http://127.0.0.1:8787`. Ở terminal khác:
 
 ```bash
 curl http://127.0.0.1:8787/api/v1/health
-.venv/bin/python scripts/smoke_runtime.py --provider rules
+.venv/bin/python scripts/smoke_runtime.py --typed-only
 ```
 
 Smoke test phải đi qua được truy vấn handbook, action thường, action cần xác nhận và bước
@@ -180,7 +180,7 @@ node --check app.js
 Khi API đang chạy và handbook đã import, kiểm tra toàn bộ core flow qua public contract:
 
 ```bash
-.venv/bin/python scripts/smoke_runtime.py --provider rules
+.venv/bin/python scripts/smoke_runtime.py --typed-only
 # Hoặc, khi llama-server đang chạy:
 .venv/bin/python scripts/smoke_runtime.py --provider local
 ```

@@ -1,3 +1,5 @@
+> Tài liệu lịch sử. Contract và vận hành hiện hành: [Lõi hội thoại Core v2](langgraph_core_v2.md).
+
 # Navigation runtime và ổn định P/D — unified-6
 
 Mốc triển khai: 2026-10-10 UTC. Phạm vi: web development, một backend worker, xe mô phỏng, giữ VietMap và cảnh 3D. Các báo cáo `navigation_controls_review.md` và `navigation_refactor_review.md` là lịch sử; số đo trong đó không dùng để nghiệm thu revision này.

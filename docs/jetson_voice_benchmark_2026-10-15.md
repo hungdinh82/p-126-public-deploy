@@ -1,3 +1,5 @@
+> Báo cáo lịch sử của nhánh main ngày 15/10/2026. Các phần local forms, voice inbox và budget cũ không thuộc runtime v2 hiện tại. Xem [tích hợp hiện tại](JETSON_MAIN_INTEGRATION.md); số đo dưới đây không phải nghiệm thu bản merge.
+
 # Jetson voice pipeline benchmark
 
 Device: Jetson AGX Xavier 16 GB, JetPack/L4T R35, CUDA 11.8, compute capability 7.2. The candidate ran from `feat/jetson-realtime-voice-pipeline` on staging ports 8795/1249/1250, with model artifacts read from the existing data directory and logs isolated under `/mnt/jetson-data/vivi-ai-staging`.
