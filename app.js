@@ -1,3 +1,4 @@
+import {buildTurnRequest, boundButtonAnswer, approveButtonAction} from './assistant-client.js?v=1';
 import { closeJourney, initJourney, openJourney, applyNavigation, getJourneyPosition, setJourneyMotionBlocked, resetJourneyRuntime } from './journey.js?v=24';
 import { GearController } from './navigation-state.js?v=2';
 import { NavigationStore, MissingRouteError } from './navigation-store.js?v=1';
@@ -351,16 +352,16 @@ function announceNewAlerts(alerts) {
     const key = `${alert.code}:${alert.source}`;
     const now = Date.now();
     const inCooldown = now - (alertLastSpoken.get(key) || 0) < ALERT_TTS_COOLDOWN_MS;
-    if (alert.severity !== 'critical' && (!state.sound || inCooldown)) continue;
+    if (!state.sound || (alert.severity !== 'critical' && inCooldown)) continue;
     alertLastSpoken.set(key, now);
-    queueAnnouncement(alert.message, alert.severity === 'critical' ? 2 : 1, `alert-${alert.alert_id}`, alert.severity === 'critical');
+    queueAnnouncement(alert.message, alert.severity === 'critical' ? 2 : 1, `alert-${alert.alert_id}`);
   }
 }
 const announcementQueue = [];
 let announcementRunning = false;
-function queueAnnouncement(text, priority = 0, id = makeId(), force = false) {
-  if (!state.sound && !force) return;
-  announcementQueue.push({text,priority,id,force});
+function queueAnnouncement(text, priority = 0, id = makeId()) {
+  if (!state.sound) return;
+  announcementQueue.push({text,priority,id});
   announcementQueue.sort((a,b)=>b.priority-a.priority);
   if(priority === 2) { state.audioEpoch=(state.audioEpoch || 0)+1; stopPlayback(); if('speechSynthesis' in window) speechSynthesis.cancel(); }
   void drainAnnouncements();
@@ -373,8 +374,7 @@ async function drainAnnouncements() {
   announcementRunning=true;
   try {
     const item=announcementQueue.shift();
-    if(state.sound) await speak(item.text,item.id,null,true).catch(()=>say(item.text,item.force));
-    else if(item.force) await say(item.text,true);
+    if(state.sound) await speak(item.text,item.id,null,true).catch(()=>say(item.text));
   } finally { announcementRunning=false; void drainAnnouncements(); }
 }
 async function pollVehicleAlerts() {
@@ -394,8 +394,8 @@ const DOCK_BY_INTENT = { climate: '#climate-button', window: '#window-button', d
 // microphone) does not start over ViVi's own words. The timer covers browsers that
 // never fire onend; speechSynthesis.speaking is not trusted, it can stay true.
 let browserSpeaking = false, lastUtterance = null;
-function say(text, force = false) {
-  if ((!state.sound && !force) || !('speechSynthesis' in window)) return Promise.resolve();
+function say(text) {
+  if (!state.sound || !('speechSynthesis' in window)) return Promise.resolve();
   speechSynthesis.cancel();
   // Browser voices read "OK" as "ô ka"; say it the Vietnamese way, as the server TTS does.
   const utterance = new SpeechSynthesisUtterance(text.replace(/\b(?:ok|okay|oke)\b/gi, 'ô kê')); utterance.lang = 'vi-VN'; utterance.rate = .93;
@@ -542,9 +542,7 @@ async function speak(text, turnId = makeId(), sequencePlayback = null, announcem
       if (playback.cancelled) return;
       console.warn('ZeroTTS streaming:', error);
       if (currentPlayback === playback) stopPlayback();
-      // The current sentence is the retry unit. Never rerun the LLM, RAG or
-      // vehicle action; restart this sentence through the browser voice.
-      if (playback.played) { await say(text); return; }
+      if (playback.played) return;
     }
   }
   await say(text);
@@ -604,12 +602,12 @@ async function acceptNavigationResponse(payload,authoritative=false) {
   state.runtimeEpoch=snapshotOrder.epoch;
   if(restarted){state.vehicleVersion=null;currentNavigationRevision=0;resetJourneyRuntime();}
   state.navigationSynced=true;
-  currentNavigationRevision=Math.max(currentNavigationRevision,payload.navigation?.revision || 0);
+  currentNavigationRevision=Math.max(currentNavigationRevision,payload.navigation_workspace?.revision || 0);
   if(payload.diagnostics?.observation_available!==false)applyBackendState(payload.vehicle_state);
   gearController.observe(payload,authoritative);
   // Rendering the route/map cannot delay vehicle controls.
   queueNavigationRender(payload);
-  announceNewAlerts(payload.navigation?.alerts || []);
+  announceNewAlerts(payload.navigation_workspace?.journey?.alerts || []);
   return true;
 }
 let navigationRenderPayload=null,navigationRenderScheduled=false;
@@ -620,13 +618,13 @@ function queueNavigationRender(payload){
   queueMicrotask(()=>{
     navigationRenderScheduled=false;
     const next=navigationRenderPayload;navigationRenderPayload=null;
-    Promise.resolve(applyNavigation(next)).catch(error=>console.warn('Navigation view failed:',error.message));
+    Promise.resolve(applyNavigation(navigationStore.renderSnapshot())).catch(error=>console.warn('Navigation view failed:',error.message));
   });
 }
 async function synchronizeNavigation() {
   if(syncRequest)return syncRequest;
   syncRequest=(async()=>{
-    const response=await fetch(`${API_BASE}/api/v1/navigation/snapshot?session_id=${encodeURIComponent(sessionId)}${gearController.pending?`&event_id=${encodeURIComponent(gearController.pending.id)}`:''}`);
+    const response=await fetch(`${API_BASE}/api/v2/navigation/snapshot?session_id=${encodeURIComponent(sessionId)}${gearController.pending?`&event_id=${encodeURIComponent(gearController.pending.id)}`:''}`);
     if(!response.ok)throw Error('Chưa đồng bộ được trạng thái xe');
     const payload=await response.json();
     await acceptNavigationResponse(payload,true);
@@ -638,7 +636,7 @@ async function sendNavigationEvent(event) {
   const journey=navigationStore.select().journey;
   event={runtime_epoch:state.runtimeEpoch,...event};
   if(journey && ['progress','charge','pause','resume','end'].includes(event.kind))event.target_id ||= journey.route_id;
-  const response = await fetch(`${API_BASE}/api/v1/navigation/events`, {
+  const response = await fetch(`${API_BASE}/api/v2/navigation/events`, {
     method:'POST', signal:AbortSignal.timeout(8000), headers:{'Content-Type':'application/json'},
     body:JSON.stringify({session_id:sessionId,event,known_routes:navigationStore.knownRoutes})
   });
@@ -654,19 +652,12 @@ async function sendNavigationEvent(event) {
   }
   return payload;
 }
-async function confirmNavigation(grant) {
-  const revision = currentNavigationRevision;
-  const response = await fetch(`${API_BASE}/api/v1/confirmations/${encodeURIComponent(grant.confirmation_id)}`, {
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({session_id:sessionId,turn_id:makeId(),decision:'approve',llm_provider:state.llmProvider})
-  });
-  const payload = await response.json();
-  if (revision !== currentNavigationRevision) return;
-  if (!response.ok) { setPhase('error',payload.detail || 'Không bắt đầu được hành trình'); return; }
-  await acceptNavigationResponse(payload);
-  setPhase(payload.status === 'verified' ? 'idle' : payload.status,payload.message);
-  if(state.sound) await speak(payload.message);
+async function confirmNavigation() {
+  const question=state.pendingQuestion;
+  if(!question?.accepts_yes)return;
+  return runBackendCommand('Xác nhận bắt đầu',makeId(),{questionReply:{question_id:question.id,option_id:'yes'}});
 }
+
 function interruptActiveTurn() {
   stopPlayback();
   if ('speechSynthesis' in window) speechSynthesis.cancel();
@@ -674,7 +665,7 @@ function interruptActiveTurn() {
   activeTurn = null;
   if (previous) {
     previous.controller.abort();
-    void fetch(`${API_BASE}/api/v1/turns/${encodeURIComponent(previous.turnId)}/cancel`, {
+    void fetch(`${API_BASE}/api/v2/turns/${encodeURIComponent(previous.turnId)}/cancel`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ session_id: sessionId })
     }).catch(() => {});
@@ -698,10 +689,10 @@ async function runBackendCommand(command, turnId = makeId(), { autoConfirm = fal
   state.busy = true; state.lastCommand = command; lockControls(true); $('#command-input').value = '';
   try {
     setPhase('thinking', `“${command}”`);
-    const response = await fetch(`${API_BASE}/api/v1/turn/stream`, {
+    const response = await fetch(`${API_BASE}/api/v2/turn/stream`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       signal: ownedTurn.controller.signal,
-      body: JSON.stringify({ transcript: command, session_id: sessionId, turn_id: turnId, llm_provider: state.llmProvider, ...(action ? { action } : {}), ...(questionReply ? { question_reply: questionReply } : {}), position: getJourneyPosition() })
+      body: JSON.stringify(buildTurnRequest({text:command,sessionId,turnId,provider:state.llmProvider,action,answer:questionReply,position:getJourneyPosition()}))
     });
     if (!response.ok) {
       const payload = await response.json();
@@ -774,7 +765,7 @@ async function runBackendCommand(command, turnId = makeId(), { autoConfirm = fal
     if (buffer.trim()) handleEvent(JSON.parse(buffer));
     if (activeTurn !== ownedTurn) return;
     if (!payload) throw new Error('Backend kết thúc luồng trước khi trả kết quả');
-    if (autoConfirm && payload.status === 'confirmation_required' && payload.confirmation) {
+    if (autoConfirm && payload.status === 'confirmation_required' && boundButtonAnswer(action,payload)) {
       if (voiceStreamed) {
         await speechQueue;
         await finishTtsPlayback(speechPlayback);
@@ -783,25 +774,14 @@ async function runBackendCommand(command, turnId = makeId(), { autoConfirm = fal
       if (activeTurn !== ownedTurn) return;
       turnId = makeId();
       ownedTurn.turnId = turnId;
-      const confirmationResponse = await fetch(
-        `${API_BASE}/api/v1/confirmations/${payload.confirmation.confirmation_id}`,
-        {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          signal: ownedTurn.controller.signal,
-          body: JSON.stringify({
-            session_id: sessionId, turn_id: turnId,
-            decision: 'approve', llm_provider: state.llmProvider
-          })
-        }
-      );
-      payload = await confirmationResponse.json();
-      if (!confirmationResponse.ok) throw new Error(payload.detail || 'Backend không phản hồi');
+      payload = await approveButtonAction({base:API_BASE,sessionId,turnId,action,response:payload,signal:ownedTurn.controller.signal});
       answerVoiceQueued = false;
     }
     await wait(180);
     if (activeTurn !== ownedTurn) return;
-    state.effectiveProvider = payload.diagnostics?.effective_provider || state.llmProvider;
+    state.effectiveProvider = payload.diagnostics?.effective_provider || (payload.diagnostics?.semantic_source==='typed_event'?'Điều khiển trực tiếp':'Chế độ dự phòng');
     state.generationProvider = payload.diagnostics?.generation_provider || '';
+    state.modelStages = payload.diagnostics?.model_stages || [];
     updateModelStatus();
     renderTurnSteps(payload.steps || []);
     await acceptNavigationResponse(payload);
@@ -1040,7 +1020,7 @@ async function startRecording(options) {
 function resolveLlmProvider(options, backendDefault, savedProvider, savedDefault) {
   const available = provider => options.some(item => item.provider === provider && item.available);
   const defaultProvider = available(backendDefault) ? backendDefault
-    : options.find(item => item.available)?.provider || 'rules';
+    : options.find(item => item.available)?.provider || backendDefault || 'google';
   // A saved override belongs to the configuration in which it was selected.
   // Old selections without that context must not mask a new backend default.
   return savedDefault === backendDefault && available(savedProvider) ? savedProvider : defaultProvider;
@@ -1083,7 +1063,8 @@ function applyConnectivity(connectivity, startup = false) {
   const messages = {
     cloud: 'Có Internet. Chế độ tự động có thể dùng dịch vụ Cloud.',
     jetson: 'Không có Cloud khả dụng. Jetson đang sẵn sàng xử lý cục bộ.',
-    rules: 'Chế độ tự động hiện chỉ có chức năng cơ bản.'
+    local: 'Model cục bộ đang sẵn sàng.',
+    fallback: 'Hiện chỉ có thao tác trực tiếp và câu trả lời giới hạn.'
   };
   if ((previous && previous !== mode) || (startup && mode !== 'cloud')) {
     queueAnnouncement(messages[mode], 1, `connectivity-${mode}-${Date.now()}`);
@@ -1096,15 +1077,15 @@ function applyConnectivity(connectivity, startup = false) {
 async function pollConnectivity() {
   if (!state.backendAvailable) return;
   try {
-    const response = await fetch(`${API_BASE}/api/v1/health`);
-    if (response.ok) applyConnectivity((await response.json()).connectivity);
+    const response = await fetch(`${API_BASE}/api/v1/connectivity`);
+    if (response.ok) applyConnectivity(await response.json());
   } catch { /* giữ trạng thái cuối cùng trong lúc backend chập chờn */ }
 }
 
 function updateModelStatus() {
   if ($('#backend-model')) {
     const served = state.effectiveProvider || state.llmProvider;
-    $('#backend-model').textContent = state.generationProvider && state.generationProvider !== served ? `${served} · cẩm nang: ${state.generationProvider}` : served;
+    $('#backend-model').textContent = state.generationProvider && state.generationProvider !== served ? `${served} · trả lời: ${state.generationProvider}` : served;
   }
 }
 
@@ -1199,7 +1180,7 @@ function handleSpeakerCommand(command) {
 $('#sound-toggle').addEventListener('click', () => setSound(!state.sound));
 
 const dialog = $('#info-dialog');
-const modelLabels = { auto: 'Tự động', rules: 'Kịch bản', openai: 'OpenAI', google: 'Google Gemini', local: 'Local API', openrouter: 'OpenRouter' };
+const modelLabels = { openai: 'OpenAI', google: 'Google Gemini', local: 'Local API', openrouter: 'OpenRouter' };
 const ttsLabels = { auto: 'Tự động', zerotts: 'ViVi', vieneu: 'VieNeu' };
 const ttsModes = { auto: 'Cloud → Jetson → trình duyệt', zerotts: 'On-device · ZeroTTS', vieneu: 'Cloud · cần Internet' };
 const ttsVoiceLabel = voice => voice === 'VIVI' ? 'ViVi' : voice;
@@ -1238,7 +1219,7 @@ function selectTtsProvider(provider) {
   const activeVoice = $('#active-voice');
   if (activeVoice) activeVoice.textContent = `${ttsLabels[provider] || provider} · ${ttsVoiceLabel(state.ttsVoice)}`;
 }
-const modelModes = { auto: 'Cloud → Jetson → Rules', rules: 'Phản hồi định sẵn', openai: 'Cloud · cần Internet', google: 'Cloud · cần Internet', local: 'On-device · riêng tư', openrouter: 'Cloud · cần Internet' };
+const modelModes = { openai: 'Cloud · cần Internet', google: 'Cloud · cần Internet', local: 'On-device · riêng tư', openrouter: 'Cloud · cần Internet' };
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>'"]/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' })[character]);
 }
@@ -1322,11 +1303,13 @@ initJourney({
   travel: distance => scene?.setRouteDistance(distance),
   network: roads => scene?.setNetwork(roads),
   command: (text, action) => {
+    if(action?.capability?.startsWith('trip.'))action={...action,capability:action.capability.replace('trip.','navigation.'),
+      arguments:{...action.arguments,...(action.capability==='trip.plan'?{purpose:'itinerary'}:{})}};
     const question=state.pendingQuestion,args=action?.arguments || {};
     const option=args.choice_handle || args.place_handle
       || (action?.capability?.endsWith('.start') && question?.accepts_yes ? 'yes' : null)
       || (action?.capability?.endsWith('.decline') && question?.accepts_no ? 'no' : null);
-    const bound=question && question.owner===action?.capability?.split('.')[0]
+    const bound=question && (question.owner===action?.capability?.split('.')[0] || question.owner==='trip' && action?.capability?.startsWith('navigation.'))
       && (!args.plan_id || args.plan_id===question.target_id)
       && (!args.route_revision || args.route_revision===question.revision)
       && (question.choices?.some(entry=>entry.handle===option) || option==='yes' && question.accepts_yes || option==='no' && question.accepts_no);

@@ -1,4 +1,5 @@
 """STT through the remote inference gateway; audio conversion stays on Laptop."""
+
 from __future__ import annotations
 
 import asyncio
@@ -21,10 +22,11 @@ class JetsonSTTAdapter:
     dtype = "server-managed"
     streaming = False
 
-    def __init__(self, config: Settings):
+    def __init__(self, config: Settings, connectivity=None):
         self.config = config
+        self.connectivity = connectivity
         self._availability_cache = None
-        self._availability_until = 0.
+        self._availability_until = 0.0
         self._served_model = ContextVar("jetson_stt_served_model", default=None)
 
     @property
@@ -41,14 +43,19 @@ class JetsonSTTAdapter:
             return False, "Thiếu AI_SERVER_TOKEN cho STT Jetson"
         if shutil.which(self.config.ffmpeg_binary) is None:
             return False, "Thiếu ffmpeg để chuyển audio thành WAV"
+        if self.connectivity is not None:
+            # HTTP routes must never synchronously probe the Jetson and block
+            # the event loop shared with urgent navigation controls.
+            ready = self.connectivity.capability_available("stt", "jetson")
+            return ready, "ready-via-gateway" if ready else "STT Jetson chưa sẵn sàng"
         if self._availability_cache is not None and time.monotonic() < self._availability_until:
             return self._availability_cache
         try:
             with httpx.Client(timeout=2, trust_env=False) as client:
-                reply = client.get(self.config.jetson_ai_url.rstrip('/') + '/v1/capabilities', headers=self._headers())
+                reply = client.get(self.config.jetson_ai_url.rstrip("/") + "/v1/capabilities", headers=self._headers())
                 reply.raise_for_status()
-                state = reply.json()['capabilities']['stt']
-            result = state['status'] in {'ready', 'busy'}, state.get('error') or state['status']
+                state = reply.json()["capabilities"]["stt"]
+            result = state["status"] in {"ready", "busy"}, state.get("error") or state["status"]
             self._availability_cache, self._availability_until = result, time.monotonic() + 1
             return result
         except (httpx.HTTPError, ValueError, KeyError, TypeError) as exc:
@@ -60,29 +67,49 @@ class JetsonSTTAdapter:
             raise RuntimeError(reason)
 
     def _wav(self, path: Path) -> bytes:
-        with tempfile.TemporaryDirectory(prefix='vivi-jetson-stt-') as directory:
-            target = Path(directory) / 'input.wav'
-            result = subprocess.run([self.config.ffmpeg_binary, '-nostdin', '-loglevel', 'error', '-y',
-                                     '-i', str(path), '-ar', '16000', '-ac', '1', '-c:a', 'pcm_s16le', str(target)],
-                                    capture_output=True, timeout=60)
+        with tempfile.TemporaryDirectory(prefix="vivi-jetson-stt-") as directory:
+            target = Path(directory) / "input.wav"
+            result = subprocess.run(
+                [
+                    self.config.ffmpeg_binary,
+                    "-nostdin",
+                    "-loglevel",
+                    "error",
+                    "-y",
+                    "-i",
+                    str(path),
+                    "-ar",
+                    "16000",
+                    "-ac",
+                    "1",
+                    "-c:a",
+                    "pcm_s16le",
+                    str(target),
+                ],
+                capture_output=True,
+                timeout=60,
+            )
             if result.returncode:
-                raise RuntimeError('Không chuyển được audio: ' + result.stderr.decode(errors='replace'))
-            with wave.open(str(target), 'rb') as wav:
+                raise RuntimeError("Không chuyển được audio: " + result.stderr.decode(errors="replace"))
+            with wave.open(str(target), "rb") as wav:
                 too_long = wav.getnframes() / wav.getframerate() > 60
             if too_long or target.stat().st_size > 2_000_000:
-                raise ValueError('Audio vượt giới hạn 60 giây của gateway Jetson')
+                raise ValueError("Audio vượt giới hạn 60 giây của gateway Jetson")
             return target.read_bytes()
 
     async def transcribe(self, path: Path) -> str:
         audio = await asyncio.to_thread(self._wav, path)
-        async with httpx.AsyncClient(timeout=90, trust_env=False) as client:
-            response = await client.post(self.config.jetson_ai_url.rstrip('/') + '/v1/stt/transcriptions',
-                                         headers=self._headers(), files={'file': ('input.wav', audio, 'audio/wav')})
+        async with httpx.AsyncClient(timeout=self.config.ai_server_request_timeout_seconds, trust_env=False) as client:
+            response = await client.post(
+                self.config.jetson_ai_url.rstrip("/") + "/v1/stt/transcriptions",
+                headers=self._headers(),
+                files={"file": ("input.wav", audio, "audio/wav")},
+            )
             response.raise_for_status()
             payload = response.json()
-            text = payload['text']
-            model_id = payload.get('model_id')
+            text = payload["text"]
+            model_id = payload.get("model_id")
             self._served_model.set(model_id if isinstance(model_id, str) and model_id else None)
         if not isinstance(text, str) or not text.strip():
-            raise RuntimeError('STT Jetson trả về transcript rỗng')
+            raise RuntimeError("STT Jetson trả về transcript rỗng")
         return text.strip()

@@ -17,18 +17,7 @@ class ThreadedSqliteSaver(SqliteSaver):
         self.path = Path(path)
         if str(path) != ":memory:":
             Path(path).parent.mkdir(parents=True, exist_ok=True)
-        existing = str(path) != ":memory:" and Path(path).exists() and Path(path).stat().st_size > 0
         self.connection = sqlite3.connect(path, check_same_thread=False)
-        if existing:
-            backup = Path(str(path) + ".before-navigation-workspace.sqlite3")
-            if not backup.exists():
-                temporary = Path(str(backup) + ".tmp")
-                target = sqlite3.connect(temporary)
-                try:
-                    self.connection.backup(target)
-                finally:
-                    target.close()
-                temporary.replace(backup)
         super().__init__(self.connection)
         # A cancelled asyncio caller must not close a connection still in use by
         # its worker. One executor serializes reads, writes and the final close.

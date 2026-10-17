@@ -1,12 +1,11 @@
 # Địa điểm, kế hoạch sạc và khởi hành
 
-Semantic prompt `semantic-unified-19`; một LangGraph, cùng reducer/scheduler cho
-cloud, local, parser và nút UI. Câu trả lời địa điểm có nghĩa rõ và lệnh tới
-tỉnh/thành, tên thường gọi đã nhận diện hoặc câu chỉ đường có đích cụ thể dùng
-parser trực tiếp để tránh chờ model. Model phân rã
-các yêu cầu còn lại; guard không thay query bằng
-regex. Guard/reducer kiểm tra handle, revision và quyền xác nhận. Parser fallback
-vẫn có grammar tiếng Việt và xuất cùng contract.
+Runtime hiện hành: [Core v2](langgraph_core_v2.md), prompt `semantic-core-2`.
+Mọi câu tự nhiên đi qua semantic interpreter; UI gửi reply có binding.
+Fallback chỉ nhận toàn câu đồng ý/từ chối, số/handle hiện hành, dừng/hủy.
+Các bảng bên dưới lưu kịch bản nghiệp vụ; nguồn chấm workflow tự động hiện nay
+là [core_cases.jsonl](../eval/core_cases.jsonl), tách khỏi [semantic eval](../eval/semantic_cases.jsonl).
+Điểm cụ thể đủ rõ được tính preview; phải xác nhận riêng trước khi khởi hành.
 
 ## Câu hỏi đang chờ
 

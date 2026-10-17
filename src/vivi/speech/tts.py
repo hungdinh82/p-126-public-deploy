@@ -78,9 +78,7 @@ class ZeroTTSAdapter:
         if "CUDAExecutionProvider" in available:
             return ["CUDAExecutionProvider", "CPUExecutionProvider"]
         if requested == "cuda":
-            raise RuntimeError(
-                "ZEROTTS_DEVICE=cuda nhưng ONNX Runtime không có CUDAExecutionProvider"
-            )
+            raise RuntimeError("ZEROTTS_DEVICE=cuda nhưng ONNX Runtime không có CUDAExecutionProvider")
         return ["CPUExecutionProvider"]
 
     def _providers(self) -> list[str]:
@@ -116,15 +114,12 @@ class ZeroTTSAdapter:
     def _load(self):
         if self._model is None:
             from zerotts import ZeroTTS
+
             providers = self._providers()
             model = ZeroTTS.from_pretrained(self.config.zerotts_model, providers=providers)
             actual = tuple(model.prefix_step_sess.get_providers())
-            if providers[0] == "CUDAExecutionProvider" and (
-                not actual or actual[0] != "CUDAExecutionProvider"
-            ):
-                raise RuntimeError(
-                    "ZeroTTS không tạo được CUDA session; kiểm tra CUDA/cuDNN runtime"
-                )
+            if providers[0] == "CUDAExecutionProvider" and (not actual or actual[0] != "CUDAExecutionProvider"):
+                raise RuntimeError("ZeroTTS không tạo được CUDA session; kiểm tra CUDA/cuDNN runtime")
             self._execution_providers = actual
             if self.config.zerotts_voice == "VIVI":
                 import numpy as np
@@ -149,8 +144,7 @@ class ZeroTTSAdapter:
             if requested not in matches:
                 available = ", ".join(voices) or "không có"
                 raise RuntimeError(
-                    f"Không tìm thấy giọng '{self.config.zerotts_voice}'. "
-                    f"Các giọng hiện có: {available}"
+                    f"Không tìm thấy giọng '{self.config.zerotts_voice}'. Các giọng hiện có: {available}"
                 )
             self._voice = matches[requested]
             self._model = model
@@ -159,14 +153,12 @@ class ZeroTTSAdapter:
     @staticmethod
     def _normalize_voice_name(value: str) -> str:
         normalized = unicodedata.normalize("NFD", value.casefold())
-        without_accents = "".join(
-            character for character in normalized
-            if unicodedata.category(character) != "Mn"
-        )
+        without_accents = "".join(character for character in normalized if unicodedata.category(character) != "Mn")
         return re.sub(r"[^a-z0-9]", "", without_accents)
 
     def _synthesize(self, text: str) -> bytes:
         import numpy as np
+
         model = self._load()
         audio = np.asarray(model.synthesize(text, voice=self._voice), dtype=np.float32).reshape(-1)
         pcm = (np.clip(audio, -1, 1) * 32767).astype("<i2").tobytes()
@@ -335,18 +327,19 @@ class JetsonTTSAdapter:
         return None
 
     def _headers(self) -> dict[str, str]:
-        return (
-            {"Authorization": f"Bearer {self.config.jetson_ai_token}"}
-            if self.config.ai_server_auth_required else {}
-        )
+        return {"Authorization": f"Bearer {self.config.jetson_ai_token}"} if self.config.ai_server_auth_required else {}
 
     async def stream(self, text: str):
         import httpx
 
-        async with httpx.AsyncClient(timeout=self.config.local_request_budget_seconds, transport=self.transport) as client:
+        async with httpx.AsyncClient(
+            timeout=self.config.ai_server_request_timeout_seconds, transport=self.transport
+        ) as client:
             async with client.stream(
-                "POST", self.config.jetson_ai_url.rstrip("/") + "/v1/tts/stream",
-                headers=self._headers(), json={"input": {"text": text}, "stream": True, "format": "pcm_s16le"},
+                "POST",
+                self.config.jetson_ai_url.rstrip("/") + "/v1/tts/stream",
+                headers=self._headers(),
+                json={"input": {"text": text}, "stream": True, "format": "pcm_s16le"},
             ) as response:
                 response.raise_for_status()
                 self.sample_rate = int(response.headers.get("X-Audio-Sample-Rate", "24000"))
@@ -366,17 +359,20 @@ def create_tts_engines(config: Settings, default, connectivity=None) -> dict:
 
     The configured default is reused so ZeroTTS is never loaded twice.
     """
-    local_factory = JetsonTTSAdapter if (
-        connectivity is not None and config.jetson_ai_url and (not config.ai_server_auth_required or config.jetson_ai_token)
-        and config.jetson_ai_policy != "disabled"
-    ) else ZeroTTSAdapter
+    local_factory = (
+        JetsonTTSAdapter
+        if (
+            connectivity is not None
+            and config.jetson_ai_url
+            and (not config.ai_server_auth_required or config.jetson_ai_token)
+            and config.jetson_ai_policy != "disabled"
+        )
+        else ZeroTTSAdapter
+    )
     engines = {"zerotts": local_factory, "vieneu": VieNeuTTSAdapter}
     if config.jetson_ai_policy == "offline_only":
         engines.pop("vieneu")
-    return {
-        name: default if default.name == name else factory(config)
-        for name, factory in engines.items()
-    }
+    return {name: default if default.name == name else factory(config) for name, factory in engines.items()}
 
 
 def create_tts(config: Settings):
@@ -385,7 +381,7 @@ def create_tts(config: Settings):
     if config.tts_provider == "off":
         return DisabledTTSAdapter()
     if config.tts_provider == "zerotts":
-        remote = config.jetson_ai_url and config.jetson_ai_policy != 'disabled'
+        remote = config.jetson_ai_url and config.jetson_ai_policy != "disabled"
         return JetsonTTSAdapter(config) if remote else ZeroTTSAdapter(config)
     if config.tts_provider == "vieneu":
         return VieNeuTTSAdapter(config)

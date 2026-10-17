@@ -10,7 +10,6 @@ from typing import Any
 from uuid import uuid4
 
 from src.vivi.agents.contracts import AssistantOutput
-from src.vivi.capabilities.registry import catalog
 from src.vivi.config import get_settings
 from src.vivi.graphs.assistant import CONTROL_EVENTS
 from src.vivi.history.erasure import clear_backups
@@ -47,23 +46,21 @@ class LangGraphOrchestrator:
 
     def __init__(
         self,
-        graphs: dict[str, Any],
+        graph: Any,
         gateway: VehicleActionGateway,
         store: EventStore,
-        default_provider: str = "rules",
+        default_provider: str = "google",
         provider_errors: dict[str, str] | None = None,
         ledger: RuntimeStore | None = None,
-        timeout_seconds: float = 45,
+        timeout_seconds: float = 120,
         profile_id: str = "default",
-        local_timeout_seconds: float | None = None,
     ) -> None:
-        self.graphs = graphs
+        self.graph = graph
         self.gateway = gateway
         self.store = store
         self.default_provider = default_provider
         self.provider_errors = provider_errors or {}
         self.ledger, self.timeout_seconds = ledger, timeout_seconds
-        self.local_timeout_seconds = local_timeout_seconds
         self.profile_id = profile_id
         self._sessions: dict[str, asyncio.Lock] = {}
         self._active: dict[tuple[str, str], TurnControl] = {}
@@ -85,13 +82,12 @@ class LangGraphOrchestrator:
         self._in_scope += 1
         session = self.session_key(request)
         lock = self._sessions.setdefault(session, asyncio.Lock())
-        timeout = self.local_timeout_seconds if provider == "local" and self.local_timeout_seconds is not None else self.timeout_seconds
-        control = TurnControl(time.monotonic() + timeout)
+        control = TurnControl(time.monotonic() + self.timeout_seconds)
         started = time.perf_counter()
         token = current_control.set(control)
         key = (request.session_id, request.turn_id)
         try:
-            async with asyncio.timeout(timeout):
+            async with asyncio.timeout(self.timeout_seconds):
                 async with nullcontext() if (request.navigation_event or {}).get("kind") in CONTROL_EVENTS else lock:
                     cached = (
                         await asyncio.to_thread(
@@ -110,20 +106,34 @@ class LangGraphOrchestrator:
                     except BaseException as exc:
                         control.cancel()
                         timed_out = isinstance(exc, TimeoutError) or time.monotonic() >= control.deadline
-                        self.store.append_event({
-                            "event_type": "turn_error", "session_id": request.session_id,
-                            "turn_id": request.turn_id, "transcript": request.transcript,
-                            "provider": provider,
-                            "error_code": "turn_timeout" if timed_out else "turn_cancelled"
-                            if isinstance(exc, asyncio.CancelledError) else "turn_failed",
-                            "stage": control.stage, "dispatched": control.dispatched,
-                            "latency_ms": {**control.timings, "total": round((time.perf_counter() - started) * 1000, 2)},
-                        })
+                        self.store.append_event(
+                            {
+                                "event_type": "turn_error",
+                                "session_id": request.session_id,
+                                "turn_id": request.turn_id,
+                                "transcript": request.transcript,
+                                "provider": provider,
+                                "error_code": "turn_timeout"
+                                if timed_out
+                                else "turn_cancelled"
+                                if isinstance(exc, asyncio.CancelledError)
+                                else "turn_failed",
+                                "stage": control.stage,
+                                "dispatched": control.dispatched,
+                                "latency_ms": {
+                                    **control.timings,
+                                    "total": round((time.perf_counter() - started) * 1000, 2),
+                                },
+                            }
+                        )
                         self.store.finish_ai_route(
                             request.session_id,
                             request.turn_id,
-                            status="timeout" if timed_out else "cancelled"
-                            if isinstance(exc, asyncio.CancelledError) else "error",
+                            status="timeout"
+                            if timed_out
+                            else "cancelled"
+                            if isinstance(exc, asyncio.CancelledError)
+                            else "error",
                             provider=provider,
                         )
                         if self.ledger and not cached:
@@ -172,39 +182,45 @@ class LangGraphOrchestrator:
             })
         for index, attempt in enumerate(response.diagnostics.get("generation_attempts") or [], start=1):
             outcome = attempt.get("outcome", "unknown")
-            self.store.record_ai_attempt({
-                "session_id": request.session_id,
-                "turn_id": request.turn_id,
-                "stage": "llm",
-                "phase": "generate",
-                "attempt": index,
-                "status": "served" if outcome == "served" else outcome,
-                **attempt,
-            })
+            self.store.record_ai_attempt(
+                {
+                    **attempt,
+                    "session_id": request.session_id,
+                    "turn_id": request.turn_id,
+                    "stage": "llm",
+                    "phase": "generate",
+                    "attempt": index,
+                    "status": "served" if outcome == "served" else outcome,
+                }
+            )
         if response.route == "handbook":
-            self.store.record_ai_stage({
+            self.store.record_ai_stage(
+                {
+                    "session_id": request.session_id,
+                    "turn_id": request.turn_id,
+                    "stage": "grounding",
+                    "status": "served" if response.grounding_status == "supported" else "blocked",
+                    "provider": "citation-validator",
+                    "location": "laptop",
+                    "detail": f"{len(response.evidence)} nguồn đã kiểm chứng",
+                }
+            )
+        self.store.record_ai_stage(
+            {
                 "session_id": request.session_id,
                 "turn_id": request.turn_id,
-                "stage": "grounding",
-                "status": "served" if response.grounding_status == "supported" else "blocked",
-                "provider": "citation-validator",
+                "stage": "output",
+                "status": response.status,
+                "provider": "driver-ui",
                 "location": "laptop",
-                "detail": f"{len(response.evidence)} nguồn đã kiểm chứng",
-            })
+            }
+        )
         self.store.record_ai_stage({
             "session_id": request.session_id,
             "turn_id": request.turn_id,
             "stage": "response",
             "status": response.status,
             "provider": "turn-response",
-            "location": "laptop",
-        })
-        self.store.record_ai_stage({
-            "session_id": request.session_id,
-            "turn_id": request.turn_id,
-            "stage": "output",
-            "status": response.status,
-            "provider": "driver-ui",
             "location": "laptop",
         })
         self.store.finish_ai_route(
@@ -220,15 +236,11 @@ class LangGraphOrchestrator:
 
     @property
     def graph_providers(self) -> set[str]:
-        return set(self.graphs)
+        return set(getattr(self, "semantic_providers", {self.default_provider}))
 
     def _graph(self, provider: str | None) -> tuple[str, Any]:
         provider = provider or self.default_provider
-        graph = self.graphs.get(provider)
-        if graph is None:
-            detail = self.provider_errors.get(provider, "LLM provider không khả dụng")
-            raise ValueError(detail)
-        return provider, graph
+        return provider, self.graph
 
     @staticmethod
     def _graph_input(request: TurnRequest) -> dict[str, Any]:
@@ -241,9 +253,7 @@ class LangGraphOrchestrator:
             "locale": "vi_vn",
             # Client state is never trusted at the policy boundary.
             "vehicle_state": None,
-            "confirmation_id": request.confirmation_id,
-            "confirmation_decision": request.confirmation_decision,
-            "provider": request.llm_provider or "rules",
+            "provider": request.llm_provider or "google",
             "action": request.action.model_dump(mode="json") if request.action else None,
             "question_reply": request.question_reply.model_dump(mode="json") if request.question_reply else None,
             "navigation_event": request.navigation_event,
@@ -254,13 +264,16 @@ class LangGraphOrchestrator:
         provider, graph = self._graph(provider)
         started = time.perf_counter()
         self.store.start_ai_route(
-            request.session_id, request.turn_id,
-            transcript=request.transcript, provider=provider,
+            request.session_id,
+            request.turn_id,
+            transcript=request.transcript,
+            provider=provider,
         )
         async with self.turn_scope(request, provider) as cached:
             if cached:
                 self.store.finish_ai_route(
-                    request.session_id, request.turn_id,
+                    request.session_id,
+                    request.turn_id,
                     status=cached.get("status", "completed"),
                     provider=(cached.get("diagnostics") or {}).get("effective_provider"),
                 )
@@ -288,13 +301,16 @@ class LangGraphOrchestrator:
         provider, _ = self._graph(provider)
         sequence = 0
         self.store.start_ai_route(
-            request.session_id, request.turn_id,
-            transcript=request.transcript, provider=provider,
+            request.session_id,
+            request.turn_id,
+            transcript=request.transcript,
+            provider=provider,
         )
         async with self.turn_scope(request, provider) as cached:
             if cached:
                 self.store.finish_ai_route(
-                    request.session_id, request.turn_id,
+                    request.session_id,
+                    request.turn_id,
                     status=cached.get("status", "completed"),
                     provider=(cached.get("diagnostics") or {}).get("effective_provider"),
                 )
@@ -314,7 +330,7 @@ class LangGraphOrchestrator:
                 return
             async for event in self._stream(request, provider):
                 metadata = event.get("response") or {}
-                epoch = metadata.get("runtime_epoch") or getattr(self.graphs[provider], "runtime_epoch", None)
+                epoch = metadata.get("runtime_epoch") or getattr(self.graph, "runtime_epoch", None)
                 if epoch:
                     event = {
                         **event,
@@ -333,7 +349,11 @@ class LangGraphOrchestrator:
                         "sequence": sequence,
                         "version": 2,
                         "timestamp": time.time(),
-                        **({"speech_id": f"{request.session_id}:{request.turn_id}:{sequence}"} if event.get("type") == "speech" else {}),
+                        **(
+                            {"speech_id": f"{request.session_id}:{request.turn_id}:{sequence}"}
+                            if event.get("type") == "speech"
+                            else {}
+                        ),
                     }
                 yield event
 
@@ -345,7 +365,8 @@ class LangGraphOrchestrator:
         reported_results = 0
         graph_input = {**self._graph_input(request), "provider": provider}
         stream = (
-            graph.astream_dialogue(graph_input) if hasattr(graph, "astream_dialogue")
+            graph.astream_dialogue(graph_input)
+            if hasattr(graph, "astream_dialogue")
             else graph.astream(graph_input, stream_mode=["updates", "values"])
         )
         async for mode, chunk in stream:
@@ -360,42 +381,28 @@ class LangGraphOrchestrator:
                 }
                 if any(a.get("capability") == "manual.search" for a in turn.get("semantic", {}).get("actions", [])):
                     yield {"type": "progress", "text": random.choice(PROGRESS_MESSAGES)}
-                elif any(a.get("capability") in {"web.search", "knowledge.lookup", "weather.get_forecast"}
-                         for a in turn.get("semantic", {}).get("actions", [])):
+                elif any(
+                    a.get("capability") in {"web.search", "knowledge.lookup", "weather.get_forecast"}
+                    for a in turn.get("semantic", {}).get("actions", [])
+                ):
                     yield {"type": "progress", "text": "Mình đang tra thông tin, bạn chờ một chút nhé."}
             elif "capability" in chunk or "validate" in chunk:
                 update = chunk.get("capability", chunk.get("validate")) or {}
                 turn = update.get("turn", {})
                 results = turn.get("results", [])
                 for result in results[reported_results:]:
-                    yield {"type": "step", "step": result, "provider": turn.get("effective_provider")}
-                    if result.get("trip_plan_update"):
-                        yield {
-                            "type": "trip_plan",
-                            "committed": False,
-                            "trip_plan": (update.get("session") or {}).get("trip_plan", result["trip_plan_update"]),
-                            "ui_events": result.get("ui_events", []),
-                            "provider": turn.get("effective_provider"),
-                            "step_id": result["step_id"],
-                        }
-                    if result.get("navigation_update"):
-                        from src.vivi.dialogue.contracts import SessionState
-
-                        projected = SessionState.model_validate(update["session"]) if update.get("session") else None
-                        navigation = (
-                            projected.navigation.model_dump(mode="json") if projected else result["navigation_update"]
-                        )
+                    if result.get("draft_update") or result.get("journey_update"):
                         yield {
                             "type": "navigation",
                             "committed": False,
-                            "navigation": navigation,
-                            "navigation_workspace": projected.navigation_workspace.model_dump(mode="json")
-                            if projected
-                            else None,
-                            "ui_events": result.get("ui_events", []),
-                            "provider": turn.get("effective_provider"),
+                            "navigation_workspace": {
+                                "draft": result.get("draft_update"),
+                                "journey": result.get("journey_update"),
+                            },
                             "step_id": result["step_id"],
+                            "ui_events": result.get("ui_events", []),
                         }
+                    yield {"type": "step", "step": result, "provider": turn.get("effective_provider")}
                 reported_results = len(results)
         output = AssistantOutput.model_validate(result["output"])
         response = self._to_turn_response(
@@ -467,7 +474,10 @@ class LangGraphOrchestrator:
                 source_id=item.get("source_id", ""),
                 section=" > ".join(item.get("section_path") or []),
                 source_url=item.get("source_url"),
-                **{key: item.get(key) for key in ("title", "kind", "published_at", "retrieved_at", "valid_date", "timezone")},
+                **{
+                    key: item.get(key)
+                    for key in ("title", "kind", "published_at", "retrieved_at", "valid_date", "timezone")
+                },
             )
             for item in output.citations
         ]
@@ -503,7 +513,8 @@ class LangGraphOrchestrator:
             turn_id=output.turn_id,
             trace_id=str(uuid4()),
             transcript=request.transcript,
-            provider=f"langgraph/{output.diagnostics.get('effective_provider', provider)}",
+            provider=output.diagnostics.get("effective_provider")
+            or output.diagnostics.get("semantic_source", "typed_event"),
             steps=output.steps,
             navigation_workspace=output.navigation_workspace,
             navigation=output.navigation,
@@ -529,8 +540,11 @@ class LangGraphOrchestrator:
             trace=trace,
             diagnostics={
                 **output.diagnostics,
-                **({"io_timings": current_control.get().io_timings}
-                   if current_control.get() and current_control.get().io_timings else {}),
+                **(
+                    {"io_timings": current_control.get().io_timings}
+                    if current_control.get() and current_control.get().io_timings
+                    else {}
+                ),
             },
         )
         if (request.navigation_event or {}).get("kind") not in {"progress", "charge"}:
@@ -546,7 +560,7 @@ class LangGraphOrchestrator:
 
     async def _reset_history(self, session_id):
         try:
-            graphs = set(self.graphs.values())
+            graphs = {self.graph}
             history = next(iter(graphs)).navigation.workflow.services.history
             sessions = set(await asyncio.to_thread(history.sessions, self.profile_id))
             if self.ledger:
@@ -575,8 +589,12 @@ class LangGraphOrchestrator:
                 await asyncio.to_thread(self.ledger.clear_history, self.profile_id, sessions)
             await asyncio.to_thread(clear_backups, history, self.ledger, graphs, sessions, self.profile_id)
             records = await asyncio.to_thread(self.store.clear_sessions, sessions)
-            return {"profile_id": self.profile_id, "sessions": len(sessions), "deleted_turns": deleted,
-                    "deleted_log_records": records}
+            return {
+                "profile_id": self.profile_id,
+                "sessions": len(sessions),
+                "deleted_turns": deleted,
+                "deleted_log_records": records,
+            }
         finally:
             self._resetting = False
 
@@ -592,7 +610,7 @@ class LangGraphOrchestrator:
         for task in tasks:
             task.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
-        for graph in set(self.graphs.values()):
+        for graph in [self.graph]:
             if hasattr(graph, "aclose"):
                 await graph.aclose()
 
@@ -633,25 +651,32 @@ def create_langgraph_orchestrator(
     vehicle: VehicleSimulator,
     store: EventStore,
     config=None,
-    *, connectivity=None,
+    *,
+    connectivity=None,
 ) -> LangGraphOrchestrator:
     config = config or get_settings()
-    from src.vivi.dialogue.planner import ModelProvider, SemanticResolver
+    from src.vivi.dialogue.planner import SemanticResolver
     from src.vivi.graphs.assistant import build_assistant_graph
+    from src.vivi.model_gateway import ModelGateway, ModelProvider
     from src.vivi.persistence.checkpoints import ThreadedSqliteSaver
     from src.vivi.persistence.confirmations import DurableConfirmations
-    from src.vivi.persistence.migration import migrate_runtime, repair_logged_name
+    from src.vivi.persistence.migration import migrate_runtime
 
     ledger = RuntimeStore(config.data_dir / "runtime" / "state.sqlite3")
     gateway = VehicleActionGateway(vehicle=vehicle, confirmations=DurableConfirmations(ledger), ledger=ledger)
     migrate_runtime(
         ledger,
-        databases=[config.rag_history_db, config.memory_path, config.data_dir / "runtime" / "conversation-v3.sqlite3"],
+        databases=[
+            config.rag_history_db,
+            config.memory_path,
+            config.data_dir / "runtime" / "conversation-v3.sqlite3",
+            config.data_dir / "runtime" / "conversation-v4.sqlite3",
+        ],
     )
-    repair_logged_name(config.memory_path)
-    services = create_services(config, provider="rules")
+    services = create_services(config, provider="extractive")
     if connectivity is not None and services.navigation is not None:
         from src.vivi.navigation.connectivity import ConnectivityMapClient
+
         services.navigation = ConnectivityMapClient(services.navigation, connectivity)
     services.action_gateway = gateway
     import json
@@ -680,59 +705,49 @@ def create_langgraph_orchestrator(
             max_detour_m=config.navigation_charging_max_detour_m,
             assumptions=load_assumptions(config.charging_assumptions_path, config.charging_assumptions_enabled),
         )
-    providers, generators, errors = {}, {"rules": services.generator}, {}
-    for name in set(configured_llm_providers(config)) - {"rules"}:
+    providers, generators, errors = {}, {}, {}
+    for name in configured_llm_providers(config):
         try:
             candidate = create_services(config, provider=name)
             client = candidate.semantic_client
-            client.max_tokens = min(config.planner_max_tokens, config.local_llm_max_tokens) if name == "local" else config.planner_max_tokens
-            client.max_attempts = 1
-            budget = config.local_request_budget_seconds if name == "local" else config.cloud_budget_seconds
+            client.max_tokens, client.max_attempts = config.planner_max_tokens, 1
+            budget = config.local_budget_seconds if name == "local" else config.cloud_budget_seconds
             providers[name] = ModelProvider(name, client, budget)
             generators[name] = candidate.generator
         except Exception as exc:
             errors[name] = str(exc)
-    fallback_chains = {}
-    if config.jetson_ai_policy != "disabled":
-        cloud = (
-            []
-            if config.jetson_ai_policy == "offline_only" or config.rag_local_only
-            else [name for name in ("google", "openai", "openrouter") if name in providers]
-        )
-        fallback_chains["local"] = ["local", *cloud]
-    chain_provider = None
-    if connectivity is not None:
-        def chain_provider(requested):
-            if not connectivity.routing_active:
-                return fallback_chains.get(requested, [requested] if requested == 'local' else [requested, 'local'])
-            return connectivity.llm_chain(requested, {"rules", *providers})
-    provider_details = {
-        name: {
-            "model": getattr(value.client, "model", None),
-            "location": (
-                "jetson"
-                if name == "local" and config.jetson_ai_policy != "disabled" and config.jetson_ai_url
-                else "laptop" if name == "local" else "cloud"
-            ),
-        }
-        for name, value in providers.items()
-    }
-    resolver = SemanticResolver(
-        providers, breaker_seconds=config.provider_breaker_seconds,
-        budget_seconds=config.semantic_budget_seconds, fallback_chains=fallback_chains,
-        chain_provider=chain_provider,
+    gateway_models = ModelGateway(
+        providers,
+        primary=config.llm_provider,
+        offline=config.jetson_ai_policy == "offline_only" or config.rag_local_only,
+        breaker_seconds=config.provider_breaker_seconds,
+        provider_allowed=connectivity.provider_allowed if connectivity is not None else None,
         result_recorder=connectivity.record_provider_result if connectivity is not None else None,
+    )
+    resolver = SemanticResolver(
+        gateway=gateway_models,
+        budget_seconds=config.semantic_budget_seconds,
         attempt_recorder=store.record_ai_attempt,
-        provider_details=provider_details,
-        requested_budgets={"local": config.local_request_budget_seconds}
-        if config.jetson_ai_policy != "disabled" and config.jetson_ai_url else {}
+        provider_details={
+            name: {
+                "model": getattr(value.client, "model", None),
+                "location": (
+                    "jetson"
+                    if name == "local" and config.jetson_ai_policy != "disabled" and config.jetson_ai_url
+                    else "laptop"
+                    if name == "local"
+                    else "cloud"
+                ),
+            }
+            for name, value in providers.items()
+        },
     )
     from src.vivi.conversation.service import ConversationService
     from src.vivi.information.service import InformationService
 
-    services.conversation = ConversationService(providers, fallback_chains=fallback_chains, enabled=config.conversation_enabled, chain_provider=chain_provider)
+    services.conversation = ConversationService(gateway=gateway_models, enabled=config.conversation_enabled)
     services.information = InformationService(config, services.conversation, connectivity=connectivity)
-    saver = ThreadedSqliteSaver(config.data_dir / "runtime" / "conversation-v3.sqlite3")
+    saver = ThreadedSqliteSaver(config.data_dir / "runtime" / "conversation-v4.sqlite3")
     graph = build_assistant_graph(
         services,
         saver,
@@ -744,23 +759,17 @@ def create_langgraph_orchestrator(
     graph.default_provider = config.llm_provider
     # Provider selection changes the resolver's first tier, never the workflow or
     # session namespace. Missing configurations remain available through fallback.
-    graphs = {name: graph for name in ("rules", "google", "openai", "openrouter", "local")}
     result = LangGraphOrchestrator(
-        graphs,
+        graph,
         gateway,
         store,
         default_provider=config.llm_provider,
         provider_errors=errors,
         ledger=ledger,
-        timeout_seconds=config.effective_turn_timeout_seconds if chain_provider is not None else config.turn_timeout_seconds,
-        local_timeout_seconds=config.effective_turn_timeout_seconds
-        if config.jetson_ai_policy != "disabled" and config.jetson_ai_url else None,
+        timeout_seconds=config.turn_timeout_seconds,
         profile_id=config.memory_profile_id,
     )
     result.local_semantic_client = providers["local"].client if "local" in providers else None
-    result.local_semantic_catalog = catalog(services.navigation is not None,
-                                           conversation=services.conversation.enabled,
-                                           information=services.information.online)
-    result.semantic_providers = {"rules", *providers}
-    result.provider_fallbacks = fallback_chains
+    result.semantic_providers = set(providers)
+    result.provider_fallbacks = {name: gateway_models.chain(name) for name in providers}
     return result

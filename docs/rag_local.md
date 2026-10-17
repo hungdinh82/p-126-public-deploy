@@ -1,3 +1,5 @@
+> Contract model/fallback và API hiện hành: [Core v2](langgraph_core_v2.md).
+
 # Offline VF8 RAG on AGX Xavier
 
 ## Current implementation
@@ -75,7 +77,7 @@ docker build --build-arg REQUIREMENTS_FILE=requirements-rag.txt -t vivi-rag-loca
 docker run --rm -p 127.0.0.1:8787:8787 \
   -v "$PWD/models:/app/models:ro" -v "$PWD/data:/app/data" \
   -e RAG_RETRIEVAL_MODE=sqlite_local -e VIVI_RAG_LOCAL_ONLY=true \
-  -e LLM_PROVIDER=rules vivi-rag-local
+  -e LLM_PROVIDER=local vivi-rag-local
 ```
 
 Docker/ARM deployment has not been validated in this change; confirm the Xavier

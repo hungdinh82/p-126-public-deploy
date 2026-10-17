@@ -135,7 +135,12 @@ class StructuredAPIHandbookGenerator:
 
     @staticmethod
     def _restore(payload: str, aliases: dict[str, RetrievedChunk]) -> GroundedAnswer:
-        answer = GroundedAnswer.model_validate_json(payload)
+        data = json.loads(payload)
+        if isinstance(data, dict):
+            # Citation metadata is owned by retrieved evidence and rebuilt
+            # below; malformed model titles/URLs must not discard valid claims.
+            data["citations"] = []
+        answer = GroundedAnswer.model_validate(data)
         by_alias = {alias.lower(): chunk.source_id for alias, chunk in aliases.items()}
         chunks = {chunk.source_id: chunk for chunk in aliases.values()}
 
@@ -209,7 +214,7 @@ class LocalHandbookGenerator(StructuredAPIHandbookGenerator):
                 base_url=config.local_llm_base_url,
                 api_key=config.local_llm_api_key,
                 model=config.local_llm_model,
-                timeout_seconds=config.local_request_budget_seconds if config.jetson_ai_policy != "disabled" and config.jetson_ai_url else config.llm_timeout_seconds,
+                timeout_seconds=config.llm_timeout_seconds,
                 max_tokens=config.local_llm_max_tokens,
                 extra_body={"chat_template_kwargs": {"enable_thinking": False}},
                 max_attempts=1,

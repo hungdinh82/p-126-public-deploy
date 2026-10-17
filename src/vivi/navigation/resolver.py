@@ -32,8 +32,11 @@ def satisfies_area(place, area):
     known_areas = [r for r in [*address_areas, *boundary_areas] if r]
     if region and known_areas and region not in known_areas:
         return False
-    locality = normalize_text(" ".join([place.get("address", ""),
-        *(b.get("full_name") or b.get("name", "") for b in place.get("boundaries", []))]))
+    locality = normalize_text(
+        " ".join(
+            [place.get("address", ""), *(b.get("full_name") or b.get("name", "") for b in place.get("boundaries", []))]
+        )
+    )
     if not any(address_areas):
         locality += " " + normalize_text(",".join(place.get("name", "").split(",")[1:]))
     return any(normalize_text(a) in locality for a in aliases)
@@ -86,8 +89,11 @@ class PlaceResolver:
         if not destination.name and destination.selection != "category":
             return PlaceResolution(status="missing_constraints", reason="missing_name", required_slot="name")
         started = monotonic()
-        arguments = {"query": destination.query(), "nearest": destination.nearest,
-                     "category": destination.entity_type if destination.entity_type in {"pharmacy", "charging"} else None}
+        arguments = {
+            "query": destination.query(),
+            "nearest": destination.nearest,
+            "category": destination.entity_type if destination.entity_type in {"pharmacy", "charging"} else None,
+        }
         errors = []
         arguments["_errors"] = errors
         queries = []
@@ -98,28 +104,49 @@ class PlaceResolver:
                 candidates = []
                 for query, basis in self.query_plan(destination):
                     queries.append(query)
-                    candidates = await self.lookup({**arguments, "_provider_query": query, "_basis": basis}, origin,
-                                                   representative=representative, with_travel=with_travel or destination.nearest)
+                    candidates = await self.lookup(
+                        {**arguments, "_provider_query": query, "_basis": basis},
+                        origin,
+                        representative=representative,
+                        with_travel=with_travel or destination.nearest,
+                    )
                     if candidates:
                         break
                     if errors:
-                        return PlaceResolution(status="provider_unavailable", reason="map_metadata_unavailable",
-                                               errors=errors, queries=queries)
+                        return PlaceResolution(
+                            status="provider_unavailable",
+                            reason="map_metadata_unavailable",
+                            errors=errors,
+                            queries=queries,
+                        )
             if not candidates:
-                return PlaceResolution(status="missing_constraints" if not destination.area else "no_verified_match",
-                                       reason="no_verified_candidates", required_slot="area" if not destination.area else "name",
-                                       queries=queries)
+                return PlaceResolution(
+                    status="missing_constraints" if not destination.area else "no_verified_match",
+                    reason="no_verified_candidates",
+                    required_slot="area" if not destination.area else "name",
+                    queries=queries,
+                )
             from src.vivi.navigation.selection import candidate_evidence, exact_destination
 
             evidence = candidate_evidence(arguments["query"], candidates)
             decision = exact_destination(arguments["query"], candidates)
-            return PlaceResolution(status="resolved" if decision else "ambiguous",
-                                   candidates=candidates, selected_handle=decision["handle"] if decision else None,
-                                   evidence=evidence, reason="exact_destination" if decision else "insufficient_margin",
-                                   queries=queries, errors=errors)
+            return PlaceResolution(
+                status="resolved" if decision else "ambiguous",
+                candidates=candidates,
+                selected_handle=decision["handle"] if decision else None,
+                evidence=evidence,
+                reason="exact_destination" if decision else "insufficient_margin",
+                queries=queries,
+                errors=errors,
+            )
         except (VietMapError, TimeoutError) as exc:
-            return PlaceResolution(status="provider_unavailable", reason="map_read_failed", queries=queries,
-                                   errors=[type(exc).__name__], evidence=[{"elapsed_ms": round((monotonic()-started)*1000, 2)}])
+            return PlaceResolution(
+                status="provider_unavailable",
+                reason="map_read_failed",
+                queries=queries,
+                errors=[type(exc).__name__],
+                evidence=[{"elapsed_ms": round((monotonic() - started) * 1000, 2)}],
+            )
 
     async def lookup(self, arguments, origin, *, representative=False, with_travel=True):
         category = arguments.get("category")
@@ -153,7 +180,7 @@ class PlaceResolver:
         candidates = []
         for place in places[:10]:
             if category and not categories.get(category):
-                from src.vivi.dialogue.parser import poi_matches
+                from src.vivi.navigation.poi import poi_matches
 
                 if not poi_matches(place.name, category):
                     continue
@@ -175,9 +202,13 @@ class PlaceResolver:
             if not satisfies_area(value, destination.area):
                 continue
             if not admin_only and not category:
-                from src.vivi.dialogue.parser import place_query_matches
+                from src.vivi.navigation.poi import place_query_matches
 
-                match_query = arguments.get("_provider_query", query) if arguments.get("_basis") in {"hypothesis", "context"} else query
+                match_query = (
+                    arguments.get("_provider_query", query)
+                    if arguments.get("_basis") in {"hypothesis", "context"}
+                    else query
+                )
                 if not place_query_matches(match_query, value):
                     continue
                 if landmark and normalize_text(short_name(value["name"])) not in {

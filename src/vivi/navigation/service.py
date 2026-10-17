@@ -10,14 +10,12 @@ from contextvars import ContextVar
 from dataclasses import replace
 from weakref import WeakValueDictionary
 
-from src.vivi.dialogue.contracts import SessionState
-from src.vivi.dialogue.reducer import clear_journey, record_navigation, record_trip_plan
 from src.vivi.graphs.concurrency import PriorityLock, SupersededTurnError
 from src.vivi.navigation.effects import vehicle_effect
 from src.vivi.navigation.metrics import MeasuredEnergy, navigation_routes, navigation_timings, record
+from src.vivi.navigation.models import ActiveJourney, PlanDraft, clear_navigation, record_navigation
 from src.vivi.navigation.store import DOMAIN_FIELDS, NavigationRepository, domain_payload
 from src.vivi.navigation.transitions import CONTROL_KINDS, NavigationTransitions
-from src.vivi.navigation.trips import TripWorkflow
 from src.vivi.navigation.vietmap import VietMapError
 from src.vivi.navigation.workflow import NavigationEvent, NavigationWorkflow
 from src.vivi.persistence.runtime_store import fingerprint
@@ -115,14 +113,11 @@ class NavigationService:
         self._cache, self._generations, self._recovered = {}, {}, set()
         adapted = replace(services, navigation=ReadClient(services.navigation) if services.navigation else None)
         self.workflow = NavigationWorkflow(adapted, ledger, resolver)
-        self.trips = TripWorkflow(adapted, ledger, resolver)
-        self.trips.places = self.workflow.places
         self.workflow.energy = MeasuredEnergy(self.workflow.energy)
-        self.trips.energy = MeasuredEnergy(self.trips.energy)
         self.transitions = NavigationTransitions(self.vehicle, self.workflow.energy)
 
     def key(self, session_id):
-        return "conversation:3:" + fingerprint({"profile": self.profile, "session": session_id})
+        return "conversation:4:" + fingerprint({"profile": self.profile, "session": session_id})
 
     def lock(self, key):
         return self._locks.setdefault(key, PriorityLock())
@@ -140,7 +135,7 @@ class NavigationService:
         # Cache immutable JSON; parsing it isolates mutable state considerably
         # faster than recursively deep-copying duplicated route point arrays.
         data = {**session.model_dump(mode="json", exclude=DOMAIN_FIELDS), **json.loads(self._cache[key])}
-        return SessionState.model_validate(data)
+        return type(session).model_validate(data)
 
     async def save(self, session, session_id, *, receipt=None, invalidate=False):
         key = self.key(session_id)
@@ -155,6 +150,10 @@ class NavigationService:
             return session
         journey = session.navigation_workspace.journey
         observed = await self.vehicle.get_state(session_id)
+        if await self.repository.run(self.repository.reset_park, key):
+            if observed.driving and hasattr(self.vehicle, "set_driving"):
+                await vehicle_effect(self.vehicle.set_driving, session_id, False)
+            await self.repository.run(lambda: self.repository.reset_park(key, complete=True))
         if journey and journey.status in {"running", "charging"}:
             if (
                 observed.state_version == 0
@@ -188,24 +187,40 @@ class NavigationService:
         session = await self.hydrate(session, session_id)
         return await self.recover(session, session_id)
 
-    async def commit_session(self, session, before, session_id):
-        """Persist only explicit domain changes from a dialogue reducer node."""
-        ignored = {"snapshot_sequence", "control_revision", "control_receipts"}
-        fields = DOMAIN_FIELDS - ignored
-        if all(getattr(session, field) == getattr(before, field) for field in fields):
-            return await self.hydrate(session, session_id)
+    async def reconcile(self, session_id, result):
+        from src.vivi.navigation.models import NavigationDomain
+
+        nav = result.get("navigation_update")
+        arguments = (result.get("action") or {}).get("arguments", {})
+        if not result.get("verified") or not nav:
+            return
         key = self.key(session_id)
         async with self.lock(key):
-            latest = await self.hydrate(before, session_id)
-            # A newer control may have advanced the active route while this node
-            # was awaiting model/history I/O. Preserve that progress and gear.
-            old, new = latest.navigation_workspace.journey, session.navigation_workspace.journey
-            if old and new and old.route_id == new.route_id and latest.snapshot_sequence > before.snapshot_sequence:
-                session.navigation_workspace.journey = old.model_copy(deep=True)
-            session.snapshot_sequence = latest.snapshot_sequence
-            session.control_receipts = latest.control_receipts
-            session.control_revision = latest.control_revision
-            return await self.save(session, session_id, invalidate=True)
+            domain = await self.hydrate(NavigationDomain(), session_id)
+            plan = domain.navigation_workspace.draft
+            if not plan or plan.id != arguments.get("plan_id") or plan.revision != arguments.get("route_revision"):
+                return
+            if plan.started_revision == plan.revision:
+                return
+            domain.navigation_workspace.journey = ActiveJourney.model_validate(nav)
+            plan.started_revision = plan.revision
+            if plan.offer:
+                plan.offer["status"] = "accepted"
+            domain.snapshot_sequence += 1
+            await self.save(domain, session_id, invalidate=True)
+
+    async def command(self, session_id, command):
+        from src.vivi.navigation.models import NavigationDomain
+
+        key = self.key(session_id)
+        async with self.lock(key):
+            domain = await self.hydrate(NavigationDomain(), session_id)
+            draft = domain.navigation_workspace.draft
+            if command["kind"] == "cancel_draft" and draft and command.get("plan_id") == draft.id:
+                domain.navigation_workspace.draft = None
+                domain.navigation_workspace.revision += 1
+                domain.snapshot_sequence += 1
+                await self.save(domain, session_id, invalidate=True)
 
     async def allocate_snapshot(self, session, session_id):
         key = self.key(session_id)
@@ -216,15 +231,98 @@ class NavigationService:
 
     @staticmethod
     def apply(session, result):
+        if result.get("draft_update"):
+            session.navigation_workspace.draft = PlanDraft.model_validate(result["draft_update"])
+            session.navigation_workspace.revision = max(
+                session.navigation_workspace.revision, session.navigation_workspace.draft.revision
+            )
+        if result.get("journey_update"):
+            session.navigation_workspace.journey = ActiveJourney.model_validate(result["journey_update"])
+        if result.get("clear_draft"):
+            session.navigation_workspace.draft = None
+            session.navigation_workspace.revision += 1
         if result.get("navigation_update"):
             session = record_navigation(session, result["navigation_update"])
-        if result.get("trip_plan_update"):
-            session = record_trip_plan(session, result["trip_plan_update"])
         if result.get("clear_journey"):
-            session = clear_journey(session)
+            session = clear_navigation(session)
         if result.get("clear_navigation_history"):
             session.navigation_workspace.history = []
         return session
+
+    async def draft_event(self, event, session, value):
+        from types import SimpleNamespace
+        from uuid import uuid4
+
+        from src.vivi.navigation.models import NavigationState
+        from src.vivi.navigation.presentation import route_summary
+        from src.vivi.navigation.workflow import current_origin
+
+        workspace = session.navigation_workspace
+        plan = workspace.draft
+        kind = value["kind"]
+        if kind == "position":
+            workspace.origin = value["position"]
+            if plan:
+                plan.origin = value["position"]
+                plan.revision += 1
+                plan.offer = None
+                plan.phase = "needs_destination" if not plan.selected else "incomplete"
+            return {
+                "status": "completed",
+                "message": "Đã cập nhật điểm xuất phát.",
+                "domain_applied": True,
+                "draft_update": plan.model_dump(mode="json") if plan else None,
+            }
+        if kind == "point":
+            plan = PlanDraft(
+                origin=workspace.origin or await current_origin(session.navigation),
+                request_id="nav:" + str(uuid4()),
+                revision=workspace.revision + 1,
+                status="selecting",
+            )
+            point = value["position"]
+            place = {
+                **point,
+                "handle": "place:" + str(uuid4()),
+                "name": point.get("label") or "Điểm trên bản đồ",
+                "address": "Điểm được chọn trên bản đồ",
+            }
+            plan.candidates = [place]
+            return {
+                "status": "completed",
+                "message": "",
+                "draft_update": plan.model_dump(mode="json"),
+                "request_action": {
+                    "capability": "navigation.select",
+                    "arguments": {"plan_id": plan.id, "route_revision": plan.revision, "place_handle": place["handle"]},
+                },
+            }
+        alternative = next((p for p in plan.alternatives if p["id"] == value["plan_id"]), None) if plan else None
+        if not alternative or not plan.route:
+            return {
+                "status": "blocked",
+                "message": "Phương án không thuộc kế hoạch hiện tại.",
+                "error_code": "stale_plan",
+            }
+        plan.revision += 1
+        plan.route_id = "route:" + str(uuid4())
+        plan.energy["selected_plan"] = alternative
+        plan.route = self.workflow.compose_route(alternative)
+        plan.summary = route_summary(plan, ask_start=False)
+        nav = NavigationState.model_validate(plan.model_dump(mode="json"))
+        result = await self.workflow.preview(
+            event,
+            nav,
+            SimpleNamespace(draft=SimpleNamespace(capability="navigation.plan")),
+            {"plan_id": plan.id, "route_revision": plan.revision},
+            value["id"],
+        )
+        plan.offer = result["navigation_update"]["offer"]
+        return {
+            "status": "completed",
+            "message": "Đã đổi phương án. Bạn xác nhận lại tuyến nhé.",
+            "draft_update": plan.model_dump(mode="json"),
+        }
 
     async def event_locked(self, event, session, *, superseded=False, coalesced=None):
         key = self.key(event.session_id)
@@ -267,7 +365,7 @@ class NavigationService:
             not in {
                 session.navigation_workspace.journey.route_id if session.navigation_workspace.journey else None,
                 session.navigation_workspace.draft.request_id if session.navigation_workspace.draft else None,
-                session.trip_plan.id if session.trip_plan else None,
+                session.navigation_workspace.draft.id if session.navigation_workspace.draft else None,
             }
         ):
             error = "stale_target"
@@ -292,13 +390,23 @@ class NavigationService:
         else:
             if value["kind"] in CONTROL_KINDS:
                 result, session = await self.transitions.apply(event, session, value)
+            elif value["kind"] in {"position", "point", "select_plan"}:
+                result = await self.draft_event(event, session, value)
+                session = self.apply(session, result)
             else:
                 token = navigation_writer.set((self, key, self.lock(key)))
                 timings = {}
                 metrics_token = navigation_timings.set(timings)
                 routes_token = navigation_routes.set({})
                 try:
-                    result = await self.workflow.event(event, session)
+                    from types import SimpleNamespace
+
+                    from src.vivi.navigation.models import NavigationState
+
+                    journey = session.navigation_workspace.journey
+                    nav = NavigationState.model_validate(journey.model_dump(mode="json") if journey else {})
+                    nav.revision = session.navigation_workspace.revision
+                    result = await self.workflow.event(event, SimpleNamespace(navigation=nav))
                 except SupersededTurnError:
                     session = await self.hydrate(session, event.session_id)
                     result = {
@@ -350,24 +458,6 @@ class NavigationService:
         lock = self.lock(key)
         async with lock:
             session = await self.synchronize(session, event.session_id)
-            if event.question_reply:
-                question = session.dialogue_question
-                owner = session.trip_plan if question and question.owner == "trip" else session.navigation
-                target = (getattr(owner, "id", None) or getattr(owner, "request_id", None)
-                          or getattr(owner, "route_id", None) or "navigation")
-                task_bound = question and question.task_id and question.target_id == question.step_id
-                if task_bound:
-                    task = session.active
-                    revision = question.revision + (1 if question.purpose == "collect_slot" else 0)
-                    valid_target = (task is not None and task.id == question.task_id
-                                    and task.revision == revision and step.id == question.target_id)
-                else:
-                    valid_target = (question is not None and owner is not None
-                                    and owner.revision == question.revision and target == question.target_id)
-                if (question is None or question.id != event.question_reply.question_id
-                    or not valid_target):
-                    return {"status": "blocked", "message": "Câu hỏi đã thay đổi. Bạn chọn lại nhé.",
-                            "error_code": "stale_question"}
             name = step.draft.capability
             if name in {"navigation.set_gear", "navigation.stop", "navigation.end"}:
                 value = {
@@ -387,8 +477,7 @@ class NavigationService:
             metrics_token = navigation_timings.set(timings)
             routes_token = navigation_routes.set({})
             try:
-                workflow = self.trips if name.startswith("trip.") else self.workflow
-                result = await workflow.execute(event, session, step, arguments, command_id, provider)
+                result = await self.workflow.execute_plan(event, session, step, arguments, command_id, provider)
                 latest = await self.hydrate(session, event.session_id)
                 updated = self.apply(latest, result)
                 old, new = latest.navigation_workspace.journey, updated.navigation_workspace.journey

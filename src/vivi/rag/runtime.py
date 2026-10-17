@@ -27,9 +27,7 @@ logger = logging.getLogger(__name__)
 
 
 class RetrieverPort(Protocol):
-    def retrieve(
-        self, query: str, vehicle_model: str, model_year: int, locale: str
-    ) -> list[RetrievedChunk]: ...
+    def retrieve(self, query: str, vehicle_model: str, model_year: int, locale: str) -> list[RetrievedChunk]: ...
 
 
 class FallbackRetriever:
@@ -86,8 +84,8 @@ def create_services(
     selected = provider
     if selected == "auto":
         selected = config.llm_provider
-    if (config.rag_local_only or config.jetson_ai_policy == "offline_only") and selected not in {"rules", "local"}:
-        raise RuntimeError("Offline RAG permits only rules or a self-hosted local LLM")
+    if (config.rag_local_only or config.jetson_ai_policy == "offline_only") and selected not in {"extractive", "local"}:
+        raise RuntimeError("Offline RAG permits only extractive generation or a self-hosted local LLM")
     if retrieval_mode == "sqlite":
         retriever = SQLiteHandbookRetriever(config.rag_handbook_db, final_k=config.rag_final_k)
     elif retrieval_mode == "sqlite_local":
@@ -95,16 +93,20 @@ def create_services(
 
         lexical = SQLiteHandbookRetriever(config.rag_handbook_db, final_k=config.rag_final_k)
         try:
-            embeddings = local_embeddings(config.rag_local_embedding_dir, config.rag_embedding_threads,
-                                          config.rag_embedding_batch_size)
+            embeddings = local_embeddings(
+                config.rag_local_embedding_dir, config.rag_embedding_threads, config.rag_embedding_batch_size
+            )
         except (ImportError, OSError, RuntimeError) as exc:
             logger.warning("Embedding unavailable at startup; using handbook FTS5: %s", exc)
             retriever = lexical
         else:
-            semantic = SQLiteVectorRetriever(config.rag_handbook_db, embeddings,
-                                             retrieval_k=config.rag_retrieval_k,
-                                             final_k=config.rag_final_k,
-                                             min_similarity=config.rag_local_min_similarity)
+            semantic = SQLiteVectorRetriever(
+                config.rag_handbook_db,
+                embeddings,
+                retrieval_k=config.rag_retrieval_k,
+                final_k=config.rag_final_k,
+                min_similarity=config.rag_local_min_similarity,
+            )
             retriever = FallbackRetriever(semantic, lexical)
     elif retrieval_mode == "lexical":
         retriever = LexicalHandbookRetriever(config.rag_data_dir, final_k=config.rag_final_k)
@@ -124,7 +126,7 @@ def create_services(
         if not config.google_api_key:
             raise RuntimeError("GOOGLE_API_KEY (or GEMINI_API_KEY) is required for the google handbook graph")
         generator = GoogleHandbookGenerator(config)
-    elif selected == "rules":
+    elif selected == "extractive":
         generator = ExtractiveHandbookGenerator()
     else:
         raise ValueError(f"unsupported generation provider: {selected}")

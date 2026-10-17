@@ -19,15 +19,21 @@ def convert(source: Path, destination: Path):
         raise ValueError("FP16 output must be separate from the original model")
     if "CUDAExecutionProvider" not in ort.get_available_providers():
         raise RuntimeError("FP16 validation requires CUDA ONNX Runtime")
-    settings = {"format": "float16-mixed", "execution_provider": "CUDAExecutionProvider",
-                "ort_version": ort.__version__, "onnx_version": onnx.__version__,
-                "keep_io_types": True, "codec_precision": "fp32",
-                "source_sha256": artifact_hashes(source)}
+    settings = {
+        "format": "float16-mixed",
+        "execution_provider": "CUDAExecutionProvider",
+        "ort_version": ort.__version__,
+        "onnx_version": onnx.__version__,
+        "keep_io_types": True,
+        "codec_precision": "fp32",
+        "source_sha256": artifact_hashes(source),
+    }
     manifest_path = destination / "quantization.json"
     if manifest_path.is_file():
         previous = json.loads(manifest_path.read_text())
-        if (all(previous.get(key) == value for key, value in settings.items())
-                and previous.get("output_sha256") == artifact_hashes(destination)):
+        if all(previous.get(key) == value for key, value in settings.items()) and previous.get(
+            "output_sha256"
+        ) == artifact_hashes(destination):
             print(f"Reusing verified FP16 model: {destination}", flush=True)
             return previous
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -43,8 +49,9 @@ def convert(source: Path, destination: Path):
             gc.collect()
             options = ort.SessionOptions()
             options.intra_op_num_threads = 2
-            session = ort.InferenceSession(str(output), sess_options=options,
-                                          providers=["CUDAExecutionProvider", "CPUExecutionProvider"])
+            session = ort.InferenceSession(
+                str(output), sess_options=options, providers=["CUDAExecutionProvider", "CPUExecutionProvider"]
+            )
             if session.get_providers()[0] != "CUDAExecutionProvider":
                 raise RuntimeError(f"CUDA unavailable for {name}")
             del session

@@ -10,6 +10,17 @@ from typing import Any
 import httpx
 
 
+class TruncatedCompletionError(ValueError):
+    """The provider exhausted its output/context budget; never execute partial data."""
+
+
+def checked_choice(response: httpx.Response) -> dict:
+    choice = response.json()["choices"][0]
+    if choice.get("finish_reason") == "length":
+        raise TruncatedCompletionError("Model completion truncated by token/context limit")
+    return choice
+
+
 def strict_schema(schema: dict) -> dict:
     """Provider strict mode requires closed objects and every property required."""
     result = copy.deepcopy(schema)
@@ -88,14 +99,17 @@ class StructuredChatClient:
         self.schema_subset = schema_subset
         self.json_object_schema_names = json_object_schema_names
         self.execution_location = execution_location
-        self._served_model: ContextVar[str | None] = ContextVar(
-            f"served_model_{id(self)}", default=None
-        )
+        self._completion_metadata = ContextVar(f"completion_metadata_{id(self)}", default=None)
+        self._served_model: ContextVar[str | None] = ContextVar(f"served_model_{id(self)}", default=None)
 
     @property
     def served_model(self) -> str | None:
         """Model identifier confirmed by the response for the current task."""
         return self._served_model.get()
+
+    @property
+    def completion_metadata(self):
+        return self._completion_metadata.get()
 
     def _capture_served_model(self, response: httpx.Response) -> None:
         try:
@@ -103,6 +117,21 @@ class StructuredChatClient:
         except (ValueError, AttributeError, TypeError):
             value = None
         self._served_model.set(value if isinstance(value, str) and value.strip() else None)
+        try:
+            body = response.json()
+            usage = body.get("usage") or {}
+            self._completion_metadata.set(
+                {
+                    "finish_reason": body["choices"][0].get("finish_reason"),
+                    **{
+                        key: usage[key]
+                        for key in ("prompt_tokens", "completion_tokens", "total_tokens")
+                        if key in usage
+                    },
+                }
+            )
+        except (ValueError, TypeError, AttributeError, KeyError, IndexError):
+            self._completion_metadata.set(None)
 
     def generate_json(
         self,
@@ -117,6 +146,7 @@ class StructuredChatClient:
 
     def _complete(self, payload: dict) -> httpx.Response:
         self._served_model.set(None)
+        self._completion_metadata.set(None)
         headers = self._headers()
         for attempt in range(self.max_attempts):
             try:
@@ -147,6 +177,7 @@ class StructuredChatClient:
 
     async def _acomplete(self, payload: dict) -> httpx.Response:
         self._served_model.set(None)
+        self._completion_metadata.set(None)
         headers = self._headers()
         for attempt in range(self.max_attempts):
             try:
@@ -177,38 +208,16 @@ class StructuredChatClient:
         }
 
     @staticmethod
-    def _tool_results(response: httpx.Response) -> list[tuple[str, dict]]:
-        message = response.json()["choices"][0]["message"]
-        calls = message.get("tool_calls") or []
-        if not 1 <= len(calls) <= 5:
-            raise ValueError("Planner must return between one and five proposals")
-        result = []
-        for item in calls:
-            call = item["function"]
-            arguments = json.loads(call["arguments"])
-            if not isinstance(arguments, dict):
-                raise ValueError("Tool arguments must be an object")
-            result.append((call["name"], arguments))
-        return result
-
-    @staticmethod
     def _tool_result(response: httpx.Response) -> tuple[str, dict]:
-        results = StructuredChatClient._tool_results(response)
-        if len(results) != 1:
+        message = checked_choice(response)["message"]
+        calls = message.get("tool_calls") or []
+        if len(calls) != 1:
             raise ValueError("Planner must return exactly one tool call")
-        return results[0]
-
-    async def agenerate_tools(self, *, system: str, user: str, tools: list[dict]) -> list[tuple[str, dict]]:
-        payload = self._tool_payload(system, user, tools)
-        payload["parallel_tool_calls"] = True
-        return self._tool_results(await self._acomplete(payload))
-
-    async def agenerate_tools_with_examples(self, *, system: str, user: str,
-                                           tools: list[dict], examples: list[dict]) -> list[tuple[str, dict]]:
-        payload = self._tool_payload(system, user, tools)
-        payload['messages'] = [payload['messages'][0], *examples, payload['messages'][1]]
-        payload['parallel_tool_calls'] = True
-        return self._tool_results(await self._acomplete(payload))
+        call = calls[0]["function"]
+        arguments = json.loads(call["arguments"])
+        if not isinstance(arguments, dict):
+            raise ValueError("Tool arguments must be an object")
+        return call["name"], arguments
 
     def generate_tool(self, *, system: str, user: str, tools: list[dict]) -> tuple[str, dict]:
         return self._tool_result(self._complete(self._tool_payload(system, user, tools)))
@@ -233,10 +242,14 @@ class StructuredChatClient:
         # Gemini accepts small structured answers but rejects the complete
         # semantic DTO (HTTP 400). JSON mode still receives its schema in the
         # prompt; SemanticTurn validation and repair remain authoritative.
-        response_format = {"type": "json_object"} if schema_name in self.json_object_schema_names else {
-            "type": "json_schema",
-            "json_schema": {"name": schema_name, "strict": True, "schema": strict_schema(schema)},
-        }
+        response_format = (
+            {"type": "json_object"}
+            if schema_name in self.json_object_schema_names
+            else {
+                "type": "json_schema",
+                "json_schema": {"name": schema_name, "strict": True, "schema": strict_schema(schema)},
+            }
+        )
         return {
             **self.extra_body,
             "model": self.model,
@@ -254,7 +267,7 @@ class StructuredChatClient:
         return {**headers, **self.extra_headers}
 
     def _response_content(self, response: httpx.Response) -> str:
-        content = response.json()["choices"][0]["message"]["content"]
+        content = checked_choice(response)["message"]["content"]
         if isinstance(content, list):
             content = "".join(part.get("text", "") for part in content)
         return self._normalize_json(str(content))

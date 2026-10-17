@@ -4,13 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import json
-import sqlite3
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
-from datetime import UTC, datetime
 
-from src.vivi.dialogue.contracts import SessionState
 from src.vivi.navigation.projections import dialogue_result
 from src.vivi.persistence.runtime_store import fingerprint
 from src.vivi.turn_control import record_io
@@ -19,7 +16,6 @@ DOMAIN_FIELDS = {
     "snapshot_sequence",
     "control_revision",
     "navigation_workspace",
-    "trip_plan",
     "navigation_focus",
     "control_receipts",
 }
@@ -49,6 +45,7 @@ class NavigationRepository:
         self._close_future = None
         with ledger.connect() as db:
             db.executescript("""
+                CREATE TABLE IF NOT EXISTS navigation_routes (route TEXT PRIMARY KEY, payload TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS navigation_sessions (
                     session TEXT PRIMARY KEY, payload TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS navigation_receipts (
@@ -88,15 +85,44 @@ class NavigationRepository:
     def load_payload(self, key):
         with self.ledger.connect() as db:
             row = db.execute("SELECT payload FROM navigation_sessions WHERE session=?", (key,)).fetchone()
-        return row[0] if row else None
+            if not row:
+                return None
+            payload = json.loads(row[0])
+            for owner in [
+                payload.get("navigation_workspace", {}).get("draft"),
+                payload.get("navigation_workspace", {}).get("journey"),
+            ]:
+                if owner and owner.pop("calculation_reference", None):
+                    geometry = db.execute(
+                        "SELECT payload FROM navigation_routes WHERE route=?", (owner["route_id"],)
+                    ).fetchone()
+                    if not geometry:
+                        raise RuntimeError("Missing immutable route calculation")
+                    owner.update(json.loads(geometry[0]))
+            return json.dumps(payload, ensure_ascii=False)
 
     def save(self, key, session, receipt=None):
-        payload = json.dumps(domain_payload(session), ensure_ascii=False)
+        full = domain_payload(session)
+        payload = json.dumps(full, ensure_ascii=False)
         with self.ledger.connect() as db:
             db.execute("BEGIN IMMEDIATE")
+            for owner in [full["navigation_workspace"].get("draft"), full["navigation_workspace"].get("journey")]:
+                if owner and owner.get("route_id") and owner.get("route"):
+                    calculation = {
+                        field: owner.pop(field, None)
+                        for field in ("route", "waypoint_routes", "energy", "alternatives")
+                    }
+                    encoded = json.dumps(calculation, ensure_ascii=False, sort_keys=True)
+                    known = db.execute(
+                        "SELECT payload FROM navigation_routes WHERE route=?", (owner["route_id"],)
+                    ).fetchone()
+                    if known and known[0] != encoded:
+                        raise ValueError("An immutable route ID cannot identify a different calculation")
+                    db.execute("INSERT OR IGNORE INTO navigation_routes VALUES (?,?)", (owner["route_id"], encoded))
+                    owner["calculation_reference"] = owner["route_id"]
             db.execute(
                 "INSERT INTO navigation_sessions VALUES (?,?) ON CONFLICT(session) DO UPDATE SET payload=excluded.payload",
-                (key, payload),
+                (key, json.dumps(full, ensure_ascii=False)),
             )
             if receipt:
                 db.execute(
@@ -194,41 +220,17 @@ class NavigationRepository:
             )
         return True
 
+    def reset_park(self, key, *, complete=False):
+        with self.ledger.connect() as db:
+            if not db.execute("SELECT 1 FROM sqlite_master WHERE name='runtime_navigation_resets'").fetchone():
+                return False
+            if complete:
+                db.execute("UPDATE runtime_navigation_resets SET park=0 WHERE session=?", (key,))
+                return False
+            row = db.execute("SELECT park FROM runtime_navigation_resets WHERE session=?", (key,)).fetchone()
+            return bool(row and row[0])
+
     def migrate(self, saver):
-        # Called before requests are admitted. Existing domain rows always win.
-        with self.ledger.connect() as db:
-            if db.execute("SELECT 1 FROM runtime_schema WHERE version=6").fetchone():
-                return
-        root = self.ledger.path.parent / "backups" / ("navigation-" + datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ"))
-        root.mkdir(parents=True, exist_ok=True)
-        with sqlite3.connect(root / "runtime.sqlite3") as target, self.ledger.connect() as source:
-            source.backup(target)
-        with sqlite3.connect(root / "checkpoints.sqlite3") as target:
-            saver.connection.backup(target)
-        saver.setup()
-        with saver.cursor(transaction=False) as cursor:
-            keys = [
-                row[0] for row in cursor.execute("SELECT DISTINCT thread_id FROM checkpoints WHERE checkpoint_ns=''")
-            ]
-        for key in keys:
-            if self.load(key) is not None:
-                continue
-            saved = saver.get_tuple({"configurable": {"thread_id": key}})
-            legacy = saved.checkpoint.get("channel_values", {}).get("session", {}) if saved else {}
-            if legacy.get("navigation_reference"):
-                continue
-            session = SessionState.model_validate(legacy)
-            if session.navigation_workspace.draft:
-                session.navigation_workspace.draft.offer = None
-            if session.trip_plan:
-                session.trip_plan.offer = None
-            journey = session.navigation_workspace.journey
-            if journey and journey.status in {"running", "charging"}:
-                journey.resume_status, journey.status = journey.status, "paused"
-            self.save(key, session)
-        with self.ledger.connect() as db:
-            if db.execute("SELECT 1 FROM sqlite_master WHERE name='confirmation_grants'").fetchone():
-                db.execute(
-                    "UPDATE confirmation_grants SET used=1 WHERE json_extract(payload, '$.binding.capability') LIKE 'navigation.%' OR json_extract(payload, '$.binding.capability') LIKE 'trip.%'"
-                )
-            db.execute("INSERT OR IGNORE INTO runtime_schema VALUES (6)")
+        # Active legacy sessions are deliberately not resumed. Runtime migration
+        # backs them up before resetting navigation and invalidating old grants.
+        return None

@@ -1,4 +1,5 @@
 """Cancellation remains observable by executor threads after coroutine cancellation."""
+
 import threading
 import time
 from contextvars import ContextVar
@@ -13,6 +14,7 @@ class TurnControl:
     stage: str = "queue"
     timings: dict = field(default_factory=dict)
     io_timings: dict = field(default_factory=dict)
+    model_attempts: list[dict] = field(default_factory=list)
     lock: threading.Lock = field(default_factory=threading.Lock)
 
     def cancel(self):

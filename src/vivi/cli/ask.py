@@ -30,9 +30,9 @@ def _print_result(result: dict) -> None:
         print(f"Execution: {execution_label}")
     elif output.get("requires_execution"):
         print("Execution: pending safety gateway")
-    confirmation = output.get("confirmation")
+    confirmation = result.get("pending_question")
     if confirmation:
-        print(f"Confirmation: {confirmation['confirmation_id']} — {confirmation['preview']}")
+        print(f"Question: {confirmation['id']} — {confirmation['question']}")
     citations = result.get("citations") or []
     if citations:
         print("\nNguồn:")
@@ -55,8 +55,8 @@ def _ask(
     *,
     input_text: str | None = None,
     payload: dict | None = None,
-    confirmation_id: str | None = None,
-    confirmation_decision: str | None = None,
+    question_id: str | None = None,
+    option_id: str | None = None,
 ) -> dict:
     state = {
         "session_id": session_id,
@@ -65,11 +65,21 @@ def _ask(
     if input_text is not None:
         state["input_text"] = input_text
     if payload is not None:
-        state["action"] = payload if "capability" in payload else {"capability": payload["intent"], "arguments": {k: v for k, v in payload.get("arguments", {}).items() if k not in {"vehicle_model", "model_year", "locale"}}}
+        state["action"] = (
+            payload
+            if "capability" in payload
+            else {
+                "capability": payload["intent"],
+                "arguments": {
+                    k: v
+                    for k, v in payload.get("arguments", {}).items()
+                    if k not in {"vehicle_model", "model_year", "locale"}
+                },
+            }
+        )
         state["input_text"] = state["action"].get("arguments", {}).get("query", "Thao tác trực tiếp")
-    if confirmation_id is not None:
-        state["confirmation_id"] = confirmation_id
-        state["confirmation_decision"] = confirmation_decision
+    if question_id is not None:
+        state["question_reply"] = {"question_id": question_id, "option_id": option_id}
     return graph.invoke(state)
 
 
@@ -94,7 +104,7 @@ def main() -> None:
         if args.retrieval:
             config = config.model_copy(update={"rag_retrieval_mode": args.retrieval})
         runtime = create_langgraph_orchestrator(VehicleSimulator(), EventStore(config), config)
-        graph = runtime.graphs[config.llm_provider]
+        graph = runtime.graph
     except (FileNotFoundError, RuntimeError, ValueError) as exc:
         parser.exit(2, f"Không thể khởi tạo RAG: {exc}\n")
     try:
@@ -116,16 +126,16 @@ def main() -> None:
                 if query:
                     result = _ask(graph, args.session, input_text=query)
                     _print_result(result)
-                    confirmation = (result.get("output") or {}).get("confirmation")
-                    if confirmation:
+                    confirmation = result.get("pending_question")
+                    if confirmation and confirmation.get("purpose") == "approve_execution":
                         choice = input("Xác nhận thao tác? [y/N]: ").strip().lower()
                         decision = "approve" if choice in {"y", "yes", "có", "co"} else "deny"
                         resolved = _ask(
                             graph,
                             args.session,
                             input_text="Xác nhận" if decision == "approve" else "Hủy",
-                            confirmation_id=confirmation["confirmation_id"],
-                            confirmation_decision=decision,
+                            question_id=confirmation["id"],
+                            option_id="yes" if decision == "approve" else "no",
                         )
                         _print_result(resolved)
     finally:

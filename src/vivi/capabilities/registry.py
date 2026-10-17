@@ -79,6 +79,30 @@ class Capability:
                 return None, "Thông tin ghi nhớ chưa hợp lệ. Nhiệt độ phải từ 16 đến 30 độ C; bạn nói lại nội dung nhé."
         return validated, error
 
+    def missing_slots(self, draft):
+        args = draft.arguments
+        if self.transferable.intersection({"zone", "zones"}) and not (args.zone or args.zones):
+            return (
+                ["target_row"]
+                if args.target_side and not args.target_row
+                else ["target_side"]
+                if args.target_row and not args.target_side
+                else ["zone"]
+            )
+        if (
+            self.name == "climate.set_temperature"
+            and args.value_celsius is None
+            and args.temperature_delta_celsius is None
+        ):
+            return ["value_celsius"]
+        if self.name == "manual.search" and args.question_kind == "charging_duration" and not args.charging_mode:
+            return ["charging_mode"]
+        return [
+            key
+            for key, field in self.spec.parameters.model_fields.items()
+            if field.is_required() and key not in args.model_dump(exclude_none=True)
+        ]
+
 
 REGISTRY = {}
 for name in TOOL_REGISTRY:
@@ -96,14 +120,14 @@ for name in TOOL_REGISTRY:
         else "handbook"
         if name == "manual.search"
         else "navigation"
-        if name.startswith(("navigation.", "trip."))
+        if name.startswith("navigation.")
         else "vehicle"
     )
     exclusive = (
         (frozenset({"value_celsius", "temperature_delta_celsius"}),)
         if name == "climate.set_temperature"
         else (frozenset({"choice_handle", "query", "reject_candidates"}),)
-        if name in {"navigation.refine", "trip.refine"}
+        if name == "navigation.refine"
         else ()
     )
     REGISTRY[name] = Capability(name, executor, transferable, exclusive)
@@ -131,7 +155,7 @@ def merge_arguments(old, incoming):
         else transferable_arguments(old, incoming)
     )
     updates = incoming.arguments.model_dump(exclude_none=True)
-    if incoming.capability.startswith(("navigation.", "trip.")):
+    if incoming.capability.startswith("navigation."):
         if "query" in updates and "destination" not in updates:
             # An absolute query replacement cannot retain a structured name
             # from an earlier slot answer. The executor treats it as authoritative.
@@ -167,7 +191,8 @@ def catalog(navigation=False, *, conversation=True, information=True):
     return [
         cap.spec.prompt_spec()
         for cap in REGISTRY.values()
-        if (navigation or cap.executor != "navigation" or cap.name == "navigation.set_gear")
+        if not cap.name.startswith("trip.")
+        and (navigation or cap.executor != "navigation" or cap.name == "navigation.set_gear")
         and (conversation or cap.executor != "conversation")
         and (information or cap.executor != "information")
     ]

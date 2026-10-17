@@ -1,3 +1,5 @@
+> Tài liệu lịch sử. Contract và vận hành hiện hành: [Lõi hội thoại Core v2](langgraph_core_v2.md).
+
 # ViVi: tính năng chỉ đường, trạng thái và giao diện
 
 Ngày rà soát: 2026-10-10. Đối chiếu code trong workspace và log SQLite đến lượt 1034.
