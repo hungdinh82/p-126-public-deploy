@@ -30,6 +30,11 @@ async def overview(_: str = Depends(engineer_role)):
     return await service.snapshot()
 
 
+@router.get("/ai-routes")
+async def ai_routes(_: str = Depends(engineer_role)):
+    return service.ai_routes()
+
+
 @router.get("/fleet")
 async def fleet(_: str = Depends(engineer_role)):
     return await service.fleet()

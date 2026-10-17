@@ -4,6 +4,7 @@ import asyncio
 import copy
 import json
 import time
+from contextvars import ContextVar
 from typing import Any
 
 import httpx
@@ -68,6 +69,7 @@ class StructuredChatClient:
         max_attempts: int = 3,
         schema_subset: bool = False,
         json_object_schema_names: frozenset[str] = frozenset(),
+        execution_location: str | None = None,
     ) -> None:
         if not model:
             raise RuntimeError("A model name is required for structured generation")
@@ -85,6 +87,22 @@ class StructuredChatClient:
         self.max_attempts = max(1, min(3, max_attempts))
         self.schema_subset = schema_subset
         self.json_object_schema_names = json_object_schema_names
+        self.execution_location = execution_location
+        self._served_model: ContextVar[str | None] = ContextVar(
+            f"served_model_{id(self)}", default=None
+        )
+
+    @property
+    def served_model(self) -> str | None:
+        """Model identifier confirmed by the response for the current task."""
+        return self._served_model.get()
+
+    def _capture_served_model(self, response: httpx.Response) -> None:
+        try:
+            value = response.json().get("model")
+        except (ValueError, AttributeError, TypeError):
+            value = None
+        self._served_model.set(value if isinstance(value, str) and value.strip() else None)
 
     def generate_json(
         self,
@@ -98,6 +116,7 @@ class StructuredChatClient:
         return self._response_content(self._complete(payload))
 
     def _complete(self, payload: dict) -> httpx.Response:
+        self._served_model.set(None)
         headers = self._headers()
         for attempt in range(self.max_attempts):
             try:
@@ -107,6 +126,7 @@ class StructuredChatClient:
                 ) as client:
                     response = client.post(self.url, json=payload, headers=headers)
                     response.raise_for_status()
+                self._capture_served_model(response)
                 return response
             except (httpx.TimeoutException, httpx.NetworkError, httpx.HTTPStatusError) as exc:
                 if not self._retryable(exc) or attempt == self.max_attempts - 1:
@@ -126,6 +146,7 @@ class StructuredChatClient:
         return self._response_content(await self._acomplete(payload))
 
     async def _acomplete(self, payload: dict) -> httpx.Response:
+        self._served_model.set(None)
         headers = self._headers()
         for attempt in range(self.max_attempts):
             try:
@@ -135,6 +156,7 @@ class StructuredChatClient:
                 ) as client:
                     response = await client.post(self.url, json=payload, headers=headers)
                     response.raise_for_status()
+                self._capture_served_model(response)
                 return response
             except (httpx.TimeoutException, httpx.NetworkError, httpx.HTTPStatusError) as exc:
                 if not self._retryable(exc) or attempt == self.max_attempts - 1:

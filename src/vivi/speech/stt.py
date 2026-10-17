@@ -125,22 +125,27 @@ class FallbackSTTAdapter:
     def __init__(self, primary, fallback):
         self.primary = primary
         self.fallback = fallback
+        self._served_engine = ContextVar("stt_fallback_served_engine", default=None)
+
+    @property
+    def served_engine(self):
+        return self._served_engine.get()
 
     def _active(self):
         return self.primary if self.primary.availability()[0] else self.fallback
 
     @property
     def name(self) -> str:
-        active = self._active()
+        active = self.served_engine or self._active()
         return active.name if active is self.primary else f"{active.name} (dự phòng)"
 
     @property
     def device(self) -> str:
-        return self._active().device
+        return (self.served_engine or self._active()).device
 
     @property
     def dtype(self) -> str:
-        return self._active().dtype
+        return (self.served_engine or self._active()).dtype
 
     @property
     def streaming(self) -> bool:
@@ -167,24 +172,28 @@ class FallbackSTTAdapter:
     async def transcribe(self, path: Path) -> str:
         if self.primary.availability()[0]:
             try:
-                return await self.primary.transcribe(path)
+                transcript = await self.primary.transcribe(path)
+                self._served_engine.set(self.primary)
+                return transcript
             except Exception:
                 logger.exception("%s lỗi, chuyển sang %s", self.primary.name, self.fallback.name)
-        return await self.fallback.transcribe(path)
+        transcript = await self.fallback.transcribe(path)
+        self._served_engine.set(self.fallback)
+        return transcript
 
     async def stream(self, audio_chunks, on_update=None) -> str:
-        return await self.primary.stream(audio_chunks, on_update)
+        transcript = await self.primary.stream(audio_chunks, on_update)
+        self._served_engine.set(self.primary)
+        return transcript
 
 
 class AdaptiveSTTAdapter(FallbackSTTAdapter):
     def __init__(self, primary, fallback, connectivity):
         super().__init__(primary, fallback)
         self.connectivity = connectivity
-        self._served_engine = ContextVar("stt_served_engine", default=None)
-
     @property
     def name(self):
-        engine = self._served_engine.get() or self._active()
+        engine = self.served_engine or self._active()
         return engine.name
 
     def _eligible(self, engine):

@@ -39,6 +39,7 @@ class ModelGateway:
         fallback_chains=None,
         provider_allowed=None,
         result_recorder=None,
+        provider_details=None,
     ):
         self.providers = {
             name: value
@@ -51,6 +52,18 @@ class ModelGateway:
         self.fallback_chains = fallback_chains or {}
         self.provider_allowed = provider_allowed
         self.result_recorder = result_recorder
+        self.provider_details = provider_details or {}
+
+    def _attempt_details(self, name, provider):
+        configured = self.provider_details.get(name, {})
+        client = getattr(provider, "client", None)
+        return {
+            "requested_model": configured.get("model") or getattr(client, "model", None),
+            "served_model": None,
+            "location": configured.get("location")
+            or getattr(client, "execution_location", None)
+            or ("cloud" if name in {"google", "openai", "openrouter"} else "laptop"),
+        }
 
     def chain(self, requested=None):
         if self.offline:
@@ -69,6 +82,7 @@ class ModelGateway:
         *,
         requested=None,
         budget_seconds=20,
+        on_attempt=None,
     ):
         control = current_control.get()
         deadline = time.monotonic() + budget_seconds
@@ -77,13 +91,23 @@ class ModelGateway:
         attempts = []
         requested = requested or self.primary
         chain = self.chain(requested)
+
+        def record_attempt(attempt):
+            if on_attempt is not None:
+                outcome = attempt["outcome"]
+                status = "calling" if outcome == "started" else outcome
+                on_attempt({**attempt, "status": status, "outcome": status})
+
         for index, name in enumerate(chain):
+            provider = self.providers.get(name)
+            details = {"attempt": index + 1, **self._attempt_details(name, provider)}
             remaining = deadline - time.monotonic()
             if control and control.cancelled.is_set():
                 raise asyncio.CancelledError()
             if remaining <= 0:
                 attempts.append(
                     {
+                        **details,
                         "stage": stage,
                         "requested_provider": requested,
                         "provider": name,
@@ -91,11 +115,12 @@ class ModelGateway:
                         "latency_ms": 0,
                     }
                 )
+                record_attempt(attempts[-1])
                 break
-            provider = self.providers.get(name)
             if provider is None:
                 attempts.append(
                     {
+                        **details,
                         "stage": stage,
                         "requested_provider": requested,
                         "provider": name,
@@ -103,12 +128,14 @@ class ModelGateway:
                         "latency_ms": 0,
                     }
                 )
+                record_attempt(attempts[-1])
                 continue
             # Connectivity can restrict eligibility, but cannot reorder the
             # configured cloud -> local policy or create a second routing layer.
             if self.provider_allowed is not None and not self.provider_allowed(name):
                 attempts.append(
                     {
+                        **details,
                         "stage": stage,
                         "requested_provider": requested,
                         "provider": name,
@@ -120,10 +147,12 @@ class ModelGateway:
                 )
                 if control:
                     control.model_attempts.append(attempts[-1].copy())
+                record_attempt(attempts[-1])
                 continue
             if time.monotonic() < provider.unavailable_until:
                 attempts.append(
                     {
+                        **details,
                         "stage": stage,
                         "requested_provider": requested,
                         "provider": name,
@@ -131,18 +160,22 @@ class ModelGateway:
                         "latency_ms": 0,
                     }
                 )
+                record_attempt(attempts[-1])
                 continue
             started = time.monotonic()
             available = sum(n in self.providers for n in chain[index:])
             attempt = {
+                **details,
                 "stage": stage,
                 "requested_provider": requested,
                 "provider": name,
                 "outcome": "started",
                 "calls": 0,
+                "latency_ms": 0,
                 "budget_seconds": min(10, provider.budget_seconds, remaining / max(1, available)),
             }
             attempts.append(attempt)
+            record_attempt(attempt)
             try:
                 limit = asyncio.timeout(attempt["budget_seconds"])
                 async with limit:
@@ -168,9 +201,12 @@ class ModelGateway:
             else:
                 if attempt["outcome"] == "started":
                     attempt["outcome"] = "served"
+                served_model = getattr(provider.client, "served_model", None)
+                attempt["served_model"] = served_model if isinstance(served_model, str) and served_model else None
                 return ModelResult(value, name, attempts)
             finally:
                 attempt["latency_ms"] = round((time.monotonic() - started) * 1000, 2)
+                record_attempt(attempt)
                 if control:
                     control.model_attempts = [*control.model_attempts, attempt.copy()]
                 if self.result_recorder is not None:

@@ -176,6 +176,8 @@ class SemanticResolver:
         fallback_chains=None,
         budget_seconds=20,
         gateway=None,
+        attempt_recorder=None,
+        provider_details=None,
     ):
         self.gateway = gateway or ModelGateway(
             providers, breaker_seconds=breaker_seconds, fallback_chains=fallback_chains
@@ -185,11 +187,16 @@ class SemanticResolver:
         self.breaker_seconds = self.gateway.breaker_seconds
         self.fallback_chains = self.gateway.fallback_chains
         self.budget_seconds = budget_seconds
+        self.attempt_recorder = attempt_recorder
+        if provider_details:
+            self.gateway.provider_details.update(provider_details)
 
     def chain(self, requested):
         return self.gateway.chain(requested)
 
-    async def resolve(self, text, session, *, requested=None, history=None, memory=None, catalog=None):
+    async def resolve(
+        self, text, session, *, requested=None, history=None, memory=None, catalog=None, trace_context=None
+    ):
         reply = literal_question_reply(text, session)
         prompt = json.dumps(
             {
@@ -206,7 +213,13 @@ class SemanticResolver:
         async def operation(provider, attempts):
             return await self.interpret(provider, prompt, attempts, literal_reply=reply)
 
-        result = await self.gateway.run("semantic", operation, requested=requested, budget_seconds=self.budget_seconds)
+        def record_attempt(attempt):
+            if self.attempt_recorder is not None and trace_context:
+                self.attempt_recorder({**attempt, **trace_context, "stage": "llm", "phase": "interpret"})
+
+        result = await self.gateway.run(
+            "semantic", operation, requested=requested, budget_seconds=self.budget_seconds, on_attempt=record_attempt
+        )
         if result.provider:
             value = result.value
             try:

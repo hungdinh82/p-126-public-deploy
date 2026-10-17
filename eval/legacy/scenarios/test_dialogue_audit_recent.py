@@ -26,7 +26,16 @@ async def test_recent_logs_replay_wrong_model_semantics(services, tmp_path, tier
     old_grants = []
     for row in ROWS:
         result = await invoke(graph, row["query"], str(row["row"]))
-        assert result["diagnostics"]["effective_provider"] == tier
+        bound = any(
+            attempt.get("source") in {"pending_confirmation", "candidate_reference", "information_policy"}
+            for attempt in result["diagnostics"].get("provider_attempts", [])
+        )
+        if tier != "rules" and bound:
+            # The fixture has one recorded model semantic per source row. Host-
+            # owned answers intentionally bypass the model, so keep the replay
+            # iterator aligned with the following row.
+            next(model.replies)
+        assert result["diagnostics"]["effective_provider"] == ("rules" if bound else tier)
         assert result["response_text"].strip()
         if row["row"] == 899:
             assert result["status"] == "clarify"

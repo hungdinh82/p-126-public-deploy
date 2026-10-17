@@ -526,6 +526,7 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
                     requested=event.provider,
                     history=turn["history"],
                     memory=turn["memory"],
+                    trace_context={"session_id": event.session_id, "turn_id": event.turn_id},
                     catalog=catalog(
                         services.navigation is not None,
                         conversation=services.conversation.enabled,

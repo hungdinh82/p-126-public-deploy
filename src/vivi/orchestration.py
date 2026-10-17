@@ -126,6 +126,16 @@ class LangGraphOrchestrator:
                                 },
                             }
                         )
+                        self.store.finish_ai_route(
+                            request.session_id,
+                            request.turn_id,
+                            status="timeout"
+                            if timed_out
+                            else "cancelled"
+                            if isinstance(exc, asyncio.CancelledError)
+                            else "error",
+                            provider=provider,
+                        )
                         if self.ledger and not cached:
                             await asyncio.to_thread(self.ledger.fail_turn, session, request.turn_id)
                         raise
@@ -147,6 +157,62 @@ class LangGraphOrchestrator:
         return {"cancelled": True, "dispatched": dispatched}
 
     async def complete(self, request, response):
+        for index, attempt in enumerate(response.diagnostics.get("generation_attempts") or [], start=1):
+            outcome = attempt.get("outcome", "unknown")
+            self.store.record_ai_attempt(
+                {
+                    **attempt,
+                    "session_id": request.session_id,
+                    "turn_id": request.turn_id,
+                    "stage": "llm",
+                    "phase": "generate",
+                    "attempt": index,
+                    "status": "served" if outcome == "served" else outcome,
+                }
+            )
+        if response.route == "handbook":
+            self.store.record_ai_stage(
+                {
+                    "session_id": request.session_id,
+                    "turn_id": request.turn_id,
+                    "stage": "rag",
+                    "status": "served" if response.grounding_status == "supported" else "blocked",
+                    "provider": self.store.config.rag_retrieval_mode,
+                    "location": "laptop",
+                    "detail": f"{len(response.evidence)} nguồn",
+                }
+            )
+        if response.steps:
+            capabilities = [
+                str(step.get("capability") or step.get("intent") or step.get("step_id") or "tool")
+                for step in response.steps
+            ]
+            self.store.record_ai_stage(
+                {
+                    "session_id": request.session_id,
+                    "turn_id": request.turn_id,
+                    "stage": "tools",
+                    "status": "served",
+                    "provider": ", ".join(dict.fromkeys(capabilities)),
+                    "location": "laptop",
+                }
+            )
+        self.store.record_ai_stage(
+            {
+                "session_id": request.session_id,
+                "turn_id": request.turn_id,
+                "stage": "output",
+                "status": response.status,
+                "provider": "driver-ui",
+                "location": "laptop",
+            }
+        )
+        self.store.finish_ai_route(
+            request.session_id,
+            request.turn_id,
+            status=response.status,
+            provider=response.diagnostics.get("effective_provider"),
+        )
         if self.ledger:
             await asyncio.to_thread(
                 self.ledger.finish_turn, self.session_key(request), request.turn_id, response.model_dump(mode="json")
@@ -181,8 +247,20 @@ class LangGraphOrchestrator:
     async def run(self, request: TurnRequest, provider: str | None = None) -> TurnResponse:
         provider, graph = self._graph(provider)
         started = time.perf_counter()
+        self.store.start_ai_route(
+            request.session_id,
+            request.turn_id,
+            transcript=request.transcript,
+            provider=provider,
+        )
         async with self.turn_scope(request, provider) as cached:
             if cached:
+                self.store.finish_ai_route(
+                    request.session_id,
+                    request.turn_id,
+                    status=cached.get("status", "completed"),
+                    provider=(cached.get("diagnostics") or {}).get("effective_provider"),
+                )
                 return TurnResponse.model_validate(cached)
             result = await graph.ainvoke({**self._graph_input(request), "provider": provider})
             output = AssistantOutput.model_validate(result["output"])
@@ -206,8 +284,20 @@ class LangGraphOrchestrator:
             return
         provider, _ = self._graph(provider)
         sequence = 0
+        self.store.start_ai_route(
+            request.session_id,
+            request.turn_id,
+            transcript=request.transcript,
+            provider=provider,
+        )
         async with self.turn_scope(request, provider) as cached:
             if cached:
+                self.store.finish_ai_route(
+                    request.session_id,
+                    request.turn_id,
+                    status=cached.get("status", "completed"),
+                    provider=(cached.get("diagnostics") or {}).get("effective_provider"),
+                )
                 yield {
                     "type": "final",
                     "runtime_epoch": cached.get("runtime_epoch"),
@@ -618,7 +708,24 @@ def create_langgraph_orchestrator(
         provider_allowed=connectivity.provider_allowed if connectivity is not None else None,
         result_recorder=connectivity.record_provider_result if connectivity is not None else None,
     )
-    resolver = SemanticResolver(gateway=gateway_models, budget_seconds=config.semantic_budget_seconds)
+    resolver = SemanticResolver(
+        gateway=gateway_models,
+        budget_seconds=config.semantic_budget_seconds,
+        attempt_recorder=store.record_ai_attempt,
+        provider_details={
+            name: {
+                "model": getattr(value.client, "model", None),
+                "location": (
+                    "jetson"
+                    if name == "local" and config.jetson_ai_policy != "disabled" and config.jetson_ai_url
+                    else "laptop"
+                    if name == "local"
+                    else "cloud"
+                ),
+            }
+            for name, value in providers.items()
+        },
+    )
     from src.vivi.conversation.service import ConversationService
     from src.vivi.information.service import InformationService
 

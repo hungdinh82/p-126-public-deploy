@@ -5,9 +5,9 @@ from types import SimpleNamespace
 
 import httpx
 import pytest
+from src.vivi.ai_router import JetsonProviderRouter
 
 from jetson_ai.app import ServiceConfig, create_app
-from src.vivi.ai_router import JetsonProviderRouter
 from src.vivi.api.routes import turns
 from src.vivi.config import Settings
 from src.vivi.dialogue.contracts import SessionState
