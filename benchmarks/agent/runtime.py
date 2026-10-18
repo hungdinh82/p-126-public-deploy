@@ -159,6 +159,11 @@ def live_resolver(provider, config):
 
     client = GENERATORS[provider](config).client
     client.max_attempts = 1
+    # Every provider is evaluated on the same well-defined operation tools; the
+    # cloud client keeps native function calling instead of the JSON grammar.
+    client.local_semantic_contract = "operations_v1"
+    if provider != "local":
+        client.tools_as_json = False
     client.max_tokens = min(config.planner_max_tokens, config.local_llm_max_tokens) if provider == "local" else config.planner_max_tokens
     budget = config.local_budget_seconds if provider == "local" else config.cloud_budget_seconds
     from src.vivi.model_gateway import ModelGateway

@@ -275,10 +275,7 @@ class SemanticResolver:
 
         async def operation(provider, attempts):
             operation_prompt = prompt
-            if (
-                provider.name == "local"
-                and getattr(provider.client, "local_semantic_contract", "legacy") == "operations_v1"
-            ):
+            if getattr(provider.client, "local_semantic_contract", "legacy") == "operations_v1":
                 data = json.loads(prompt)
                 if session.active and data["tasks"].get("active"):
                     data["tasks"]["active"]["form_identity"] = session.active.id
@@ -474,10 +471,7 @@ class SemanticResolver:
 
     @staticmethod
     async def interpret(provider, prompt, attempts=None, *, literal_reply=None):
-        if (
-            provider.name == "local"
-            and getattr(provider.client, "local_semantic_contract", "legacy") == "operations_v1"
-        ):
+        if getattr(provider.client, "local_semantic_contract", "legacy") == "operations_v1":
             from src.vivi.dialogue.local_operations import interpret_operations
 
             return await interpret_operations(provider.client, json.loads(prompt), attempts)
