@@ -120,6 +120,12 @@ def resume_message(nav):
     return message
 
 
+def spoken_distance(meters):
+    if meters < 1000:
+        return f"{max(50, round(meters / 50) * 50)} m"
+    return f"{meters / 1000:.1f}".replace(".", ",").removesuffix(",0") + " km"
+
+
 def choice_message(candidates):
     labels = [place_label(place) for place in candidates]
     counts = Counter(label.casefold() for label in labels)
@@ -127,6 +133,13 @@ def choice_message(candidates):
     # between branches. Choice numbers always refer to server-owned handles.
     labels = [
         place_label(place, full_name=True) if counts[label.casefold()] > 1 else label
+        for place, label in zip(candidates, labels)
+    ]
+    # Nearby category results are chosen by distance, so say it.
+    labels = [
+        f"{label}, {spoken_distance(place['distance_m'])}"
+        if place.get("category") and place.get("distance_m") is not None
+        else label
         for place, label in zip(candidates, labels)
     ]
     if len(labels) == 1:

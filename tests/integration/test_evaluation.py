@@ -45,3 +45,81 @@ async def test_evaluator_records_failures_without_changing_independent_oracle(tm
     assert check == {"passed": False, "expected": False, "actual": True}
     assert "Missing reference" in report["results"][1]["steps"][0]["error"]
     assert hashlib.sha256(dataset.read_bytes()).hexdigest() == before
+
+
+@pytest.mark.asyncio
+async def test_semantic_evaluator_uses_production_budgets_context_and_local_prompt_hash(monkeypatch, tmp_path):
+    from eval import semantic_benchmark
+    from src.vivi.dialogue.planner import semantic_system_prompt
+
+    class Model:
+        model = "synthetic-model"
+        tools_as_json = True
+
+        async def agenerate_tool(self, **kwargs):
+            assert "plan:fixture" in kwargs["user"]
+            assert "prior fixture turn" in kwargs["user"]
+            return "interpret_turn", {
+                "act": "request",
+                "actions": [
+                    {"capability": "climate.set_temperature", "arguments": {"value_celsius": 24}},
+                ],
+            }
+
+    monkeypatch.setitem(semantic_benchmark.GENERATORS, "local", lambda config: SimpleNamespace(client=Model()))
+    dataset = tmp_path / "semantic.jsonl"
+    dataset.write_text(
+        json.dumps(
+            {
+                "id": "wrong-temperature",
+                "text": "đặt 25 độ",
+                "session": {"navigation_workspace": {"draft": {"id": "plan:fixture"}}},
+                "history": [{"query": "prior fixture turn", "answer": "old answer"}],
+                "expect": {"actions.0.arguments.value_celsius": 25},
+            }
+        )
+    )
+    before = dataset.read_bytes()
+    report = await semantic_benchmark.evaluate(SimpleNamespace(provider="local", dataset=dataset, repeats=2))
+    assert report["cases"] == 2 and report["passed"] == 0 and report["fallbacks"] == 0
+    assert report["results"][0]["attempts"][0]["budget_seconds"] > 10
+    assert (
+        report["semantic_instruction_sha256"] == hashlib.sha256(semantic_system_prompt(local=True).encode()).hexdigest()
+    )
+    assert report["transport"] == "json_schema" and report["semantic_schema_sha256"]
+    assert dataset.read_bytes() == before
+
+
+def test_inference_breakdown_counts_each_response_once_including_repairs():
+    from eval.semantic_benchmark import inference_breakdown
+
+    first = {
+        "prompt_tokens": 100,
+        "completion_tokens": 10,
+        "cached_tokens": 80,
+        "timings": {"prompt_ms": 20, "predicted_ms": 100},
+    }
+    second = {
+        "prompt_tokens": 120,
+        "completion_tokens": 12,
+        "cached_tokens": 90,
+        "timings": {"prompt_ms": 30, "predicted_ms": 120},
+    }
+    result = inference_breakdown(
+        [
+            {
+                "attempts": [
+                    {
+                        "completion": second,
+                        "proposal_attempts": [
+                            {"completion": first},
+                            {"completion": second},
+                        ],
+                    }
+                ]
+            }
+        ]
+    )
+    assert result["responses_with_metadata"] == 2
+    assert result["output_tokens_total"] == 22
+    assert result["prefill_ms_total"] == 50 and result["decode_ms_total"] == 220

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 
 from pydantic import ValidationError
 
@@ -11,11 +12,12 @@ from src.vivi.agents.prompts import VOICE_PERSONA
 from src.vivi.conversation.context import conversation_view
 from src.vivi.conversation.guardrails import TOPIC_INSTRUCTION
 from src.vivi.dialogue.contracts import SemanticTurn, SessionState, semantic_schema
-from src.vivi.dialogue.fallback import LimitedFallback, literal_question_reply
+from src.vivi.dialogue.fallback import LimitedFallback, literal_cancel, literal_nearer, literal_question_reply
 from src.vivi.dialogue.local_schema import (
     LOCAL_EXAMPLES,
     LOCAL_INSTRUCTION,
     compact_local_prompt,
+    local_json_prompt,
     local_semantic_schema,
 )
 from src.vivi.dialogue.validation import validate_semantic
@@ -23,7 +25,7 @@ from src.vivi.model_gateway import ModelGateway, record_model_call
 from src.vivi.model_gateway import ModelProvider as ModelProvider
 from src.vivi.structured_llm import TruncatedCompletionError
 
-PROMPT_VERSION = "semantic-core-3"
+PROMPT_VERSION = "semantic-core-4"
 SEMANTIC_INSTRUCTION = """
 Interpret the COMPLETE current Vietnamese utterance into SemanticTurn JSON.
 You propose meaning only. The server owns task/step IDs, revisions, scheduling,
@@ -111,27 +113,33 @@ def semantic_system_prompt(*, local=False):
     )
 
 
-def semantic_tools():
+def semantic_tools(context=None):
     return [
         {
             "type": "function",
             "function": {
                 "name": "interpret_turn",
                 "description": "Interpret the complete turn into semantic events.",
-                "parameters": local_semantic_schema(),
+                "parameters": local_semantic_schema(context),
             },
         }
     ]
 
 
 async def warmup_local_client(client):
+    if getattr(client, "local_semantic_contract", "legacy") == "operations_v1":
+        # Selected form/tool prefixes vary by turn; full-catalog warmup competes
+        # with live requests without priming their actual prefix.
+        return
     # Use exactly the real system/tools prefix; one output token primes KV cache
     # without interpreting or executing the generated proposal.
-    payload = client._tool_payload(
-        semantic_system_prompt(local=True),
-        '{"utterance":"Xin chào","tasks":{},"recent_turns":[],"explicit_user_memory":[],"capabilities":[]}',
-        semantic_tools(),
+    system = semantic_system_prompt(local=True)
+    user = compact_local_prompt(
+        '{"utterance":"Xin chào","tasks":{},"recent_turns":[],"explicit_user_memory":[],"capabilities":[]}'
     )
+    if getattr(client, "tools_as_json", False):
+        system, user = local_json_prompt(system, user)
+    payload = client._tool_payload(system, user, semantic_tools())
     payload.update(max_tokens=1, cache_prompt=True)
     await client._acomplete(payload)
 
@@ -178,7 +186,7 @@ def semantic_workspace_context(workspace):
     return {
         "revision": workspace.revision,
         "draft": semantic_navigation_context(workspace.draft) if workspace.draft else None,
-        "journey": semantic_navigation_context(workspace.journey) if workspace.journey else None,
+        "journey": semantic_navigation_context(workspace.visible_journey) if workspace.visible_journey else None,
         "origin": workspace.origin,
     }
 
@@ -212,13 +220,51 @@ class SemanticResolver:
         return self.gateway.chain(requested)
 
     async def resolve(
-        self, text, session, *, requested=None, history=None, memory=None, catalog=None, trace_context=None
+        self,
+        text,
+        session,
+        *,
+        requested=None,
+        history=None,
+        memory=None,
+        catalog=None,
+        trace_context=None,
+        observation_loader=None,
     ):
         reply = literal_question_reply(text, session)
+        cancel = None if reply else literal_cancel(text, session) or literal_nearer(text, session)
+        if cancel:
+            # A small model guessed "start" for "huỷ"; cancellation is never
+            # delegated to it.
+            return (
+                cancel,
+                None,
+                [{"provider": None, "source": "literal_question_reply", "outcome": "served", "calls": 0}],
+            )
+        requested_provider = self.providers.get(self.chain(requested)[0])
+        operations = (
+            getattr(getattr(requested_provider, "client", None), "local_semantic_contract", "legacy") == "operations_v1"
+        )
+        if operations and reply:
+            return (
+                SemanticTurn(act="answer", question_answer=reply),
+                None,
+                [
+                    {
+                        "provider": None,
+                        "source": "literal_question_reply",
+                        "outcome": "served",
+                        "calls": 0,
+                        "latency_ms": 0,
+                        "question_id": reply.question_id,
+                    }
+                ],
+            )
+        task_context = self.context(session)
         prompt = json.dumps(
             {
                 "utterance": text,
-                "tasks": self.context(session),
+                "tasks": task_context,
                 "conversation_context": conversation_view(session),
                 "recent_turns": [{k: t.get(k) for k in ("query", "answer")} for t in (history or [])[-6:]],
                 "explicit_user_memory": memory or [],
@@ -228,7 +274,30 @@ class SemanticResolver:
         )
 
         async def operation(provider, attempts):
-            return await self.interpret(provider, prompt, attempts, literal_reply=reply)
+            operation_prompt = prompt
+            if getattr(provider.client, "local_semantic_contract", "legacy") == "operations_v1":
+                data = json.loads(prompt)
+                if session.active and data["tasks"].get("active"):
+                    data["tasks"]["active"]["form_identity"] = session.active.id
+                if observation_loader:
+                    try:
+                        async with asyncio.timeout(1):
+                            data["vehicle_observation"] = await observation_loader()
+                    except (TimeoutError, OSError, RuntimeError):
+                        attempts[-1]["observation_unavailable"] = True
+                operation_prompt = json.dumps(data, ensure_ascii=False)
+            proposed = await self.interpret(provider, operation_prompt, attempts, literal_reply=reply)
+            try:
+                value = self.destination_slots(proposed, text, session)
+            except ValueError:
+                value = SemanticTurn(
+                    act="clarify", text="Thông tin địa điểm chưa khớp yêu cầu hiện tại. Bạn nói rõ lại nhé."
+                )
+            value = validate_semantic(value, session)
+            attempts[-1]["proposed_act"] = proposed.act
+            attempts[-1]["proposed_capabilities"] = [action.capability for action in proposed.drafts()]
+            attempts[-1]["semantic_validation"] = "accepted" if value is proposed else "rejected"
+            return value
 
         def record_attempt(attempt):
             if self.attempt_recorder is not None and trace_context:
@@ -238,15 +307,7 @@ class SemanticResolver:
             "semantic", operation, requested=requested, budget_seconds=self.budget_seconds, on_attempt=record_attempt
         )
         if result.provider:
-            value = result.value
-            try:
-                value = self.destination_slots(value, text, session)
-            except ValueError:
-                value = SemanticTurn(
-                    act="clarify", text="Thông tin địa điểm chưa khớp yêu cầu hiện tại. Bạn nói rõ lại nhé."
-                )
-            value = validate_semantic(value, session)
-            return value, result.provider, result.attempts
+            return result.value, result.provider, result.attempts
         value = self.fallback.interpret(text, session, memory, history)
         return (
             value,
@@ -265,6 +326,28 @@ class SemanticResolver:
         )
 
     @staticmethod
+    def fill_category_query(action, text):
+        """ "Bệnh viện gần nhất" carries its query in the category itself.
+
+        A small model often sends category/nearest and leaves the query empty;
+        the spoken category is host-known, so ask nothing the user already said.
+        """
+        from src.vivi.navigation.categories import CATEGORIES, category_for_text
+
+        arguments = action.arguments
+        if (
+            action.capability not in {"navigation.search", "navigation.plan"}
+            or arguments.query
+            or arguments.destination
+        ):
+            return
+        key = category_for_text(text)
+        if key is None and arguments.category in CATEGORIES:
+            key = arguments.category
+        if key is not None:
+            arguments.query = CATEGORIES[key].label
+
+    @staticmethod
     def destination_slots(value, text, session):
         """Establish provenance for model-supplied slots without a second parse."""
         from src.vivi.dialogue.questions import current_question
@@ -272,7 +355,25 @@ class SemanticResolver:
 
         utterance = normalize_text(text)
         question = current_question(session)
+        known_origins = {
+            normalize_text(step.draft.arguments.origin_query)
+            for task in [session.active, *session.suspended]
+            if task
+            for step in task.steps
+            if step.draft.arguments.origin_query
+        }
+        round_trip_cue = re.search(r"khu hoi|hai chieu|di (?:va|roi) ve|quay (?:lai|ve)|round trip", utterance)
         for action in value.drafts():
+            SemanticResolver.fill_category_query(action, text)
+            if action.arguments.trip_kind == "round_trip" and not round_trip_cue:
+                # "đổi về Đồ Sơn" is a destination change, not a return trip.
+                action.arguments.trip_kind = "one_way"
+            origin = action.arguments.origin_query
+            if origin and normalize_text(origin) not in utterance and normalize_text(origin) not in known_origins:
+                # A small model copied an earlier destination into the departure
+                # slot ("Phường Lê Chân" -> origin "Phường Đồ Sơn"). Unspoken, it
+                # is dropped so the route starts from the car.
+                action.arguments.origin_query = None
             destination = action.arguments.destination
             if destination is None:
                 continue
@@ -296,7 +397,7 @@ class SemanticResolver:
                 owner = session.navigation_workspace.draft
                 places = [*getattr(owner, "candidates", []), *([owner.selected] if owner and owner.selected else [])]
                 if action.capability == "navigation.plan":
-                    for other in [session.navigation_workspace.journey]:
+                    for other in [session.navigation_workspace.visible_journey]:
                         if other and other.selected:
                             places.append(other.selected)
                 place = next((p for p in places if p.get("handle") == destination.reference), None)
@@ -370,10 +471,21 @@ class SemanticResolver:
 
     @staticmethod
     async def interpret(provider, prompt, attempts=None, *, literal_reply=None):
+        if getattr(provider.client, "local_semantic_contract", "legacy") == "operations_v1":
+            from src.vivi.dialogue.local_operations import interpret_operations
+
+            return await interpret_operations(provider.client, json.loads(prompt), attempts)
         local = provider.name == "local" and hasattr(provider.client, "agenerate_tool")
         instruction = semantic_system_prompt(local=local)
+        context = None
         if local:
+            try:
+                context = json.loads(prompt)
+            except (ValueError, TypeError):
+                pass
             prompt = compact_local_prompt(prompt)
+            if getattr(provider.client, "tools_as_json", False):
+                instruction, prompt = local_json_prompt(instruction, prompt)
         for attempt in range(2):
             payload = None
             try:
@@ -384,7 +496,7 @@ class SemanticResolver:
                     name, payload = await client.agenerate_tool(
                         system=instruction,
                         user=prompt,
-                        tools=semantic_tools(),
+                        tools=semantic_tools(context),
                     )
                     if name != "interpret_turn":
                         raise ValueError("Unexpected semantic function")

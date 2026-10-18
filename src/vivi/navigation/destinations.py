@@ -87,6 +87,17 @@ def administrative_layer(query):
     return None
 
 
+def accented_name_match(place, query):
+    """Same administrative name with the accents the user actually said."""
+    import unicodedata
+
+    def bare(value):
+        value = unicodedata.normalize("NFC", value or "").casefold().split(",")[0].strip(" .!?")
+        return re.sub(r"^(?:phường|xã|thị trấn|đặc khu|thành phố|tỉnh)\s+", "", value)
+
+    return bare(place.get("name", "")) == bare(query)
+
+
 def administrative_match(place, query):
     """An address inside a region does not make its business an admin result."""
     value = normalize_text(place.get("name", ""))

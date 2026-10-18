@@ -1,8 +1,38 @@
 from __future__ import annotations
 
+import re
+import unicodedata
 from collections.abc import Mapping
 
+from src.vivi.text import normalize_text
+
 CABIN_ZONES = ("driver", "front_passenger", "rear_left", "rear_right")
+# Vocabulary for a position, not complete user commands or model answers.
+CABIN_ZONE_ALIASES = {
+    "driver": ("ghế lái", "ghế tài xế", "tài xế", "người lái", "bên tài", "bên lái", "cửa lái", "cửa tài", "trước trái", "trái trước"),
+    "front_passenger": ("ghế phụ", "bên phụ", "cửa phụ", "phụ", "hành khách", "trước phải", "phải trước"),
+    "rear_left": ("sau trái", "trái sau"),
+    "rear_right": ("sau phải", "phải sau"),
+}
+
+
+def spoken_zone_aliases(text):
+    """Accept missing accents, but preserve explicit different word meanings."""
+    spelling = unicodedata.normalize("NFC", text.casefold())
+    folded = normalize_text(spelling)
+    found = set()
+    for zone, aliases in CABIN_ZONE_ALIASES.items():
+        for alias in aliases:
+            value = normalize_text(alias)
+            for match in re.finditer(r"(?<!\w)" + re.escape(value) + r"(?!\w)", folded):
+                actual = spelling[match.start():match.end()]
+                if len(actual) == len(alias) and any(
+                    a != b and a != normalize_text(a) and b != normalize_text(b)
+                    for a, b in zip(actual, alias, strict=True)
+                ):
+                    continue
+                found.add(zone)
+    return found
 ZONE_LABELS = {
     "driver": "bên tài",
     "front_passenger": "bên phụ",

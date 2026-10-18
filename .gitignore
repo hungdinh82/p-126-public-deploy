@@ -85,3 +85,7 @@ docs/jetson_*benchmark_*.json
 docs/jetson_*probe_*.json
 docs/jetson_*isolated_*.json
 docs/jetson_tts_profiles_*.json
+benchmarks/agent/results/*
+!benchmarks/agent/results/compare-1018/
+benchmarks/agent/results/compare-1018/*
+!benchmarks/agent/results/compare-1018/comparison.md

@@ -19,8 +19,11 @@ from pydantic import (
     model_validator,
 )
 
+from src.vivi.navigation.categories import CATEGORY_KEYS
 from src.vivi.navigation.contracts import DestinationSpec
 from src.vivi.vehicle.zones import CABIN_ZONE_CHOICES
+
+PoiCategoryKey = Literal[*CATEGORY_KEYS]
 
 Zone = Literal["driver", "front_passenger", "rear_left", "rear_right", "all"]
 
@@ -94,7 +97,7 @@ class ManualSearch(SearchQuery):
 class StatusRead(Parameters):
     query: str | None = Field(
         default=None,
-        pattern=r"^(?:summary|temperature|battery|tires|range|range_time|body|diagnostics)(?:,(?:temperature|battery|tires|range|range_time|body|diagnostics))*$",
+        pattern=r"^(?:summary|temperature|battery|tires|range|range_time|body|doors|windows|hood|trunk|diagnostics)(?:,(?:temperature|battery|tires|range|range_time|body|doors|windows|hood|trunk|diagnostics))*$",
     )
 
 
@@ -120,7 +123,7 @@ class PlanReference(Parameters):
 class NavigationSearch(PlanReference):
     destination: DestinationSpec | None = None
     query: str = Field(min_length=2, max_length=200)
-    category: Literal["pharmacy", "charging"] | None = None
+    category: PoiCategoryKey | None = None
     nearest: bool = False
     destination_scope: Literal["place", "region"] = "place"
 
@@ -184,6 +187,19 @@ class ToolSpec:
             "read_only": self.read_only,
             "parameters": self.parameters.model_json_schema(),
         }
+
+
+def semantic_argument_names(name: str) -> set[str]:
+    """Slots accepted at interpretation time, including unresolved targets."""
+    spec = TOOL_REGISTRY.get(name)
+    if spec is None:
+        return set()
+    allowed = set(spec.parameters.model_fields)
+    if name == "climate.set_temperature":
+        allowed.update({"temperature_delta_celsius", "temperature_direction"})
+    if name in {"door.set_open", "door.set_lock", "window.set_position", "seat.set_heat_level"}:
+        allowed.update({"target_side", "target_row"})
+    return allowed
 
 
 class ConversationQuery(SearchQuery):
@@ -318,7 +334,7 @@ TOOL_REGISTRY = {tool.name: tool for tool in TOOLS}
 NAVIGATION_TOOLS = (
     ToolSpec(
         "navigation.search",
-        "Tìm địa điểm. pharmacy/charging là loại địa điểm, nearest cần vị trí và khoảng cách lái xe. Luôn chờ chọn kết quả.",
+        "Tìm địa điểm. category là loại địa điểm (charging, cafe, hospital…), nearest cần vị trí và khoảng cách lái xe. Luôn chờ chọn kết quả.",
         NavigationSearch,
         "Bạn muốn tìm địa điểm nào?",
         True,

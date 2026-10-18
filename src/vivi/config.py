@@ -155,6 +155,8 @@ class Settings(BaseSettings):
     local_llm_api_key: str = "local"
     local_llm_model: str = ""
     local_llm_max_tokens: int = Field(default=512, ge=64, le=4096)
+    local_semantic_transport: Literal["json_schema", "native"] = "json_schema"
+    local_semantic_contract: Literal["legacy", "operations_v1"] = "operations_v1"
     # Opt-in Laptop router for the private Jetson inference gateway.
     jetson_ai_policy: Literal["disabled", "offline_only", "prefer_local", "allow_cloud"] = "disabled"
     jetson_ai_url: str = Field(

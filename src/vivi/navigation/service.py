@@ -102,6 +102,10 @@ class ReadClient:
             record("navigation_charging_discovery", started)
 
 
+# Position refreshes closer than this keep the current plan revision.
+POSITION_JITTER_M = 30
+
+
 class NavigationService:
     def __init__(self, services, ledger, saver, resolver, epoch):
         self.repository = NavigationRepository(ledger)
@@ -135,7 +139,10 @@ class NavigationService:
         # Cache immutable JSON; parsing it isolates mutable state considerably
         # faster than recursively deep-copying duplicated route point arrays.
         data = {**session.model_dump(mode="json", exclude=DOMAIN_FIELDS), **json.loads(self._cache[key])}
-        return type(session).model_validate(data)
+        hydrated = type(session).model_validate(data)
+        # Sessions saved before finished journeys were archived still hold one.
+        hydrated.navigation_workspace.archive_finished()
+        return hydrated
 
     async def save(self, session, session_id, *, receipt=None, invalidate=False):
         key = self.key(session_id)
@@ -247,6 +254,7 @@ class NavigationService:
             session = clear_navigation(session)
         if result.get("clear_navigation_history"):
             session.navigation_workspace.history = []
+        session.navigation_workspace.archive_finished()
         return session
 
     async def draft_event(self, event, session, value):
@@ -261,7 +269,26 @@ class NavigationService:
         plan = workspace.draft
         kind = value["kind"]
         if kind == "position":
+            from src.vivi.navigation.resolver import straight_distance
+
+            previous = (plan.origin if plan else None) or workspace.origin
+            moved = (
+                not previous
+                or straight_distance(
+                    (previous["lat"], previous["lng"]), (value["position"]["lat"], value["position"]["lng"])
+                )
+                > POSITION_JITTER_M
+            )
             workspace.origin = value["position"]
+            if plan and not moved:
+                # GPS jitter must not invalidate the choice or consent being asked.
+                plan.origin = value["position"]
+                return {
+                    "status": "completed",
+                    "message": "Đã cập nhật điểm xuất phát.",
+                    "domain_applied": True,
+                    "draft_update": plan.model_dump(mode="json"),
+                }
             if plan:
                 plan.origin = value["position"]
                 plan.revision += 1

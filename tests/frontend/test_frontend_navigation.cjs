@@ -562,3 +562,14 @@ test('unchanged itinerary choice keeps its owner after a fresh snapshot object',
   assert.equal(h.commands[0][1].capability,'trip.refine');
   assert.equal(h.commands[0][1].arguments.plan_id,'trip:stable');
 });
+
+test('after a trip ends the map can be reopened and idle refreshes keep it open',async()=>{
+  const h=harness();
+  await apply(h,{...nav('paused'),route_id:'route:end'});
+  await apply(h,{revision:2,event_sequence:1,status:'idle',origin:{lat:21,lng:105.85,label:'TEST'},candidates:[],alternatives:[],pending:null});
+  assert.equal(vm.runInContext('view',h.sandbox),'hidden');
+  assert.equal(vm.runInContext('route',h.sandbox),null);
+  vm.runInContext("setView('full')",h.sandbox);
+  await apply(h,{revision:2,event_sequence:2,status:'idle',origin:{lat:21,lng:105.85,label:'TEST'},candidates:[],alternatives:[],pending:null});
+  assert.equal(vm.runInContext('view',h.sandbox),'full');
+});
