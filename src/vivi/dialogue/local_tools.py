@@ -13,7 +13,7 @@ from jsonschema import Draft202012Validator
 
 from src.vivi.agents.tools import TOOL_REGISTRY
 from src.vivi.dialogue.contracts import ActionDraft, SemanticTurn, StepUpdate
-from src.vivi.dialogue.form_tools import current_form, decode_form_call, lifecycle_tools
+from src.vivi.dialogue.form_tools import FORM_CAPABILITIES, current_form, decode_form_call, lifecycle_tools
 from src.vivi.dialogue.local_schema import local_semantic_schema
 
 GUIDANCE = {
@@ -22,7 +22,7 @@ GUIDANCE = {
     "window.set_position": "Dùng cho cửa kính/cửa sổ. Bên tài=driver; bên phụ=front_passenger; sau trái=rear_left; sau phải=rear_right. Xuống/hạ/mở kính dùng window_open=100% mở; lên/nâng/đóng kính dùng window_close=0% mở. Không nói vị trí: zone=null, hỏi vị trí, không tự chọn bên tài. Giữ phần trăm được nói. Không mở cửa cabin.",
     "door.set_open": "Mở cửa: open=true. Đóng cửa: open=false. Bên tài/cửa lái/tài xế là driver. Cửa còn lại phải căn cứ trạng thái cửa đang được cung cấp; không đoán vị trí. Chỉ mở/đóng cánh cửa cabin. Không dùng cho cửa sổ/cửa kính, cốp, capo hoặc mở khóa.",
     "door.set_lock": "Chỉ khóa/mở khóa cửa cabin; không mở cánh cửa hoặc kính.",
-    "climate.set_temperature": 'Đặt nhiệt độ dùng value_celsius. Tăng/giảm dùng temperature_delta_celsius, chỉ chọn một loại. Than nóng: delta=-2. Than lạnh: delta=2. Ví dụ "tôi lạnh quá" -> {"temperature_delta_celsius":2}.',
+    "climate.set_temperature": "Đặt nhiệt độ dùng value_celsius; thay đổi tương đối dùng delta. Nóng cần giảm, lạnh cần tăng. Không nói số độ thay đổi thì để trống để backend hỏi, không tự chọn số độ.",
     "media.play": "Phát/bật/mở nhạc hoặc tiếp tục nghe nhạc. Nhạc chung gọi với {}. Chỉ điền media_query khi có tên bài, ca sĩ, thể loại hoặc tâm trạng được nói rõ. Không tự đổi bài hoặc âm lượng. Demo UI phát nhạc mô phỏng, không khẳng định đã tìm được bản thu của ca sĩ.",
     "media.pause": "Dừng/tắt/tạm dừng nhạc, arguments={}. Không tắt loa trả lời của trợ lý; bật/tắt loa là cài đặt UI.",
     "body.set_open": "Chỉ dùng khi người dùng yêu cầu cùng lúc TẤT CẢ cửa cabin, capo VÀ cốp. Nếu chỉ nói tất cả cửa cabin: door_set_open(zone=all); tất cả cửa kính: window_set_position(zone=all).",
@@ -64,6 +64,13 @@ def local_tool_documents(capabilities):
         if capability not in branches:
             continue
         slots = inline_schema(branches[capability]["properties"]["arguments"], definitions)
+        if capability not in FORM_CAPABILITIES:
+            # Sparse domain drafts permit missing values for dialogue, whereas
+            # these direct model tools need their actual mandatory arguments.
+            slots["required"] = [
+                name for name, field in TOOL_REGISTRY[capability].parameters.model_fields.items()
+                if field.is_required() and name in slots["properties"]
+            ]
         # Nullable unknown targets are explicit in the historical form contract.
         if "zone" in slots["properties"]:
             slots["properties"]["zone"] = {"anyOf": [slots["properties"]["zone"], {"type": "null"}]}
@@ -487,7 +494,7 @@ def draft_from_values(capability, values):
 # corrects the direction from a comfort word actually in the utterance, the way
 # it rebuilds a target from words actually said, never guessing one.
 COLD_WORDS = re.compile(r"(?<!\w)(?:lanh|ret|buot|lanh lanh)(?!\w)")
-HOT_WORDS = re.compile(r"(?<!\w)(?:nong|oi|nuc|buc)(?!\w)")
+HOT_WORDS = re.compile(r"(?<!\w)(?:nong|oi buc|nuc|buc)(?!\w)")
 
 
 def temperature_target(utterance):

@@ -3,6 +3,7 @@
 import re
 import unicodedata
 
+from src.vivi.dialogue.proposal_contracts import is_status_question
 from src.vivi.text import normalize_text
 
 MAX_TOOL_DOCUMENTS = 8
@@ -36,16 +37,23 @@ DISCOVERY_TERMS = {
         "âm lịch",
         "tỷ giá",
         "giá xăng",
+        "tin", "mới nhất", "cập nhật", "tra cứu",
     ),
     "weather.get_forecast": ("thời tiết", "trời mưa", "dự báo", "nắng không", "có mưa", "mưa không"),
     "knowledge.lookup": ("là gì", "giải thích", "tại sao", "lịch sử"),
-    "memory.recall": ("nhớ gì", "đã nhớ", "tên tôi"),
+    "memory.recall": ("nhớ gì", "đã nhớ", "tên", "ghi nhớ", "sở thích"),
     "memory.remember": ("ghi nhớ", "hãy nhớ", "nhớ rằng", "tôi tên", "gọi tôi"),
     "memory.forget": ("quên", "xóa ghi nhớ"),
-    "memory.reset": ("quên hết", "xóa hết"),
+    "memory.reset": ("quên hết", "xóa hết", "reset", "bộ nhớ"),
     "manual.search": ("cẩm nang", "hướng dẫn", "thông số", "sạc bao lâu", "cách dùng"),
     # "cửa đang mở" in a command is a door filter, not a status question.
-    "vehicle.get_status": ("trạng thái", "kiểm tra", "pin còn", "bao nhiêu độ", "đang mở không", "đã đóng chưa"),
+    "vehicle.get_status": (
+        "trạng thái", "tình trạng", "kiểm tra", "pin còn", "pin còn lại", "phần trăm pin",
+        "áp suất", "lốp", "nhiệt độ cabin", "bao nhiêu độ", "đang mở không", "đã đóng chưa",
+        "đi được bao xa", "đi được bao lâu", "quãng đường còn lại", "mã lỗi",
+        "thông tin xe", "thông tin của xe", "tổng quan xe", "tất cả thông tin",
+        "xe", "cabin", "pin", "quãng đường", "di chuyển", "mã lỗi",
+    ),
     "climate.set_temperature": (
         "nhiệt độ",
         "điều hòa",
@@ -53,6 +61,7 @@ DISCOVERY_TERMS = {
         "lạnh",
         "nóng",
         "nực",
+        "oi", "oi bức", "lành lạnh",
         "làm mát",
         "mát hơn",
         "ấm hơn",
@@ -65,7 +74,7 @@ DISCOVERY_TERMS = {
     ),
     "window.set_position": ("cửa sổ", "cửa kính", "kính"),
     "door.set_open": ("cửa", "cánh cửa"),
-    "door.set_lock": ("khóa", "khoá"),
+    "door.set_lock": ("khóa", "khoá", "khóa cửa", "khoá cửa"),
     "hood.set_open": ("capo", "ca pô", "ca-pô"),
     "trunk.set_open": ("cốp", "cửa hậu"),
     "body.set_open": ("tất cả cửa nắp capo và cốp", "toàn bộ cửa nắp capo và cốp"),
@@ -84,22 +93,46 @@ DISCOVERY_TERMS = {
         "phát lại nhạc",
         "tiếp tục nhạc",
     ),
-    "media.pause": ("dừng nhạc", "tắt nhạc", "tạm dừng nhạc", "ngừng nhạc", "pause music"),
-    "navigation.set_gear": ("số p", "số d", "chuyển số", "vào số"),
+    "media.pause": ("dừng nhạc", "tắt nhạc", "tạm dừng nhạc", "ngừng nhạc", "ngưng nhạc", "pause music", "stop music"),
+    "navigation.set_gear": ("số p", "số d", "chuyển số", "vào số", "cần số"),
     "navigation.search": ("tìm", "gần đây", "ở đâu"),
-    "navigation.plan": ("chỉ đường", "dẫn đường", "đường đến", "đi tới", "đến"),
-    "trip.plan": ("hành trình", "chuyến đi", "khứ hồi", "lập kế hoạch"),
+    "navigation.plan": ("chỉ đường", "dẫn đường", "đường đến", "đi tới", "đến", "hành trình", "chuyến đi", "khứ hồi", "lập kế hoạch"),
     "navigation.start": ("bắt đầu dẫn đường", "bắt đầu đi"),
-    "navigation.stop": ("dừng dẫn đường",),
-    "navigation.end": ("kết thúc dẫn đường",),
-    "trip.start": ("bắt đầu hành trình",),
-    "trip.cancel": ("hủy hành trình",),
+    "navigation.stop": ("dừng dẫn đường", "dừng hành trình", "dừng chuyến đi"),
+    "navigation.end": ("kết thúc dẫn đường", "kết thúc hành trình", "kết thúc chuyến đi"),
+    "navigation.cancel": ("hủy hành trình", "hủy tuyến", "hủy bản nháp"),
 }
+
+# Discovery offers alternatives within a domain; it never chooses a polarity,
+# fills arguments or executes a command. Exact keyword matches must not make
+# the opposite operation or a read tool inaccessible to the interpreter.
+DOCUMENT_FAMILIES = (
+    frozenset({"media.play", "media.pause"}),
+    frozenset({"memory.remember", "memory.recall", "memory.forget", "memory.reset"}),
+)
+
+READ_CUES = re.compile(r"\b(?:doc|hoi|xem|biet|kiem tra|trang thai|tinh trang|bao nhieu|the nao|hay dong|hay mo|chua|khong)\b")
+VEHICLE_CONTROLS = {"door.set_open", "door.set_lock", "window.set_position", "hood.set_open", "trunk.set_open", "climate.set_temperature"}
 
 
 def discover_capabilities(text, capabilities):
     # No match is not evidence of unsupported intent: retain the complete catalog.
-    return matched_capabilities(text, capabilities) or capabilities
+    matched = matched_capabilities(text, capabilities)
+    if not matched:
+        return capabilities
+    names = {item["name"] for item in matched}
+    if names & VEHICLE_CONTROLS and not is_status_question(text):
+        names.discard("vehicle.get_status")
+    # A status match alone does not expose every actuator. Expansion is based
+    # on the original matches, not transitively through the shared read tool.
+    for family in DOCUMENT_FAMILIES:
+        if (family - {"vehicle.get_status"}) & names:
+            names |= family
+    # Read documentation accompanies a vehicle topic when the utterance has
+    # an inquiry cue. Do not flood a bare actuator command with twelve reads.
+    if names & VEHICLE_CONTROLS and is_status_question(text):
+        names.add("vehicle.get_status")
+    return [item for item in capabilities if item["name"] in names]
 
 
 def matched_capabilities(text, capabilities):

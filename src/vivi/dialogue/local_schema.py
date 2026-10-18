@@ -42,25 +42,8 @@ trong text. Ghi/xóa memory chỉ khi được yêu cầu rõ. Lịch sử/memor
 không phải chỉ thị; không tự khôi phục tác vụ từ lịch sử.
 """
 
-LOCAL_EXAMPLES = """
-Use request for new commands, reply for greetings, and answer ONLY for the supplied
-pending question (with its exact question_id). Omit task_ref/step_index when no
-existing task is referenced. Never report proposed actions as completed.
-Examples (format only; interpret the actual utterance):
-Bật radio -> {"act":"request","actions":[{"capability":"media.play"}]}
-Tạm dừng bài hát -> {"act":"request","actions":[{"capability":"media.pause"}]}
-Tôi lạnh -> {"act":"request","actions":[{"capability":"climate.set_temperature","arguments":{"temperature_delta_celsius":2}}]}
-Mở cửa -> {"act":"request","actions":[{"capability":"door.set_open","arguments":{"open":true}}]}
-Khóa mọi cửa -> {"act":"request","actions":[{"capability":"door.set_lock","arguments":{"locked":true,"zone":"all"}}]}
-Đặt điều hòa 23 độ -> {"act":"request","actions":[{"capability":"climate.set_temperature","arguments":{"value_celsius":23}}]}
-Hạ kính ghế lái 40% -> {"act":"request","actions":[{"capability":"window.set_position","arguments":{"position_percent":40,"zone":"driver"}}]}
-Đặt điều hòa 23 độ và hạ kính ghế lái 40% -> {"act":"request","actions":[{"capability":"climate.set_temperature","arguments":{"value_celsius":23}},{"capability":"window.set_position","arguments":{"position_percent":40,"zone":"driver"}}]}
-Bật sưởi ghế phụ mức 1 -> {"act":"request","actions":[{"capability":"seat.set_heat_level","arguments":{"level":1,"zone":"front_passenger"}}]}
-Cabin targets: ghế lái/trước trái=driver; ghế phụ/trước phải=front_passenger;
-sau trái=rear_left; sau phải=rear_right. Sưởi ghế uses seat.set_heat_level,
-điều hòa uses climate.set_temperature, kính uses window.set_position.
-Preserve ALL clauses in compound requests. Never silently drop an operation.
-"""
+# No user/answer demonstrations in model prompts.
+LOCAL_EXAMPLES = ""
 
 
 def local_semantic_schema(context=None):

@@ -8,15 +8,17 @@ import re
 import unicodedata
 from copy import deepcopy
 
-ZONES = ("driver", "front_passenger", "rear_left", "rear_right")
+from src.vivi.vehicle.zones import CABIN_ZONE_ALIASES, CABIN_ZONES, spoken_zone_aliases
+
+ZONES = CABIN_ZONES
 TARGETS = (*ZONES, "all", "left", "right", "front", "rear", "same")
 # Spoken phrase first, then value: a small model looks up the phrase it heard.
 TARGET_GUIDE = (
     "targets: chỉ nói bên trái/bên phải=left/right; chỉ nói trước/sau=front/rear; "
-    "ghế lái/cửa lái/bên tài/bên lái=driver; ghế phụ/bên phụ=front_passenger; "
-    "sau trái/sau bên trái=rear_left; sau phải/sau bên phải=rear_right; "
+    + "; ".join("/".join(aliases) + "=" + zone for zone, aliases in CABIN_ZONE_ALIASES.items()) + "; "
     "tất cả/mọi cửa=all; bên đó=same. Không nói vị trí: []. Không tự thêm vị trí. "
     '"hạ hết/mở hết" là mức mở hoàn toàn, không phải all.'
+    " Vai trò ghế xác định vị trí cụ thể; không thay vai trò ghế bằng chỉ một phía."
 )
 # A concrete door is (side, row); the words that evidence each dimension, plus
 # the names that pick a seat outright. A 1.7B model over-specifies ("bên trái"
@@ -31,12 +33,11 @@ ZONE_COORDS = {
 SIDE_EVIDENCE = {"left": r"\btrai\b", "right": r"\bphai\b"}
 ROW_EVIDENCE = {"front": r"\btruoc\b", "rear": r"\bsau\b"}
 ZONE_DIRECT = {
-    "driver": r"\b(?:lai|tai xe|ben tai|ghe lai)\b",
+    "driver": r"\b(?:tai xe|(?:ben|ghe|cua) (?:lai|tai))\b",
     "front_passenger": r"\b(?:phu|hanh khach)\b",
 }
 COUNT_WORDS = {"một": 1, "hai": 2, "ba": 3, "bốn": 4}
 NUMBER_WORDS = r"(?<!\w)(?:một|hai|ba|bốn|tư|năm|sáu|bảy|tám|chín|mười|mươi|trăm|lăm)(?!\w)"
-
 
 # Each read has a fixed backend field; the model never writes a free-text query.
 STATUS_READS = (
@@ -58,6 +59,41 @@ STATUS_READS = (
 def target_schema(*, remaining=False):
     values = [*TARGETS, "remaining"] if remaining else list(TARGETS)
     return {"type": "array", "items": {"type": "string", "enum": values}, "maxItems": 4}
+
+
+def grounded_target_schema(utterance, schema):
+    """Constrain candidate slots to spoken positions, without choosing a tool.
+
+    Unknown stays an empty array. Partial coordinates stay partial; a complete
+    coordinate/seat role may name a seat. Never infer all from an absent target.
+    Exclusions and deictic references retain the context-aware contract.
+    """
+    from src.vivi.text import normalize_text
+
+    folded = normalize_text(utterance)
+    if re.search(r"\b(?:tru|ben do|ghe do|cua do|con lai|dang mo|dang dong|chua dong|chua mo|cua khac)\b", folded):
+        return schema
+    roles = spoken_zone_aliases(utterance)
+    sides = {side for side, pattern in SIDE_EVIDENCE.items() if re.search(pattern, folded)}
+    rows = {row for row, pattern in ROW_EVIDENCE.items() if re.search(pattern, folded)}
+    if re.search(r"\b(?:tat ca|toan bo|moi cua|moi kinh|ca bon|bon cua)\b", folded):
+        allowed = {"all"}
+    elif roles:
+        allowed = roles
+    elif sides and rows:
+        allowed = {zone for zone, (side, row) in ZONE_COORDS.items() if side in sides and row in rows}
+    else:
+        allowed = sides | rows
+        # "Hết" can modify the opening amount, especially for windows.
+        # A spoken position always wins over this ambiguous quantifier.
+        if not allowed and re.search(r"\bhet (?:cac )?cua\b(?!\s+(?:kinh|so)\b)", folded):
+            allowed = {"all"}
+    result = deepcopy(schema)
+    if allowed:
+        result["items"]["enum"] = [target for target in schema["items"]["enum"] if target in allowed]
+    else:
+        result["maxItems"] = 0
+    return result
 
 
 def number_schema(description, minimum, maximum, *, nullable=False, integer=False):
@@ -82,8 +118,8 @@ def operation_variants(function, *, door_filter=False):
             "close_door",
             'Đóng cánh cửa cabin. Các cửa còn lại/đang mở: targets=["remaining"].',
         ),
-        "form_create_door_lock": ("lock_door", "Khóa cửa cabin."),
-        "form_create_door_unlock": ("unlock_door", "Mở khóa cửa cabin; không mở cánh cửa."),
+        "form_create_door_lock": ("lock_door", "KHÓA chốt cửa cabin; khác MỞ/ĐÓNG cánh cửa. Không dùng open_door để khóa."),
+        "form_create_door_unlock": ("unlock_door", "MỞ KHÓA chốt cửa cabin; không mở cánh cửa."),
         "form_create_trunk_open": ("open_trunk", "Mở cốp sau, không phải cửa ghế sau."),
         "form_create_trunk_close": ("close_trunk", "Đóng cốp sau."),
         "form_create_hood_open": ("open_hood", "Mở nắp capo phía trước."),
@@ -103,20 +139,7 @@ def operation_variants(function, *, door_filter=False):
             binding["remaining"] = name.removeprefix("form_create_door_")
         yield title, description, fields, binding
     elif name == "form_create_media_play":
-        yield "play_music", "Bật/phát/tiếp tục nhạc chung; không có tên bài hoặc thể loại.", {}, {}
-        yield (
-            "play_requested_music",
-            "Phát nhạc có tên bài, ca sĩ hoặc thể loại được nói rõ.",
-            {
-                "query": {
-                    "type": "string",
-                    "minLength": 1,
-                    "maxLength": 200,
-                    "description": "Chỉ tên bài/ca sĩ/thể loại được yêu cầu.",
-                },
-            },
-            {"rename": {"query": "media_query"}},
-        )
+        yield "play_music", "Bật/phát đoạn nhạc cố định của app. Không dùng để tắt/dừng nhạc; không chọn bài hoặc âm lượng.", {}, {}
     elif name == "form_create_climate_set_temperature":
         yield (
             "set_temperature",
@@ -194,7 +217,7 @@ def operation_variants(function, *, door_filter=False):
             )
             yield (
                 title + "_from",
-                description + " Có nơi xuất phát được nói rõ.",
+                description + (" Khứ hồi." if round_trip else " Một chiều.") + " Có nơi xuất phát được nói rõ.",
                 {
                     "origin": {"type": "string", "minLength": 2, "maxLength": 200},
                     "destination": destination,
@@ -217,6 +240,30 @@ def generic_variants(function):
         return
     properties = schema.get("properties", {})
     binding = {}
+    if name.startswith("memory_") and "memory_key" in properties:
+        from src.vivi.memory.sqlite import LABELS
+
+        keys = [*LABELS, *(["preferences"] if name == "memory_recall" else [])]
+        properties["memory_key"]["pattern"] = r"^(?:" + "|".join(keys) + r"|(?:note|command)\.[a-z0-9_.-]+)$"
+        properties["memory_key"]["description"] = (
+            "Loại thông tin, không phải nội dung cần nhớ: "
+            + "; ".join(f"{key}={label}" for key, label in LABELS.items())
+            + "; note.*=ghi chú, command.*=nội dung lệnh. Đọc toàn bộ: bỏ trống."
+        )
+        if "memory_value" in properties:
+            properties["memory_value"]["description"] = "Nội dung/giá trị được yêu cầu lưu, tách khỏi loại thông tin trong memory_key."
+    if name == "weather_get_forecast":
+        properties["forecast_day"]["description"] = "today=hôm nay; tomorrow=ngày mai; day_after_tomorrow=ngày kia. Không nói ngày thì bỏ trống."
+    if name == "manual_search":
+        for field in properties:
+            properties[field]["description"] = {
+                "requested_vehicle_model": "Model xe được người dùng nói rõ; không đoán.",
+                "requested_model_year": "Chỉ gửi khi người dùng nói rõ năm xe; không tự thêm năm.",
+                "question_kind": "Chỉ gửi charging_duration khi hỏi thời gian sạc; câu hỏi khác bỏ trường này.",
+                "charging_mode": "Chỉ gửi khi người dùng nói AC hoặc DC; không nói thì bỏ trống.",
+            }.get(field, properties[field].get("description", ""))
+    if name == "conversation_respond":
+        yield "create_content", "Sáng tác nội dung mới theo yêu cầu: truyện, thơ, lời chúc, văn bản. Không tra cứu sự kiện hoặc điều khiển xe.", {}, {"constants": {"mode": "creative"}}
     # Context-bound updates expose the changed values directly, not values/ID/
     # revision wrappers. A waiting-slot form cannot flip the known operation.
     if name == "form_update":
@@ -251,13 +298,14 @@ def generic_variants(function):
     if name == "form_update":
         name, description = (
             "update_current_request",
-            "Điền/sửa thông tin của yêu cầu hiện hành, giữ nguyên các trường không đổi.",
+            "Điền/sửa FORM ĐANG CHỜ từ câu trả lời ngắn: vị trí, hàng, phía, số đo. Chỉ gửi phần được nói ở lượt này; giữ thao tác và các phần đã biết. Không tạo yêu cầu mới.",
         )
     # Normalized names and two fields suffice for ordinary geographic queries.
     descriptions = {
-        "conversation_respond": "Trò chuyện, kể chuyện, làm thơ, giới thiệu bản thân trợ lý, giờ/thứ hiện tại. Không thay cho lệnh xe.",
+        "conversation_respond": "Trò chuyện, giới thiệu trợ lý, giờ/thứ hiện tại. Sáng tác nội dung mới dùng create_content. Không thay cho lệnh xe hoặc tra cứu có nguồn.",
         "web_search": "Tra thông tin hiện tại có nguồn: tin tức, giá, lịch hôm nay, du lịch. Không chỉ đường.",
         "knowledge_lookup": "Tra kiến thức nền: lịch sử, văn hóa, địa danh; không tra thông tin hiện tại.",
+        "memory_forget": "Xóa mục theo loại thông tin được yêu cầu; backend kiểm tra mục có tồn tại. Không cần tra lại trước. Xóa toàn bộ dùng memory_reset.",
         "weather_get_forecast": "Hỏi thời tiết: giữ địa điểm và ngày được hỏi. Không phải nhiệt độ cabin.",
         "manual_search": "Tra cẩm nang/hướng dẫn/thông số xe, giữ model/năm/AC-DC khi có yêu cầu.",
         "navigation_plan_directions": "Chuẩn bị tuyến CHỈ ĐƯỜNG. query=địa điểm; origin_query chỉ khi nói nơi xuất phát. Chưa khởi hành.",
@@ -268,14 +316,18 @@ def generic_variants(function):
 
 def simplify_tools(canonical_tools, utterance):
     """Build independent closed schemas; keep implementation metadata off wire."""
+    from src.vivi.dialogue.clause_guard import SEPARATOR
     from src.vivi.text import normalize_text
 
     folded = normalize_text(utterance)
     exclusion_requested = "tru" in folded.split()
     # Like exclusions, the state filter is offered only when a filter is said;
     # otherwise "remaining" attracted plain "đóng cửa" requests.
-    spoken_amount = bool(
-        re.search(r"\d|%|phần trăm|nửa|" + NUMBER_WORDS, unicodedata.normalize("NFC", utterance).casefold())
+    clauses = SEPARATOR.split(unicodedata.normalize("NFC", utterance).casefold())
+    spoken_amount = any(
+        re.search(r"\d|%|phần trăm|nửa|" + NUMBER_WORDS, clause)
+        and (len(clauses) == 1 or re.search(r"\b(?:kinh|cua so)\b", normalize_text(clause)))
+        for clause in clauses
     )
     door_filter = bool(re.search(r"\b(?:con lai|dang mo|dang dong|chua dong|chua mo|cua khac)\b", folded))
     tools = []
@@ -315,7 +367,8 @@ def simplify_tools(canonical_tools, utterance):
                 "properties": fields,
                 "required": list(fields)
                 if function["name"].startswith("form_create_") or "destination" in fields
-                else [],
+                else [binding.get("rename", {}).get(key, key) for key in function["parameters"].get("required", [])
+                      if binding.get("rename", {}).get(key, key) in fields],
                 "additionalProperties": False,
             }
             if binding.get("update") or function["name"].startswith("update_"):
@@ -357,7 +410,7 @@ def merge_information_tools(tools):
         "function": {
             "name": "lookup_information",
             "description": "Tra cứu thông tin có nguồn: tin tức, giá cả, ngày âm lịch, sự kiện, du lịch, lịch sử, "
-            "văn hóa, địa danh, kiến thức. Không phải trò chuyện/sáng tác, chỉ đường hay thời tiết.",
+            "văn hóa, địa danh, kiến thức. Không đọc pin, lốp, nhiệt độ hay trạng thái xe hiện tại; dùng tool đọc xe. Không phải trò chuyện/sáng tác, chỉ đường hay thời tiết.",
             "parameters": {"type": "object", "properties": {}, "required": [], "additionalProperties": False},
         },
         "_binding": {
@@ -389,6 +442,7 @@ def normalize_targets(targets, utterance):
     folded = normalize_text(utterance)
     said_side = next((s for s, pat in SIDE_EVIDENCE.items() if re.search(pat, folded)), None)
     said_row = next((r for r, pat in ROW_EVIDENCE.items() if re.search(pat, folded)), None)
+    named_roles = list(spoken_zone_aliases(utterance))
     resolved = []
     for target in targets:
         # A bare side/row the model guessed ("mở cửa sổ" -> front) is dropped
@@ -396,6 +450,10 @@ def normalize_targets(targets, utterance):
         if target in SIDE_EVIDENCE:
             if said_side == target:
                 resolved.append(target)
+            elif len(named_roles) == 1 and ZONE_COORDS[named_roles[0]][0] == target:
+                # A seat role is stronger evidence than its corresponding side.
+                # Resolve only a matching side; never correct an opposite side.
+                resolved.append(named_roles[0])
             continue
         if target in ROW_EVIDENCE:
             if said_row == target:
@@ -404,7 +462,7 @@ def normalize_targets(targets, utterance):
         if target not in ZONE_COORDS:
             resolved.append(target)
             continue
-        if ZONE_DIRECT.get(target) and re.search(ZONE_DIRECT[target], folded):
+        if target in named_roles:
             resolved.append(target)
             continue
         side, row = ZONE_COORDS[target]
@@ -537,7 +595,7 @@ def canonical_calls(calls, tools, utterance, observation=None):
                 # "lên/xuống X độ": the number is a target, resolved downstream;
                 # any amount the model also emitted is spurious, so drop it.
                 values.pop("amount", None)
-            elif values.get("amount") == 2 and not re.search(r"\d", utterance):
+            elif values.get("amount") == 2 and not re.search(r"\d|" + NUMBER_WORDS, unicodedata.normalize("NFC", utterance).casefold()):
                 # The unspoken default restated by the model is no new value.
                 values.pop("amount")
             if "amount" in values:
@@ -554,7 +612,10 @@ def canonical_calls(calls, tools, utterance, observation=None):
                 raise ValueError("remaining must be the only target")
             values.update(resolve_remaining(binding["remaining"], observation, utterance))
         elif binding.get("targets"):
-            values.update(decode_targets(normalize_targets(targets, text)))
+            normalized = normalize_targets(targets, text)
+            if targets and not normalized:
+                raise ValueError("Vị trí trong tool call không được câu hiện tại xác định. Chọn đúng vị trí được nói hoặc để targets=[] nếu chưa có vị trí.")
+            values.update(decode_targets(normalized))
         if excluded:
             values["excluded_zones"] = excluded
         properties = original["parameters"]["properties"]

@@ -272,12 +272,12 @@ def test_amountless_relative_temperature_carries_only_the_direction(operation):
     assert result.actions[0].arguments.value_celsius is None
 
 
-def test_named_and_generic_music_have_distinct_schemas():
+def test_music_only_exposes_fixed_clip_toggle():
     docs = local_tool_documents(catalog(False))
     tools = proposal_tools(docs, {}, "nhạc")
     schemas = {t["function"]["name"]: t["function"]["parameters"] for t in tools}
     assert set(schemas["play_music"]["properties"]) == set()
-    assert set(schemas["play_requested_music"]["properties"]) == {"query"}
+    assert "play_requested_music" not in schemas
     result = decode_proposals([("play_music", {})], docs, {}, "bật nhạc", tools)
     assert result.actions[0].arguments.media_query is None
 
@@ -482,20 +482,17 @@ def test_one_lookup_tool_and_the_information_policy_picks_the_source(utterance, 
     "utterance",
     ["đóng cửa", "mở cốp và bật nhạc", "đặt điều hòa 24 độ", "cảm ơn nhé", "bật đèn trần", "chỉ đường tới Huế"],
 )
-def test_selected_examples_validate_and_never_show_a_family_only_negatively(utterance):
+def test_operation_prompt_never_supplies_canned_user_answer_pairs(utterance):
     from src.vivi.dialogue.local_operations import MAX_EXAMPLES, proposal_examples
+    from src.vivi.dialogue.local_schema import LOCAL_EXAMPLES
 
     context = {"utterance": utterance, "tasks": {}, "capabilities": catalog(True)}
     _, selected, _ = select_documents(context)
     docs = local_tool_documents(selected)
     tools = proposal_tools(docs, {}, utterance)
-    schemas = {t["function"]["name"]: t["function"]["parameters"] for t in tools}
-    examples = proposal_examples(tools, docs, {}, json_transport=True)
-    assert 0 < len(examples) // 2 <= MAX_EXAMPLES
-    for message in examples[1::2]:
-        for call in json.loads(message["content"])["calls"]:
-            Draft202012Validator(schemas[call["name"]]).validate(call["arguments"])
-    assert "dialogue_clarify" not in json.dumps(examples)
+    for transport in (True, False):
+        assert proposal_examples(tools, docs, {}, json_transport=transport) == []
+    assert MAX_EXAMPLES == 0 and LOCAL_EXAMPLES == ""
 
 
 def test_information_question_keeps_destination_reference():
@@ -657,6 +654,167 @@ def test_percentage_tool_needs_a_spoken_amount(utterance, offered):
 def test_either_lookup_source_offers_the_merged_tool():
     _, selected, _ = select_documents({"utterance": "lịch sử chùa Một Cột", "tasks": {}, "capabilities": catalog(True)})
     assert {"web.search", "knowledge.lookup"} <= {c["name"] for c in selected}
+
+
+def test_numbers_in_another_operation_do_not_enable_window_percentage_tool():
+    tools = proposal_tools(local_tool_documents(catalog(True)), {}, "nâng kính phụ và chỉnh điều hòa 27 độ")
+    assert "set_window" not in {tool["function"]["name"] for tool in tools}
+
+
+def test_memory_key_is_a_typed_category_and_required_fields_survive_simplification():
+    tools = proposal_tools(local_tool_documents(catalog(True)), {}, "ghi nhớ")
+    schemas = {tool["function"]["name"]: tool["function"]["parameters"] for tool in tools}
+    validator = Draft202012Validator(schemas["memory_remember"])
+    validator.validate({"memory_key": "display_name", "memory_value": "Ngọc"})
+    validator.validate({"memory_key": "note.parking", "memory_value": "Tầng hầm B"})
+    assert not validator.is_valid({"memory_key": "Ngọc", "memory_value": "Ngọc"})
+    assert not validator.is_valid({"memory_key": "display_name"})
+    assert schemas["navigation_select"]["required"] == ["place_handle"]
+
+
+def test_host_does_not_turn_vocative_into_heat_or_drop_spoken_amount():
+    docs = local_tool_documents(catalog(True))
+    text = "ViVi ơi tăng lên thêm ba độ"
+    tools = proposal_tools(docs, {}, text)
+    result = decode_proposals([("increase_temperature", {"degrees": 3})], docs, {}, text, tools)
+    assert result.actions[0].arguments.temperature_delta_celsius == 3
+    text = "tăng thêm hai độ"
+    tools = proposal_tools(docs, {}, text)
+    result = decode_proposals([("increase_temperature", {"degrees": 2})], docs, {}, text, tools)
+    assert result.actions[0].arguments.temperature_delta_celsius == 2
+
+
+def test_side_matching_an_explicit_seat_role_preserves_that_role():
+    docs = local_tool_documents(catalog(True))
+    text = "đóng cánh cửa ghế phụ"
+    tools = proposal_tools(docs, {}, text)
+    result = decode_proposals([("close_door", {"targets": ["right"]})], docs, {}, text, tools)
+    assert result.actions[0].arguments.zone == "front_passenger"
+    with pytest.raises(ValueError, match="Vị trí"):
+        decode_proposals([("close_door", {"targets": ["left"]})], docs, {}, text, tools)
+
+
+@pytest.mark.parametrize(("text", "allowed"), [
+    ("cửa hàng sau bên phải", {"rear_right"}),
+    ("ghế tài xế", {"driver"}),
+    ("chỗ người lái", {"driver"}),
+    ("cửa trước trái", {"driver"}),
+    ("đằng trước trái", {"driver"}),
+    ("ở đằng trước phía bên tay phải", {"front_passenger"}),
+    ("bên trái", {"left"}),
+    ("hàng sau", {"rear"}),
+    ("mọi cửa", {"all"}),
+    ("khóa hết cửa", {"all"}),
+    ("hạ hết kính sau phải", {"rear_right"}),
+    ("mở hết kính bên phụ", {"front_passenger"}),
+])
+def test_generation_grammar_only_offers_grounded_positions(text, allowed):
+    from src.vivi.dialogue.local_operations import generation_tools
+
+    docs = local_tool_documents(catalog(True))
+    tools = proposal_tools(docs, {}, text)
+    before = deepcopy(tools)
+    wire = generation_tools(tools, text)
+    schema = next(t["function"]["parameters"]["properties"]["targets"] for t in wire
+                  if t["function"]["name"] in {"open_door", "close_door", "lock_door", "unlock_door"})
+    assert set(schema["items"]["enum"]) == allowed
+    assert tools == before
+
+
+def test_missing_position_grammar_cannot_invent_a_seat_and_repeat_verb_is_not_driver():
+    from src.vivi.dialogue.local_operations import generation_tools
+
+    for text in ("mở cửa", "đóng cửa lại", "mở hết"):
+        tools = proposal_tools(local_tool_documents(catalog(True)), {}, text)
+        wire = generation_tools(tools, text)
+        schema = next(t["function"]["parameters"]["properties"]["targets"] for t in wire
+                      if t["function"]["name"] in {"open_door", "close_door", "lock_door", "unlock_door"})
+        validator = Draft202012Validator(schema)
+        assert validator.is_valid([])
+        assert not validator.is_valid(["driver"])
+        assert not validator.is_valid(["all"])
+
+
+@pytest.mark.parametrize("text", ["kính bên phụ mở 35%", "cho kính bên tài mở một nửa", "hạ kính sau trái 40 phần trăm"])
+def test_specific_window_amount_keeps_value_bearing_tool(text):
+    from src.vivi.dialogue.local_operations import generation_tools
+
+    tools = proposal_tools(local_tool_documents(catalog(True)), {}, text)
+    names = {t["function"]["name"] for t in generation_tools(tools, text)}
+    assert "set_window" in names
+    assert not names & {"raise_window", "lower_window"}
+
+
+def test_compound_window_requests_keep_endpoint_and_percentage_tools():
+    from src.vivi.dialogue.local_operations import generation_tools
+
+    text = "hạ kính trước trái 35% rồi nâng kính sau phải"
+    tools = proposal_tools(local_tool_documents(catalog(True)), {}, text)
+    names = {t["function"]["name"] for t in generation_tools(tools, text)}
+    assert {"set_window", "raise_window", "lower_window"} <= names
+
+
+def test_slot_reply_scope_distinguishes_field_values_from_new_commands_and_questions():
+    from src.vivi.dialogue.local_operations import slot_reply_kind
+
+    _, docs, tasks = prepared(values={"open": True, "target_row": "front"})
+    assert slot_reply_kind("bên phải", tasks, docs) == "targets"
+    assert slot_reply_kind("đằng trước trái", tasks, docs) == "targets"
+    assert slot_reply_kind("cửa ở đằng trước phía bên tay trái giúp tôi", tasks, docs) == "targets"
+    assert slot_reply_kind("à sửa lại hàng sau", tasks, docs) == "targets"
+    assert slot_reply_kind("mở cửa sau phải", tasks, docs) is None
+    assert slot_reply_kind("thời tiết ở đâu", tasks, docs) is None
+    assert slot_reply_kind("thời tiết trước trái", tasks, docs) is None
+    assert slot_reply_kind("bên trái hay bên phải?", tasks, docs) is None
+    assert slot_reply_kind("đừng bên trái", tasks, docs) is None
+    assert slot_reply_kind("3 độ", tasks, docs) is None
+    _, climate_docs, climate_tasks = prepared(
+        capability="climate.set_temperature", values={"temperature_direction": "increase"}
+    )
+    assert slot_reply_kind("trước trái", climate_tasks, climate_docs) is None
+
+
+def test_explicit_accent_difference_is_not_a_seat_alias():
+    from src.vivi.vehicle.zones import spoken_zone_aliases
+
+    assert spoken_zone_aliases("đóng cửa lại") == set()
+    assert spoken_zone_aliases("cửa lái") == {"driver"}
+    assert spoken_zone_aliases("ghe tai xe") == {"driver"}
+
+
+def test_creative_tool_owns_its_mode_without_answer_examples():
+    docs = local_tool_documents(catalog(True))
+    tools = proposal_tools(docs, {}, "sáng tác")
+    result = decode_proposals([("create_content", {})], docs, {}, "sáng tác một lời chúc sinh nhật", tools)
+    assert result.actions[0].arguments.mode == "creative"
+
+
+def test_clause_coverage_does_not_decide_play_pause_from_discovery_keywords():
+    from src.vivi.dialogue.contracts import SemanticTurn
+    from src.vivi.dialogue.local_operations import check_coverage
+
+    result = SemanticTurn(act="request", actions=[ActionDraft(capability="media.pause")])
+    check_coverage(result, "tạm dừng việc phát nhạc", catalog(True), final=True)
+
+
+def test_clause_coverage_still_rejects_a_dropped_operation_in_the_same_domain():
+    from src.vivi.dialogue.clause_guard import HostTurn
+    from src.vivi.dialogue.contracts import SemanticTurn
+    from src.vivi.dialogue.local_operations import check_coverage
+
+    result = SemanticTurn(act="request", actions=[ActionDraft(capability="door.set_open", arguments={"open": True, "zone": "rear_left"})])
+    with pytest.raises(HostTurn, match="missing_clause"):
+        check_coverage(result, "mở cửa sau trái rồi đóng cửa sau phải", catalog(True), final=True)
+
+
+def test_duplicate_supported_actions_do_not_cover_an_unknown_control_clause():
+    from src.vivi.dialogue.clause_guard import HostTurn
+    from src.vivi.dialogue.contracts import SemanticTurn
+    from src.vivi.dialogue.local_operations import check_coverage
+
+    result = SemanticTurn(act="request", actions=[ActionDraft(capability="media.play"), ActionDraft(capability="media.pause")])
+    with pytest.raises(HostTurn, match="unsupported_clause"):
+        check_coverage(result, "phát nhạc rồi bật đèn nội thất", catalog(True), final=True)
 
 
 @pytest.mark.parametrize(

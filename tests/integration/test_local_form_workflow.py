@@ -1,6 +1,7 @@
 """Proposal → persisted question → consent → effect, using current Core runtime."""
 
 import json
+from copy import deepcopy
 
 import pytest
 
@@ -96,6 +97,69 @@ def flatten_state(value, prefix):
     if not isinstance(value, dict):
         return {prefix: value}
     return {leaf: val for key, item in value.items() for leaf, val in flatten_state(item, prefix + "." + key).items()}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("answers", "zone"), [
+    ([("trước trái", "driver")], "driver"),
+    ([("đằng trước trái", "driver")], "driver"),
+    ([("ở đằng trước phía bên tay phải", "front_passenger")], "front_passenger"),
+    ([("cửa trước", "front"), ("bên trái", "left")], "driver"),
+    ([("bên phải", "right"), ("đằng sau", "rear")], "rear_right"),
+    ([("phía sau bên trái nhé", "rear_left")], "rear_left"),
+])
+async def test_short_positions_persist_both_coordinates_before_consent(services, tmp_path, answers, zone):
+    class Model:
+        tools_as_json = True
+        local_semantic_contract = "operations_v1"
+        calls = 0
+
+        async def agenerate_proposals(self, *, tools, **kwargs):
+            self.calls += 1
+            if self.calls == 1:
+                return [("open_door", {"targets": []})]
+            assert {t["function"]["name"] for t in tools} == {"update_current_request"}
+            value = answers[self.calls - 2][1]
+            schema = tools[0]["function"]["parameters"]["properties"]["targets"]
+            assert value in schema["items"]["enum"]
+            return [("update_current_request", {"targets": [value]})]
+
+    model = Model()
+    graph, _, gateway = build(services, tmp_path, local=model)
+    graph.default_provider = "local"
+    initial = gateway.vehicle.state_for("driver").model_dump()
+    try:
+        result = await invoke(graph, "mở cửa", "start")
+        step_id = result["steps"][0]["id"]
+        assert result["steps"][0]["status"] == "waiting_slot"
+        for index, (text, _) in enumerate(answers):
+            result = await invoke(graph, text, f"position-{index}")
+            assert result["steps"][0]["id"] == step_id
+            assert gateway.vehicle.state_for("driver").model_dump() == initial
+        step = result["steps"][0]
+        assert step["status"] == "waiting_confirmation"
+        assert step["arguments"]["open"] is True
+        coordinates = {
+            ("front", "left"): "driver", ("front", "right"): "front_passenger",
+            ("rear", "left"): "rear_left", ("rear", "right"): "rear_right",
+        }
+        stored_zone = step["arguments"].get("zone") or coordinates.get(
+            (step["arguments"].get("target_row"), step["arguments"].get("target_side"))
+        )
+        assert stored_zone == zone
+        assert step["result"]["confirmation"]["action"]["arguments"]["zone"] == zone
+        result = await invoke(graph, "đúng rồi", "confirm")
+        assert result["output"]["status"] == "action_verified"
+        after = gateway.vehicle.state_for("driver").model_dump()
+        expected = deepcopy(initial)
+        expected["door_states"][zone]["open"] = True
+        expected["door_driver_open"] = zone == "driver"
+        assert after.pop("state_version") == expected.pop("state_version") + 1
+        assert after.pop("updated_at") >= expected.pop("updated_at")
+        assert after == expected
+        assert model.calls == len(answers) + 1
+    finally:
+        await graph.aclose()
 
 
 @pytest.mark.asyncio

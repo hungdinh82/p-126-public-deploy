@@ -28,3 +28,19 @@ def test_specific_window_phrase_does_not_add_cabin_or_body_tools(text):
 def test_unknown_words_preserve_discovery_instead_of_declaring_unsupported():
     capabilities = catalog(True)
     assert discover_capabilities("xyzzy", capabilities) == capabilities
+
+
+@pytest.mark.parametrize("text", ["áp suất lốp", "lốp xe trạng thái sao rồi", "pin còn lại bao nhiêu", "nhiệt độ cabin", "thông tin của xe"])
+def test_measured_vehicle_status_is_available_without_web_discovery(text):
+    names = {c["name"] for c in discover_capabilities(text, catalog(True))}
+    assert "vehicle.get_status" in names
+
+
+@pytest.mark.parametrize(("text", "expected"), [
+    ("ngưng phát bản nhạc", {"media.play", "media.pause"}),
+    ("đọc dữ liệu ghi nhớ", {"memory.remember", "memory.recall", "memory.forget", "memory.reset"}),
+    ("nắp capo đang đóng hay mở", {"hood.set_open", "vehicle.get_status"}),
+])
+def test_discovery_retains_domain_alternatives_instead_of_deciding_operation(text, expected):
+    names = {c["name"] for c in discover_capabilities(text, catalog(True))}
+    assert expected <= names
