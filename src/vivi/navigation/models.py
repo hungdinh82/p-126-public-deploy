@@ -167,6 +167,12 @@ class NavigationWorkspace(BaseModel):
         return workspace
 
     @property
+    def open_draft(self):
+        """A plan still being chosen or confirmed; a started one is the journey's."""
+        draft = self.draft
+        return draft if draft and draft.started_revision != draft.revision else None
+
+    @property
     def live_journey(self):
         journey = self.journey
         return journey if journey and journey.status in LIVE_JOURNEY_STATUSES else None
@@ -179,7 +185,7 @@ class NavigationWorkspace(BaseModel):
             return None
         if journey.status in LIVE_JOURNEY_STATUSES:
             return journey
-        return journey if journey.status == "completed" and self.draft is None else None
+        return journey if journey.status == "completed" and self.open_draft is None else None
 
     def archive_finished(self):
         """Drop a finished journey once history holds it or a new draft exists.
@@ -190,7 +196,7 @@ class NavigationWorkspace(BaseModel):
         journey = self.journey
         if journey is None or journey.status in LIVE_JOURNEY_STATUSES:
             return False
-        if journey.status == "completed" and self.draft is None:
+        if journey.status == "completed" and self.open_draft is None:
             return False
         if journey.route_id and not any(item.get("id") == journey.route_id for item in self.history):
             self.history = [
@@ -203,25 +209,25 @@ class NavigationWorkspace(BaseModel):
                 },
             ]
         self.journey = None
+        if self.draft is not None and self.open_draft is None:
+            # The plan that started this journey must not reappear as a preview.
+            self.draft = None
         return True
 
     def snapshot(self):
-        journey = self.visible_journey
-        base = journey or self.draft
+        journey, draft = self.visible_journey, self.open_draft
+        base = journey or draft
         nav = NavigationState.model_validate(base.model_dump(mode="json") if base else {"origin": self.origin})
         nav.revision, nav.event_sequence = self.revision, self.event_sequence
         nav.applied_events = list(self.applied_events)
-        if journey and self.draft:
-            nav.request_id = self.draft.request_id
-            nav.candidates = list(self.draft.candidates)
-            nav.clarification = self.draft.clarification
+        if journey and draft:
+            nav.request_id = draft.request_id
+            nav.candidates = list(draft.candidates)
+            nav.clarification = draft.clarification
             nav.pending = {
-                "status": self.pending_status
-                or ("selecting" if self.draft.clarification or not self.draft.route else "preview"),
+                "status": self.pending_status or ("selecting" if draft.clarification or not draft.route else "preview"),
                 "message": self.pending_message,
-                "navigation": NavigationState.model_validate(self.draft.model_dump(mode="json")).model_dump(
-                    mode="json"
-                ),
+                "navigation": NavigationState.model_validate(draft.model_dump(mode="json")).model_dump(mode="json"),
             }
         elif self.pending_status:
             nav.pending = {"status": self.pending_status, "message": self.pending_message}

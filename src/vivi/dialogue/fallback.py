@@ -49,13 +49,13 @@ def literal_cancel(text, session):
     _, value = folded_reply(text)
     workspace = session.navigation_workspace
     idle_task = session.active is None or session.active.current_index() is None
-    if idle_task and workspace.draft is None and workspace.live_journey and END_PATTERN.fullmatch(value):
+    if idle_task and workspace.open_draft is None and workspace.live_journey and END_PATTERN.fullmatch(value):
         # "Huỷ lộ trình hiện tại" with only a trip running ends that trip;
         # navigation.end keeps its own confirmation policy.
         return SemanticTurn(act="request", actions=[{"capability": "navigation.end"}])
     if not (CANCEL_PATTERN.fullmatch(value) or END_PATTERN.fullmatch(value)):
         return None
-    if idle_task and workspace.draft is None:
+    if idle_task and workspace.open_draft is None:
         return None
     return SemanticTurn(act="cancel", task_ref="active")
 
@@ -68,7 +68,7 @@ def literal_nearer(text, session):
     from src.vivi.navigation.categories import CATEGORIES
     from src.vivi.navigation.presentation import choice_message
 
-    draft = session.navigation_workspace.draft
+    draft = session.navigation_workspace.open_draft
     destination = draft.destination if draft else None
     _, value = folded_reply(text)
     if not (

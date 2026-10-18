@@ -232,9 +232,9 @@ def reduce_turn(
             if state.active:
                 state.suspended.insert(0, state.active)
             state.active = task
-    if value.act in {"deny", "cancel"} and task is None and state.navigation_workspace.draft:
+    if value.act in {"deny", "cancel"} and task is None and state.navigation_workspace.open_draft:
         # The plan outlived its task (e.g. after a misheard turn); still cancel it.
-        state.domain_commands.append({"kind": "cancel_draft", "plan_id": state.navigation_workspace.draft.id})
+        state.domain_commands.append({"kind": "cancel_draft", "plan_id": state.navigation_workspace.open_draft.id})
         return state, "Đã hủy kế hoạch đang chờ."
     if value.act in {"modify", "confirm", "deny", "cancel", "resume", "suspend"} and task is None:
         return state, "Mình đã bỏ qua yêu cầu đó." if value.act in {

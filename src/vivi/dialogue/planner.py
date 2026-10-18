@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 
 from pydantic import ValidationError
 
@@ -328,6 +329,28 @@ class SemanticResolver:
         )
 
     @staticmethod
+    def fill_category_query(action, text):
+        """ "Bệnh viện gần nhất" carries its query in the category itself.
+
+        A small model often sends category/nearest and leaves the query empty;
+        the spoken category is host-known, so ask nothing the user already said.
+        """
+        from src.vivi.navigation.categories import CATEGORIES, category_for_text
+
+        arguments = action.arguments
+        if (
+            action.capability not in {"navigation.search", "navigation.plan"}
+            or arguments.query
+            or arguments.destination
+        ):
+            return
+        key = category_for_text(text)
+        if key is None and arguments.category in CATEGORIES:
+            key = arguments.category
+        if key is not None:
+            arguments.query = CATEGORIES[key].label
+
+    @staticmethod
     def destination_slots(value, text, session):
         """Establish provenance for model-supplied slots without a second parse."""
         from src.vivi.dialogue.questions import current_question
@@ -342,7 +365,12 @@ class SemanticResolver:
             for step in task.steps
             if step.draft.arguments.origin_query
         }
+        round_trip_cue = re.search(r"khu hoi|hai chieu|di (?:va|roi) ve|quay (?:lai|ve)|round trip", utterance)
         for action in value.drafts():
+            SemanticResolver.fill_category_query(action, text)
+            if action.arguments.trip_kind == "round_trip" and not round_trip_cue:
+                # "đổi về Đồ Sơn" is a destination change, not a return trip.
+                action.arguments.trip_kind = "one_way"
             origin = action.arguments.origin_query
             if origin and normalize_text(origin) not in utterance and normalize_text(origin) not in known_origins:
                 # A small model copied an earlier destination into the departure

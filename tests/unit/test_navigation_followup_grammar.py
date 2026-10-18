@@ -136,3 +136,45 @@ def test_new_directions_request_over_an_open_plan_is_not_a_refine():
     assert fresh.actions[0].arguments.choice_handle is None
     kept = fresh_navigation_request(proposed, "đổi về trạm sạc gần nhất", capabilities)
     assert kept.actions[0].capability == "navigation.refine"
+
+
+def test_directions_grammar_overrides_a_model_refusal_only_for_plain_requests():
+    from src.vivi.dialogue.contracts import SemanticTurn
+    from src.vivi.dialogue.local_operations import directions_from_grammar
+
+    refusal = SemanticTurn(act="clarify", text="Bạn nói rõ yêu cầu muốn thực hiện nhé.")
+    capabilities = catalog(navigation=True)
+    plan = directions_from_grammar(refusal, "chỉ đường tới Phủ Lý", capabilities)
+    assert plan.act == "request" and plan.actions[0].capability == "navigation.plan"
+    assert plan.actions[0].arguments.query == "Phủ Lý"
+    for text in ["chỉ đường tới Phủ Lý rồi bật nhạc", "chỉ đường tới đâu đó và về", "bật điều hoà"]:
+        assert directions_from_grammar(refusal, text, capabilities) is refusal
+
+
+def test_category_without_query_and_unspoken_round_trip_are_normalised():
+    from src.vivi.dialogue.contracts import SemanticTurn
+    from src.vivi.dialogue.planner import SemanticResolver
+
+    turn = SemanticTurn(
+        act="request",
+        actions=[{"capability": "navigation.search", "arguments": {"category": "hospital", "nearest": True}}],
+    )
+    value = SemanticResolver.destination_slots(turn, "chỉ đường tới bệnh viện gần nhất", SessionState())
+    assert value.actions[0].arguments.query == "bệnh viện"
+    plan = SemanticTurn(
+        act="modify",
+        step_updates=[
+            {
+                "step_index": 0,
+                "action": {
+                    "capability": "navigation.plan",
+                    "arguments": {"query": "Đồ Sơn", "trip_kind": "round_trip"},
+                },
+            }
+        ],
+    )
+    value = SemanticResolver.destination_slots(plan, "đổi về Đồ Sơn", SessionState())
+    assert value.step_updates[0].action.arguments.trip_kind == "one_way"
+    plan.step_updates[0].action.arguments.trip_kind = "round_trip"
+    value = SemanticResolver.destination_slots(plan, "đi Đồ Sơn khứ hồi", SessionState())
+    assert value.step_updates[0].action.arguments.trip_kind == "round_trip"

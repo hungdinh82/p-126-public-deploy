@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import unicodedata
 from copy import deepcopy
 
 from jsonschema import Draft202012Validator
@@ -370,6 +371,7 @@ async def interpret_operations(client, context, attempts):
             result = proposals_to_turn(
                 calls, documents, tasks, text, tools, observation=context.get("vehicle_observation")
             )
+            result = directions_from_grammar(result, text, capabilities)
             result = fresh_navigation_request(result, text, capabilities)
             check_coverage(result, text, capabilities, final=bool(attempt))
             entry["validation"] = "accepted"
@@ -396,6 +398,32 @@ async def interpret_operations(client, context, attempts):
 
 
 NEW_NAVIGATION = {"navigation.plan", "navigation.search"}
+
+# The whole utterance is "directions to <place>": nothing else is asked, so a
+# model's "please clarify" is a refusal, not an ambiguity.
+DIRECTIONS_GRAMMAR = re.compile(
+    r"^(?:(?:xin |cho (?:mình|tôi) |hãy )?(?:chỉ đường|dẫn đường|tìm đường|đường đi|chỉ|dẫn))"
+    r"(?: giúp| cho)?(?: mình| tôi)?\s+(?:tới|đến|về|tại)\s+(?P<place>[^,;.!?]+)$",
+    re.IGNORECASE,
+)
+CONJUNCTIONS = re.compile(r"\b(?:và|rồi|sau đó|nhưng|hoặc|nếu|khi|xong)\b", re.IGNORECASE)
+
+
+def directions_from_grammar(result, text, capabilities):
+    if result.act != "clarify" or result.actions or "navigation.plan" not in {c["name"] for c in capabilities}:
+        return result
+    match = DIRECTIONS_GRAMMAR.match(unicodedata.normalize("NFC", text).strip())
+    if not match:
+        return result
+    place = " ".join(match["place"].split())
+    if not 1 <= len(place.split()) <= 8 or CONJUNCTIONS.search(place):
+        return result
+    return SemanticTurn.model_validate(
+        {
+            "act": "request",
+            "actions": [{"capability": "navigation.plan", "arguments": {"query": place, "purpose": "navigate"}}],
+        }
+    )
 
 
 def fresh_navigation_request(result, text, capabilities):

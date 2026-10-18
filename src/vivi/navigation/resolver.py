@@ -3,14 +3,19 @@
 import asyncio
 import json
 import math
-import re
 from collections import OrderedDict
 from time import monotonic, perf_counter
 from uuid import uuid4
 
 from src.vivi.navigation.categories import CATEGORIES, matches_category
 from src.vivi.navigation.contracts import DestinationSpec, PlaceResolution
-from src.vivi.navigation.destinations import administrative_layer, administrative_match, landmark_for, landmark_query
+from src.vivi.navigation.destinations import (
+    accented_name_match,
+    administrative_layer,
+    administrative_match,
+    landmark_for,
+    landmark_query,
+)
 from src.vivi.navigation.metrics import record
 from src.vivi.navigation.presentation import place_label, short_address, short_name
 from src.vivi.navigation.reads import read_many
@@ -32,6 +37,12 @@ def straight_distance(a, b):
     dlat, dlng = math.radians(b[0] - a[0]), math.radians(b[1] - a[1])
     h = math.sin(dlat / 2) ** 2 + math.cos(math.radians(a[0])) * math.cos(math.radians(b[0])) * math.sin(dlng / 2) ** 2
     return 6371000 * 2 * math.asin(min(1, math.sqrt(h)))
+
+
+def prefer_spoken_accents(places, query):
+    """Folded matching equates "Phủ Lý" with "Phú Lý"; keep the spoken one."""
+    exact = [p for p in places if accented_name_match(p.model_dump(), query)]
+    return exact or places
 
 
 def satisfies_area(place, area):
@@ -292,14 +303,16 @@ class PlaceResolver:
         if not admin_only and not category:
             places.sort(key=lambda p: destination_rank(query, p.model_dump()))
         if admin_only:
-            places = [p for p in places if administrative_match(p.model_dump(), query)]
+            places = prefer_spoken_accents([p for p in places if administrative_match(p.model_dump(), query)], query)
             # The alias catalogue includes former cities/provinces. In v4 new
             # boundaries these names may identify wards, rather than CITY results.
             # Retry only when no verified result remains, never accept a business
             # or a renamed province merely because its address contains the name.
             if not places and representative and layer is None:
                 places = await self.provider_search(query, **{**kwargs, "layers": "WARD"})
-                places = [p for p in places if administrative_match(p.model_dump(), query)]
+                places = prefer_spoken_accents(
+                    [p for p in places if administrative_match(p.model_dump(), query)], query
+                )
         missing = [place for place in places[:10] if place.lat is None or place.lng is None]
         details = await read_many(self.client, [("place", (place.ref_id,), {}) for place in missing])
         details = dict(zip((place.ref_id for place in missing), details))
@@ -369,22 +382,16 @@ class PlaceResolver:
         """
         from src.vivi.navigation.contracts import entity_type
 
-        name = normalize_text(query)
         # A spoken area ("Tà Xùa, Sơn La") already scopes the search, and a
         # typed venue ("hồ", "đường") is never a commune.
-        if (
-            not candidates
-            or "," in query
-            or entity_type(query)
-            or any(normalize_text(short_name(c["name"])) == name for c in candidates)
-        ):
+        # Folded names equate "Phủ Lý" with "Phú Lý"; the spoken accents decide.
+        if "," in query or entity_type(query) or any(accented_name_match(c, query) for c in candidates):
             return None
         try:
             wards = await self.provider_search(query, near=None, layers="WARD")
         except VietMapError:
             return None
-        prefix = r"^(?:xa|phuong|thi tran|dac khu)\s+"
-        ward = next((w for w in wards if re.sub(prefix, "", normalize_text(w.name)) == name), None)
+        ward = next((w for w in wards if accented_name_match(w.model_dump(), query)), None)
         if ward is None:
             return None
         if ward.lat is None or ward.lng is None:

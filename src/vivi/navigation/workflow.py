@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from src.vivi.navigation.categories import CATEGORIES
 from src.vivi.navigation.contracts import DestinationSpec
 from src.vivi.navigation.destinations import (
+    accented_name_match,
     administrative_layer,
     administrative_match,
     center_requested,
@@ -505,6 +506,9 @@ class NavigationWorkflow:
                 and any(administrative_match(p, arguments.get("query", "")) for p in nav.candidates)
             ):
                 nav.candidates = [p for p in nav.candidates if administrative_match(p, arguments["query"])]
+                # Folded text equates "Phủ Lý" with "Phú Lý"; the spoken accents decide.
+                exact = [p for p in nav.candidates if accented_name_match(p, arguments["query"])]
+                nav.candidates = exact or nav.candidates
                 if not administrative_layer(arguments["query"]):
                     default_region = {"name": arguments["query"]}
                 representative = True

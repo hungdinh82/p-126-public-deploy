@@ -118,3 +118,70 @@ async def test_commune_name_outranks_businesses_named_after_it():
     result = await PlaceResolver(maps).resolve(DestinationSpec.from_arguments({"query": "Tà Xùa"}), ORIGIN)
     assert [c["ref_id"] for c in result.candidates] == ["ward", "cafe"]
     assert result.candidates[0]["spoken_label"] == "Xã Tà Xùa, Tỉnh Sơn La"
+
+
+@pytest.mark.asyncio
+async def test_spoken_accents_pick_phu_ly_over_phu_ly():
+    class Wards(Maps):
+        async def search(self, text, near=None, category=None, *, radius_m=None, layers=None):
+            wards = [
+                Place(ref_id="dongnai", name="Xã Phú Lý", address="Xã Phú Lý, Thành phố Đồng Nai", lat=11.2, lng=107.1),
+                Place(
+                    ref_id="ninhbinh",
+                    name="Phường Phủ Lý",
+                    address="Phường Phủ Lý, Tỉnh Ninh Bình",
+                    lat=20.54,
+                    lng=105.91,
+                ),
+            ]
+            return wards if layers == "WARD" else wards[:1]
+
+    result = await PlaceResolver(Wards([])).resolve(DestinationSpec.from_arguments({"query": "Phủ Lý"}), ORIGIN)
+    assert result.candidates[0]["ref_id"] == "ninhbinh"
+
+
+@pytest.mark.asyncio
+async def test_vietmap_rate_limit_is_retried_before_giving_up():
+    import httpx
+
+    from src.vivi.config import Settings
+    from src.vivi.navigation.vietmap import VietMapClient
+
+    calls = []
+
+    def handler(request):
+        calls.append(request.url.path)
+        if len(calls) < 3:
+            return httpx.Response(429, headers={"Retry-After": "0"})
+        return httpx.Response(200, json=[{"ref_id": "a", "name": "Hồ Gươm", "lat": 21.0, "lng": 105.85}])
+
+    client = VietMapClient(Settings(vietmap_api_key="test"), transport=httpx.MockTransport(handler))
+    assert [p.name for p in await client.search("Hồ Gươm")] == ["Hồ Gươm"]
+    assert len(calls) == 3
+
+
+@pytest.mark.asyncio
+async def test_representative_point_keeps_spoken_accents():
+    class Wards(Maps):
+        async def search(self, text, near=None, category=None, *, radius_m=None, layers=None):
+            if layers == "WARD":
+
+                def ward(prefix, name):
+                    # VietMap lists the ward itself among its boundaries (type 2).
+                    return [{"type": 2, "name": name, "full_name": f"{prefix} {name}"}, {"type": 0, "name": "Việt Nam"}]
+
+                return [
+                    Place(ref_id="dongnai", name="Xã Phú Lý", lat=11.2, lng=107.1, boundaries=ward("Xã", "Phú Lý")),
+                    Place(
+                        ref_id="ninhbinh",
+                        name="Phường Phủ Lý",
+                        lat=20.54,
+                        lng=105.91,
+                        boundaries=ward("Phường", "Phủ Lý"),
+                    ),
+                ]
+            return []
+
+    destination = DestinationSpec.from_arguments({"query": "Phủ Lý"})
+    result = await PlaceResolver(Wards([])).resolve(destination, ORIGIN, representative=True)
+    assert [c["ref_id"] for c in result.candidates][:1] == ["ninhbinh"]

@@ -38,10 +38,30 @@ class DestinationSpec(BaseModel):
     reference: str | None = None
     nearest: bool = False
 
+    @model_validator(mode="after")
+    def fill_name_from_raw(self):
+        if not self.name and self.raw_text and self.selection != "reference":
+            from src.vivi.navigation.categories import strip_nearest
+
+            text = strip_nearest(self.raw_text) if self.nearest else self.raw_text
+            parts = [p.strip() for p in text.split(",") if p.strip()]
+            if parts:
+                self.name = parts[0]
+        return self
+
     @classmethod
     def from_arguments(cls, arguments):
         if arguments.get("destination"):
-            return cls.model_validate(arguments["destination"])
+            dest = cls.model_validate(arguments["destination"])
+            if not dest.entity_type and arguments.get("category"):
+                from src.vivi.navigation.categories import reconcile_category
+
+                cat = reconcile_category(dest.name or dest.raw_text, arguments["category"], nearest=dest.nearest)
+                if cat:
+                    dest.entity_type = cat
+                    if dest.selection == "named_place":
+                        dest.selection = "category"
+            return dest
         from src.vivi.navigation.categories import asks_nearest, reconcile_category, strip_nearest
 
         query = arguments.get("query") or ""

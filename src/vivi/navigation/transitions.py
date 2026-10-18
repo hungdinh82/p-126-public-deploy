@@ -121,7 +121,7 @@ class NavigationTransitions:
                             "ended_at": datetime.now(UTC).isoformat(),
                         },
                     ]
-                    workspace.journey = None
+                    workspace.archive_finished()
                     message, ui = "Đã kết thúc hành trình.", "navigation.end"
             elif kind in {"resume", "free_drive"}:
                 driving = kind == "free_drive" or journey.resume_status == "running"
