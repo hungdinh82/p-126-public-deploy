@@ -37,6 +37,24 @@ async def record():
 
 
 MODEL_ASSETS = {"vf8.glb", "vf8-hq.glb", "vf8-lossless.glb"}
+LANDING_ASSETS = {
+    "cabin-home.jpg",
+    "manual-panel.jpg",
+    "navigation-charging.jpg",
+    "navigation-route.jpg",
+    "vehicle-status.jpg",
+}
+
+
+@router.get("/assets/landing/{asset_name}")
+async def landing_asset(asset_name: str):
+    if asset_name not in LANDING_ASSETS:
+        raise HTTPException(status_code=404)
+    return FileResponse(
+        PROJECT_ROOT / "assets" / "landing" / asset_name,
+        media_type="image/jpeg",
+        headers={"Cache-Control": "public, max-age=3600"},
+    )
 
 
 @router.get("/assets/{asset_name}")
