@@ -199,6 +199,50 @@ async def test_model_fills_location_then_literal_ok_executes_once(services, tmp_
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(("text", "calls", "included", "excluded"), [
+    (
+        "pin còn lại và áp suất lốp bao nhiêu",
+        [("get_battery_level", {}), ("get_tire_pressure", {})],
+        ["Pin còn", "Áp suất lốp"], ["Điều hoà", "Nắp capo", "Các cửa:"],
+    ),
+    (
+        "trạng thái cửa và kính xe",
+        [("get_door_status", {}), ("get_window_positions", {})],
+        ["Các cửa:", "Độ mở cửa kính:"], ["Pin còn", "Nắp capo", "Cốp sau"],
+    ),
+    (
+        "nhiệt độ cabin và trạng thái cốp",
+        [("get_cabin_temperature", {}), ("get_trunk_status", {})],
+        ["Điều hoà", "Cốp sau"], ["Pin còn", "Nắp capo", "Các cửa:"],
+    ),
+])
+async def test_multiple_status_tools_return_only_requested_measurements(services, tmp_path, text, calls, included, excluded):
+    class Model:
+        tools_as_json = True
+        local_semantic_contract = "operations_v1"
+
+        async def agenerate_proposals(self, **kwargs):
+            names = {t["function"]["name"] for t in kwargs["tools"]}
+            assert {name for name, _ in calls} <= names
+            assert "vehicle_get_status" not in names
+            return calls
+
+    graph, _, gateway = build(services, tmp_path, local=Model())
+    graph.default_provider = "local"
+    initial = gateway.vehicle.state_for("driver").model_dump()
+    try:
+        result = await invoke(graph, text, "read-multiple")
+        output = result["output"]
+        assert output["status"] == "action_verified"
+        assert all(part in output["response_text"] for part in included)
+        assert all(part not in output["response_text"] for part in excluded)
+        assert len(result["steps"]) == 1
+        assert gateway.vehicle.state_for("driver").model_dump() == initial
+    finally:
+        await graph.aclose()
+
+
+@pytest.mark.asyncio
 async def test_unrelated_request_cannot_become_model_invented_consent(services, tmp_path):
     class Model:
         tools_as_json = True

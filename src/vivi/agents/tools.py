@@ -94,7 +94,7 @@ class ManualSearch(SearchQuery):
 class StatusRead(Parameters):
     query: str | None = Field(
         default=None,
-        pattern=r"^(?:summary|temperature|battery|tires|range|range_time|body|diagnostics)(?:,(?:temperature|battery|tires|range|range_time|body|diagnostics))*$",
+        pattern=r"^(?:summary|temperature|battery|tires|range|range_time|body|doors|windows|hood|trunk|diagnostics)(?:,(?:temperature|battery|tires|range|range_time|body|doors|windows|hood|trunk|diagnostics))*$",
     )
 
 

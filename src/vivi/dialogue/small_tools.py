@@ -38,6 +38,23 @@ COUNT_WORDS = {"một": 1, "hai": 2, "ba": 3, "bốn": 4}
 NUMBER_WORDS = r"(?<!\w)(?:một|hai|ba|bốn|tư|năm|sáu|bảy|tám|chín|mười|mươi|trăm|lăm)(?!\w)"
 
 
+# Each read has a fixed backend field; the model never writes a free-text query.
+STATUS_READS = (
+    ("get_cabin_temperature", "temperature", "Đọc nhiệt độ điều hòa cabin hiện tại, đơn vị °C. Chỉ đọc, không đặt/tăng/giảm nhiệt độ."),
+    ("get_battery_level", "battery", "Đọc phần trăm pin còn lại của xe hiện tại. Không tìm web hoặc tra dung lượng thiết kế trong cẩm nang."),
+    ("get_tire_pressure", "tires", "Đọc áp suất hiện tại của bốn lốp xe, đơn vị kPa. Không tra áp suất khuyến nghị trong cẩm nang."),
+    ("get_remaining_range", "range", "Đọc quãng đường xe dự kiến còn đi được với pin hiện tại, đơn vị km."),
+    ("get_remaining_drive_time", "range_time", "Hỏi số giờ xe còn đi được. Backend báo rõ nếu adapter chưa cung cấp số giờ; không tự tính hoặc đoán."),
+    ("get_body_status", "body", "Đọc trạng thái mở/đóng capo, cốp và mở/đóng, khóa/mở khóa bốn cửa cabin. Chỉ đọc, không điều khiển cửa hoặc kính."),
+    ("get_door_status", "doors", "Đọc trạng thái mở/đóng và khóa/mở khóa bốn cửa cabin. Chỉ đọc cửa, không đọc capo/cốp và không đóng/mở cửa."),
+    ("get_window_positions", "windows", "Đọc phần trăm độ mở hiện tại của bốn cửa kính. Chỉ đọc, không nâng/hạ kính."),
+    ("get_hood_status", "hood", "Đọc nắp capo đang mở hay đóng. Chỉ đọc, không điều khiển capo."),
+    ("get_trunk_status", "trunk", "Đọc cốp sau đang mở hay đóng. Chỉ đọc, không điều khiển cốp."),
+    ("get_vehicle_diagnostics", "diagnostics", "Đọc tình trạng mã lỗi xe. Backend báo rõ nếu adapter chưa cung cấp mã lỗi; không tự chẩn đoán."),
+    ("get_vehicle_overview", "summary", "Đọc tổng quan xe: pin, nhiệt độ điều hòa, cửa/capo/cốp. Hỏi riêng thông số nào thì dùng tool đọc thông số đó; hỏi nhiều thông số thì gọi đủ các tool tương ứng."),
+)
+
+
 def target_schema(*, remaining=False):
     values = [*TARGETS, "remaining"] if remaining else list(TARGETS)
     return {"type": "array", "items": {"type": "string", "enum": values}, "maxItems": 4}
@@ -194,6 +211,10 @@ def operation_variants(function, *, door_filter=False):
 
 def generic_variants(function):
     name, schema = function["name"], deepcopy(function["parameters"])
+    if name == "vehicle_get_status":
+        for public, field, description in STATUS_READS:
+            yield public, description, {}, {"constants": {"query": field}}
+        return
     properties = schema.get("properties", {})
     binding = {}
     # Context-bound updates expose the changed values directly, not values/ID/
@@ -548,4 +569,21 @@ def canonical_calls(calls, tools, utterance, observation=None):
         args["source_text"] = text
         decoded.append((original["name"], args))
         canonical.append({"type": "function", "function": original})
-    return decoded, canonical
+    # Consecutive reads share one execution and one response containing the
+    # requested fields. Keep reads on either side of an actuator separate.
+    merged, merged_tools = [], []
+    for call, spec in zip(decoded, canonical, strict=True):
+        if call[0] == "vehicle_get_status" and merged and merged[-1][0] == call[0]:
+            previous = merged[-1][1]
+            fields = [*previous["query"].split(","), *call[1]["query"].split(",")]
+            # summary expands to its actual fields; it does not erase other reads.
+            fields = [
+                part
+                for field in fields
+                for part in (["battery", "temperature", "body"] if field == "summary" else [field])
+            ]
+            previous["query"] = ",".join(dict.fromkeys(fields))
+        else:
+            merged.append(call)
+            merged_tools.append(spec)
+    return merged, merged_tools
