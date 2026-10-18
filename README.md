@@ -23,6 +23,7 @@
 - **Development Journal:** [JOURNAL.md](JOURNAL.md) — nhật ký tuần
 - **Worklog:** [WORKLOG.md](WORKLOG.md) — công việc theo ngày
 - **System workflow:** [SYSTEM_WORKFLOW.md](SYSTEM_WORKFLOW.md)
+- **Tài liệu (chỉ mục):** [docs/README.md](docs/README.md) — bản đồ toàn bộ docs
 - **AI logs setup:** [docs/AI_LOG_SETUP.md](docs/AI_LOG_SETUP.md)
 
 ## Screenshot
@@ -45,13 +46,13 @@ Contract LangGraph/navigation, migration và kết quả kiểm chứng hiện t
 
 Hỏi–đáp UI/voice, slot địa điểm và phân giải POI dùng chung: [Conversation generalization](docs/conversation_generalization_runtime.md).
 
-Thời tiết mặc định Hà Nội và cách chọn model knowledge/Wikipedia/web: [Information review 14/10](docs/information_review_2026-10-14.md).
+Thời tiết mặc định Hà Nội và cách chọn model knowledge/Wikipedia/web: [Information review 14/10](docs/archive/information_review_2026-10-14.md).
 
 Chủ đề conversation, giới hạn tư vấn và các điểm kiểm soát an toàn: [Topic guardrails](docs/topic_guardrails.md).
 
 Query tham chiếu, timeout tổng hợp và kiểm chứng đơn vị số liệu: [Search reliability 14/10](docs/archive/search_review_2026-10-13.md).
 
-Sửa destination, câu dẫn đường kèm giới thiệu và hủy chuỗi thao tác: [Dialogue review — log 1353–1379](docs/dialogue_tasks.md).
+Sửa destination, câu dẫn đường kèm giới thiệu và hủy chuỗi thao tác: [Dialogue review — log 1353–1379](docs/archive/dialogue_tasks.md).
 
 > Runtime chuẩn sau khi hợp nhất là `src.vivi.api.app:app`; không còn backend `/assist`
 > hay entrypoint thứ hai. Xem [contract runtime](docs/contracts.md),

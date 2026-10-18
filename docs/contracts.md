@@ -15,7 +15,7 @@ platform, agent và vehicle owner.
 
 ## Workflow thống nhất
 
-Xem [runtime thống nhất](langgraph_unified_runtime.md) cho checkpoints, task revision, cancellation
+Xem [runtime thống nhất](archive/langgraph_unified_runtime.md) cho checkpoints, task revision, cancellation
 và rollback. Response thêm `execution` (executed/verified), `diagnostics`
 (provider thực tế, từng lần fallback, semantic event, task revision và node spans).
 `steps` chứa ID, capability, arguments, status và result từng bước. `action`/`execution`

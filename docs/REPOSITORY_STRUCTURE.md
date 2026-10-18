@@ -255,7 +255,7 @@ phụ thuộc API embedding.
 ## 10. Khi nào nên tách thêm file
 
 Workflow hiện tại nằm trong `graphs/assistant.py`; reducer, parser và capabilities đã
-được tách riêng. Xem [kiến trúc thống nhất](langgraph_unified_runtime.md) để thay đổi
+được tách riêng. Xem [kiến trúc thống nhất](archive/langgraph_unified_runtime.md) để thay đổi
 state, provider, task lifecycle và execution theo đúng quyền sở hữu.
 
 Một module nên được tách khi có ít nhất một trong các dấu hiệu:

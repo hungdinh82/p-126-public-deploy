@@ -3,7 +3,7 @@
 ## Vấn đề thực tế
 
 Backend mặc định đang chạy `rules`. Đã tải và thử Qwen3 1.7B Q4_K_M local; xem
-`docs/dialogue_tasks.md` để biết kết quả và giới hạn trước khi bật. Embedding E5 là model truy xuất,
+`docs/archive/dialogue_tasks.md` để biết kết quả và giới hạn trước khi bật. Embedding E5 là model truy xuất,
 không phải model sinh hội thoại. System prompt chỉ tác động khi đường chạy gọi SLM.
 Bản sửa dựa trên các câu mẫu trước đó đã bỏ sót những cách nói gần nghĩa và hội thoại
 nhiều lượt. Các lỗi trong log mới gồm:

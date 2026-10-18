@@ -53,7 +53,7 @@ Mở file dưới đây trong trình duyệt để xem sơ đồ đầy đủ (c
 ## Tài liệu liên quan
 
 - [docs/langgraph_core_v2.md](langgraph_core_v2.md) — Contract LangGraph hiện hành
-- [docs/langgraph_unified_runtime.md](langgraph_unified_runtime.md) — Runtime hợp nhất
+- [docs/archive/langgraph_unified_runtime.md](archive/langgraph_unified_runtime.md) — Runtime hợp nhất
 - [docs/handbook_sqlite.md](handbook_sqlite.md) — Handbook RAG bằng SQLite FTS5
 - [docs/setup_jetson_nano.md](setup_jetson_nano.md) — Setup Jetson
 - [docs/AI_LOG_SETUP.md](AI_LOG_SETUP.md) — Observability setup

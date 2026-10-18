@@ -11,8 +11,8 @@ Baseline và nơi kiểm invariant: [core_v2_baseline.md](core_v2_baseline.md).
 | `bash scripts/check_local.sh --run-mqtt` | Pass | Ruff, whitespace, JS syntax/behavior, toàn bộ Python và Mosquitto cục bộ |
 | Python | 617 pass, 7 skip | Những ca tùy chọn engine/hardware chưa có môi trường tương ứng |
 | JavaScript | 76 pass | Bao gồm binding question, stale snapshots, stream/audio, gear/store |
-| Workflow | 30/30 episode | [core-v2.json](../eval/results/core-v2.json), 10 scenario × 3, model/map/xe giả |
-| P/D backend | 600 mẫu, đạt mọi ngưỡng | [controls-v2.json](../eval/results/controls-v2.json), 100 mẫu mỗi số/tải |
+| Workflow | 30/30 episode | [core-v2.json](../../eval/results/core-v2.json), 10 scenario × 3, model/map/xe giả |
+| P/D backend | 600 mẫu, đạt mọi ngưỡng | [controls-v2.json](../../eval/results/controls-v2.json), 100 mẫu mỗi số/tải |
 
 | Tải | p95 P | p95 D | Ngưỡng mỗi số |
 |---|---:|---:|---:|
@@ -31,9 +31,9 @@ hoặc map; mọi câu bắt đầu từ context rỗng. Không có fallback tro
 
 | Đợt | Kết quả | Xử lý sau đo |
 |---|---|---|
-| [8 câu đầu](../eval/results/semantic-holdout-v2.json) | 7/8 | Phát hiện thiếu purpose; thêm guard làm rõ chuỗi nhiều bước nếu model bỏ purpose |
-| [6 câu tiếp](../eval/results/semantic-holdout-after-fix-v2.json) | 4/6 | Phát hiện bỏ bước nhạc phụ thuộc; bổ sung chỉ dẫn giữ đủ bước chờ prerequisite |
-| [6 câu mới cuối](../eval/results/semantic-dependencies-v2.json) | 5/6 | Giữ nguyên điểm, chưa dùng sửa prompt |
+| [8 câu đầu](../../eval/results/semantic-holdout-v2.json) | 7/8 | Phát hiện thiếu purpose; thêm guard làm rõ chuỗi nhiều bước nếu model bỏ purpose |
+| [6 câu tiếp](../../eval/results/semantic-holdout-after-fix-v2.json) | 4/6 | Phát hiện bỏ bước nhạc phụ thuộc; bổ sung chỉ dẫn giữ đủ bước chờ prerequisite |
+| [6 câu mới cuối](../../eval/results/semantic-dependencies-v2.json) | 5/6 | Giữ nguyên điểm, chưa dùng sửa prompt |
 
 Mỗi bộ là câu mới tại thời điểm chạy. Hai bộ đầu sau đó trở thành development
 data; điểm cũ và prompt/hash vẫn giữ, không gộp thành accuracy của bản cuối.

@@ -1,6 +1,6 @@
 # Ổn định chuyển P/D và đồng bộ navigation
 
-> Tài liệu lịch sử. Runtime hiện tại và kết quả kiểm chứng mới nhất: [navigation_runtime.md](../navigation_runtime.md).
+> Tài liệu lịch sử. Runtime hiện tại và kết quả kiểm chứng mới nhất: [navigation_runtime.md](navigation_runtime.md).
 
 Ngày kiểm tra: 2026-10-10. Báo cáo này bổ sung, thay thế các kết luận về P/D và khả năng chạy khi Map SDK lỗi trong [báo cáo refactor trước](navigation_refactor_review.md).
 

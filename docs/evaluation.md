@@ -204,8 +204,8 @@ Mỗi report ghi `revision` và `dataset_sha256`, trace được về đúng phi
 
 - [`eval/README.md`](../eval/README.md) — chi tiết dataset và nguyên tắc đo
 - [`eval/results/`](../eval/results/) — JSON report gốc (có timestamp, revision, SHA256)
-- [`docs/core_v2_acceptance.md`](core_v2_acceptance.md) — evidence và giới hạn nghiệm thu
+- [`docs/core_v2_acceptance.md`](archive/core_v2_acceptance.md) — evidence và giới hạn nghiệm thu
 - [`docs/local_tool_pipeline.md`](local_tool_pipeline.md) — luồng SLM local, catalog, workflow test
-- [`docs/investigations/local-model-runtime-2026-10-17.md`](investigations/local-model-runtime-2026-10-17.md) — Jetson runtime investigation
+- [`docs/archive/investigations/local-model-runtime-2026-10-17.md`](archive/investigations/local-model-runtime-2026-10-17.md) — Jetson runtime investigation
 - [`JOURNAL.md`](../JOURNAL.md) — nhật ký phát triển + deep-dive SLM
 - [`benchmarks/agent/README.md`](../benchmarks/agent/README.md) — feature-based agent benchmark
