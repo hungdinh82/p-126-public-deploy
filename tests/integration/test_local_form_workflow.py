@@ -154,7 +154,8 @@ async def test_new_same_operation_cannot_approve_or_rewrite_previous_form(servic
 
 
 @pytest.mark.asyncio
-async def test_model_fills_location_then_literal_ok_executes_once(services, tmp_path):
+@pytest.mark.parametrize("approval", ["ok", "oke", "okee", "OKEEE!", "ô kê nhé", "đồng ý ạ"])
+async def test_model_fills_location_then_literal_ok_executes_once(services, tmp_path, approval):
     class Model:
         tools_as_json = True
         local_semantic_contract = "operations_v1"
@@ -187,7 +188,7 @@ async def test_model_fills_location_then_literal_ok_executes_once(services, tmp_
         assert all(not d["open"] for d in gateway.vehicle.state_for("driver").door_states.model_dump().values())
         second = await invoke(graph, "sau phải", "update")
         assert second["output"]["confirmation"]
-        third = await invoke(graph, "ok", "approve")
+        third = await invoke(graph, approval, "approve")
         assert gateway.vehicle.state_for("driver").door_states.rear_right.open
         assert third["output"]["diagnostics"]["semantic_source"] == "literal_question_reply"
         assert model.calls == 2

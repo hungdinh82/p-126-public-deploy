@@ -16,10 +16,14 @@ def literal_question_reply(text, session):
     raw = " ".join(unicodedata.normalize("NFC", text.casefold()).strip(" .,!?:;…").split())
     value = normalize_text(raw)
     option = None
-    if value in {"co", "ok", "okay", "dong y", "xac nhan", "u", "vang", "bat dau"} or raw in {
-        "đúng",
-        "đúng rồi",
-    }:
+    # Match the whole answer, allowing spelling variants and polite endings.
+    # Never strip a new command, correction or condition into an approval.
+    affirmative = re.sub(r"(?:\s+(?:nhe|nha|a|di|luon))+$", "", value)
+    if (
+        affirmative in {"co", "dong y", "xac nhan", "u", "vang", "bat dau", "duoc", "duoc roi", "yes", "yep"}
+        or re.fullmatch(r"(?:ok(?:e+|i+|ie+|a+y+)?|o ke|o kay)", affirmative)
+        or re.fullmatch(r"đúng(?: rồi)?(?: (?:nhé|nha|ạ|đi|luôn))*", raw)
+    ):
         option = "yes"
     elif value in {"khong", "chua", "khong dung", "de sau"}:
         option = "no"
