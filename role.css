@@ -418,8 +418,8 @@ button, a { font: inherit; }
 
 .control-list li {
   display: grid;
-  grid-template-columns: 35px 1fr;
-  gap: 14px;
+  grid-template-columns: 35px 27px 1fr;
+  gap: 12px;
   min-height: 96px;
   padding: 20px 0;
   border-top: 1px solid rgba(193, 200, 216, .1);
@@ -431,6 +431,19 @@ button, a { font: inherit; }
   font-size: 9px;
   letter-spacing: 1px;
 }
+
+.control-list-icon {
+  display: grid;
+  width: 27px;
+  height: 27px;
+  place-items: center;
+  color: #93a2be;
+  border: 1px solid rgba(151, 170, 207, .17);
+  border-radius: 8px;
+  background: rgba(42, 53, 76, .35);
+}
+.control-list-icon svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+.control-list-icon.control-list-gear { font-size: 13px; font-weight: 600; }
 
 .control-list h3 { margin: 0; color: #dfe5ef; font-size: 13px; font-weight: 500; }
 .control-list h3 small { margin-left: 5px; color: #91a0bd; font-size: 10px; font-weight: 400; }
