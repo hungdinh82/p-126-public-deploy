@@ -391,9 +391,12 @@ async function pollVehicleAlerts() {
     const response = await fetch(`${API_BASE}/api/v1/vehicle/alerts?session_id=${encodeURIComponent(sessionId)}`);
     if (!response.ok) return;
     const snapshot = await response.json();
-    await synchronizeNavigation();
+    // Alerts must surface as soon as the vehicle snapshot arrives. Navigation is
+    // supplemental here and must not hide an already-active safety warning.
+    applyBackendState(snapshot.vehicle_state);
     renderAlerts(snapshot);
     announceNewAlerts(snapshot.active_alerts || []);
+    await synchronizeNavigation();
   } catch { /* Polling resumes automatically after a temporary disconnect. */ }
 }
 function highlight(id) { $(id).classList.add('highlight'); setTimeout(() => $(id).classList.remove('highlight'), 2600); }
