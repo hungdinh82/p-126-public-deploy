@@ -1,9 +1,19 @@
-# Pitch Deck & Demo Materials
+# Pitch Deck & Demo Materials — The Odysseans (Nhóm P-126)
+
+**Live demo:** <https://p126-vivi.onrender.com/>
 
 ## Files
 
-- `pitch_deck.pptx` — Slide thuyết trình Demo Day
-- `video_demo.mp4` — Video demo sản phẩm (tối đa 5 phút)
+- `pitch_deck.html` — Nguồn slide (render ra PDF)
+- `pitch_deck.pdf` — Slide thuyết trình Demo Day (18 slides)
+- `video_demo.mp4` — ⚠️ Chưa quay (deliverable #6)
+
+## Team
+
+- **Đinh Văn Hùng** (2A202602443) — trưởng nhóm · @hungdinh82
+- Nguyễn Thanh Phong (2A202602843) · @kaisye
+- Nguyễn Minh Dương (2A202602920) · @minhduong814
+- Hoàng Trung Khải (2A202602947) · @khaihoang004
 
 ## Pitch Deck Structure (10 slides)
 

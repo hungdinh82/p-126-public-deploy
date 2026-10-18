@@ -68,7 +68,7 @@ local_semantic_contract = "operations_v1"
 # Change only this URL; /v1 and the shared authentication are wired automatically.
 # Docker: use the server's LAN/Tailscale IP, or host.docker.internal for the host PC.
 # Authentication is optional for personal testing on a private network.
-ai_server_url = "http://100.123.27.125:8789"
+ai_server_url = "http://192.168.55.1:8789"
 ai_server_auth_required = false
 jetson_ai_policy = "prefer_local"
 # To use a standalone LM Studio/llama.cpp server instead, set policy = "disabled"
