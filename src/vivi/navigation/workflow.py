@@ -166,8 +166,10 @@ class NavigationWorkflow:
         name = step.draft.capability
         workspace = domain.navigation_workspace
         plan = workspace.draft.model_copy(deep=True) if workspace.draft else None
-        fresh = name in {"navigation.plan", "navigation.search"} and not (
-            step.result and step.result.get("status") in {"waiting_slot", "waiting_confirmation"}
+        # A request that stopped before saving a draft (e.g. no origin yet)
+        # starts over instead of looking for a plan that never existed.
+        fresh = name in {"navigation.plan", "navigation.search"} and (
+            plan is None or not (step.result and step.result.get("status") in {"waiting_slot", "waiting_confirmation"})
         )
         if fresh:
             purpose = arguments.get("purpose", "navigate")

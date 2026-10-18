@@ -515,7 +515,9 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
                 and index is not None
                 and task.steps[index].draft.capability.startswith("navigation.")
                 and task.steps[index].status == "waiting_slot"
-                and (result.get("navigation_update") or result.get("draft_update"))
+                # The first request may fail before any draft exists; the new
+                # origin alone is enough to resume it.
+                and (result.get("navigation_update") or result.get("draft_update") or result.get("domain_applied"))
             ):
                 semantic = SemanticTurn(act="resume", task_ref="active")
         elif event.kind == "action" and event.action:
