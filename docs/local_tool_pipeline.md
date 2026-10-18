@@ -1,7 +1,7 @@
 # Local tools: giao diện nhỏ cho model, contract đầy đủ ở host
 
 `local_semantic_contract="operations_v1"` nay là **mặc định** (config.toml và
-`config.py`); version trong log là `local-operations-3`. Đặt `legacy` để quay lại
+`config.py`); version trong log là `local-operations-7`. Đặt `legacy` để quay lại
 bộ interpreter một-schema khi cần so sánh/gỡ lỗi. Không cần đổi weights hoặc
 inference server Jetson.
 
@@ -21,10 +21,9 @@ Ví dụ output gốc:
 | Tool | Tham số model cung cấp | Host chuyển đổi |
 |---|---|---|
 | play_music | không có | media.play({}) |
-| play_requested_music | query | media.play(media_query) |
 | pause_music | không có | media.pause({}) |
 | set_temperature | celsius: 16–30 hoặc null | value_celsius; null giữ thiếu để hỏi |
-| increase_temperature / decrease_temperature | degrees dương hoặc null | delta có dấu; null dùng 2°C |
+| increase_temperature / decrease_temperature | degrees dương hoặc null | delta có dấu; null giữ hướng để hỏi thêm số độ |
 | open_door / close_door | targets | open=true/false |
 | lock_door / unlock_door | targets | locked=true/false |
 | raise_window / lower_window | targets | độ mở 0/100 |
@@ -33,12 +32,51 @@ Ví dụ output gốc:
 | get_directions / calculate_trip | destination | purpose=navigate/itinerary |
 | các biến thể _round_trip / _from | destination, origin khi cần | trip_kind/origin_query |
 | update_current_request | các giá trị sửa được của form | ID/revision/bước từ snapshot |
+| get_battery_level / get_tire_pressure | không có | vehicle.get_status: battery / tires |
+| get_cabin_temperature | không có | vehicle.get_status: temperature; chỉ đọc |
+| get_door_status / get_window_positions | không có | vehicle.get_status: doors / windows |
+| get_hood_status / get_trunk_status | không có | vehicle.get_status: hood / trunk |
+| get_remaining_range / get_remaining_drive_time | không có | vehicle.get_status: range / range_time |
+| get_vehicle_diagnostics | không có | vehicle.get_status: diagnostics |
+| get_body_status / get_vehicle_overview | không có | toàn bộ cửa/capo/cốp / tổng quan pin, nhiệt độ, cửa/capo/cốp |
+
+Tool đọc xe không nhận `query` tự do. Hỏi pin và áp suất lốp thì model gọi cả
+`get_battery_level({})` và `get_tire_pressure({})`; host gộp các lượt đọc liền nhau
+thành một lần thực thi, trả đủ các thông số đã hỏi. Không gộp qua lệnh điều khiển
+để giữ thứ tự đọc trước/sau thao tác. Giữ giới hạn tối đa năm proposal mỗi lượt.
+Thời gian chạy còn lại và mã lỗi chưa có dữ liệu từ adapter sẽ được báo rõ;
+không suy đoán từ quãng đường hay cẩm nang.
+
+Lời đồng ý ngắn như `ok`, `oke`, `okee`, `okeee`, `oki`, `okie`, `ô kê nhé`,
+`đồng ý ạ` được nhận khi có câu hỏi hiện hành. Câu có thêm lệnh, phủ định hoặc
+điều kiện không được rút gọn thành đồng ý; AnswerResolver vẫn kiểm tra binding,
+revision và hạn dùng trước khi thực thi.
 
 `targets` là một mảng duy nhất: driver/front_passenger/rear_left/rear_right,
 all, left/right, front/rear hoặc same. `[]` là chưa biết vị trí; `["left"]` chỉ
 xác định bên, không tự chọn hàng ghế. Mảng concrete biểu diễn nhiều vị trí;
 side+row được host chuyển thành tọa độ tương ứng. Các tập mâu thuẫn bị từ chối.
 Tham số loại trừ chỉ xuất hiện trên biến thể `_except` khi cần tài liệu đó.
+
+Schema sinh proposal được thu hẹp theo vị trí có bằng chứng trong câu hiện tại:
+chưa nói vị trí chỉ cho `[]`, nói một phía/hàng giữ một phần, nói đủ hàng và phía
+cho phép tọa độ tương ứng. Từ vựng tên ghế dùng chung trong
+`src/vivi/vehicle/zones.py`; có hỗ trợ thiếu dấu nhưng không coi “lại” là “lái”.
+Đây là ràng buộc slot; model vẫn chọn thao tác. Các trường hợp loại trừ, tham
+chiếu và lọc trạng thái tiếp tục dùng contract đầy đủ và resolver ở host.
+
+Khi form có trường vị trí đang chờ, câu ngắn chỉ chứa thông tin vị trí được đưa
+vào `update_current_request`. Câu đủ hàng/phía điền cả hai trong một lượt; câu
+một phần ghép với dữ liệu đã lưu. Câu hỏi, phủ định, lệnh mới và form không có
+trường vị trí không bị ép vào nhánh này. Adapter tiếp tục kiểm tham số, binding,
+revision và yêu cầu xác nhận. Test tích hợp kiểm dữ liệu trong task, payload
+xác nhận và đúng cửa thay đổi sau khi đồng ý, không chỉ kiểm câu trả lời hiển thị.
+
+Với một yêu cầu kính có tỷ lệ mở cụ thể (phần trăm hoặc một nửa), grammar giữ
+`set_window` và bỏ hai biến thể đầu mút `raise_window`/`lower_window`; model vẫn
+phải điền giá trị. Câu ghép giữ các biến thể để có thể phối hợp mức mở và đóng
+hoàn toàn ở các vị trí khác nhau. Từ “hết” không mở rộng sang mọi kính khi đã
+nói vị trí cụ thể; không tự thêm phạm vi chỉ từ độ mở.
 
 Chữ ký tool chỉ chứa trường liên quan và đóng bằng additionalProperties=false.
 Trường bắt buộc chỉ áp dụng cho các tham số nghiệp vụ của thao tác đó; không chạy
@@ -62,10 +100,19 @@ Runner hiện xuất semantic với exclude_none/exclude_defaults và ghi rõ
 - System prompt giữ quy tắc chung; chữ ký/tool guide ngắn thay cho chèn cả JSON
   schema. Unit/bounds và ranh giới ý định nằm ở từng tool. JSON grammar vẫn nhận
   schema đầy đủ để ràng buộc cấu trúc.
-- Tối đa bốn ví dụ, chọn theo nhóm tool đang được đưa ra: cả hai chiều mở/đóng, ca
-  thiếu vị trí và ca có vị trí; khi có hai nhóm thì thêm một câu ghép. Ví dụ chỉ được
-  giữ nếu hợp lệ với schema của lượt đó. Không nhóm nào chỉ có ví dụ phủ định (ví dụ
-  cũ "đừng mở cốp" khiến "đóng cốp giúp tôi" thành reply/clarify).
+- Hướng dẫn vòng đời form áp dụng cho cả tạo và cập nhật form xe, dựa trên
+  nhóm tài liệu điều khiển xe đang được cung cấp. Không đưa các quy tắc này vào lượt chỉ bật/tắt nhạc
+  hoặc tra cứu thông tin.
+- Không chèn ví dụ câu người dùng/đáp án vào prompt, cả JSON và native transport.
+  Model chỉ nhận hợp đồng tool, quy tắc chung và context của lượt hiện tại.
+- Discovery giữ các thao tác đối ứng của cùng miền (bật/tắt nhạc, đọc/ghi/xóa
+  bộ nhớ), và tool đọc trạng thái khi có tín hiệu câu hỏi về xe. Đây là chọn tài liệu,
+  không điền tham số hay quyết định thao tác theo câu mẫu.
+- Schema tool trực tiếp giữ trường bắt buộc từ registry thực thi. Khóa bộ nhớ
+  theo loại dữ liệu đã định nghĩa và namespace note/command; nội dung lưu là
+  một trường riêng. Sáng tác có tool mode cố định, nhạc chỉ bật/tắt clip của app.
+- Coverage guard kiểm số vế/miền chức năng và chặn vế không hỗ trợ; từ khóa
+  discovery không được chọn chiều bật/tắt hay loại thao tác thay model.
 - Prompt đề xuất không còn topic policy: model này chỉ chọn route, không viết câu trả
   lời; policy vẫn áp dụng ở bước responder.
 - Context bỏ lời trợ lý cũ không có typed draft, chỉ giữ form/question/tham chiếu
@@ -126,9 +173,3 @@ Live workflow dùng xe bộ nhớ và SQLite tạm, không dùng phiên xe ngư�
 Budget là production; STT/TTS không nằm trong phép đo semantic.
 `inference_breakdown` tách số response, prompt/output tokens, cache, prefill/decode;
 không đếm trùng completion cuối trong gateway và trong proposal attempts.
-
-Hai corpus hiện có đã dùng phát triển, không phải holdout. Fallback không tính
-đúng. Pass cuối tách khỏi passed_first_call. Chỉ bật mặc định sau nghiệm thu riêng:
->=95% đúng toàn bộ proposal theo nhóm; không có effect trái yêu cầu trong ca
-phủ định/điều kiện/thiếu nghĩa/stale consent; p95 không tăng quá 20% so baseline
-cùng corpus và điều kiện cache.
