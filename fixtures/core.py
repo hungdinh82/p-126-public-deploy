@@ -64,7 +64,7 @@ class Maps:
 
 
 class Harness:
-    def __init__(self, root: Path, replies=(), *, model=None, maps=None, offline=False, vehicle=None):
+    def __init__(self, root: Path, replies=(), *, model=None, maps=None, offline=False, vehicle=None, semantic_budget=20):
         self.model = model or ScriptedModel(replies)
         self.maps = maps or Maps()
         self.ledger = RuntimeStore(root / "runtime.sqlite3")
@@ -98,7 +98,7 @@ class Harness:
         )
         self.saver = ThreadedSqliteSaver(root / "checkpoint.sqlite3")
         self.graph = build_assistant_graph(
-            self.services, self.saver, self.ledger, resolver=SemanticResolver(gateway=self.models)
+            self.services, self.saver, self.ledger, resolver=SemanticResolver(gateway=self.models, budget_seconds=semantic_budget)
         )
         self.graph.default_provider = "google"
         self.number = 0
