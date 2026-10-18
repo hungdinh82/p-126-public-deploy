@@ -1,6 +1,6 @@
 const {test}=require('node:test');const assert=require('node:assert/strict');const vm=require('node:vm');const {readFileSync}=require('node:fs');
 const sandbox={setTimeout,clearTimeout,performance,crypto:require('node:crypto').webcrypto};vm.createContext(sandbox);
-vm.runInContext(readFileSync('navigation-state.js','utf8').replace(/export /g,'')+';globalThis.types={GearController,SnapshotOrder}',sandbox);
+vm.runInContext(readFileSync('web/navigation-state.js','utf8').replace(/export /g,'')+';globalThis.types={GearController,SnapshotOrder}',sandbox);
 const {GearController,SnapshotOrder}=sandbox.types;
 const deferred=()=>{let resolve,reject;const promise=new Promise((a,b)=>{resolve=a;reject=b;});return{promise,resolve,reject};};
 function setup(){const calls=[],changes=[],timers=[],replies=[];let snapshot={runtime_epoch:'one',snapshot_sequence:1,vehicle_state:{driving:false},control_receipts:[]};const gear=new GearController({send:event=>{calls.push(event);const reply=deferred();replies.push(reply);return reply.promise;},synchronize:async()=>snapshot,changed:controller=>changes.push({status:controller.status,frozen:controller.frozen,desired:controller.desired}),schedule:(fn,ms)=>{timers.push({fn,ms});return timers.length;},cancel(){},id:()=>String(calls.length+1),now:()=>0});return{gear,calls,changes,timers,replies,setSnapshot:value=>snapshot=value};}

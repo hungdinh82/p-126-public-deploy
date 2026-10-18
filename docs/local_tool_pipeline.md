@@ -5,8 +5,8 @@
 bộ interpreter một-schema khi cần so sánh/gỡ lỗi. Không cần đổi weights hoặc
 inference server Jetson.
 
-Review mới nhất: [tool/schema vòng 2 + đổi mặc định](investigations/local-tool-schema-v3-2026-10-17.md)
-(nối tiếp [binding và đối chứng model thật](investigations/local-tool-review-2026-10-17.md)).
+Review mới nhất: [tool/schema vòng 2 + đổi mặc định](investigations/local-llm-schema-2026-10-17.md)
+(nối tiếp [binding và đối chứng model thật](investigations/local-model-runtime-2026-10-17.md)).
 
 ## Model thực sự nhận gì?
 
@@ -157,7 +157,7 @@ local_semantic_transport = "json_schema" # native để so sánh
 ```
 
 Có thể dùng LOCAL_SEMANTIC_CONTRACT/LOCAL_SEMANTIC_TRANSPORT rồi restart backend.
-Kết quả local-operations-3: [review tool/schema 17/10 (vòng 2)](investigations/local-tool-schema-v3-2026-10-17.md).
+Kết quả local-operations-3: [review tool/schema 17/10 (vòng 2)](investigations/local-llm-schema-2026-10-17.md).
 
 ```bash
 PYTHONPATH=. .venv/bin/python scripts/export_local_tools.py

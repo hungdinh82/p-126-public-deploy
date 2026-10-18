@@ -3,7 +3,7 @@
 Ngày chạy: 2026-10-15 UTC. Source là working tree trên revision nền
 `5a549456b678d24ef5d68550d26ddb954b7c34b1`, chưa commit; report ghi rõ dirty và hash.
 Môi trường: Linux/WSL, Python 3.12.12, Node 20; DB, vehicle fixture và broker MQTT cô lập.
-Contract/vận hành: [langgraph_core_v2.md](langgraph_core_v2.md).
+Contract/vận hành: [langgraph_core_v2.md](../langgraph_core_v2.md).
 Baseline và nơi kiểm invariant: [core_v2_baseline.md](core_v2_baseline.md).
 
 | Kiểm tra | Kết quả | Evidence |

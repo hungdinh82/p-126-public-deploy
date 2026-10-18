@@ -129,6 +129,6 @@ Các fixture server chỉ mở DB tạm. Report/trace/ảnh mặc định nằm 
 
 Trước release: giải quyết 38 regression/contract test hội thoại tồn tại sẵn, nghiệm thu VietMap cùng GPU/3D trên browser máy phát triển, kiểm tra cold start/reconnect với dịch vụ thật. Việc tách nốt DTO tính toán phẳng và chuyển nốt render là cải tổ tiếp theo sau khi các gate này đạt.
 
-Cập nhật 11/10: [chọn đề xuất và timeout Sầm Sơn](navigation_followups_oct11.md), gồm sửa ordinal/handle, batch VietMap, thu gọn checkpoint và phục hồi kế hoạch sau timeout.
+Cập nhật 11/10: [chọn đề xuất và timeout Sầm Sơn](archive/navigation_followups_oct11.md), gồm sửa ordinal/handle, batch VietMap, thu gọn checkpoint và phục hồi kế hoạch sau timeout.
 
 Artifact lưu lâu dài: [regression summary](../eval/artifacts/navigation-runtime/regression-summary.json), [số đo backend](../eval/artifacts/navigation-runtime/navigation-backend-performance.json), [số đo UI](../eval/artifacts/navigation-runtime/navigation-performance.json), [map VietMap mobile](../eval/artifacts/navigation-runtime/vietmap-live-390.png). Trace và video lớn giữ ở `/tmp/vivi-ui-check/navigation-*-trace.zip` và `/tmp/vivi-ui-check/videos/`.

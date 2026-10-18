@@ -81,7 +81,7 @@ P-126/
 ├── data/                         # Runtime artifacts; phần lớn không commit
 ├── docs/                         # Product, architecture và setup docs
 ├── scripts/                      # Setup, smoke test và development utilities
-├── app.js / index.html / style.css
+├── web/                          # Frontend tĩnh (HTML/JS/CSS) serve bởi api/routes/web.py
 ├── Dockerfile* / docker-compose.yml
 └── Makefile
 ```
@@ -169,7 +169,7 @@ Lệnh tương đương CI:
 ```bash
 .venv/bin/python -m ruff check src vehicle_simulator tests
 .venv/bin/python -m pytest tests/ -q
-node --check app.js
+node --check web/app.js
 ```
 
 Test cần dùng temporary directory cho SQLite/audio. Không gọi provider online trong unit

@@ -174,7 +174,7 @@ mosquitto -c data/mqtt/mosquitto.conf
 ```bash
 .venv/bin/python -m pytest -q
 .venv/bin/python -m ruff check server src vehicle_simulator tests
-node --check app.js
+node --check web/app.js
 ```
 
 Khi API đang chạy và handbook đã import, kiểm tra toàn bộ core flow qua public contract:

@@ -9,31 +9,32 @@ from src.vivi.api.routes.roles import role_for
 
 router = APIRouter()
 PROJECT_ROOT = Path(__file__).resolve().parents[4]
+WEB_ROOT = PROJECT_ROOT / "web"
 
 
 @router.get("/")
 async def index():
-    return FileResponse(PROJECT_ROOT / "role.html", headers={"Cache-Control": "no-store"})
+    return FileResponse(WEB_ROOT / "role.html", headers={"Cache-Control": "no-store"})
 
 
 @router.get("/ivi")
 async def ivi(request: Request):
     if role_for(request) != "driver":
         return RedirectResponse("/", status_code=303)
-    return FileResponse(PROJECT_ROOT / "index.html", headers={"Cache-Control": "no-store"})
+    return FileResponse(WEB_ROOT / "index.html", headers={"Cache-Control": "no-store"})
 
 
 @router.get("/engineer")
 async def engineer(request: Request):
     if role_for(request) != "engineer":
         return RedirectResponse("/", status_code=303)
-    return FileResponse(PROJECT_ROOT / "engineer.html", headers={"Cache-Control": "no-store"})
+    return FileResponse(WEB_ROOT / "engineer.html", headers={"Cache-Control": "no-store"})
 
 
 @router.get("/record")
 async def record():
     """Voice recorder for wake-word clips; needs no role, so it can be shared as a link."""
-    return FileResponse(PROJECT_ROOT / "record.html", headers={"Cache-Control": "no-store"})
+    return FileResponse(WEB_ROOT / "record.html", headers={"Cache-Control": "no-store"})
 
 
 MODEL_ASSETS = {"vf8.glb", "vf8-hq.glb", "vf8-lossless.glb"}
@@ -88,7 +89,7 @@ async def asset(asset_name: str, request: Request):
     if asset_name == "monitor":
         if role_for(request) != "engineer":
             return RedirectResponse("/", status_code=303)
-        return FileResponse(PROJECT_ROOT / "monitor.html", headers={"Cache-Control": "no-store"})
+        return FileResponse(WEB_ROOT / "monitor.html", headers={"Cache-Control": "no-store"})
     if asset_name not in {
         "app.js",
         "assistant-client.js",
@@ -112,4 +113,4 @@ async def asset(asset_name: str, request: Request):
         "role.css",
     }:
         raise HTTPException(status_code=404)
-    return FileResponse(PROJECT_ROOT / asset_name, headers={"Cache-Control": "no-store"})
+    return FileResponse(WEB_ROOT / asset_name, headers={"Cache-Control": "no-store"})

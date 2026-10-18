@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
 const vm = require('node:vm');
 
-const source = readFileSync('app.js', 'utf8');
+const source = readFileSync('web/app.js', 'utf8');
 
 test('active alerts render and announce even if navigation synchronization fails', async () => {
   const rendered = [], announced = [];

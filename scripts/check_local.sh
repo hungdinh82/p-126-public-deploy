@@ -41,7 +41,7 @@ echo "[2/5] Linting Python"
 "$PYTHON" -m ruff check src vehicle_simulator tests fixtures eval/workflow_benchmark.py eval/navigation_controls_benchmark.py eval/semantic_benchmark.py
 
 echo "[3/5] Checking JavaScript syntax"
-for source in *.js; do node --check "$source"; done
+for source in web/*.js; do node --check "$source"; done
 
 echo "[4/5] Running JavaScript behavior tests"
 node --test tests/frontend/*.cjs

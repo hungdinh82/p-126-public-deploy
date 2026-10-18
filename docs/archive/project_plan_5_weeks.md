@@ -2,7 +2,7 @@
 
 > **Planned window:** 21 September 2026 - 25 October 2026
 > **Delivery model:** Five weekly increments, each ending with an integrated demo
-> **Architecture:** [VIVI Cabin Copilot architecture](architecture_diagram.md)
+> **Architecture:** [VIVI Cabin Copilot architecture](../architecture_diagram.md)
 
 If kickoff changes, move the dates while preserving sequence, dependencies, and exit gates.
 
@@ -188,4 +188,4 @@ A task is done only when:
 - **Weekly:** increment demo, metric snapshot, risk review, `JOURNAL.md`, and next-week commitment.
 - **Release:** safety regression, ungrounded claims, or loss of offline core blocks release regardless of polish.
 
-Store raw results under `eval/`, summarize them in `eval/results/report.md`, and keep changes synchronized with the [architecture document](architecture_diagram.md).
+Store raw results under `eval/`, summarize them in `eval/results/report.md`, and keep changes synchronized with the [architecture document](../architecture_diagram.md).

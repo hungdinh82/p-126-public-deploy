@@ -1,6 +1,6 @@
 const {test}=require('node:test');const assert=require('node:assert/strict');const vm=require('node:vm');const {readFileSync}=require('node:fs');
 const box={crypto:require('node:crypto').webcrypto};vm.createContext(box);
-for(const file of ['navigation-state.js','navigation-store.js','journey-simulation.js'])vm.runInContext(readFileSync(file,'utf8').replace(/^import .*$/gm,'').replace(/export /g,''),box);
+for(const file of ['web/navigation-state.js','web/navigation-store.js','web/journey-simulation.js'])vm.runInContext(readFileSync(file,'utf8').replace(/^import .*$/gm,'').replace(/export /g,''),box);
 vm.runInContext('globalThis.types={NavigationStore,MissingRouteError,DriveSimulation}',box);
 const {NavigationStore,MissingRouteError,DriveSimulation}=box.types;
 const full={runtime_epoch:'one',snapshot_sequence:1,navigation:{route_id:'route:1',route:{coordinates:[[105,21],[106,21]],steps:[],distance_m:1000},waypoint_routes:[],progress_m:0}};

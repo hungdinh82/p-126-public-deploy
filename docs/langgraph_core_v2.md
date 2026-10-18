@@ -113,7 +113,7 @@ Artifact ghi git revision nền và `working_tree_dirty=true`, dataset/fixture h
 provider thực tế, attempts và môi trường. Các lần đo dưới đây chạy trên Linux/WSL,
 Python 3.12; chưa phải nghiệm thu Jetson/xe thật.
 
-- Gate `bash scripts/check_local.sh --run-mqtt` kiểm cả Python, JavaScript và broker Mosquitto cục bộ. Kết quả cụ thể cập nhật trong [acceptance](core_v2_acceptance.md).
+- Gate `bash scripts/check_local.sh --run-mqtt` kiểm cả Python, JavaScript và broker Mosquitto cục bộ. Kết quả cụ thể cập nhật trong [acceptance](archive/core_v2_acceptance.md).
 - [Workflow](../eval/results/core-v2.json): 30/30 episode (10 scenario × 3), semantic/map/xe giả, SQLite/orchestrator thật.
 - [Controls](../eval/results/controls-v2.json): 100 mẫu mỗi số/tải; p95 P/D bình thường 84,83/91,67 ms, model chờ 82,21/82,52 ms, map chờ 67,36/67,52 ms. Tất cả đạt ngưỡng 300/500 ms.
 - Google thật `gemini-3.5-flash-lite`: [8 câu trước chỉnh](../eval/results/semantic-holdout-v2.json) đạt 7/8; [6 câu tiếp](../eval/results/semantic-holdout-after-fix-v2.json) đạt 4/6. Những ca đã dùng chỉnh prompt được giữ điểm cũ và chuyển thành development data.

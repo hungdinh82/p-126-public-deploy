@@ -345,4 +345,4 @@ These are prototype targets, not production automotive safety claims. Reports na
 | Intent/hallucination evaluation | Frozen datasets and eval pipeline | Versioned dataset, command, report. |
 | Fleet and OTA | Optional simulated control plane | Multi-vehicle dashboard and rollback. |
 
-Task sequencing and acceptance criteria are in the [five-week project plan](project_plan_5_weeks.md).
+Task sequencing and acceptance criteria are in the [five-week project plan](archive/project_plan_5_weeks.md).

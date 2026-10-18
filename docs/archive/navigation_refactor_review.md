@@ -1,10 +1,10 @@
-> Tài liệu lịch sử. Contract và vận hành hiện hành: [Lõi hội thoại Core v2](langgraph_core_v2.md).
+> Tài liệu lịch sử. Contract và vận hành hiện hành: [Lõi hội thoại Core v2](../langgraph_core_v2.md).
 
 # Navigation refactor — implementation and focused review
 
-> Tài liệu lịch sử. Runtime hiện tại và kết quả kiểm chứng mới nhất: [navigation_runtime.md](navigation_runtime.md).
+> Tài liệu lịch sử. Runtime hiện tại và kết quả kiểm chứng mới nhất: [navigation_runtime.md](../navigation_runtime.md).
 
-Reviewed 2026-10-10. Design: [navigation_state_ui_design.md](navigation_state_ui_design.md).
+Reviewed 2026-10-10. Design: [navigation_state_ui_design.md](../navigation_state_ui_design.md).
 
 ## State ownership
 
