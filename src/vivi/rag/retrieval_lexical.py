@@ -66,9 +66,7 @@ class LexicalHandbookRetriever:
         if not path.exists():
             raise FileNotFoundError(f"parsed handbook not found: {path}; crawl and parse the handbook first")
         self._chunks = [
-            HandbookChunk.model_validate_json(line)
-            for line in path.read_text(encoding="utf-8").splitlines()
-            if line
+            HandbookChunk.model_validate_json(line) for line in path.read_text(encoding="utf-8").splitlines() if line
         ]
         corpus = [_tokens(f"{' '.join(chunk.section_path)} {chunk.content}") for chunk in self._chunks]
         self._bm25 = BM25Okapi(corpus)

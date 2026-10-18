@@ -191,6 +191,7 @@ class AdaptiveSTTAdapter(FallbackSTTAdapter):
     def __init__(self, primary, fallback, connectivity):
         super().__init__(primary, fallback)
         self.connectivity = connectivity
+
     @property
     def name(self):
         engine = self.served_engine or self._active()

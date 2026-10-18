@@ -4,7 +4,9 @@ import re
 
 from src.vivi.text import normalize_text
 
-_FUNCTION_WORDS = set("ban minh toi xe vf8 cua co la gi nao the nhu sao bao nhieu hay va voi ve cho mot nhung cac nay do khi o duoc de can thong tin tinh nang huong dan su dung cach".split())
+_FUNCTION_WORDS = set(
+    "ban minh toi xe vf8 cua co la gi nao the nhu sao bao nhieu hay va voi ve cho mot nhung cac nay do khi o duoc de can thong tin tinh nang huong dan su dung cach".split()
+)
 
 
 def expand_query(query: str) -> str:

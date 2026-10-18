@@ -39,9 +39,7 @@ async def test_login_creates_server_owned_conversation_and_isolates_accounts(tmp
             assert one.status_code == 200
             conversation = one.json()["conversation_id"]
             assert conversation
-            remembered = await first.put(
-                "/api/v1/memory/display_name", json={"kind": "fact", "value": "An"}
-            )
+            remembered = await first.put("/api/v1/memory/display_name", json={"kind": "fact", "value": "An"})
             assert remembered.status_code == 200
             another = await first.post("/api/v1/session/conversations")
             assert another.status_code == 201
@@ -61,7 +59,9 @@ async def test_wrong_pin_is_rejected_and_logout_invalidates_cookie(tmp_path):
     runtime, app = await auth_app(tmp_path)
     try:
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-            assert (await client.post("/api/v1/session/login", json={"phone": "0901 234 567", "pin": "1234"})).status_code == 200
+            assert (
+                await client.post("/api/v1/session/login", json={"phone": "0901 234 567", "pin": "1234"})
+            ).status_code == 200
             await client.delete("/api/v1/session")
             assert (await client.get("/api/v1/session")).status_code == 401
             wrong = await client.post("/api/v1/session/login", json={"phone": "0901 234 567", "pin": "9999"})

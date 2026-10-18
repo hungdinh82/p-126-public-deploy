@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 
 import pytest
+from tests.semantic_helpers import parse
 
 from src.vivi.dialogue.contracts import SessionState
 from src.vivi.dialogue.planner import ModelProvider, SemanticResolver
@@ -17,7 +18,6 @@ from src.vivi.rag.runtime import HandbookServices
 from src.vivi.rag.schemas import RetrievedChunk
 from src.vivi.vehicle.gateway import VehicleActionGateway
 from src.vivi.vehicle.memory import VehicleSimulator
-from tests.semantic_helpers import parse
 
 CASES = [(case["query"], case["expected_route"], case["expected_intent"])
          for case in (json.loads(line) for line in

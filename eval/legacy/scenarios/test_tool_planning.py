@@ -3,15 +3,15 @@
 
 import pytest
 from pydantic import ValidationError
+from tests.semantic_helpers import parse
 
+from eval.legacy.grammar import OfflineParser
 from src.vivi.agents.tools import TOOL_REGISTRY, validate_tool_arguments
 from src.vivi.dialogue.contracts import ActionDraft, SessionState
-from eval.legacy.grammar import OfflineParser
 from src.vivi.dialogue.planner import ModelProvider, SemanticResolver
 from src.vivi.dialogue.reducer import reduce_turn
 from src.vivi.rag.generator import ExtractiveHandbookGenerator, validate_grounding
 from src.vivi.rag.knowledge import analyze_question
-from tests.semantic_helpers import parse
 from tests.support.history_regressions import chunk
 
 

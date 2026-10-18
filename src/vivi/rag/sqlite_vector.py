@@ -21,8 +21,16 @@ class SQLiteVectorRetriever:
     extensions and an additional database daemon. No cloud calls are made.
     """
 
-    def __init__(self, path: Path | str, embeddings: EmbeddingProvider, *, retrieval_k: int = 12,
-                 final_k: int = 5, mode: str = "hybrid", min_similarity: float = 0.0):
+    def __init__(
+        self,
+        path: Path | str,
+        embeddings: EmbeddingProvider,
+        *,
+        retrieval_k: int = 12,
+        final_k: int = 5,
+        mode: str = "hybrid",
+        min_similarity: float = 0.0,
+    ):
         self.path = Path(path)
         self.store = SQLiteHandbookStore(path, read_only=True)
         self.embeddings = embeddings
@@ -59,8 +67,11 @@ class SQLiteVectorRetriever:
                         scope,
                     ).fetchall()
                 chunks = [self.store._to_retrieved(row) for row in rows]
-                matrix = (np.stack([np.frombuffer(row["embedding"], dtype="<f4") for row in rows])
-                          if rows else np.empty((0, self.manifest["dimensions"]), dtype=np.float32))
+                matrix = (
+                    np.stack([np.frombuffer(row["embedding"], dtype="<f4") for row in rows])
+                    if rows
+                    else np.empty((0, self.manifest["dimensions"]), dtype=np.float32)
+                )
                 if matrix.shape[1] != self.manifest["dimensions"] or not np.isfinite(matrix).all():
                     raise ValueError("Corrupt vector index")
                 if len(matrix) and not np.allclose(np.linalg.norm(matrix, axis=1), 1.0, atol=1e-4):
@@ -83,7 +94,7 @@ class SQLiteVectorRetriever:
         scores = np.einsum("ij,j->i", matrix, vector, optimize=False)
         accept_variant = variant_filter(query)
         eligible = np.asarray([accept_variant(chunk) and matches_topic(query, chunk) for chunk in chunks])
-        order = [int(index) for index in np.argsort(-scores, kind="stable") if eligible[index]][:self.retrieval_k]
+        order = [int(index) for index in np.argsort(-scores, kind="stable") if eligible[index]][: self.retrieval_k]
         candidates: dict[str, RetrievedChunk] = {}
         for rank, index in enumerate(order, 1):
             if float(scores[index]) < self.min_similarity:
@@ -93,9 +104,16 @@ class SQLiteVectorRetriever:
             chunk.fused_score = 1 / (60 + rank)
             candidates[chunk.source_id] = chunk
         if self.mode == "hybrid":
-            lexical = self.store.search(lexical_query(expand_query(query)), vehicle_model=scope[0], model_year=scope[1], locale=scope[2],
-                                        limit=self.retrieval_k * 4)
-            lexical = [chunk for chunk in lexical if accept_variant(chunk) and matches_topic(query, chunk)][:self.retrieval_k]
+            lexical = self.store.search(
+                lexical_query(expand_query(query)),
+                vehicle_model=scope[0],
+                model_year=scope[1],
+                locale=scope[2],
+                limit=self.retrieval_k * 4,
+            )
+            lexical = [chunk for chunk in lexical if accept_variant(chunk) and matches_topic(query, chunk)][
+                : self.retrieval_k
+            ]
             by_id = {chunk.source_id: i for i, chunk in enumerate(chunks)}
             for rank, chunk in enumerate(lexical, 1):
                 index = by_id.get(chunk.source_id)
@@ -109,7 +127,7 @@ class SQLiteVectorRetriever:
                 item.lexical_score = chunk.lexical_score
                 item.fused_score += 1 / (60 + rank)
         ranked = sorted(candidates.values(), key=lambda chunk: (-rerank_score(query, chunk), chunk.source_id))
-        result = ranked[:self.final_k]
+        result = ranked[: self.final_k]
         question = analyze_question(query)
         # An overview and its limitation are complementary evidence roles.
         # Reserve one slot for a directly scoped safety statement, rather than
@@ -123,7 +141,7 @@ class SQLiteVectorRetriever:
                         if source.source_id not in {item.source_id for item in result}:
                             warning = source.model_copy(deep=True)
                             warning.semantic_distance = 1 - float(scores[index])
-                            result = result[:self.final_k - 1] + [warning]
+                            result = result[: self.final_k - 1] + [warning]
                         break
         return result
 
@@ -138,5 +156,7 @@ def write_vectors(connection: sqlite3.Connection, source_ids: list[str], vectors
         norm = float(np.linalg.norm(values))
         if values.shape != (dimensions,) or not np.isfinite(values).all() or norm < 1e-12:
             raise ValueError("Invalid document vector")
-        connection.execute("INSERT INTO handbook_vectors(source_id, embedding) VALUES (?, ?)",
-                           (source_id, (values / norm).astype("<f4").tobytes()))
+        connection.execute(
+            "INSERT INTO handbook_vectors(source_id, embedding) VALUES (?, ?)",
+            (source_id, (values / norm).astype("<f4").tobytes()),
+        )

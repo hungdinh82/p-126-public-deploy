@@ -1,5 +1,6 @@
 """Geometry references for telemetry; authoritative snapshots remain complete."""
 
+
 def compact_snapshot(payload, known_routes):
     def compact(value):
         if isinstance(value, list):

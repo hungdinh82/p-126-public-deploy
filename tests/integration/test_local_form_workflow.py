@@ -100,14 +100,17 @@ def flatten_state(value, prefix):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(("answers", "zone"), [
-    ([("trước trái", "driver")], "driver"),
-    ([("đằng trước trái", "driver")], "driver"),
-    ([("ở đằng trước phía bên tay phải", "front_passenger")], "front_passenger"),
-    ([("cửa trước", "front"), ("bên trái", "left")], "driver"),
-    ([("bên phải", "right"), ("đằng sau", "rear")], "rear_right"),
-    ([("phía sau bên trái nhé", "rear_left")], "rear_left"),
-])
+@pytest.mark.parametrize(
+    ("answers", "zone"),
+    [
+        ([("trước trái", "driver")], "driver"),
+        ([("đằng trước trái", "driver")], "driver"),
+        ([("ở đằng trước phía bên tay phải", "front_passenger")], "front_passenger"),
+        ([("cửa trước", "front"), ("bên trái", "left")], "driver"),
+        ([("bên phải", "right"), ("đằng sau", "rear")], "rear_right"),
+        ([("phía sau bên trái nhé", "rear_left")], "rear_left"),
+    ],
+)
 async def test_short_positions_persist_both_coordinates_before_consent(services, tmp_path, answers, zone):
     class Model:
         tools_as_json = True
@@ -140,8 +143,10 @@ async def test_short_positions_persist_both_coordinates_before_consent(services,
         assert step["status"] == "waiting_confirmation"
         assert step["arguments"]["open"] is True
         coordinates = {
-            ("front", "left"): "driver", ("front", "right"): "front_passenger",
-            ("rear", "left"): "rear_left", ("rear", "right"): "rear_right",
+            ("front", "left"): "driver",
+            ("front", "right"): "front_passenger",
+            ("rear", "left"): "rear_left",
+            ("rear", "right"): "rear_right",
         }
         stored_zone = step["arguments"].get("zone") or coordinates.get(
             (step["arguments"].get("target_row"), step["arguments"].get("target_side"))
@@ -263,24 +268,32 @@ async def test_model_fills_location_then_literal_ok_executes_once(services, tmp_
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(("text", "calls", "included", "excluded"), [
-    (
-        "pin còn lại và áp suất lốp bao nhiêu",
-        [("get_battery_level", {}), ("get_tire_pressure", {})],
-        ["Pin còn", "Áp suất lốp"], ["Điều hoà", "Nắp capo", "Các cửa:"],
-    ),
-    (
-        "trạng thái cửa và kính xe",
-        [("get_door_status", {}), ("get_window_positions", {})],
-        ["Các cửa:", "Độ mở cửa kính:"], ["Pin còn", "Nắp capo", "Cốp sau"],
-    ),
-    (
-        "nhiệt độ cabin và trạng thái cốp",
-        [("get_cabin_temperature", {}), ("get_trunk_status", {})],
-        ["Điều hoà", "Cốp sau"], ["Pin còn", "Nắp capo", "Các cửa:"],
-    ),
-])
-async def test_multiple_status_tools_return_only_requested_measurements(services, tmp_path, text, calls, included, excluded):
+@pytest.mark.parametrize(
+    ("text", "calls", "included", "excluded"),
+    [
+        (
+            "pin còn lại và áp suất lốp bao nhiêu",
+            [("get_battery_level", {}), ("get_tire_pressure", {})],
+            ["Pin còn", "Áp suất lốp"],
+            ["Điều hoà", "Nắp capo", "Các cửa:"],
+        ),
+        (
+            "trạng thái cửa và kính xe",
+            [("get_door_status", {}), ("get_window_positions", {})],
+            ["Các cửa:", "Độ mở cửa kính:"],
+            ["Pin còn", "Nắp capo", "Cốp sau"],
+        ),
+        (
+            "nhiệt độ cabin và trạng thái cốp",
+            [("get_cabin_temperature", {}), ("get_trunk_status", {})],
+            ["Điều hoà", "Cốp sau"],
+            ["Pin còn", "Nắp capo", "Các cửa:"],
+        ),
+    ],
+)
+async def test_multiple_status_tools_return_only_requested_measurements(
+    services, tmp_path, text, calls, included, excluded
+):
     class Model:
         tools_as_json = True
         local_semantic_contract = "operations_v1"

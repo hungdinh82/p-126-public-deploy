@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from tests.semantic_helpers import parse
 
 from src.vivi.dialogue.contracts import SessionState
 from src.vivi.dialogue.planner import ModelProvider, SemanticResolver
@@ -10,7 +11,6 @@ from src.vivi.history.sqlite import SQLiteConversationHistory
 from src.vivi.rag.generator import ExtractiveHandbookGenerator
 from src.vivi.rag.runtime import HandbookServices
 from src.vivi.vehicle.gateway import VehicleActionGateway
-from tests.semantic_helpers import parse
 from tests.support.history_regressions import chunk as chunk
 
 

@@ -10,6 +10,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
 from fastapi.testclient import TestClient
+from tests.semantic_helpers import parse
 
 from src.vivi.api.app import app
 from src.vivi.api.runtime import runtime
@@ -28,7 +29,6 @@ from src.vivi.speech.stt import DisabledSTTAdapter, PhoWhisperAdapter, create_st
 from src.vivi.speech.tts import DisabledTTSAdapter, ZeroTTSAdapter, create_tts
 from src.vivi.vehicle.gateway import VehicleActionGateway
 from src.vivi.vehicle.memory import VehicleSimulator
-from tests.semantic_helpers import parse
 
 
 class SafetyTests(unittest.TestCase):

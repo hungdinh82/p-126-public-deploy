@@ -71,10 +71,26 @@ class AlertEngine:
                 return []
             self._last_versions[state.vehicle_id] = state.state_version
             desired = {self._key(alert): alert for alert in self._evaluate_rules(state)}
-            for code, trigger, recovery, severity in [('LOW_BATTERY',20,22,'warning'),('BATTERY_CRITICAL',10,12,'critical')]:
-                key = (state.vehicle_id,code,'battery')
+            for code, trigger, recovery, severity in [
+                ("LOW_BATTERY", 20, 22, "warning"),
+                ("BATTERY_CRITICAL", 10, 12, "critical"),
+            ]:
+                key = (state.vehicle_id, code, "battery")
                 if state.battery_percent < trigger or (key in self._active and state.battery_percent < recovery):
-                    desired[key] = VehicleAlert(alert_id=str(uuid4()),vehicle_id=state.vehicle_id,code=code,source='battery',severity=severity,message=f'Pin xe còn {state.battery_percent} phần trăm. Bạn cần chọn trạm sạc có thể tới.',observed_value=state.battery_percent,threshold=trigger,unit='%',state_version=state.state_version,triggered_at=state.updated_at,updated_at=state.updated_at)
+                    desired[key] = VehicleAlert(
+                        alert_id=str(uuid4()),
+                        vehicle_id=state.vehicle_id,
+                        code=code,
+                        source="battery",
+                        severity=severity,
+                        message=f"Pin xe còn {state.battery_percent} phần trăm. Bạn cần chọn trạm sạc có thể tới.",
+                        observed_value=state.battery_percent,
+                        threshold=trigger,
+                        unit="%",
+                        state_version=state.state_version,
+                        triggered_at=state.updated_at,
+                        updated_at=state.updated_at,
+                    )
             current_keys = {key for key in self._active if key[0] == state.vehicle_id}
             events: list[AlertEvent] = []
 

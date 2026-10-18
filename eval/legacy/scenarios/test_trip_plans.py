@@ -2,8 +2,8 @@
 
 import pytest
 
-from src.vivi.dialogue.contracts import SessionState
 from eval.legacy.grammar import OfflineParser
+from src.vivi.dialogue.contracts import SessionState
 from src.vivi.navigation.energy import EnergyPlanner
 from src.vivi.navigation.vietmap import Place, VietMapError
 from tests.support.dialogue_v2 import ScriptedModel, build, invoke

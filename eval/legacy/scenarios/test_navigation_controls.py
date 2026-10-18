@@ -240,8 +240,8 @@ async def test_voice_gear_uses_same_accepted_journey_as_button(services, tmp_pat
 
 
 def test_negated_gear_request_cannot_create_a_drive_action():
-    from src.vivi.dialogue.contracts import SessionState
     from eval.legacy.grammar import OfflineParser
+    from src.vivi.dialogue.contracts import SessionState
 
     decision = OfflineParser().interpret("không chuyển sang D", SessionState())
     assert not decision.actions or decision.negated

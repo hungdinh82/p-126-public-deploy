@@ -41,7 +41,13 @@ def _r2_action(proposal: ActionProposal) -> str:
     if proposal.intent == "window.set_position":
         target = zoned_noun("cửa sổ", proposal.arguments)
         percent = int(proposal.arguments["position_percent"])
-        return f"mở {target}" if percent == 100 else f"đóng {target}" if percent == 0 else f"mở {target} {percent} phần trăm"
+        return (
+            f"mở {target}"
+            if percent == 100
+            else f"đóng {target}"
+            if percent == 0
+            else f"mở {target} {percent} phần trăm"
+        )
     if proposal.intent == "door.set_lock":
         target = zoned_noun("cửa", proposal.arguments)
         return f"khóa {target}" if proposal.arguments.get("locked") else f"mở khóa {target}"

@@ -49,9 +49,7 @@ class VehicleActionGateway:
         self.confirmations = confirmations or ConfirmationStore()
         self.ledger = ledger
         self._execute_lock = threading.Lock()
-        self._confirmation_cache: dict[
-            tuple[str, str], tuple[str, str, ConfirmationResolution, VehicleState]
-        ] = {}
+        self._confirmation_cache: dict[tuple[str, str], tuple[str, str, ConfirmationResolution, VehicleState]] = {}
         self._safety_cache: dict[tuple[str, str], tuple[str, GatewayDecision]] = {}
         self._cache_lock = threading.Lock()
         self._confirmation_checks: dict[tuple[str, str], GatewayDecision] = {}
@@ -96,7 +94,10 @@ class VehicleActionGateway:
         # source of truth at the policy boundary.
         del supplied_vehicle_state
         vehicle_state = self.vehicle.state_for(session_id)
-        if approved_snapshot and (vehicle_state.vehicle_id, vehicle_state.state_version) != (approved_snapshot.vehicle_id, approved_snapshot.state_version):
+        if approved_snapshot and (vehicle_state.vehicle_id, vehicle_state.state_version) != (
+            approved_snapshot.vehicle_id,
+            approved_snapshot.state_version,
+        ):
             return GatewayDecision(False, "denied", "Trạng thái xe đã thay đổi. Bạn xác nhận lại thao tác nhé.", "R2")
         result = validate(action, vehicle_state, confirmed=confirmed)
         confirmation = None
@@ -117,7 +118,11 @@ class VehicleActionGateway:
         )
         if turn_id and decision.allowed:
             with self._cache_lock:
-                self._authorizations[(session_id, turn_id)] = (fingerprint, vehicle_state.vehicle_id, vehicle_state.state_version)
+                self._authorizations[(session_id, turn_id)] = (
+                    fingerprint,
+                    vehicle_state.vehicle_id,
+                    vehicle_state.state_version,
+                )
         if cache_key is not None:
             with self._cache_lock:
                 self._safety_cache[cache_key] = (fingerprint, decision)
@@ -166,7 +171,9 @@ class VehicleActionGateway:
         with self._cache_lock:
             checked = self._confirmation_checks.get(cache_key)
         if checked is None:
-            checked = self.check(session_id, proposal, confirmed=True, turn_id=turn_id, approved_snapshot=approved_snapshot)
+            checked = self.check(
+                session_id, proposal, confirmed=True, turn_id=turn_id, approved_snapshot=approved_snapshot
+            )
             with self._cache_lock:
                 self._confirmation_checks[cache_key] = checked
         return proposal, checked
@@ -198,17 +205,30 @@ class VehicleActionGateway:
                     return GatewayExecution(**completed["result"])
             with self._cache_lock:
                 authorization = self._authorizations.get((session_id, turn_id))
-            if (self.ledger or authorization) and authorization != (action_fingerprint(action), current.vehicle_id, current.state_version):
-                return GatewayExecution(False, False, "Trạng thái xe đã thay đổi. Bạn xác nhận lại thao tác nhé.",
-                    current.model_dump(mode="json"), "missing or stale dispatch authorization")
+            if (self.ledger or authorization) and authorization != (
+                action_fingerprint(action),
+                current.vehicle_id,
+                current.state_version,
+            ):
+                return GatewayExecution(
+                    False,
+                    False,
+                    "Trạng thái xe đã thay đổi. Bạn xác nhận lại thao tác nhé.",
+                    current.model_dump(mode="json"),
+                    "missing or stale dispatch authorization",
+                )
             policy = validate(action, current, confirmed=True)
             if not policy.allowed:
-                return GatewayExecution(False, False, policy.message, current.model_dump(mode="json"), "policy changed before dispatch")
+                return GatewayExecution(
+                    False, False, policy.message, current.model_dump(mode="json"), "policy changed before dispatch"
+                )
             control = current_control.get()
             if control:
                 control.allow_dispatch()
             if self.ledger:
-                cached = self.ledger.reserve_command(session_id, turn_id, {"intent": action.intent, "arguments": action.arguments})
+                cached = self.ledger.reserve_command(
+                    session_id, turn_id, {"intent": action.intent, "arguments": action.arguments}
+                )
                 if cached:
                     return GatewayExecution(**cached)
             options = {"expected_state_version": current.state_version} if self.ledger else {}
@@ -259,8 +279,10 @@ class VehicleActionGateway:
             return getattr(state, BODY_PANELS[proposal.intent][0]) is arguments["open"]
         if proposal.intent == "body.set_open":
             opening = arguments["open"]
-            return state.hood_open is opening and state.trunk_open is opening and all(
-                getattr(state.door_states, zone).open is opening for zone in CABIN_ZONES
+            return (
+                state.hood_open is opening
+                and state.trunk_open is opening
+                and all(getattr(state.door_states, zone).open is opening for zone in CABIN_ZONES)
             )
         if proposal.intent == "seat.set_heat_level":
             return all(

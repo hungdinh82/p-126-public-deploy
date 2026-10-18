@@ -694,20 +694,23 @@ def test_side_matching_an_explicit_seat_role_preserves_that_role():
         decode_proposals([("close_door", {"targets": ["left"]})], docs, {}, text, tools)
 
 
-@pytest.mark.parametrize(("text", "allowed"), [
-    ("cửa hàng sau bên phải", {"rear_right"}),
-    ("ghế tài xế", {"driver"}),
-    ("chỗ người lái", {"driver"}),
-    ("cửa trước trái", {"driver"}),
-    ("đằng trước trái", {"driver"}),
-    ("ở đằng trước phía bên tay phải", {"front_passenger"}),
-    ("bên trái", {"left"}),
-    ("hàng sau", {"rear"}),
-    ("mọi cửa", {"all"}),
-    ("khóa hết cửa", {"all"}),
-    ("hạ hết kính sau phải", {"rear_right"}),
-    ("mở hết kính bên phụ", {"front_passenger"}),
-])
+@pytest.mark.parametrize(
+    ("text", "allowed"),
+    [
+        ("cửa hàng sau bên phải", {"rear_right"}),
+        ("ghế tài xế", {"driver"}),
+        ("chỗ người lái", {"driver"}),
+        ("cửa trước trái", {"driver"}),
+        ("đằng trước trái", {"driver"}),
+        ("ở đằng trước phía bên tay phải", {"front_passenger"}),
+        ("bên trái", {"left"}),
+        ("hàng sau", {"rear"}),
+        ("mọi cửa", {"all"}),
+        ("khóa hết cửa", {"all"}),
+        ("hạ hết kính sau phải", {"rear_right"}),
+        ("mở hết kính bên phụ", {"front_passenger"}),
+    ],
+)
 def test_generation_grammar_only_offers_grounded_positions(text, allowed):
     from src.vivi.dialogue.local_operations import generation_tools
 
@@ -715,8 +718,11 @@ def test_generation_grammar_only_offers_grounded_positions(text, allowed):
     tools = proposal_tools(docs, {}, text)
     before = deepcopy(tools)
     wire = generation_tools(tools, text)
-    schema = next(t["function"]["parameters"]["properties"]["targets"] for t in wire
-                  if t["function"]["name"] in {"open_door", "close_door", "lock_door", "unlock_door"})
+    schema = next(
+        t["function"]["parameters"]["properties"]["targets"]
+        for t in wire
+        if t["function"]["name"] in {"open_door", "close_door", "lock_door", "unlock_door"}
+    )
     assert set(schema["items"]["enum"]) == allowed
     assert tools == before
 
@@ -727,15 +733,20 @@ def test_missing_position_grammar_cannot_invent_a_seat_and_repeat_verb_is_not_dr
     for text in ("mở cửa", "đóng cửa lại", "mở hết"):
         tools = proposal_tools(local_tool_documents(catalog(True)), {}, text)
         wire = generation_tools(tools, text)
-        schema = next(t["function"]["parameters"]["properties"]["targets"] for t in wire
-                      if t["function"]["name"] in {"open_door", "close_door", "lock_door", "unlock_door"})
+        schema = next(
+            t["function"]["parameters"]["properties"]["targets"]
+            for t in wire
+            if t["function"]["name"] in {"open_door", "close_door", "lock_door", "unlock_door"}
+        )
         validator = Draft202012Validator(schema)
         assert validator.is_valid([])
         assert not validator.is_valid(["driver"])
         assert not validator.is_valid(["all"])
 
 
-@pytest.mark.parametrize("text", ["kính bên phụ mở 35%", "cho kính bên tài mở một nửa", "hạ kính sau trái 40 phần trăm"])
+@pytest.mark.parametrize(
+    "text", ["kính bên phụ mở 35%", "cho kính bên tài mở một nửa", "hạ kính sau trái 40 phần trăm"]
+)
 def test_specific_window_amount_keeps_value_bearing_tool(text):
     from src.vivi.dialogue.local_operations import generation_tools
 
@@ -802,7 +813,9 @@ def test_clause_coverage_still_rejects_a_dropped_operation_in_the_same_domain():
     from src.vivi.dialogue.contracts import SemanticTurn
     from src.vivi.dialogue.local_operations import check_coverage
 
-    result = SemanticTurn(act="request", actions=[ActionDraft(capability="door.set_open", arguments={"open": True, "zone": "rear_left"})])
+    result = SemanticTurn(
+        act="request", actions=[ActionDraft(capability="door.set_open", arguments={"open": True, "zone": "rear_left"})]
+    )
     with pytest.raises(HostTurn, match="missing_clause"):
         check_coverage(result, "mở cửa sau trái rồi đóng cửa sau phải", catalog(True), final=True)
 
@@ -812,7 +825,9 @@ def test_duplicate_supported_actions_do_not_cover_an_unknown_control_clause():
     from src.vivi.dialogue.contracts import SemanticTurn
     from src.vivi.dialogue.local_operations import check_coverage
 
-    result = SemanticTurn(act="request", actions=[ActionDraft(capability="media.play"), ActionDraft(capability="media.pause")])
+    result = SemanticTurn(
+        act="request", actions=[ActionDraft(capability="media.play"), ActionDraft(capability="media.pause")]
+    )
     with pytest.raises(HostTurn, match="unsupported_clause"):
         check_coverage(result, "phát nhạc rồi bật đèn nội thất", catalog(True), final=True)
 

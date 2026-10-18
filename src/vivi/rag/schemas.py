@@ -45,7 +45,6 @@ class HandbookChunk(BaseModel):
     chunk_index: int
 
 
-
 class RetrievedChunk(HandbookChunk):
     semantic_distance: float = 1.0
     lexical_score: float = 0.0

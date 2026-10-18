@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from eval.legacy.grammar import OfflineParser
 from src.vivi.dialogue.answers import AnswerResolver
 from src.vivi.dialogue.contracts import (
     DialogueTask,
@@ -15,7 +16,6 @@ from src.vivi.dialogue.contracts import (
     SessionState,
     TaskStep,
 )
-from eval.legacy.grammar import OfflineParser
 from src.vivi.dialogue.planner import ModelProvider, SemanticResolver
 from src.vivi.dialogue.questions import current_question, propose_question
 from src.vivi.dialogue.reducer import reduce_turn, synchronize_question

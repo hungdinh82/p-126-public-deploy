@@ -5,12 +5,12 @@ import socket
 import sqlite3
 
 import pytest
+from tests.semantic_helpers import parse
 
 from eval.benchmark import fact_coverage, load_dataset, local_network_only
 from src.vivi.rag.schemas import HandbookChunk
 from src.vivi.rag.sqlite_store import SQLiteHandbookStore
 from src.vivi.rag.sqlite_vector import SQLiteVectorRetriever, write_vectors
-from tests.semantic_helpers import parse
 
 
 class FakeEmbeddings:

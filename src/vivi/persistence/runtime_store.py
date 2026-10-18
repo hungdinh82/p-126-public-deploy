@@ -3,6 +3,7 @@
 SQLite transactions own reservations. Checkpoints are workflow state; this ledger
 records external effects and never assumes that a crashed dispatch did not occur.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -12,7 +13,9 @@ from pathlib import Path
 
 
 def fingerprint(value: dict) -> str:
-    return hashlib.sha256(json.dumps(value, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode()).hexdigest()
+    return hashlib.sha256(
+        json.dumps(value, sort_keys=True, ensure_ascii=False, separators=(",", ":")).encode()
+    ).hexdigest()
 
 
 class RuntimeStore:
@@ -63,21 +66,22 @@ class RuntimeStore:
         prefix = profile_id + ":"
         with self.connect() as db:
             rows = db.execute("SELECT DISTINCT session FROM turn_ledger").fetchall()
-        return [row[0][len(prefix):] for row in rows if row[0].startswith(prefix)]
+        return [row[0][len(prefix) :] for row in rows if row[0].startswith(prefix)]
 
     def clear_history(self, profile_id, session_ids):
         with self.connect() as db:
             for session_id in session_ids:
                 session = f"{profile_id}:{session_id}"
-                db.execute("UPDATE turn_ledger SET response=? WHERE session=?",
-                           ('{"history_cleared":true}', session))
+                db.execute("UPDATE turn_ledger SET response=? WHERE session=?", ('{"history_cleared":true}', session))
                 db.execute("DELETE FROM dialogue_sessions WHERE session=?", (session,))
                 db.execute("DELETE FROM suspended_tasks WHERE session=?", (session,))
 
     def finish_turn(self, session: str, turn: str, response: dict):
         with self.connect() as db:
-            db.execute("UPDATE turn_ledger SET status='completed',response=? WHERE session=? AND turn=?",
-                       (json.dumps(response, ensure_ascii=False), session, turn))
+            db.execute(
+                "UPDATE turn_ledger SET status='completed',response=? WHERE session=? AND turn=?",
+                (json.dumps(response, ensure_ascii=False), session, turn),
+            )
 
     def fail_turn(self, session: str, turn: str):
         with self.connect() as db:
@@ -99,8 +103,10 @@ class RuntimeStore:
 
     def finish_command(self, session: str, turn: str, result: dict):
         with self.connect() as db:
-            db.execute("UPDATE command_ledger SET status=?,result=? WHERE session=? AND turn=?",
-                       ("verified" if result["verified"] else "unknown", json.dumps(result), session, turn))
+            db.execute(
+                "UPDATE command_ledger SET status=?,result=? WHERE session=? AND turn=?",
+                ("verified" if result["verified"] else "unknown", json.dumps(result), session, turn),
+            )
 
     @staticmethod
     def action_key(action):
@@ -108,7 +114,9 @@ class RuntimeStore:
 
     def command_result(self, session, turn):
         with self.connect() as db:
-            row = db.execute("SELECT fingerprint,result FROM command_ledger WHERE session=? AND turn=?", (session, turn)).fetchone()
+            row = db.execute(
+                "SELECT fingerprint,result FROM command_ledger WHERE session=? AND turn=?", (session, turn)
+            ).fetchone()
         if row and row["result"]:
             return {"fingerprint": row["fingerprint"], "result": json.loads(row["result"])}
         return None
@@ -120,14 +128,37 @@ class RuntimeStore:
     def turn_status(self, session, turn, command_session=None):
         effect_session = command_session or session
         with self.connect() as db:
-            row = db.execute("SELECT status,response FROM turn_ledger WHERE session=? AND turn=?", (session, turn)).fetchone()
-            commands = list(db.execute("""SELECT c.turn AS id,c.status,c.result FROM command_ledger c
+            row = db.execute(
+                "SELECT status,response FROM turn_ledger WHERE session=? AND turn=?", (session, turn)
+            ).fetchone()
+            commands = list(
+                db.execute(
+                    """SELECT c.turn AS id,c.status,c.result FROM command_ledger c
                 JOIN command_turns t ON t.session=c.session AND t.command=c.turn
-                WHERE t.session=? AND t.turn=? ORDER BY t.rowid""", (effect_session, turn)))
+                WHERE t.session=? AND t.turn=? ORDER BY t.rowid""",
+                    (effect_session, turn),
+                )
+            )
             if not commands:
-                commands = list(db.execute("SELECT turn AS id,status,result FROM command_ledger WHERE session=? AND turn=?", (effect_session, turn)))
+                commands = list(
+                    db.execute(
+                        "SELECT turn AS id,status,result FROM command_ledger WHERE session=? AND turn=?",
+                        (effect_session, turn),
+                    )
+                )
         if not row:
             return None
-        effects = [{"id": item["id"], "status": item["status"], "result": json.loads(item["result"]) if item["result"] else None} for item in commands]
-        return {"status": row["status"], "response": json.loads(row["response"]) if row["response"] else None,
-                "command": effects[-1] if effects else None, "commands": effects}
+        effects = [
+            {
+                "id": item["id"],
+                "status": item["status"],
+                "result": json.loads(item["result"]) if item["result"] else None,
+            }
+            for item in commands
+        ]
+        return {
+            "status": row["status"],
+            "response": json.loads(row["response"]) if row["response"] else None,
+            "command": effects[-1] if effects else None,
+            "commands": effects,
+        }
