@@ -13,6 +13,13 @@ from src.vivi.turn_control import current_control
 
 
 class CapabilityRuntime:
+    TIRE_POSITION_LABELS = {
+        "front_left": "lốp trước trái",
+        "front_right": "lốp trước phải",
+        "rear_left": "lốp sau trái",
+        "rear_right": "lốp sau phải",
+    }
+
     def __init__(
         self,
         services,
@@ -240,8 +247,10 @@ class CapabilityRuntime:
             parts.append(f"Quãng đường dự kiến còn {state['range_km']} km.")
         if "tires" in selected:
             parts.append(
-                "Áp suất lốp: "
-                + "; ".join(f"{key}: {value:g} kPa" for key, value in state["tire_pressures_kpa"].items())
+                ". ".join(
+                    f"Áp suất {CapabilityRuntime.TIRE_POSITION_LABELS.get(key, key)} là {value:g} kPa"
+                    for key, value in state["tire_pressures_kpa"].items()
+                )
                 + "."
             )
         if "body" in selected:
