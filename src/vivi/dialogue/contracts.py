@@ -11,6 +11,7 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictFloat, StrictInt, model_validator
 
+from src.vivi.navigation.categories import CATEGORY_KEYS
 from src.vivi.navigation.contracts import DestinationSpec
 from src.vivi.navigation.models import (
     ActiveJourney as ActiveJourney,
@@ -31,9 +32,15 @@ from src.vivi.navigation.models import (
     TripPlanState as TripPlanState,
 )
 
+PoiCategoryKey = Literal[*CATEGORY_KEYS]
+
 
 class Arguments(BaseModel):
-    """Nullable capability slots; schemas in the registry validate execution."""
+    """Normalized domain slots; registry schemas validate execution.
+
+    The local operations model receives small per-tool schemas, not this union.
+    Null defaults in a serialized SemanticTurn can be host-added values.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -59,7 +66,7 @@ class Arguments(BaseModel):
     choice_handle: str | None = None
     reject_candidates: StrictBool | None = None
     use_search_results: bool | None = None
-    category: Literal["pharmacy", "charging"] | None = None
+    category: PoiCategoryKey | None = None
     nearest: bool | None = None
     destination_scope: Literal["place", "region"] | None = None
     trip_kind: Literal["one_way", "round_trip"] | None = None
@@ -73,6 +80,9 @@ class Arguments(BaseModel):
     question_kind: Literal["charging_duration"] | None = None
     charging_mode: Literal["AC", "DC"] | None = None
     temperature_delta_celsius: StrictFloat | None = Field(default=None, ge=-30, le=30)
+    # Direction of an amountless comfort request ("tôi lạnh"); the host asks the
+    # target rather than guessing a step, and ignores it once value_celsius is set.
+    temperature_direction: Literal["increase", "decrease"] | None = None
 
 
 class ActionDraft(BaseModel):
@@ -85,7 +95,7 @@ class ActionDraft(BaseModel):
 
     @model_validator(mode="after")
     def capability_arguments(self):
-        from src.vivi.agents.tools import TOOL_REGISTRY
+        from src.vivi.agents.tools import TOOL_REGISTRY, semantic_argument_names
 
         spec = TOOL_REGISTRY.get(self.capability)
         if spec is not None:
@@ -95,11 +105,7 @@ class ActionDraft(BaseModel):
                 and not self.arguments.query
             ):
                 self.arguments.query = self.arguments.destination.query() or None
-            allowed = set(spec.parameters.model_fields)
-            if self.capability == "climate.set_temperature":
-                allowed.add("temperature_delta_celsius")
-            if self.capability in {"door.set_open", "door.set_lock", "window.set_position", "seat.set_heat_level"}:
-                allowed.update({"target_side", "target_row"})
+            allowed = semantic_argument_names(self.capability)
             supplied = set(self.arguments.model_dump(exclude_none=True))
             if supplied - allowed:
                 raise ValueError(f"Unsupported arguments for {self.capability}: {sorted(supplied - allowed)}")

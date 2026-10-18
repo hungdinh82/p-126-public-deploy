@@ -9,6 +9,8 @@ from pydantic import BaseModel, Field, model_validator
 
 from src.vivi.config import Settings
 
+RATE_LIMIT_RETRIES = 2
+
 
 class VietMapError(RuntimeError):
     """Upstream VietMap failure that the API reports as a gateway error."""
@@ -136,10 +138,21 @@ class VietMapClient:
 
     async def _get(self, path: str, params: list[tuple[str, str]], key: str | None = None) -> Any:
         query = [("apikey", key or self.api_key), *params]
-        try:
-            response = await self.http().get(path, params=query)
-        except httpx.HTTPError as exc:
-            raise VietMapError("Không kết nối được VietMap") from exc
+        for attempt in range(RATE_LIMIT_RETRIES + 1):
+            try:
+                response = await self.http().get(path, params=query)
+            except httpx.HTTPError as exc:
+                raise VietMapError("Không kết nối được VietMap") from exc
+            # A burst of detail reads can trip the per-second limit; one short
+            # wait normally clears it, and the caller's budget still bounds us.
+            if response.status_code == 429 and attempt < RATE_LIMIT_RETRIES:
+                try:
+                    wait = float(response.headers.get("Retry-After", ""))
+                except ValueError:
+                    wait = 0.5 * (attempt + 1)
+                await asyncio.sleep(min(max(wait, 0.2), 1.5))
+                continue
+            break
         if response.status_code != 200:
             raise VietMapError(f"VietMap trả về HTTP {response.status_code}")
         return response.json()

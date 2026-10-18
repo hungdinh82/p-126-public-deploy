@@ -520,7 +520,33 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
                 semantic = SemanticTurn(act="resume", task_ref="active")
         elif event.kind == "action" and event.action:
             semantic, served, attempts = SemanticTurn(act="request", actions=[event.action]), None, []
+            question = session.dialogue_question
+            draft = session.navigation_workspace.draft
+            args = semantic.actions[0].arguments
+            if (
+                semantic.actions[0].capability == "navigation.start"
+                and question
+                and question.purpose == "approve_execution"
+                and question.owner == "navigation"
+                and draft
+                and args.plan_id == draft.id
+                and args.route_revision == draft.revision
+            ):
+                # Pressing "Bắt đầu" on this exact plan revision answers the
+                # consent question; a typed UI event is never model output.
+                semantic.consent_question_id = question.id
         else:
+
+            async def load_local_observation():
+                observation = await services.action_gateway.vehicle.get_state(event.session_id)
+                return {
+                    "state_version": observation.state_version,
+                    "updated_at": observation.updated_at.isoformat(),
+                    "door_open": {key: value["open"] for key, value in observation.door_states.model_dump().items()},
+                    "hood_open": observation.hood_open,
+                    "trunk_open": observation.trunk_open,
+                }
+
             semantic, served, attempts = await external_read(
                 resolver.resolve(
                     event.text,
@@ -528,6 +554,7 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
                     requested=event.provider,
                     history=turn["history"],
                     memory=turn["memory"],
+                    observation_loader=load_local_observation,
                     trace_context={"session_id": event.session_id, "turn_id": event.turn_id},
                     catalog=catalog(
                         services.navigation is not None,
@@ -572,6 +599,8 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
             effective_provider=served,
             semantic_source="typed_event"
             if event.kind != "utterance" or event.question_reply
+            else "literal_question_reply"
+            if any(a.get("source") == "literal_question_reply" for a in attempts)
             else "llm"
             if served
             else "fallback",
@@ -975,9 +1004,12 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
         action = last.get("action")
         if confirmation and last.get("capability") == "memory.reset":
             action = {"intent": "memory.reset", "arguments": {}}
+        semantic_attempt = next(
+            (a for a in reversed(turn.get("provider_attempts", [])) if a.get("outcome") == "served"), {}
+        )
         diagnostics = {
             "workflow_version": "core-2",
-            "prompt_version": PROMPT_VERSION,
+            "prompt_version": semantic_attempt.get("semantic_contract", PROMPT_VERSION),
             "requested_provider": event.provider,
             "effective_provider": turn["effective_provider"],
             "semantic_source": turn.get("semantic_source", "typed_event"),

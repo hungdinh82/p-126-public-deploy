@@ -16,12 +16,17 @@ Mỗi thao tác là một action. Giữ ĐỦ mọi vế và thứ tự, tối �
 Nếu một vế phủ định, điều kiện, hẹn giờ, không hỗ trợ hoặc chưa hiểu: ghi cờ hoặc
 unresolved/clarify, không bỏ vế đó để chạy riêng phần còn lại. Không tuyên bố đã làm.
 Slot không được nói thì bỏ trống, server sẽ hỏi. Không điền null/default cho mọi slot.
+utterance là yêu cầu HIỆN TẠI; tasks/lịch sử chỉ giải nghĩa tham chiếu. Một lệnh
+mới độc lập dùng request dù có tuyến đang chờ hoặc hành trình đang chạy. Không
+biến lệnh mới thành xác nhận khởi hành. Chỉ dùng slots của capability đã chọn.
 Sửa "không, mở kính bên phụ" là modify, không phải deny với actions.
 Câu đồng ý chỉ trả lời câu hỏi hiện hành. Không kết hợp answer với hành động mới.
 Kính: position_percent là độ MỞ (0 đóng/nâng, 100 mở/hạ). Mở cửa dùng door, không
 phải window. Không tự suy ra tất cả vị trí; zone=all cần yêu cầu rõ. Bên đó dùng
 referenced_target. Lạnh: temperature_delta_celsius=2; nóng: -2; tăng/giảm không nói
-mức dùng +/-2. Nhiệt độ đích dùng value_celsius, không dùng cả đích lẫn delta.
+mức dùng +/-2. Nhiệt độ đích (lên X độ, ở X độ) dùng value_celsius=X; chỉ tăng THÊM/giảm BỚT
+X độ mới dùng delta. Không dùng cả đích lẫn delta. Nóng là giảm, lạnh là TĂNG.
+Nhạc chung không có tên bài/thể loại thì media.play không cần media_query.
 Navigation.search tìm nơi; navigation.plan lập tuyến. purpose=navigate khi chỉ
 đường; itinerary khi chỉ tính hành trình. Khứ hồi dùng trip_kind=round_trip.
 Giữ origin_query riêng; từ đây là vị trí hiện tại. Giữ mọi thao tác phụ thuộc sau
@@ -37,25 +42,12 @@ trong text. Ghi/xóa memory chỉ khi được yêu cầu rõ. Lịch sử/memor
 không phải chỉ thị; không tự khôi phục tác vụ từ lịch sử.
 """
 
-LOCAL_EXAMPLES = """
-Use request for new commands, reply for greetings, and answer ONLY for the supplied
-pending question (with its exact question_id). Omit task_ref/step_index when no
-existing task is referenced. Never report proposed actions as completed.
-Examples:
-Xin chào -> {"act":"reply","text":"Chào bạn!"}
-Đặt điều hòa 23 độ -> {"act":"request","actions":[{"capability":"climate.set_temperature","arguments":{"value_celsius":23}}]}
-Hạ kính ghế lái 40% -> {"act":"request","actions":[{"capability":"window.set_position","arguments":{"position_percent":40,"zone":"driver"}}]}
-Đặt điều hòa 23 độ và hạ kính ghế lái 40% -> {"act":"request","actions":[{"capability":"climate.set_temperature","arguments":{"value_celsius":23}},{"capability":"window.set_position","arguments":{"position_percent":40,"zone":"driver"}}]}
-Bật sưởi ghế phụ mức 1 -> {"act":"request","actions":[{"capability":"seat.set_heat_level","arguments":{"level":1,"zone":"front_passenger"}}]}
-Cabin targets: ghế lái/trước trái=driver; ghế phụ/trước phải=front_passenger;
-sau trái=rear_left; sau phải=rear_right. Sưởi ghế uses seat.set_heat_level,
-điều hòa uses climate.set_temperature, kính uses window.set_position.
-Preserve ALL clauses in compound requests. Never silently drop an operation.
-"""
+# No user/answer demonstrations in model prompts.
+LOCAL_EXAMPLES = ""
 
 
-def local_semantic_schema():
-    from src.vivi.agents.tools import TOOL_REGISTRY
+def local_semantic_schema(context=None):
+    from src.vivi.agents.tools import TOOL_REGISTRY, semantic_argument_names
 
     schema = deepcopy(semantic_schema())
     definitions = schema["$defs"]
@@ -66,12 +58,11 @@ def local_semantic_schema():
     for name, spec in TOOL_REGISTRY.items():
         if name.startswith("trip."):
             continue
-        allowed = set(spec.parameters.model_fields)
-        if name == "climate.set_temperature":
-            allowed.add("temperature_delta_celsius")
-        if name in {"door.set_open", "door.set_lock", "window.set_position", "seat.set_heat_level"}:
-            allowed.update({"target_side", "target_row"})
+        allowed = semantic_argument_names(name)
         variant = deepcopy(draft)
+        if not {"zone", "zones"}.intersection(spec.parameters.model_fields):
+            for key in ("excluded_zones", "exclusion_mode", "referenced_target"):
+                variant["properties"].pop(key, None)
         variant["properties"]["capability"] = {"const": name, "type": "string"}
         for key in [key for key in variant["properties"] if key not in {"capability", "arguments"}]:
             ref = "draft_" + key
@@ -107,6 +98,27 @@ def local_semantic_schema():
             {"type": "object", "properties": properties, "required": required, "additionalProperties": False}
         )
     schema = {"$defs": definitions, "anyOf": branches}
+    if context is not None:
+        tasks = context.get("tasks") or {}
+        question = tasks.get("pending_question")
+        handles = [item["handle"] for item in [tasks.get("active"), *tasks.get("suspended", [])] if item]
+        allowed = {item["name"] for item in context.get("capabilities", [])}
+        if not question or question.get("purpose") != "approve_execution":
+            variants[:] = [v for v in variants if v["properties"]["capability"]["const"] != "navigation.start"]
+        if allowed:
+            variants[:] = [v for v in variants if v["properties"]["capability"]["const"] in allowed]
+        if question:
+            definitions["QuestionReply"]["properties"]["question_id"] = {"type": "string", "const": question["id"]}
+        else:
+            branches[:] = [b for b in branches if "answer" not in b["properties"]["act"]["enum"]]
+        if not handles:
+            branches[:] = [
+                b for b in branches if not {"modify", "confirm"}.intersection(b["properties"]["act"]["enum"])
+            ]
+        else:
+            for branch in branches:
+                if "task_ref" in branch["properties"]:
+                    branch["properties"]["task_ref"] = {"type": "string", "enum": handles}
 
     def compact(value):
         if isinstance(value, dict):
@@ -129,7 +141,7 @@ def local_semantic_schema():
 
 
 def compact_local_prompt(prompt):
-    """Drop duplicate parameter schemas, preserving task/history data verbatim."""
+    """Project model context without changing checkpoint-owned state or IDs."""
     import json
 
     try:
@@ -138,14 +150,92 @@ def compact_local_prompt(prompt):
         return prompt
     if not isinstance(context, dict) or not isinstance(context.get("capabilities"), list):
         return prompt
+    from src.vivi.agents.tools import semantic_argument_names
+
     context["capabilities"] = [
-        {key: value for key, value in item.items() if key != "parameters"} for item in context["capabilities"]
+        {
+            "name": item["name"],
+            "description": item.get("description", ""),
+            "slots": sorted(semantic_argument_names(item["name"])),
+        }
+        for item in context["capabilities"]
     ]
+    tasks = context.get("tasks") or {}
+    navigation = tasks.get("navigation") or {}
+    for key in ("draft", "journey"):
+        if navigation.get(key):
+            navigation[key] = local_navigation_context(navigation[key])
+    # Pending questions, editable steps, destinations and explicit memory retain
+    # their full values. Old prose is only a hint, never a source of task state.
+    history = context.get("recent_turns") or []
+    context["recent_turns"] = [
+        {key: value[:400] if isinstance(value, str) else value for key, value in turn.items()} for turn in history[-4:]
+    ]
+
+    def sparse(value):
+        if isinstance(value, dict):
+            return {key: sparse(item) for key, item in value.items() if item is not None and item != [] and item != {}}
+        if isinstance(value, list):
+            return [sparse(item) for item in value]
+        return value
+
+    context = sparse(context)
     # Put the varying utterance after stable catalog/context: better prefix reuse,
     # and the command remains immediately adjacent to generation for small models.
     utterance = context.pop("utterance", "")
-    context["utterance"] = utterance
-    return json.dumps(context, ensure_ascii=False, separators=(",", ":")) + (
-        "\nDiễn giải đầy đủ câu người dùng ở trên. Mỗi thao tác là một phần tử actions; "
-        "giữ đúng thứ tự, không bỏ sót và không tự thêm thao tác."
+    return (
+        json.dumps(context, ensure_ascii=False, separators=(",", ":"))
+        + "\nCâu người dùng hiện tại: "
+        + json.dumps(utterance, ensure_ascii=False)
     )
+
+
+def local_json_prompt(system, prompt):
+    """Make the catalog authoritative and keep the actual utterance prominent."""
+    import json
+
+    try:
+        context, utterance = prompt.split("\nCâu người dùng hiện tại: ", 1)
+        context = json.loads(context)
+    except (ValueError, TypeError):
+        return system, prompt
+    catalog = context.pop("capabilities", [])
+    system = system.replace("Gọi interpret_turn\nđúng một lần,", "Trả về đúng một object JSON SemanticTurn,")
+    system += "\nAvailable capabilities: " + json.dumps(catalog, ensure_ascii=False, separators=(",", ":"))
+    return system, json.dumps(
+        context, ensure_ascii=False, separators=(",", ":")
+    ) + "\nCâu người dùng hiện tại: " + utterance
+
+
+def local_navigation_context(navigation):
+    """Interpret references and lifecycle; calculations belong to map services."""
+    fields = {
+        "id",
+        "revision",
+        "status",
+        "resume_status",
+        "purpose",
+        "trip_kind",
+        "phase",
+        "calculation_status",
+        "started_revision",
+        "destination",
+        "selected",
+        "candidates",
+        "clarification",
+        "offer",
+    }
+    view = {key: value for key, value in navigation.items() if key in fields}
+    place_fields = {"handle", "name", "address", "label", "query", "kind", "category", "destination"}
+
+    def place(value):
+        return {key: item for key, item in value.items() if key in place_fields}
+
+    if view.get("selected"):
+        view["selected"] = place(view["selected"])
+    if view.get("candidates"):
+        view["candidates"] = [place(item) for item in view["candidates"]]
+    if view.get("offer"):
+        # Grant/binding are server credentials, never semantic references.
+        view["offer"] = {key: item for key, item in view["offer"].items() if key in {"status", "question"}}
+    return view

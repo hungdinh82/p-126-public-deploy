@@ -1057,17 +1057,26 @@ export async function applyNavigation(payload) {
   else if (['paused','idle','ended'].includes(next.status) && sim.running) stopSimulation(false,true);
   if(next.pending?.navigation?.route && map && relevant) {
     map.getSource('vivi-pending-preview')?.setData({type:'Feature',geometry:{type:'LineString',coordinates:next.pending.navigation.route.coordinates}});
-    setMessage(next.pending.message);
+    if(next.pending.message)setMessage(next.pending.message);
   }
   if(!next.pending?.navigation?.route)map?.getSource('vivi-pending-preview')?.setData(emptyLine());
   if(['completed','ended'].includes(next.status)){hooks.route(null);hooks.network?.([]);}
-  if(next.status==='idle' && !next.route) {
-    navigationGrant=null;route=null;routeIdentity=null;destination=null;sim.traveled=0;
+  if(!next.route && (route || routeIdentity)) {
+    // A new search, a cancelled draft or an ended trip leaves no route: drop
+    // the previous line, markers and energy view instead of keeping them.
+    if(sim.running)stopSimulation(false,true);
+    route=null;routeIdentity=null;destination=null;sim.traveled=0;
     removeMarker('car');removeMarker('destination');
     map?.getSource('vivi-route')?.setData(emptyLine());
     map?.getSource('vivi-traveled')?.setData(emptyLine());
     hooks.route(null);hooks.network?.([]);
-    if(!mapTripPlan){renderRoute();setView('hidden');}
+    if(!['selecting','preview'].includes(next.status))$('#journey-search').value='';
+  }
+  if(next.status==='idle' && !next.route) {
+    navigationGrant=null;
+    // Hide once when a trip or plan ends; an idle refresh must not close a
+    // map the driver opened afterwards.
+    if(!mapTripPlan){renderRoute();if(previous && previous.status!=='idle')setView('hidden');}
   }
   if(['paused','ended'].includes(next.status) && previous?.status!==next.status || journeyInformationHidden)setView('hidden');
   if(mapAction && !actionCurrent(mapAction)){restoreNavigationView();}

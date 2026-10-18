@@ -253,15 +253,23 @@ class CapabilityRuntime:
                 )
                 + "."
             )
-        if "body" in selected:
+        if "body" in selected or "hood" in selected:
             parts.append("Nắp capo đang mở." if state["hood_open"] else "Nắp capo đang đóng.")
+        if "body" in selected or "trunk" in selected:
             parts.append("Cốp sau đang mở." if state["trunk_open"] else "Cốp sau đang đóng.")
+        if "body" in selected or "doors" in selected:
             parts.append(
                 "Các cửa: "
                 + "; ".join(
                     f"{key}: {'mở' if door['open'] else 'đóng'}, {'khóa' if door['locked'] else 'mở khóa'}"
                     for key, door in state["door_states"].items()
                 )
+                + "."
+            )
+        if "windows" in selected:
+            parts.append(
+                "Độ mở cửa kính: "
+                + "; ".join(f"{key}: {value:g}%" for key, value in state["window_positions"].items())
                 + "."
             )
         return " ".join(parts)

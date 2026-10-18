@@ -57,6 +57,12 @@ local_llm_base_url = "http://127.0.0.1:1234/v1"
 local_llm_api_key = "local"
 local_llm_model = "vivi-qwen3-1.7b"
 local_llm_max_tokens = 512
+# llama.cpp grammar without duplicating the semantic schema in the chat template.
+# Set to native to compare native function calling on another local runtime.
+local_semantic_transport = "json_schema"
+# Per-operation tools, bound forms and proposal audits. Now the default; set
+# legacy to fall back to the single-schema interpreter for comparison/debug.
+local_semantic_contract = "operations_v1"
 
 # Private AI gateway: can run on Jetson, this PC, or another reachable server.
 # Change only this URL; /v1 and the shared authentication are wired automatically.

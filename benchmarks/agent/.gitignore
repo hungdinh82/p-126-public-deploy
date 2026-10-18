@@ -1,0 +1,4 @@
+results/*
+!results/compare-1018/
+results/compare-1018/*
+!results/compare-1018/comparison.md

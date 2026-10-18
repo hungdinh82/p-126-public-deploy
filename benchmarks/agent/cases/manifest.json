@@ -1,0 +1,373 @@
+{
+  "excluded_capabilities": {
+    "seat.set_heat_level": "Không có trong app thực tế; người dùng yêu cầu không benchmark."
+  },
+  "excluded_model_tools": {
+    "play_requested_music": "App chỉ bật/tắt một đoạn nhạc cố định."
+  },
+  "execution_order": [
+    "doors",
+    "windows",
+    "music",
+    "climate",
+    "body_panels",
+    "vehicle_status",
+    "navigation",
+    "information",
+    "memory",
+    "dialogue",
+    "hard_cases",
+    "multi_tool",
+    "adversarial"
+  ],
+  "features": {
+    "doors": {
+      "label": "Cửa xe",
+      "counts": {
+        "tools": 32,
+        "language": 62,
+        "workflows": 0
+      },
+      "input_styles": {
+        "regression": 22,
+        "direct": 4,
+        "polite": 8,
+        "colloquial": 8,
+        "indirect": 4,
+        "question": 4,
+        "formal": 4,
+        "unaccented": 4,
+        "typo": 4
+      },
+      "tool_input_counts": {
+        "open_door": 10,
+        "close_door": 10,
+        "lock_door": 10,
+        "unlock_door": 10
+      }
+    },
+    "windows": {
+      "label": "Cửa kính",
+      "counts": {
+        "tools": 15,
+        "language": 41,
+        "workflows": 0
+      },
+      "input_styles": {
+        "regression": 8,
+        "direct": 3,
+        "polite": 6,
+        "colloquial": 6,
+        "indirect": 3,
+        "question": 3,
+        "formal": 3,
+        "unaccented": 3,
+        "typo": 3,
+        "spoken_number": 3
+      },
+      "tool_input_counts": {
+        "lower_window": 10,
+        "raise_window": 10,
+        "set_window": 13
+      }
+    },
+    "music": {
+      "label": "Bật/tắt nhạc cố định",
+      "counts": {
+        "tools": 2,
+        "language": 21,
+        "workflows": 0
+      },
+      "input_styles": {
+        "regression": 3,
+        "direct": 2,
+        "polite": 4,
+        "colloquial": 3,
+        "indirect": 2,
+        "question": 2,
+        "unaccented": 2,
+        "typo": 2,
+        "formal": 1
+      },
+      "tool_input_counts": {
+        "play_music": 8,
+        "pause_music": 10
+      }
+    },
+    "climate": {
+      "label": "Điều hòa",
+      "counts": {
+        "tools": 8,
+        "language": 52,
+        "workflows": 0
+      },
+      "input_styles": {
+        "regression": 16,
+        "direct": 3,
+        "polite": 6,
+        "colloquial": 6,
+        "indirect": 3,
+        "question": 3,
+        "formal": 3,
+        "unaccented": 3,
+        "typo": 3,
+        "spoken_number": 6
+      },
+      "tool_input_counts": {
+        "set_temperature": 14,
+        "increase_temperature": 11,
+        "decrease_temperature": 11
+      }
+    },
+    "body_panels": {
+      "label": "Capo và cốp",
+      "counts": {
+        "tools": 6,
+        "language": 64,
+        "workflows": 0
+      },
+      "input_styles": {
+        "regression": 4,
+        "direct": 6,
+        "polite": 12,
+        "colloquial": 12,
+        "indirect": 6,
+        "question": 6,
+        "formal": 6,
+        "unaccented": 6,
+        "typo": 6
+      },
+      "tool_input_counts": {
+        "open_hood": 10,
+        "close_hood": 10,
+        "open_trunk": 10,
+        "close_trunk": 10,
+        "open_body": 10,
+        "close_body": 10
+      }
+    },
+    "vehicle_status": {
+      "label": "Đọc trạng thái xe",
+      "counts": {
+        "tools": 12,
+        "language": 132,
+        "workflows": 0
+      },
+      "input_styles": {
+        "regression": 12,
+        "direct": 12,
+        "polite": 24,
+        "colloquial": 24,
+        "indirect": 12,
+        "question": 12,
+        "formal": 12,
+        "unaccented": 12,
+        "typo": 12
+      },
+      "tool_input_counts": {
+        "get_battery_level": 10,
+        "get_tire_pressure": 10,
+        "get_cabin_temperature": 10,
+        "get_door_status": 10,
+        "get_window_positions": 10,
+        "get_hood_status": 10,
+        "get_trunk_status": 10,
+        "get_remaining_range": 10,
+        "get_remaining_drive_time": 10,
+        "get_vehicle_diagnostics": 10,
+        "get_body_status": 10,
+        "get_vehicle_overview": 10
+      }
+    },
+    "navigation": {
+      "label": "Điều hướng",
+      "counts": {
+        "tools": 0,
+        "language": 153,
+        "workflows": 11
+      },
+      "input_styles": {
+        "regression": 9,
+        "direct": 13,
+        "polite": 26,
+        "colloquial": 26,
+        "indirect": 13,
+        "question": 13,
+        "formal": 13,
+        "unaccented": 4,
+        "typo": 4,
+        "context": 32
+      },
+      "tool_input_counts": {
+        "get_directions": 8,
+        "calculate_trip": 8,
+        "navigation_search": 8,
+        "navigation_stop": 10,
+        "navigation_end": 10,
+        "navigation_set_gear": 20,
+        "navigation_cancel": 8,
+        "navigation_decline": 8,
+        "navigation_refine": 8,
+        "navigation_select": 8,
+        "get_directions_from": 8,
+        "get_directions_round_trip": 8,
+        "get_directions_round_trip_from": 8,
+        "calculate_trip_from": 8,
+        "calculate_trip_round_trip": 8,
+        "calculate_trip_round_trip_from": 8
+      }
+    },
+    "information": {
+      "label": "Hỏi thông tin",
+      "counts": {
+        "tools": 8,
+        "language": 46,
+        "workflows": 0
+      },
+      "input_styles": {
+        "regression": 8,
+        "direct": 4,
+        "polite": 8,
+        "colloquial": 8,
+        "indirect": 4,
+        "question": 4,
+        "formal": 4,
+        "unaccented": 3,
+        "typo": 3
+      },
+      "tool_input_counts": {
+        "manual_search": 10,
+        "weather_get_forecast": 8,
+        "lookup_information": 20
+      }
+    },
+    "memory": {
+      "label": "Ghi nhớ",
+      "counts": {
+        "tools": 1,
+        "language": 39,
+        "workflows": 0
+      },
+      "input_styles": {
+        "regression": 1,
+        "direct": 4,
+        "polite": 8,
+        "colloquial": 8,
+        "indirect": 4,
+        "question": 4,
+        "formal": 4,
+        "unaccented": 3,
+        "typo": 3
+      },
+      "tool_input_counts": {
+        "memory_remember": 8,
+        "memory_recall": 10,
+        "memory_forget": 10,
+        "memory_reset": 10
+      }
+    },
+    "dialogue": {
+      "label": "Hội thoại",
+      "counts": {
+        "tools": 2,
+        "language": 28,
+        "workflows": 0
+      },
+      "input_styles": {
+        "regression": 18,
+        "direct": 1,
+        "polite": 2,
+        "colloquial": 2,
+        "indirect": 1,
+        "question": 1,
+        "formal": 1,
+        "unaccented": 1,
+        "typo": 1
+      },
+      "tool_input_counts": {
+        "conversation_respond": 10
+      }
+    },
+    "hard_cases": {
+      "label": "Câu khó và ngữ cảnh",
+      "counts": {
+        "tools": 7,
+        "language": 30,
+        "workflows": 6
+      },
+      "input_styles": {
+        "regression": 12,
+        "ambiguous": 15,
+        "context": 3
+      },
+      "tool_input_counts": {
+        "set_temperature": 3,
+        "increase_temperature": 2,
+        "lower_window": 4,
+        "unlock_door": 1,
+        "get_tire_pressure": 1,
+        "manual_search": 1,
+        "open_door": 1,
+        "decrease_temperature": 1,
+        "close_door": 1,
+        "play_music": 2,
+        "get_battery_level": 1
+      }
+    },
+    "multi_tool": {
+      "label": "Phối hợp hai tool",
+      "counts": {
+        "tools": 4,
+        "language": 46,
+        "workflows": 0
+      },
+      "input_styles": {
+        "regression": 4,
+        "compound": 42
+      },
+      "tool_input_counts": {
+        "set_temperature": 6,
+        "play_music": 12,
+        "pause_music": 6,
+        "decrease_temperature": 3,
+        "open_door": 3,
+        "lock_door": 3,
+        "lower_window": 3,
+        "raise_window": 3,
+        "open_hood": 3,
+        "open_trunk": 3,
+        "get_battery_level": 9,
+        "get_tire_pressure": 3,
+        "get_door_status": 3,
+        "get_window_positions": 3,
+        "get_cabin_temperature": 3,
+        "get_trunk_status": 3,
+        "get_hood_status": 3,
+        "get_directions": 3,
+        "calculate_trip": 3,
+        "weather_get_forecast": 3,
+        "lookup_information": 3
+      }
+    },
+    "adversarial": {
+      "label": "Đánh đố và đổi ý",
+      "counts": {
+        "tools": 8,
+        "language": 18,
+        "workflows": 0
+      },
+      "input_styles": {
+        "adversarial": 12,
+        "self_correction": 6
+      },
+      "tool_input_counts": {
+        "open_door": 1,
+        "lock_door": 1,
+        "set_temperature": 1,
+        "pause_music": 1,
+        "get_door_status": 1,
+        "manual_search": 1
+      }
+    }
+  }
+}
