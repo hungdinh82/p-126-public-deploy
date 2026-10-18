@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import asyncio
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
+from src.vivi.api.routes.roles import require_conversation
 from src.vivi.api.runtime import runtime
 
 router = APIRouter(prefix="/api/v2")
@@ -28,11 +29,12 @@ class CancelTurn(BaseModel):
 
 
 @router.get("/turns/{turn_id}")
-async def turn_status(turn_id: str, session_id: str):
+async def turn_status(turn_id: str, session_id: str, request: Request):
+    principal = require_conversation(request, session_id)
     ledger = runtime.orchestrator.ledger
     value = (
         await asyncio.to_thread(
-            ledger.turn_status, f"{runtime.orchestrator.profile_id}:{session_id}", turn_id, session_id
+            ledger.turn_status, f"{principal.account_id}:{session_id}", turn_id, session_id
         )
         if ledger
         else None
@@ -50,5 +52,6 @@ async def turn_status(turn_id: str, session_id: str):
 
 
 @router.post("/turns/{turn_id}/cancel")
-async def cancel_turn(turn_id: str, request: CancelTurn):
+async def cancel_turn(turn_id: str, request: CancelTurn, http_request: Request):
+    require_conversation(http_request, request.session_id)
     return runtime.orchestrator.cancel(request.session_id, turn_id)

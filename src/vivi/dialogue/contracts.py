@@ -228,6 +228,7 @@ class TurnEvent(BaseModel):
     model_config = ConfigDict(extra="forbid")
     session_id: str
     turn_id: str
+    profile_id: str = "default"
     text: str = ""
     provider: str = "google"
     kind: Literal["utterance", "action", "navigation"] = "utterance"

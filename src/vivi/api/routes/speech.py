@@ -6,10 +6,11 @@ import time
 from pathlib import Path
 from urllib.parse import quote
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile, WebSocket
+from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile, WebSocket
 from fastapi.responses import Response, StreamingResponse
 from starlette.background import BackgroundTask
 
+from src.vivi.api.routes.roles import principal_for, require_conversation
 from src.vivi.api.runtime import runtime
 from src.vivi.domain.models import STTResponse, TTSRequest
 from src.vivi.text import spoken_text
@@ -66,10 +67,12 @@ def _temporary_audio(content: bytes, suffix: str) -> Path:
 
 @router.post("/stt", response_model=STTResponse)
 async def transcribe(
+    request: Request,
     audio: UploadFile = File(...),
     session_id: str = Form(...),
     turn_id: str = Form(...),
 ):
+    require_conversation(request, session_id)
     content = await audio.read()
     if not content or len(content) > 25 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="Audio rỗng hoặc vượt quá 25 MB")
@@ -153,6 +156,11 @@ async def transcribe_stream(socket: WebSocket, session_id: str, turn_id: str):
     Replies are JSON: ``partial`` (final + interim text while speaking), then
     one ``done`` with the transcript, or ``error``.
     """
+    if runtime.settings.app_env != "test" and runtime.settings.auth_required:
+        principal = principal_for(socket)  # Starlette WebSocket exposes the same cookie interface.
+        if principal is None or not runtime.sessions.owns_conversation(principal.account_id, session_id):
+            await socket.close(code=4401)
+            return
     await socket.accept()
     input_started = time.perf_counter()
     input_received_at = time.time()
@@ -295,25 +303,26 @@ def _tts(request: TTSRequest):
 
 
 @router.post("/tts")
-async def synthesize(request: TTSRequest):
-    for tts in _tts_candidates(request):
+async def synthesize(value: TTSRequest, request: Request):
+    require_conversation(request, value.session_id)
+    for tts in _tts_candidates(value):
         runtime.store.record_ai_stage(
             {
-                "session_id": request.session_id,
-                "turn_id": request.turn_id,
+                "session_id": value.session_id,
+                "turn_id": value.turn_id,
                 "stage": "tts",
                 "status": "calling",
                 **_tts_identity(tts),
             }
         )
         try:
-            audio = await tts.synthesize(spoken_text(request.text))
+            audio = await tts.synthesize(spoken_text(value.text))
             if not audio:
                 raise ValueError("Empty TTS audio")
             runtime.store.record_ai_stage(
                 {
-                    "session_id": request.session_id,
-                    "turn_id": request.turn_id,
+                    "session_id": value.session_id,
+                    "turn_id": value.turn_id,
                     "stage": "tts",
                     "status": "served",
                     **_tts_identity(tts),
@@ -323,8 +332,8 @@ async def synthesize(request: TTSRequest):
         except Exception as exc:
             runtime.store.record_ai_stage(
                 {
-                    "session_id": request.session_id,
-                    "turn_id": request.turn_id,
+                    "session_id": value.session_id,
+                    "turn_id": value.turn_id,
                     "stage": "tts",
                     "status": "fallback",
                     "reason": type(exc).__name__,
@@ -344,14 +353,15 @@ async def _close_audio(iterator):
 
 
 @router.post("/tts/stream")
-async def synthesize_stream(request: TTSRequest):
+async def synthesize_stream(value: TTSRequest, request: Request):
+    require_conversation(request, value.session_id)
     started, received_at = time.perf_counter(), time.time()
     iterator = None
-    for tts in _tts_candidates(request):
+    for tts in _tts_candidates(value):
         runtime.store.record_ai_stage(
             {
-                "session_id": request.session_id,
-                "turn_id": request.turn_id,
+                "session_id": value.session_id,
+                "turn_id": value.turn_id,
                 "stage": "tts",
                 "status": "calling",
                 **_tts_identity(tts),
@@ -361,7 +371,7 @@ async def synthesize_stream(request: TTSRequest):
             ensure_loaded = getattr(tts, "ensure_loaded", None)
             if ensure_loaded is not None:
                 await ensure_loaded()
-            iterator = tts.stream(spoken_text(request.text)).__aiter__()
+            iterator = tts.stream(spoken_text(value.text)).__aiter__()
             async with asyncio.timeout(
                 runtime.settings.ai_server_request_timeout_seconds
                 if tts.device == "jetson"
@@ -372,8 +382,8 @@ async def synthesize_stream(request: TTSRequest):
                     first = await anext(iterator)
             runtime.store.record_ai_stage(
                 {
-                    "session_id": request.session_id,
-                    "turn_id": request.turn_id,
+                    "session_id": value.session_id,
+                    "turn_id": value.turn_id,
                     "stage": "tts",
                     "status": "served",
                     "latency_ms": round((time.perf_counter() - started) * 1000, 2),
@@ -389,8 +399,8 @@ async def synthesize_stream(request: TTSRequest):
                 raise
             runtime.store.record_ai_stage(
                 {
-                    "session_id": request.session_id,
-                    "turn_id": request.turn_id,
+                    "session_id": value.session_id,
+                    "turn_id": value.turn_id,
                     "stage": "tts",
                     "status": "fallback",
                     "reason": type(exc).__name__,
@@ -419,13 +429,13 @@ async def synthesize_stream(request: TTSRequest):
                 audio_duration_ms += len(chunk) / 2 / tts.sample_rate * 1000
                 yield chunk
             runtime.store.record_tts(
-                request.session_id,
-                request.turn_id,
+                value.session_id,
+                value.turn_id,
                 {
-                    "session_id": request.session_id,
-                    "turn_id": request.turn_id,
+                    "session_id": value.session_id,
+                    "turn_id": value.turn_id,
                     "received_at": received_at,
-                    "text": request.text,
+                    "text": value.text,
                     "time_to_first_chunk_ms": first_chunk,
                     "synthesis_ms": round((time.perf_counter() - started) * 1000, 2),
                     "audio_duration_ms": round(audio_duration_ms, 2),

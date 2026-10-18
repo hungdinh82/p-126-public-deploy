@@ -1,15 +1,23 @@
 const status = document.querySelector('#role-status');
-document.querySelectorAll('[data-role]').forEach((button) => button.addEventListener('click', async () => {
-  const role = button.dataset.role;
-  document.querySelectorAll('[data-role]').forEach((item) => { item.disabled = true; });
-  status.textContent = 'Đang mở không gian…';
+const form = document.querySelector('#login-form');
+form.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const submit = form.querySelector('button');
+  const values = new FormData(form);
+  submit.disabled = true;
+  status.textContent = 'Đang mở phiên riêng…';
   try {
-    const response = await fetch('/api/v1/session/role', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ role }) });
+    const response = await fetch('/api/v1/session/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone: values.get('phone'), pin: values.get('pin') })
+    });
     const payload = await response.json();
-    if (!response.ok) throw new Error(payload.detail || 'Không thể tạo phiên demo.');
+    if (!response.ok) throw new Error(payload.detail || 'Không thể đăng nhập.');
+    if (payload.conversation_id) sessionStorage.setItem('vivi-conversation-id', payload.conversation_id);
     window.location.assign(payload.redirect);
   } catch (error) {
     status.textContent = error.message;
-    document.querySelectorAll('[data-role]').forEach((item) => { item.disabled = false; });
+    submit.disabled = false;
   }
-}));
+});

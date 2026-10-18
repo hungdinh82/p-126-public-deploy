@@ -14,8 +14,16 @@ const motionPreference = matchMedia('(prefers-reduced-motion: reduce)');
 // VIVI_PORT automatically instead of being tied to a hard-coded port.
 const API_BASE = '';
 const makeId = () => globalThis.crypto?.randomUUID?.() || `vivi-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-const sessionId = localStorage.getItem('vivi-session-id') || makeId();
-localStorage.setItem('vivi-session-id', sessionId);
+let sessionId = sessionStorage.getItem('vivi-conversation-id');
+if (!sessionId) {
+  const response = await fetch(`${API_BASE}/api/v1/session/conversations`, { method: 'POST' });
+  if (!response.ok) {
+    window.location.assign('/');
+    throw new Error('Phiên đăng nhập đã hết hạn.');
+  }
+  sessionId = (await response.json()).conversation_id;
+  sessionStorage.setItem('vivi-conversation-id', sessionId);
+}
 const state = { phase: 'idle', temp: 23, window: false, music: false, driving: false, powerState: 'off', battery: 82, range: 328, powertrainTemp: 45, tirePressures: {}, windows: {}, doors: {}, seatHeatLevels: {}, doorLocked: false, doorOpen: false, hoodOpen: false, trunkOpen: false, seatHeat: 0, alerts: [], alertSequence: 0, reduced: motionPreference.matches, sound: true, busy: false, backendAvailable: false, connectivityMode: '', connectivityOverride: 'actual', vehicleProvider: '', sttAvailable: false, sttProvider: '', sttStreaming: false, sttDevice: '', ttsAvailable: false, ttsProvider: '', ttsVoice: '', ttsDevice: '', ttsOptions: [], storeAudio: false, storeTranscripts: false, llmProvider: '', llmOptions: [], lastCommand: '', manualAnswer: '', manualEvidence: [], progress: 0 };
 const navigationStore = new NavigationStore();
 const snapshotOrder = navigationStore.order;
@@ -383,9 +391,12 @@ async function pollVehicleAlerts() {
     const response = await fetch(`${API_BASE}/api/v1/vehicle/alerts?session_id=${encodeURIComponent(sessionId)}`);
     if (!response.ok) return;
     const snapshot = await response.json();
-    await synchronizeNavigation();
+    // Alerts must surface as soon as the vehicle snapshot arrives. Navigation is
+    // supplemental here and must not hide an already-active safety warning.
+    applyBackendState(snapshot.vehicle_state);
     renderAlerts(snapshot);
     announceNewAlerts(snapshot.active_alerts || []);
+    await synchronizeNavigation();
   } catch { /* Polling resumes automatically after a temporary disconnect. */ }
 }
 function highlight(id) { $(id).classList.add('highlight'); setTimeout(() => $(id).classList.remove('highlight'), 2600); }
@@ -1290,6 +1301,11 @@ function openPanel(view) {
 }
 document.querySelectorAll('[data-view]').forEach(button => button.addEventListener('click', () => openPanel(button.dataset.view)));
 $('#settings-button').addEventListener('click', () => openPanel('settings'));
+$('#session-exit').addEventListener('click', async () => {
+  await fetch('/api/v1/session', { method: 'DELETE' });
+  sessionStorage.removeItem('vivi-conversation-id');
+  window.location.assign('/');
+});
 $('#close-dialog').addEventListener('click', () => dialog.close());
 dialog.addEventListener('click', event => { if (event.target === dialog) { const rect = dialog.getBoundingClientRect(); if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) dialog.close(); } });
 dialog.addEventListener('close', () => { activePanelView = ''; setActiveRail(document.body.classList.contains('journey-open') ? 'journey' : 'home'); dialog.classList.remove('config-dialog'); });

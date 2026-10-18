@@ -40,7 +40,7 @@
   <header class="hud-top">
     <a class="brand" href="./" aria-label="ViVi trang chủ">v<span>ı</span>v<span>ı</span><i></i></a>
     <span class="connection" id="backend-status"><i></i> Đang kết nối</span>
-    <div class="hud-top-right"><span class="weather">24° <span>☀</span></span><time id="clock">09:41</time></div>
+    <div class="hud-top-right"><span class="weather">24° <span>☀</span></span><time id="clock">09:41</time><button id="session-exit" class="session-exit" type="button">Đăng xuất</button></div>
   </header>
 
   <section class="hud-status" aria-label="Thông số xe" aria-live="polite">
@@ -93,7 +93,6 @@
     <span class="dock-divider"></span>
     <button id="sound-toggle" class="dock-button" aria-label="Tắt loa" aria-pressed="true" title="Loa · nói “tắt loa” hoặc “bật loa”"><svg><use href="#i-volume"/></svg></button>
     <button id="drive-toggle" class="dock-button gear" aria-label="Chuyển sang lái xe" aria-pressed="false" title="Đỗ xe / lái xe (demo)"><span>P</span></button>
-    <a class="dock-button" href="/monitor" aria-label="Giám sát phần cứng edge" title="Giám sát phần cứng edge"><svg><use href="#i-gauge"/></svg></a>
     <button id="settings-button" class="dock-button" aria-label="Cấu hình ViVi" title="Cấu hình ViVi"><svg><use href="#i-sliders"/></svg></button>
   </nav>
   <div id="climate-pop" class="climate-pop" role="group" aria-label="Nhiệt độ cabin" hidden>
@@ -191,6 +190,6 @@
   </section>
 
   <dialog id="info-dialog"><div class="dialog-top"><span class="eyebrow">VIVI / SPACE CONCEPT</span><button id="close-dialog" aria-label="Đóng">×</button></div><div id="dialog-content"></div></dialog>
-  <script type="module" src="./app.js?v=81"></script>
+  <script type="module" src="./app.js?v=82"></script>
 </body>
 </html>

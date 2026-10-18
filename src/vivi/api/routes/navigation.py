@@ -3,10 +3,11 @@ from __future__ import annotations
 import time
 from uuid import uuid4
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
 
 from src.vivi.api.contracts import envelope
+from src.vivi.api.routes.roles import require_conversation
 from src.vivi.api.runtime import runtime
 from src.vivi.domain.models import TurnRequest
 from src.vivi.navigation import Place, Route, VietMapClient, VietMapError
@@ -17,8 +18,10 @@ router = APIRouter(prefix="/api/v2/navigation")
 
 @router.get("/snapshot")
 async def navigation_snapshot(
+    request: Request,
     session_id: str = Query(min_length=1, max_length=100), event_id: str | None = Query(default=None, max_length=100)
 ):
+    require_conversation(request, session_id)
     return envelope(await runtime.orchestrator.navigation_snapshot(session_id, event_id))
 
 
@@ -30,11 +33,13 @@ class NavigationRequest(BaseModel):
 
 
 @router.post("/events")
-async def navigation_event(request: NavigationRequest):
+async def navigation_event(request: NavigationRequest, http_request: Request):
+    principal = require_conversation(http_request, request.session_id)
     try:
         turn = TurnRequest(
             session_id=request.session_id,
             turn_id=str(uuid4()),
+            profile_id=principal.account_id,
             transcript="Cập nhật hành trình",
             navigation_event=request.event.model_dump(mode="json"),
         )

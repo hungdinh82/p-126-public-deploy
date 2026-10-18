@@ -16,6 +16,10 @@ async def engineer_client(client):
 @pytest.mark.asyncio
 async def test_role_selection_and_protected_pages(client):
     assert (await client.get("/")).status_code == 200
+    screenshot = await client.get("/assets/landing/navigation-charging.jpg")
+    assert screenshot.status_code == 200
+    assert screenshot.headers["content-type"] == "image/jpeg"
+    assert (await client.get("/assets/landing/not-allowed.jpg")).status_code == 404
     assert (await client.get("/engineer", follow_redirects=False)).status_code == 303
     assert (await client.get("/api/v1/engineer/fleet")).status_code == 403
     await engineer_client(client)
