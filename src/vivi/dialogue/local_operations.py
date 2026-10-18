@@ -77,6 +77,13 @@ def select_documents(context):
     pending = {
         s["capability"] for t in [tasks.get("active"), *tasks.get("suspended", [])] if t for s in t.get("steps", [])
     }
+    # An open navigation plan or question can always be refined ("đổi về Đồ
+    # Sơn", "chỗ nào gần hơn") even when the reply names no navigation term.
+    # A fresh "chỉ đường tới …" names its own tools; offering refine there made
+    # the model edit the previous plan instead of starting a new one.
+    fresh = {c["name"] for c in matched_capabilities(context["utterance"], capabilities)} & NEW_NAVIGATION
+    if not fresh and (question.get("owner") == "navigation" or (tasks.get("navigation") or {}).get("draft")):
+        pending |= {"navigation.refine"} & {c["name"] for c in capabilities}
     names = {c["name"] for c in selected} | pending
     # Either lookup source is offered as the single merged lookup tool.
     if names & INFORMATION_SOURCES:
@@ -363,6 +370,7 @@ async def interpret_operations(client, context, attempts):
             result = proposals_to_turn(
                 calls, documents, tasks, text, tools, observation=context.get("vehicle_observation")
             )
+            result = fresh_navigation_request(result, text, capabilities)
             check_coverage(result, text, capabilities, final=bool(attempt))
             entry["validation"] = "accepted"
             return result
@@ -385,6 +393,36 @@ async def interpret_operations(client, context, attempts):
                 raise
             repair, expanded = error, False
     raise ValueError("No local proposal produced")
+
+
+NEW_NAVIGATION = {"navigation.plan", "navigation.search"}
+
+
+def fresh_navigation_request(result, text, capabilities):
+    """A refine proposed for "chỉ đường tới X" is a new plan, not an edit.
+
+    Discovery evidence decides: the utterance names directions or a search and
+    no refinement wording ("đổi về", "chỗ khác").
+    """
+    named = {c["name"] for c in matched_capabilities(text, capabilities)}
+    if result.act != "request" or "navigation.refine" in named or not named & NEW_NAVIGATION:
+        return result
+    if not any(a.capability == "navigation.refine" and a.arguments.query for a in result.actions):
+        return result
+    capability = "navigation.plan" if "navigation.plan" in named else "navigation.search"
+    actions = [
+        {
+            "capability": capability,
+            "arguments": {
+                "query": a.arguments.query,
+                **({"purpose": "navigate"} if capability == "navigation.plan" else {}),
+            },
+        }
+        if a.capability == "navigation.refine" and a.arguments.query
+        else a.model_dump(mode="json")
+        for a in result.actions
+    ]
+    return SemanticTurn.model_validate({"act": "request", "actions": actions})
 
 
 def check_coverage(result, text, capabilities, *, final):

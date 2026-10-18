@@ -11,6 +11,7 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from src.vivi.navigation.categories import CATEGORIES
 from src.vivi.navigation.contracts import DestinationSpec
 from src.vivi.navigation.destinations import (
     administrative_layer,
@@ -285,7 +286,7 @@ class NavigationWorkflow:
                 arguments["nearest"] = True
             if destination.selection == "region":
                 arguments["destination_scope"] = "region"
-            if destination.selection == "category" and destination.entity_type in {"pharmacy", "charging"}:
+            if destination.selection == "category" and destination.entity_type in CATEGORIES:
                 arguments["category"] = destination.entity_type
         binding_arguments = dict(arguments)
         if name in {"navigation.plan", "navigation.search"} and not (
@@ -421,7 +422,11 @@ class NavigationWorkflow:
                     resolved.append(place.model_dump())
             if len(resolved) != 1:
                 return self.result(
-                    nav, "Bạn nói địa điểm xuất phát cụ thể hơn nhé.", "waiting_slot", "navigation.results"
+                    nav,
+                    f"Mình chưa xác định được điểm xuất phát {binding_arguments['origin_query']}. "
+                    "Bạn nói cụ thể hơn, hoặc nói đi từ vị trí xe nhé.",
+                    "waiting_slot",
+                    "navigation.results",
                 )
             nav.origin = {**resolved[0], "label": resolved[0]["name"]}
         if not nav.origin:
@@ -472,11 +477,16 @@ class NavigationWorkflow:
                         scoped = DestinationSpec.from_arguments({"query": arguments["query"]})
                         destination = destination.model_copy(update={"area": scoped.area})
                     nav.destination = destination
+                    if destination.selection == "category" and destination.entity_type in CATEGORIES:
+                        # The host-inferred category replaces a model's guess downstream too.
+                        arguments = {**arguments, "category": destination.entity_type}
+                    if destination.nearest:
+                        arguments = {**arguments, "nearest": True}
                     resolution = await self.places.resolve(
                         destination,
                         nav.origin,
                         representative=representative,
-                        with_travel=name == "navigation.search" or bool(arguments.get("nearest")),
+                        with_travel=name == "navigation.search" or destination.nearest,
                     )
                     nav.candidates = resolution.candidates
                     if resolution.status == "provider_unavailable":
@@ -525,7 +535,10 @@ class NavigationWorkflow:
                         else f"Mình chưa xác minh được {query}. Bạn cho tên địa điểm cụ thể hoặc địa chỉ khác nhé."
                     )
                     if not arguments.get("category")
-                    else ("Chưa tìm được kết quả phù hợp. Bạn cho thêm địa chỉ hoặc khu vực nhé?")
+                    else f"Mình không tìm thấy {CATEGORIES[arguments['category']].label} nào trong bán kính "
+                    f"{resolution.evidence[0]['radius_m'] // 1000} km quanh xe. Bạn muốn tìm ở khu vực nào?"
+                    if resolution.reason == "no_nearby_candidates"
+                    else "Chưa tìm được kết quả phù hợp. Bạn cho thêm địa chỉ hoặc khu vực nhé?"
                 )
                 nav.clarification = {
                     "phase": "place_area" if required_slot == "area" else "specific",

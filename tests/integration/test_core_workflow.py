@@ -111,21 +111,27 @@ async def test_equivalent_directions_call_same_semantic_and_place_stages(tmp_pat
 
 
 @pytest.mark.asyncio
-async def test_direct_start_action_cannot_replace_bound_question_answer(tmp_path):
+async def test_start_button_on_the_previewed_revision_is_consent(tmp_path):
     h = Harness(tmp_path, [action("navigation.plan", {"query": "Tràng An", "purpose": "navigate"})])
     try:
         preview = await h.turn("đến Tràng An")
         draft = preview["navigation_workspace"]["draft"]
-        direct = await h.turn(
+        assert preview["pending_question"]["purpose"] == "approve_execution"
+        stale = await h.turn(
+            action={
+                "capability": "navigation.start",
+                "arguments": {"plan_id": draft["id"], "route_revision": draft["revision"] - 1},
+            }
+        )
+        assert not h.vehicle.state_for("driver").driving
+        assert not (stale["navigation_workspace"].get("journey") or {}).get("status")
+        started = await h.turn(
             action={
                 "capability": "navigation.start",
                 "arguments": {"plan_id": draft["id"], "route_revision": draft["revision"]},
             }
         )
-        assert not h.vehicle.state_for("driver").driving
-        assert direct["pending_question"]["purpose"] == "approve_execution"
-        confirmed = await h.turn(question_reply={"question_id": direct["pending_question"]["id"], "option_id": "yes"})
-        assert confirmed["navigation_workspace"]["journey"]["status"] == "running"
+        assert started["navigation_workspace"]["journey"]["status"] == "running"
         assert h.vehicle.state_for("driver").driving
     finally:
         await h.close()

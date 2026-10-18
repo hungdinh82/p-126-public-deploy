@@ -41,7 +41,10 @@ export class NavigationStore {
   }
   renderSnapshot(){
     const snapshot=this.current || {}, workspace=snapshot.navigation_workspace || {};
-    const draft=workspace.draft, journey=workspace.journey;
+    const draft=workspace.draft;
+    // Same rule as the backend: a finished journey never shadows a newer plan.
+    const live=['running','charging','paused'].includes(workspace.journey?.status);
+    const journey=live || workspace.journey?.status==='completed' && !draft ? workspace.journey : null;
     const navigation={...(journey || (draft?.purpose!=='itinerary'?draft:null) || {status:'idle'}),
       revision:workspace.revision || 0,event_sequence:workspace.event_sequence || 0,origin:workspace.origin};
     if(journey && draft?.purpose!=='itinerary' && draft && !draft.started_revision){

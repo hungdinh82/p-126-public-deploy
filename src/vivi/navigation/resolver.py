@@ -2,10 +2,13 @@
 
 import asyncio
 import json
+import math
+import re
 from collections import OrderedDict
 from time import monotonic, perf_counter
 from uuid import uuid4
 
+from src.vivi.navigation.categories import CATEGORIES, matches_category
 from src.vivi.navigation.contracts import DestinationSpec, PlaceResolution
 from src.vivi.navigation.destinations import administrative_layer, administrative_match, landmark_for, landmark_query
 from src.vivi.navigation.metrics import record
@@ -18,6 +21,17 @@ from src.vivi.text import normalize_text
 
 def coordinates(place):
     return place["lat"], place["lng"]
+
+
+# Nearby search widens in rings and stops at the first ring with enough results.
+NEARBY_RINGS_M = (2000, 5000, 15000, 30000)
+NEARBY_ENOUGH = 3
+
+
+def straight_distance(a, b):
+    dlat, dlng = math.radians(b[0] - a[0]), math.radians(b[1] - a[1])
+    h = math.sin(dlat / 2) ** 2 + math.cos(math.radians(a[0])) * math.cos(math.radians(b[0])) * math.sin(dlng / 2) ** 2
+    return 6371000 * 2 * math.asin(min(1, math.sqrt(h)))
 
 
 def satisfies_area(place, area):
@@ -92,7 +106,7 @@ class PlaceResolver:
         arguments = {
             "query": destination.query(),
             "nearest": destination.nearest,
-            "category": destination.entity_type if destination.entity_type in {"pharmacy", "charging"} else None,
+            "category": destination.entity_type if destination.entity_type in CATEGORIES else None,
         }
         errors = []
         arguments["_errors"] = errors
@@ -119,6 +133,15 @@ class PlaceResolver:
                             errors=errors,
                             queries=queries,
                         )
+            if not candidates and self.nearby_request(arguments, origin, representative):
+                # Asking for an area makes no sense when the car's position is known.
+                return PlaceResolution(
+                    status="no_verified_match",
+                    reason="no_nearby_candidates",
+                    required_slot="area",
+                    queries=queries,
+                    evidence=[{"radius_m": NEARBY_RINGS_M[-1]}],
+                )
             if not candidates:
                 return PlaceResolution(
                     status="missing_constraints" if not destination.area else "no_verified_match",
@@ -148,7 +171,110 @@ class PlaceResolver:
                 evidence=[{"elapsed_ms": round((monotonic() - started) * 1000, 2)}],
             )
 
+    @staticmethod
+    def nearby_request(arguments, origin, representative=False):
+        return bool(
+            arguments.get("category") in CATEGORIES
+            and arguments.get("nearest")
+            and origin
+            and origin.get("lat") is not None
+            and not representative
+        )
+
+    async def nearby(self, arguments, origin, *, with_travel=True):
+        """Category POIs around the car, widest ring only when inner ones are sparse."""
+        item = CATEGORIES[arguments["category"]]
+        near = coordinates(origin)
+        code = (self.categories or {}).get(item.key) or item.codes[0]
+        query = arguments.get("_provider_query") or arguments["query"]
+        found = {}
+        for radius in NEARBY_RINGS_M:
+            kwargs = {"near": near, "radius_m": radius, "layers": "POI"}
+            places = await self.provider_search(query, **kwargs, category=code)
+            if not places and query != item.query:
+                places = await self.provider_search(item.query, **kwargs, category=code)
+            if not places:
+                # An unknown code must not hide every result; identity is checked below.
+                places = await self.provider_search(query, **kwargs)
+            places = [p for p in places if p.ref_id not in found and matches_category(p.model_dump(), item.key)]
+            missing = [p for p in places if p.lat is None or p.lng is None]
+            details = await read_many(self.client, [("place", (p.ref_id,), {}) for p in missing])
+            details = dict(zip((p.ref_id for p in missing), details))
+            for place in places:
+                if place.lat is None or place.lng is None:
+                    detail = details.get(place.ref_id)
+                    if detail is None or isinstance(detail, Exception):
+                        if isinstance(detail, Exception):
+                            arguments.get("_errors", []).append(type(detail).__name__)
+                        continue
+                    place = place.model_copy(
+                        update={"lat": detail.lat, "lng": detail.lng, "address": place.address or detail.address}
+                    )
+                value = place.model_dump()
+                value["_straight_m"] = straight_distance(near, (place.lat, place.lng))
+                if value["_straight_m"] <= radius * 1.25:
+                    found[place.ref_id] = value
+            if len(found) >= NEARBY_ENOUGH:
+                break
+        destination = DestinationSpec.from_arguments(arguments)
+        candidates = [
+            {
+                **value,
+                "handle": "place:" + str(uuid4()),
+                "category": item.key,
+                "spoken_label": place_label(value),
+                "short_address": short_address(value.get("address", "")),
+            }
+            for value in sorted(found.values(), key=lambda v: v["_straight_m"])
+            if satisfies_area(value, destination.area)
+        ]
+        candidates = distinct_places(candidates)[:5]
+        for place in candidates:
+            place["straight_distance_m"] = round(place.pop("_straight_m"))
+        if not with_travel:
+            return candidates[:3]
+        return await self.travel(candidates, origin, arguments, nearest=True)
+
+    async def travel(self, candidates, origin, arguments, *, nearest):
+        """One matrix call ranks the shortlist; only the shown places get a route."""
+        distances = None
+        if candidates and hasattr(self.client, "matrix"):
+            try:
+                distances = await self.client.matrix([coordinates(origin), *map(coordinates, candidates)])
+            except Exception:
+                pass
+        indexed = [
+            (index, place)
+            for index, place in enumerate(candidates)
+            if not (distances and index < len(distances) and (distances[index] is None or distances[index] < 0))
+        ]
+        if nearest and distances:
+            indexed.sort(key=lambda pair: distances[pair[0]])
+        indexed = indexed[:3] if nearest else indexed
+        routes = await read_many(
+            self.client, [("route", (coordinates(origin), coordinates(place)), {}) for _, place in indexed]
+        )
+        reachable = []
+        for (index, place), route in zip(indexed, routes):
+            if isinstance(route, Exception):
+                arguments.get("_errors", []).append(type(route).__name__)
+                continue
+            place["distance_m"], place["duration_s"] = route.distance_m, route.duration_s
+            place["_rank_distance"] = (
+                distances[index]
+                if distances and index < len(distances) and distances[index] is not None
+                else route.distance_m
+            )
+            reachable.append(place)
+        if nearest:
+            reachable.sort(key=lambda p: p["_rank_distance"])
+        for place in reachable:
+            place.pop("_rank_distance")
+        return reachable[:3]
+
     async def lookup(self, arguments, origin, *, representative=False, with_travel=True):
+        if self.nearby_request(arguments, origin, representative):
+            return await self.nearby(arguments, origin, with_travel=with_travel)
         category = arguments.get("category")
         categories = self.categories or {}
         # Without a verified category code use a bounded alias query plus a
@@ -179,11 +305,8 @@ class PlaceResolver:
         details = dict(zip((place.ref_id for place in missing), details))
         candidates = []
         for place in places[:10]:
-            if category and not categories.get(category):
-                from src.vivi.navigation.poi import poi_matches
-
-                if not poi_matches(place.name, category):
-                    continue
+            if category and not categories.get(category) and not matches_category(place.model_dump(), category):
+                continue
             if place.lat is None or place.lng is None:
                 detail = details.get(place.ref_id)
                 if detail is None or isinstance(detail, Exception):
@@ -193,7 +316,7 @@ class PlaceResolver:
                 place = place.model_copy(
                     update={"lat": detail.lat, "lng": detail.lng, "address": place.address or detail.address}
                 )
-                if category and not categories.get(category) and not poi_matches(place.name, category):
+                if category and not categories.get(category) and not matches_category(place.model_dump(), category):
                     continue
             if place.lat is None or place.lng is None:
                 continue
@@ -229,37 +352,58 @@ class PlaceResolver:
                 )
             if len(candidates) == 5:
                 break
+        if not admin_only and not category:
+            commune = await self.named_commune(query, arguments, candidates)
+            if commune:
+                candidates = [commune, *candidates][:5]
         candidates = distinct_places(candidates)
         if not with_travel:
             return candidates[:3]
-        distances = None
-        if candidates and hasattr(self.client, "matrix"):
-            try:
-                distances = await self.client.matrix([coordinates(origin), *map(coordinates, candidates)])
-            except Exception:
-                pass
-        reachable = []
-        indexed = [
-            (index, place)
-            for index, place in enumerate(candidates)
-            if not (distances and index < len(distances) and (distances[index] is None or distances[index] < 0))
-        ]
-        routes = await read_many(
-            self.client, [("route", (coordinates(origin), coordinates(place)), {}) for _, place in indexed]
-        )
-        for (index, place), route in zip(indexed, routes):
-            if isinstance(route, Exception):
-                arguments.get("_errors", []).append(type(route).__name__)
-                continue
-            place["distance_m"], place["duration_s"] = route.distance_m, route.duration_s
-            place["_rank_distance"] = (
-                distances[index]
-                if distances and index < len(distances) and distances[index] is not None
-                else route.distance_m
-            )
-            reachable.append(place)
-        if arguments.get("nearest"):
-            reachable.sort(key=lambda p: p["_rank_distance"])
-        for place in reachable:
-            place.pop("_rank_distance")
-        return reachable[:3]
+        return await self.travel(candidates, origin, arguments, nearest=bool(arguments.get("nearest")))
+
+    async def named_commune(self, query, arguments, candidates):
+        """ "Tà Xùa" is a commune, not the Hà Nội café that shares its name.
+
+        Only consulted when no candidate carries exactly the spoken name; the
+        alias catalogue covers provinces, not every commune and ward.
+        """
+        from src.vivi.navigation.contracts import entity_type
+
+        name = normalize_text(query)
+        # A spoken area ("Tà Xùa, Sơn La") already scopes the search, and a
+        # typed venue ("hồ", "đường") is never a commune.
+        if (
+            not candidates
+            or "," in query
+            or entity_type(query)
+            or any(normalize_text(short_name(c["name"])) == name for c in candidates)
+        ):
+            return None
+        try:
+            wards = await self.provider_search(query, near=None, layers="WARD")
+        except VietMapError:
+            return None
+        prefix = r"^(?:xa|phuong|thi tran|dac khu)\s+"
+        ward = next((w for w in wards if re.sub(prefix, "", normalize_text(w.name)) == name), None)
+        if ward is None:
+            return None
+        if ward.lat is None or ward.lng is None:
+            detail = (await read_many(self.client, [("place", (ward.ref_id,), {})]))[0]
+            if isinstance(detail, Exception):
+                arguments.get("_errors", []).append(type(detail).__name__)
+                return None
+            ward = ward.model_copy(update={"lat": detail.lat, "lng": detail.lng})
+        value = ward.model_dump()
+        destination = DestinationSpec.from_arguments(arguments)
+        if not satisfies_area(value, destination.area):
+            return None
+        # "Xã Tà Xùa, Tỉnh Sơn La": the province is what tells it apart.
+        parts = [part.strip() for part in value.get("address", "").split(",") if part.strip()]
+        province = parts[-1] if len(parts) > 1 else ""
+        return {
+            **value,
+            "handle": "place:" + str(uuid4()),
+            "category": None,
+            "spoken_label": ", ".join(p for p in [value["name"], province] if p),
+            "short_address": province or short_address(value.get("address", "")),
+        }

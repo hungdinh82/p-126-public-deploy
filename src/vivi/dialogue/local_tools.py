@@ -30,7 +30,7 @@ GUIDANCE = {
     "manual.search": "Tra hướng dẫn/thông số/cách dùng từ cẩm nang; không đọc số đo live hay điều khiển xe. Giữ query hiện tại. Chỉ điền model/năm/AC/DC khi có căn cứ.",
     "conversation.respond": "Chỉ dùng khi hiểu được yêu cầu trò chuyện/kiến thức/truyện. Không dùng cho câu STT không hiểu hoặc câu hỏi trợ lý cũ; câu nghe không rõ dùng dialogue_clarify. Backend tự gắn query hiện tại, model chỉ chọn mode nếu cần.",
     "navigation.set_gear": "Chỉ đề xuất số P hoặc D được yêu cầu. Chuyển D không chấp thuận tuyến mới; backend kiểm tra cửa/capo/cốp và tuyến trước khi đổi số.",
-    "navigation.search": "Tìm địa điểm và chờ người dùng chọn, không tự khởi hành. Không tạo place_handle hoặc tọa độ. pharmacy/charging là bộ lọc; tìm thông tin chung trên mạng dùng web_search.",
+    "navigation.search": "Tìm địa điểm và chờ người dùng chọn, không tự khởi hành. Không tạo place_handle hoặc tọa độ. category là loại địa điểm (charging, cafe, hospital…), nearest=true khi nói gần nhất/gần đây; tìm thông tin chung trên mạng dùng web_search.",
     "navigation.plan": "Lập tuyến xem trước tới điểm đến và nơi xuất phát nếu được nói. Không tự bắt đầu dẫn đường hoặc đoán route_revision.",
     "navigation.select": "Chỉ dùng place_handle có trong các kết quả của biểu mẫu hiện tại; không tự tạo ID hoặc chọn hộ khi người dùng chưa chọn.",
     "navigation.refine": "Bổ sung/chỉnh điểm đến của biểu mẫu hiện tại: một trong query/destination, choice_handle được cấp hoặc reject_candidates=true. Không lấy điểm đến từ chủ đề đã đóng.",

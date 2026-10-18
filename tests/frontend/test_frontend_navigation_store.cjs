@@ -36,3 +36,16 @@ test('a new draft never lends its clarification to the saved journey',()=>{
  assert.equal(view.navigation.pending.navigation.selected.name,'Đà Nẵng');
  assert.equal(view.navigation.pending.navigation.revision,7);
 });
+
+test('a finished journey never shadows a newer draft',()=>{
+ for(const status of ['ended','completed']){
+  const store=new NavigationStore();
+  const journey={status,selected:{name:'Xã Kim Sơn'},route:{coordinates:[[105,21],[106,20]],steps:[],distance_m:1000}};
+  const draft={id:'plan:bk',purpose:'navigate',status:'selecting',revision:5,candidates:[{name:'Bách Khoa'}]};
+  store.receive({runtime_epoch:'one',snapshot_sequence:1,navigation_workspace:{revision:5,draft,journey}},true);
+  const view=store.renderSnapshot();
+  assert.equal(view.navigation.status,'selecting');
+  assert.equal(view.navigation.selected,undefined);
+  assert.equal(view.navigation.pending,undefined);
+ }
+});

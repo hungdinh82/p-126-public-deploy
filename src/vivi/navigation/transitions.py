@@ -37,6 +37,28 @@ class NavigationTransitions:
             elif journey and journey.status == "charging":
                 return self.blocked("Xe đang sạc tới mức pin cần thiết để tiếp tục.", "charging"), session
             else:
+                draft = workspace.draft
+                if (
+                    workspace.live_journey is None
+                    and draft
+                    and draft.purpose == "navigate"
+                    and draft.route
+                    and not draft.clarification
+                    and (draft.offer or {}).get("status") == "pending"
+                ):
+                    # D beside an unconfirmed route must not drive off without it.
+                    name = (draft.selected or {}).get("spoken_label") or (draft.selected or {}).get("name")
+                    return {
+                        "status": "blocked",
+                        "error_code": "plan_unconfirmed",
+                        "message": f"Bạn xác nhận tuyến tới {name} để bắt đầu nhé."
+                        if name
+                        else "Bạn xác nhận tuyến hiện tại để bắt đầu nhé.",
+                        "request_action": {
+                            "capability": "navigation.start",
+                            "arguments": {"plan_id": draft.id, "route_revision": draft.revision},
+                        },
+                    }, session
                 kind = "free_drive"
         if kind in {"pause", "end", "free_drive", "resume"} and not hasattr(self.vehicle, "set_driving"):
             return self.blocked("Xe chưa hỗ trợ đổi chế độ lái qua mô phỏng.", "unsupported_control"), session
@@ -86,6 +108,8 @@ class NavigationTransitions:
                 )
                 ui = "navigation.pause"
                 if kind == "end":
+                    # The car stays where the trip stopped; keep that as origin.
+                    workspace.origin = await current_origin(session.navigation) or workspace.origin
                     journey.status, journey.resume_status = "ended", None
                     workspace.history = [
                         *workspace.history[-19:],
@@ -97,6 +121,7 @@ class NavigationTransitions:
                             "ended_at": datetime.now(UTC).isoformat(),
                         },
                     ]
+                    workspace.journey = None
                     message, ui = "Đã kết thúc hành trình.", "navigation.end"
             elif kind in {"resume", "free_drive"}:
                 driving = kind == "free_drive" or journey.resume_status == "running"

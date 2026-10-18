@@ -7,8 +7,9 @@ from src.vivi.text import normalize_text
 
 def destination(session):
     workspace = session.navigation_workspace
-    # A running journey takes precedence over an unaccepted replacement draft.
-    owner = workspace.journey or workspace.draft
+    # A running journey takes precedence over an unaccepted replacement draft;
+    # a finished one never shadows the draft being planned now.
+    owner = workspace.live_journey or workspace.draft or workspace.visible_journey
     selected = (owner.selected or {}) if owner else {}
     if not selected and session.trip_plan:
         selected = session.trip_plan.selected or {}
