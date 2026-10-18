@@ -250,7 +250,7 @@ class Settings(BaseSettings):
 
     database_url: str = "sqlite:///./data/app.db"
     rag_data_dir: Path = Path("./data/handbooks")
-    rag_history_db: Path = Path("./data/vivi_rag.sqlite3")
+    rag_history_db: Path = Path("./data/vivi_history.sqlite3")
     rag_handbook_db: Path = Path("./data/handbooks/handbook.sqlite3")
     rag_retrieval_mode: Literal["sqlite", "sqlite_local", "lexical"] = "sqlite_local"
     rag_local_only: bool = Field(default=True, validation_alias="VIVI_RAG_LOCAL_ONLY")

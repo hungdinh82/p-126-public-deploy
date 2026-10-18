@@ -9,7 +9,7 @@ và luật, không gọi API, tải model hay chạy embedding.
 
 | Nguồn | Nội dung | Vòng đời và cách sử dụng |
 | --- | --- | --- |
-| Short-term | Câu hỏi/trả lời, intent, kết quả action của phiên | Lấy tối đa `rag_history_turns=6` lượt từ `data/vivi_rag.sqlite3`; prompt model dùng 3 lượt gần nhất đã rút gọn. Khôi phục được khi dùng lại session sau restart. |
+| Short-term | Câu hỏi/trả lời, intent, kết quả action của phiên | Lấy tối đa `rag_history_turns=6` lượt từ `data/vivi_history.sqlite3`; prompt model dùng 3 lượt gần nhất đã rút gọn. Khôi phục được khi dùng lại session sau restart. |
 | Long-term | Tên, sở thích, yêu cầu/ghi chú, lệnh có tên | Theo hồ sơ người lái, dùng qua nhiều session/restart, tồn tại tới khi sửa hoặc xoá. |
 | Trạng thái xe và handbook | Số đo hiện tại, kiến thức kỹ thuật VF8 | Trạng thái đọc từ adapter; kiến thức đọc từ handbook. Memory không thay thế hai nguồn này. |
 
