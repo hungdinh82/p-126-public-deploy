@@ -1,4 +1,45 @@
-# ViVi Space Concept
+# VIVI Cabin Copilot — The Odysseans (Nhóm P-126)
+
+> **Mã đề:** DEV-01 — Trợ lý cabin tiếng Việt offline-first chạy trên edge.
+> **Demo Day:** AI20K Build Phase, Cohort 4.
+> **🔗 Live demo:** <https://p126-vivi.onrender.com/>
+> **📊 Pitch deck:** [presentation/pitch_deck.pdf](presentation/pitch_deck.pdf) · **🏗 Kiến trúc tương tác:** [docs/architecture.html](docs/architecture.html) ([mô tả](docs/architecture_diagram.md)) · **🧪 Evaluation evidence:** [docs/evaluation.md](docs/evaluation.md)
+
+## Team — The Odysseans
+
+| Vai trò | Họ tên | MSSV | GitHub |
+|---------|--------|------|--------|
+| 🧭 Trưởng nhóm | **Đinh Văn Hùng** | 2A202602443 | [@hungdinh82](https://github.com/hungdinh82) |
+| Thành viên | Nguyễn Thanh Phong | 2A202602843 | [@kaisye](https://github.com/kaisye) |
+| Thành viên | Nguyễn Minh Dương | 2A202602920 | [@minhduong814](https://github.com/minhduong814) |
+| Thành viên | Hoàng Trung Khải | 2A202602947 | [@khaihoang004](https://github.com/khaihoang004) |
+
+## Tech stack
+
+![LangGraph](https://img.shields.io/badge/LangGraph-orchestration-5b4bd9) ![FastAPI](https://img.shields.io/badge/FastAPI-runtime-0f8f94) ![Jetson](https://img.shields.io/badge/Jetson-edge%20SLM-76b900) ![SQLite_FTS5](https://img.shields.io/badge/SQLite-FTS5-003b57) ![Docker](https://img.shields.io/badge/Docker-deploy-2496ed) ![Render](https://img.shields.io/badge/Render-live-46e3b7)
+
+## Liên kết nhanh
+
+- **Development Journal:** [JOURNAL.md](JOURNAL.md) — nhật ký tuần
+- **Worklog:** [WORKLOG.md](WORKLOG.md) — công việc theo ngày
+- **System workflow:** [SYSTEM_WORKFLOW.md](SYSTEM_WORKFLOW.md)
+- **AI logs setup:** [docs/AI_LOG_SETUP.md](docs/AI_LOG_SETUP.md)
+
+## Screenshot
+
+Giao diện landing — truy cập <https://p126-vivi.onrender.com/>:
+
+| Hero | Cabin tasks |
+|------|-------------|
+| ![Hero](docs/screenshots/01-hero.jpg) | ![Cabin tasks](docs/screenshots/02-cabin-tasks.jpg) |
+
+| Features (voice + Digital Twin + HUD) | Navigation & route planning |
+|---------------------------------------|------------------------------|
+| ![Features](docs/screenshots/03-features.jpg) | ![Navigation](docs/screenshots/04-navigation.jpg) |
+
+---
+
+## Tài liệu runtime & review gần đây
 
 Contract LangGraph/navigation, migration và kết quả kiểm chứng hiện tại: [Lõi hội thoại Core v2](docs/langgraph_core_v2.md).
 

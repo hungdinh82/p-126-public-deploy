@@ -1,0 +1,691 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<title>VIVI Cabin Copilot — Pitch Deck</title>
+<style>
+  @page { size: 13.333in 7.5in; margin: 0; }
+
+  :root {
+    --bg:        #ffffff;
+    --bg-2:      #f6f8fc;
+    --ink:       #0e1526;
+    --ink-dim:   #4a5468;
+    --ink-faint: #8591a8;
+    --cyan:      #0f8f94;    /* readable teal for accents on white */
+    --violet:    #5b4bd9;
+    --amber:     #c87a05;
+    --rose:      #c93858;
+    --line:      rgba(14,21,38,0.12);
+    --card:      #ffffff;
+    --card-border: rgba(14,21,38,0.09);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "SF Pro Display", "SF Pro Text", -apple-system, "Helvetica Neue",
+                 "Arial Unicode MS", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .slide {
+    position: relative;
+    width: 1280px;
+    height: 720px;
+    padding: 56px 72px 64px;
+    overflow: hidden;
+    page-break-after: always;
+    break-after: page;
+    background:
+      radial-gradient(1100px 620px at 86% -12%, rgba(15,143,148,0.07), transparent 62%),
+      radial-gradient(900px 560px at -8% 108%, rgba(91,75,217,0.07), transparent 60%),
+      linear-gradient(170deg, var(--bg-2) 0%, var(--bg) 58%);
+  }
+  .slide:last-child { page-break-after: auto; break-after: auto; }
+
+  /* thin LED strip, echoing the product's visual language */
+  .slide::before {
+    content: "";
+    position: absolute; left: 0; right: 0; top: 0; height: 3px;
+    background: linear-gradient(90deg, var(--cyan), var(--violet) 55%, transparent);
+  }
+
+  .eyebrow {
+    font-size: 13px; font-weight: 600; letter-spacing: 0.18em;
+    text-transform: uppercase; color: var(--cyan); margin-bottom: 14px;
+  }
+  h1 { font-size: 62px; line-height: 1.06; font-weight: 700; letter-spacing: -0.02em; }
+  h2 { font-size: 40px; line-height: 1.14; font-weight: 700; letter-spacing: -0.015em; }
+  .sub { font-size: 20px; line-height: 1.5; color: var(--ink-dim); }
+  .divider { width: 72px; height: 3px; border-radius: 3px;
+             background: linear-gradient(90deg, var(--cyan), var(--violet));
+             margin: 18px 0 30px; }
+
+  .num {
+    position: absolute; right: 44px; bottom: 30px;
+    font-size: 13px; color: var(--ink-faint); font-variant-numeric: tabular-nums;
+  }
+  .foot {
+    position: absolute; left: 72px; bottom: 30px;
+    font-size: 13px; color: var(--ink-faint); letter-spacing: 0.04em;
+  }
+
+  /* ---------- layout helpers ---------- */
+  .grid    { display: grid; gap: 18px; }
+  .g2      { grid-template-columns: 1fr 1fr; }
+  .g3      { grid-template-columns: repeat(3, 1fr); }
+  .g4      { grid-template-columns: repeat(4, 1fr); }
+  .split   { display: grid; grid-template-columns: 1.05fr 1fr; gap: 34px; align-items: start; }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-radius: 14px;
+    padding: 20px 22px;
+    box-shadow: 0 1px 2px rgba(14,21,38,0.03);
+  }
+  .card .k { font-size: 13px; font-weight: 600; letter-spacing: 0.12em;
+             text-transform: uppercase; color: var(--cyan); margin-bottom: 9px; }
+  .card .t { font-size: 20px; font-weight: 650; margin-bottom: 7px; line-height: 1.25; }
+  .card .d { font-size: 15.5px; line-height: 1.52; color: var(--ink-dim); }
+  .card.violet .k { color: var(--violet); }
+  .card.amber  .k { color: var(--amber); }
+  .card.rose   .k { color: var(--rose); }
+
+  ul.bul { list-style: none; }
+  ul.bul li {
+    position: relative; padding-left: 22px; margin-bottom: 13px;
+    font-size: 17.5px; line-height: 1.5; color: var(--ink-dim);
+  }
+  ul.bul li::before {
+    content: ""; position: absolute; left: 2px; top: 9px;
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--cyan);
+  }
+  ul.bul li b { color: var(--ink); font-weight: 650; }
+  ul.bul.v li::before { background: var(--violet); }
+
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 11px 14px; font-size: 16px; }
+  th { font-size: 12.5px; letter-spacing: 0.12em; text-transform: uppercase;
+       color: var(--ink-faint); font-weight: 600; border-bottom: 1px solid var(--line); }
+  td { border-bottom: 1px solid rgba(14,21,38,0.07); color: var(--ink-dim); }
+  td.key { color: var(--ink); font-weight: 600; }
+  td.num-c, th.num-c { text-align: right; font-variant-numeric: tabular-nums; }
+  .ok   { color: var(--cyan); font-weight: 650; }
+  .warn { color: var(--amber); font-weight: 650; }
+  .no   { color: var(--rose); font-weight: 650; }
+
+  .stat { text-align: center; padding: 22px 16px; }
+  .stat .v { font-size: 44px; font-weight: 700; letter-spacing: -0.02em;
+             background: linear-gradient(135deg, var(--cyan), var(--violet));
+             -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .stat .l { font-size: 14.5px; color: var(--ink-dim); margin-top: 8px; line-height: 1.4; }
+
+  .pill {
+    display: inline-block; padding: 6px 13px; margin: 0 7px 9px 0;
+    border: 1px solid var(--card-border); border-radius: 999px;
+    font-size: 14.5px; color: var(--ink-dim); background: #ffffff;
+  }
+  .pill b { color: var(--ink); font-weight: 600; }
+
+  /* pipeline chain */
+  .chain { display: flex; align-items: stretch; gap: 0; }
+  .step {
+    flex: 1; text-align: center; padding: 16px 8px;
+    border: 1px solid var(--card-border); border-radius: 12px;
+    background: var(--card);
+  }
+  .step .n { font-size: 11.5px; color: var(--ink-faint); letter-spacing: 0.1em; }
+  .step .s { font-size: 16px; font-weight: 650; margin-top: 5px; }
+  .arrow { align-self: center; padding: 0 9px; color: var(--violet); font-size: 17px; }
+
+  .note {
+    font-size: 14.5px; line-height: 1.5; color: var(--ink-faint);
+    border-left: 2px solid var(--violet); padding-left: 14px;
+  }
+
+  /* architecture blocks */
+  .layer {
+    border: 1px solid var(--card-border); border-radius: 13px;
+    background: var(--card); padding: 14px 18px; margin-bottom: 12px;
+  }
+  .layer .lh { font-size: 12.5px; letter-spacing: 0.13em; text-transform: uppercase;
+               color: var(--cyan); font-weight: 600; margin-bottom: 10px; }
+  .layer.violet .lh { color: var(--violet); }
+  .layer.amber  .lh { color: var(--amber); }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    font-size: 14px; padding: 6px 12px; border-radius: 8px;
+    background: rgba(15,143,148,0.09); border: 1px solid rgba(15,143,148,0.28);
+    color: var(--ink);
+  }
+  .layer.violet .chip { background: rgba(91,75,217,0.08); border-color: rgba(91,75,217,0.28); }
+  .layer.amber  .chip { background: rgba(200,122,5,0.08); border-color: rgba(200,122,5,0.28); }
+  .flowdown { text-align: center; color: var(--ink-faint); font-size: 15px; margin: -4px 0 8px; }
+  .quote { font-size: 23px; line-height: 1.45; color: var(--ink); font-weight: 600; }
+</style>
+</head>
+<body>
+
+<!-- 1 · TITLE -->
+<section class="slide" style="display:flex; flex-direction:column; justify-content:center;">
+  <div class="eyebrow">Mã đề DEV-01 · Nhóm P-126 · Demo Day</div>
+  <h1>VIVI Cabin&nbsp;Copilot</h1>
+  <div class="divider" style="width:120px"></div>
+  <div class="sub" style="max-width:900px; font-size:23px">
+    Trợ lý giọng nói trên xe VinFast — <b style="color:var(--ink)">đa phương thức</b>
+    (voice, text, cảm ứng), <b style="color:var(--ink)">vẫn hoạt động khi mạng kém</b>,
+    và không để mô hình ngôn ngữ tự quyết định thao tác trên xe.
+  </div>
+  <div style="margin-top:38px">
+    <span class="pill"><b>Đinh Văn Hùng</b> · trưởng nhóm</span>
+    <span class="pill">Nguyễn Thanh Phong</span>
+    <span class="pill">Nguyễn Minh Dương</span>
+    <span class="pill">Hoàng Trung Khải</span>
+  </div>
+  <div class="foot">Prototype độc lập — chưa phải sản phẩm VinFast chính thức</div>
+  <div class="num">01</div>
+</section>
+
+<!-- 2 · PAIN POINT (driver-centric) -->
+<section class="slide">
+  <div class="eyebrow">Pain point</div>
+  <h2>Lái xe là lúc tài xế ít có thể thao tác nhất</h2>
+  <div class="divider"></div>
+  <div class="grid g2" style="gap:22px">
+    <div class="card">
+      <div class="k">01 · Hai tay trên vô lăng, mắt trên đường</div>
+      <div class="t">Mỗi lần với tay chỉnh điều hòa, mở nhạc, tìm điểm đến là một lần
+        rời tay/mắt khỏi vị trí an toàn.</div>
+      <div class="d">Màn hình cảm ứng trên IVI buộc tài xế nhìn và chạm nhiều lần
+        cho một tác vụ đơn giản.</div>
+    </div>
+    <div class="card violet">
+      <div class="k">02 · Vào vùng mất sóng là lúc cần hỏi nhất</div>
+      <div class="t">Hầm, cao tốc đồi, tầng hầm — mạng chập chờn</div>
+      <div class="d">Trợ lý phụ thuộc cloud sẽ chậm hẳn hoặc im lặng đúng lúc
+        tài xế hỏi đường, hỏi cảnh báo trên đồng hồ, hỏi điểm sạc.</div>
+    </div>
+    <div class="card amber">
+      <div class="k">03 · Nhiều việc cần làm cùng lúc khi lái</div>
+      <div class="t">Điều khiển cabin · tra cẩm nang · hỏi thông tin · tìm đường</div>
+      <div class="d">Mỗi việc hiện đang nằm ở một app/menu khác nhau. Chưa có một
+        điểm vào duy nhất bằng giọng nói.</div>
+    </div>
+    <div class="card rose">
+      <div class="k">04 · Thao tác sai có thể nguy hiểm</div>
+      <div class="t">Mở cửa khi đang chạy, chỉnh nhiệt vượt giới hạn</div>
+      <div class="d">Không thể để trợ lý "hiểu đại khái" rồi thao tác thật trên xe.
+        Người lái phải nghe được chính xác lệnh sắp chạy và được xác nhận.</div>
+    </div>
+  </div>
+  <div class="foot">Người dùng chính: tài xế xe điện VinFast (mô phỏng)</div>
+  <div class="num">02</div>
+</section>
+
+<!-- 3 · PROBLEM STATEMENT -->
+<section class="slide" style="display:flex; flex-direction:column; justify-content:center;">
+  <div class="eyebrow">Problem statement</div>
+  <div class="quote" style="font-size:34px; line-height:1.4; max-width:1040px; font-weight:650">
+    Tài xế cần một trợ lý <span style="color:var(--cyan)">dùng bằng giọng nói —
+    rảnh tay, không rời mắt khỏi đường</span>,
+    <span style="color:var(--violet)">an toàn khi lái</span> (nghe rõ lệnh sắp chạy,
+    xác nhận với thao tác nhạy cảm, chặn thao tác sai), và
+    <span style="color:var(--amber)">không ngắt quãng khi mạng chập chờn</span>.
+  </div>
+  <div class="divider" style="margin:34px 0 26px; width:120px"></div>
+  <div class="grid g3" style="max-width:1140px; gap:20px">
+    <div class="note">Rảnh tay — một nút giữ mic, phần còn lại là nghe và nói.</div>
+    <div class="note" style="border-color:var(--cyan)">An toàn — mọi thao tác xe
+      đi qua lớp policy tất định, không phải quyết định của model.</div>
+    <div class="note" style="border-color:var(--amber)">Bền với mạng — cloud khi có,
+      tự chuyển local khi không.</div>
+  </div>
+  <div class="foot">VIVI Cabin Copilot · P-126</div>
+  <div class="num">03</div>
+</section>
+
+<!-- 4 · GIẢI PHÁP -->
+<section class="slide">
+  <div class="eyebrow">Giải pháp</div>
+  <h2>VIVI gồm ba lớp: nghe, hiểu + lập kế hoạch, thực thi an toàn</h2>
+  <div class="divider"></div>
+  <div class="grid g3" style="gap:18px; margin-bottom:24px">
+    <div class="card">
+      <div class="k">Lớp 1 · Nghe và trả lời</div>
+      <div class="t">Giọng nói hai chiều</div>
+      <div class="d">PhoWhisper / whisper.cpp cho STT · ZeroTTS giọng "Mai Chi"
+        cho TTS. Luồng stream: nói trước, âm thanh về sớm.</div>
+    </div>
+    <div class="card violet">
+      <div class="k">Lớp 2 · Hiểu + lập kế hoạch</div>
+      <div class="t">LangGraph + ModelGateway</div>
+      <div class="d">Model trả semantic event, không gọi thẳng tool. Cloud (Google)
+        khi có mạng, tự chuyển local khi không — đổi provider giữ nguyên session.</div>
+    </div>
+    <div class="card amber">
+      <div class="k">Lớp 3 · Thực thi an toàn</div>
+      <div class="t">Policy tất định + HITL</div>
+      <div class="d">30 tool kiểu typed · policy R0–R3 bằng code · xác nhận một lần
+        cho cửa/kính · verify qua acknowledgement của xe mô phỏng.</div>
+    </div>
+  </div>
+  <div class="grid g2">
+    <ul class="bul">
+      <li><b>Đa phương thức:</b> voice, text và chạm — vào bằng đường nào cũng ra chung một pipeline.</li>
+      <li><b>Không chết khi mất mạng:</b> local chạy được một mình; thiếu model vẫn tra cẩm nang bằng SQLite FTS5.</li>
+    </ul>
+    <ul class="bul v">
+      <li><b>Hai vai trò:</b> Tài xế (ra lệnh, nhận câu trả lời) và Kỹ sư (xem health, trace, audit).</li>
+      <li><b>Bộ nhớ hội thoại:</b> short-term theo phiên và long-term khi người dùng yêu cầu rõ.</li>
+    </ul>
+  </div>
+  <div class="foot">VIVI Cabin Copilot · P-126</div>
+  <div class="num">04</div>
+</section>
+
+<!-- 5 · 6 NHÓM NĂNG LỰC + DEMO -->
+<section class="slide">
+  <div class="eyebrow">Năng lực</div>
+  <h2>Sáu nhóm tool thật, 30 action — tất cả vào bằng giọng nói</h2>
+  <div class="divider"></div>
+  <div class="grid g3" style="gap:14px; margin-bottom:14px">
+    <div class="card">
+      <div class="k">Điều khiển cabin · 8 tool</div>
+      <div class="d" style="font-size:14.5px"><b style="color:var(--ink)">climate, media, seat,
+        door (open/lock), window, hood, trunk, body.</b><br>
+        → "Đặt nhiệt độ 25 độ" · "Phát nhạc thư giãn" · "Sưởi ghế sau trái mức 2".</div>
+    </div>
+    <div class="card violet">
+      <div class="k">Dẫn đường · 9 tool</div>
+      <div class="d" style="font-size:14.5px"><b style="color:var(--ink)">search, plan, select,
+        refine, start, stop, end, cancel, set_gear.</b><br>
+        → "Chỉ đường đi Ninh Bình" · "Sửa điểm đến thành Tràng An" · "Kết thúc dẫn đường".</div>
+    </div>
+    <div class="card amber">
+      <div class="k">Thông tin · 3 tool</div>
+      <div class="d" style="font-size:14.5px"><b style="color:var(--ink)">web.search (Tavily),
+        weather.get_forecast, knowledge.lookup.</b><br>
+        → "Thời tiết Hà Nội mai thế nào?" · "Ở Ninh Bình có gì chơi?".</div>
+    </div>
+    <div class="card">
+      <div class="k">Cẩm nang VF8 · 1 tool</div>
+      <div class="d" style="font-size:14.5px"><b style="color:var(--ink)">manual.search</b> với
+        RAG trên 931 chunk VF8 2026, lọc theo dòng xe + năm.<br>
+        → "Đèn vàng hình bình ắc-quy có ý nghĩa gì?".</div>
+    </div>
+    <div class="card violet">
+      <div class="k">Bộ nhớ · 4 tool</div>
+      <div class="d" style="font-size:14.5px"><b style="color:var(--ink)">remember, recall, forget,
+        reset.</b> Chỉ ghi khi người dùng yêu cầu rõ.<br>
+        → "Nhớ rằng tôi tên Minh" · "Quên tên tôi".</div>
+    </div>
+    <div class="card amber">
+      <div class="k">Hội thoại · 2 tool</div>
+      <div class="d" style="font-size:14.5px"><b style="color:var(--ink)">conversation.respond,
+        conversation.clarify.</b> Thiếu thông tin → hỏi lại, không đoán.<br>
+        → "Mở cửa sổ" → "Bạn muốn cửa sổ bên nào?".</div>
+    </div>
+  </div>
+  <div class="note">
+    Luồng khuyên thử trong demo: điều hòa và nhạc (R1 chạy ngay) → mở cửa sổ (R2 chờ "OK" hoặc "hủy") →
+    chuyển sang "đang lái" rồi mở cửa (bị policy chặn) → hỏi cẩm nang → dẫn đường kèm hỏi thông tin điểm đến.
+  </div>
+  <div class="foot">Chi tiết tool trong src/vivi/agents/tools.py — danh sách sinh từ TOOL_REGISTRY</div>
+  <div class="num">05</div>
+</section>
+
+<!-- 6 · KIẾN TRÚC TỔNG QUAN -->
+<section class="slide">
+  <div class="eyebrow">Kiến trúc</div>
+  <h2>Edge gateway + ModelGateway hai tầng cloud–local</h2>
+  <div class="divider" style="margin:16px 0 16px"></div>
+  <div class="layer">
+    <div class="lh">IVI — Giao diện trên xe (Canvas 3D, voice, cảm ứng)</div>
+    <div class="chips">
+      <span class="chip">UI Tài xế</span>
+      <span class="chip">Dashboard Kỹ sư</span>
+      <span class="chip">/monitor — health &amp; trace</span>
+    </div>
+  </div>
+  <div class="flowdown">↓&nbsp;&nbsp;REST + NDJSON stream</div>
+  <div class="layer violet">
+    <div class="lh">FastAPI · src.vivi.api.app:app</div>
+    <div class="chips">
+      <span class="chip">Auth &amp; RBAC</span>
+      <span class="chip">Session / conversation</span>
+      <span class="chip">Telemetry &amp; audit</span>
+      <span class="chip">/api/v2/turn · /api/v2/turn/stream · /api/v1/stt · /api/v1/tts</span>
+    </div>
+  </div>
+  <div class="flowdown">↓</div>
+  <div class="grid g2" style="gap:14px; margin-bottom:12px">
+    <div class="layer" style="margin:0">
+      <div class="lh">LangGraph assistant · ModelGateway</div>
+      <div class="chips">
+        <span class="chip">Cloud · Google / OpenAI / OpenRouter</span>
+        <span class="chip">Local · SLM Qwen3-1.7B Q4 trên Jetson</span>
+        <span class="chip">Grammar hồi phục giới hạn</span>
+      </div>
+    </div>
+    <div class="layer amber" style="margin:0">
+      <div class="lh">Policy &amp; HITL · src/vivi/domain/safety.py</div>
+      <div class="chips">
+        <span class="chip">RISK_BY_INTENT (R0–R3)</span>
+        <span class="chip">Confirmations gắn session + state version</span>
+      </div>
+    </div>
+  </div>
+  <div class="grid g3" style="gap:14px">
+    <div class="layer violet" style="margin:0; padding:12px 16px">
+      <div class="lh">Vehicle twin</div>
+      <div class="chips"><span class="chip">MQTT Mosquitto</span><span class="chip">Memory simulator</span></div>
+    </div>
+    <div class="layer" style="margin:0; padding:12px 16px">
+      <div class="lh">RAG VF8</div>
+      <div class="chips"><span class="chip">SQLite FTS5 + E5</span><span class="chip">931 chunk</span></div>
+    </div>
+    <div class="layer amber" style="margin:0; padding:12px 16px">
+      <div class="lh">Information</div>
+      <div class="chips"><span class="chip">Tavily · Open-Meteo</span><span class="chip">Wikipedia · VietMap</span></div>
+    </div>
+  </div>
+  <div class="foot">Cloud và service online nằm ngoài critical path của điều khiển cabin — rớt mạng vẫn trả lời được</div>
+  <div class="num">06</div>
+</section>
+
+<!-- 7 · PIPELINE 1 LƯỢT -->
+<section class="slide">
+  <div class="eyebrow">Pipeline một lượt</div>
+  <h2>7 node LangGraph thật trong src/vivi/graphs/assistant.py</h2>
+  <div class="divider"></div>
+  <div class="chain" style="margin-bottom:24px">
+    <div class="step"><div class="n">01</div><div class="s">context</div></div>
+    <div class="arrow">→</div>
+    <div class="step"><div class="n">02</div><div class="s">interpret</div></div>
+    <div class="arrow">→</div>
+    <div class="step"><div class="n">03</div><div class="s">reducer</div></div>
+    <div class="arrow">→</div>
+    <div class="step"><div class="n">04</div><div class="s">scheduler</div></div>
+    <div class="arrow">⇄</div>
+    <div class="step"><div class="n">05</div><div class="s">capability</div></div>
+    <div class="arrow">→</div>
+    <div class="step"><div class="n">06</div><div class="s">response</div></div>
+    <div class="arrow">→</div>
+    <div class="step"><div class="n">07</div><div class="s">persist</div></div>
+  </div>
+  <div class="grid g3" style="gap:14px; margin-bottom:16px">
+    <div class="card">
+      <div class="k">interpret · nơi chọn cloud / local</div>
+      <div class="d" style="font-size:14.5px">Model trả <b style="color:var(--ink)">semantic event</b>,
+        server validate <code>SemanticTurn</code>, sửa JSON lỗi một lần.
+        Google → local → grammar; mỗi tầng có budget riêng.</div>
+    </div>
+    <div class="card violet">
+      <div class="k">scheduler ⇄ capability</div>
+      <div class="d" style="font-size:14.5px">Task sống trong checkpoint. Scheduler chạy tối đa 5 bước
+        tuần tự qua policy; capability trả kết quả, scheduler quyết bước tiếp.</div>
+    </div>
+    <div class="card amber">
+      <div class="k">response · verify trước khi báo</div>
+      <div class="d" style="font-size:14.5px">Lệnh xe: đọc ACK MQTT đúng command, đọc state lần nữa,
+        rồi mới nói "đã làm". Mất ACK → "chưa xác minh".</div>
+    </div>
+  </div>
+  <div class="note">
+    Mỗi node ghi span timing riêng (có thể xem trong /monitor). Luồng stream
+    <code>/api/v2/turn/stream</code> chỉ phát câu trả lời sau khi grounding, safety và verify
+    tương ứng đã hoàn tất — không phát sớm nội dung chưa kiểm chứng.
+  </div>
+  <div class="foot">Đổi provider cloud ↔ local giữa phiên vẫn giữ nguyên session và task đang chờ</div>
+  <div class="num">07</div>
+</section>
+
+<!-- 8 · TECH STACK -->
+<section class="slide">
+  <div class="eyebrow">Tech stack</div>
+  <h2>Mọi thành phần đổi được bằng config, không sửa code</h2>
+  <div class="divider"></div>
+  <table>
+    <thead>
+      <tr><th style="width:17%">Thành phần</th><th style="width:25%">Biến cấu hình</th><th>Lựa chọn thực tế</th></tr>
+    </thead>
+    <tbody>
+      <tr><td class="key">Runtime</td><td><code>src.vivi.api.app:app</code></td>
+          <td>FastAPI · Uvicorn · LangGraph 1.2 + checkpoint SQLite · Pydantic v2 · Docker</td></tr>
+      <tr><td class="key">STT</td><td><code>stt_provider</code></td>
+          <td>PhoWhisper-medium · whisper.cpp · Soniox · Jetson HTTP · <span style="color:var(--ink-faint)">off</span></td></tr>
+      <tr><td class="key">LLM / planner</td><td><code>llm_provider</code></td>
+          <td>Google Gemini Flash Lite · SLM local Qwen3-1.7B Q4 · OpenAI · OpenRouter</td></tr>
+      <tr><td class="key">TTS</td><td><code>tts_provider</code></td>
+          <td>ZeroTTS giọng "VIVI/Mai Chi" (local) · VieNeu (cloud) · <span style="color:var(--ink-faint)">off</span></td></tr>
+      <tr><td class="key">Handbook</td><td><code>rag_retrieval_mode</code></td>
+          <td>sqlite_local (mặc định) · sqlite · lexical · rank-bm25</td></tr>
+      <tr><td class="key">Vehicle</td><td><code>vehicle_provider</code></td>
+          <td>memory · MQTT qua Mosquitto + paho-mqtt</td></tr>
+      <tr><td class="key">Thông tin</td><td><code>information_enabled</code></td>
+          <td>Tavily · Open-Meteo · Wikipedia · VietMap</td></tr>
+      <tr><td class="key">Frontend</td><td>—</td>
+          <td>Vanilla JS + Canvas 3D, reduced-motion, fallback font hệ thống khi offline</td></tr>
+    </tbody>
+  </table>
+  <div class="note" style="margin-top:18px">
+    Mặc định <b style="color:var(--ink)">cloud → local → grammar hồi phục</b>, chỉ tụt tầng khi
+    tầng trước lỗi. <code>offline_only</code> / <code>rag_local_only</code> chặn mọi HTTP ra ngoài.
+    Khóa API và override theo máy nằm trong <code>.env</code>, không commit.
+  </div>
+  <div class="foot">VIVI Cabin Copilot · P-126</div>
+  <div class="num">08</div>
+</section>
+
+<!-- 9 · SAFETY R0–R3 -->
+<section class="slide">
+  <div class="eyebrow">An toàn</div>
+  <h2>Policy R0–R3 là code tất định, không phải prompt</h2>
+  <div class="divider"></div>
+  <table style="margin-bottom:20px">
+    <thead>
+      <tr><th style="width:9%">Mức</th><th style="width:34%">Intent trong RISK_BY_INTENT</th><th>Chính sách thực thi</th></tr>
+    </thead>
+    <tbody>
+      <tr><td class="key ok">R0</td>
+          <td><code>vehicle.get_status</code> · <code>manual.search</code> · <code>conversation.respond/clarify</code></td>
+          <td>Chỉ đọc trạng thái và trả lời — không cần xác nhận.</td></tr>
+      <tr><td class="key ok">R1</td>
+          <td><code>climate.set_temperature</code> · <code>media.play/pause</code> · <code>seat.set_heat_level</code></td>
+          <td>Kiểm role + bounds + live state rồi thực thi ngay.</td></tr>
+      <tr><td class="key warn">R2</td>
+          <td><code>window.set_position</code> · <code>door.set_lock/open</code> · <code>hood/trunk/body.set_open</code></td>
+          <td>Hỏi "nói OK để [action]"; xác nhận một lần, hết hạn 30 giây.</td></tr>
+      <tr><td class="key no">R3</td>
+          <td><code>unsupported.request</code> · <code>vehicle.prohibited</code></td>
+          <td>Tool không tồn tại hoặc luôn bị từ chối và ghi audit.</td></tr>
+    </tbody>
+  </table>
+  <div class="grid g2">
+    <ul class="bul">
+      <li><b>Policy đọc live state</b> ngay trước khi thực thi, không suy ra từ bộ nhớ hội thoại.</li>
+      <li><b>Confirmation gắn chặt</b> action + session + state version; đổi tham số là mất hiệu lực.</li>
+    </ul>
+    <ul class="bul v">
+      <li><b>Không có đường đi</b> từ UI hoặc LLM tới MQTT bỏ qua policy gateway.</li>
+      <li><b>Nội dung cẩm nang là data</b>, không phải instruction — chống prompt injection.</li>
+    </ul>
+  </div>
+  <div class="foot">Bảng mapping lấy trực tiếp từ src/vivi/domain/safety.py:21–37</div>
+  <div class="num">09</div>
+</section>
+
+<!-- 10 · GROUNDED RAG -->
+<section class="slide">
+  <div class="eyebrow">Grounded RAG</div>
+  <h2>Trả lời cẩm nang VF8 2026 kèm nguồn, thiếu bằng chứng thì abstain</h2>
+  <div class="divider"></div>
+  <div class="grid g4" style="gap:14px; margin-bottom:26px">
+    <div class="card stat"><div class="v">931</div><div class="l">chunk + embedding VF8
+      trong index runtime</div></div>
+    <div class="card stat"><div class="v">E5</div><div class="l">multilingual-e5-small
+      INT8, chạy local</div></div>
+    <div class="card stat"><div class="v">12→5</div><div class="l">retrieval k → final k
+      sau rerank</div></div>
+    <div class="card stat"><div class="v">0</div><div class="l">câu trả lời không có
+      bằng chứng được phát</div></div>
+  </div>
+  <div class="split" style="gap:30px">
+    <div>
+      <ul class="bul">
+        <li><b>Pipeline chuẩn bị:</b> crawl → parse → import corpus → prepare embeddings →
+          build index, mọi bước là CLI chạy lại được.</li>
+        <li><b>Lọc trước khi truy xuất</b> theo dòng xe, năm sản xuất và locale (VF8 / 2026 / vi_vn).</li>
+        <li><b>SQLite FTS5 + vector</b> trong một file; không cần service vector riêng, chạy được offline hoàn toàn.</li>
+      </ul>
+    </div>
+    <div>
+      <ul class="bul v">
+        <li><b>Model chọn mã đoạn bằng chứng</b> thay vì chép lại trích dẫn; server giữ nguyên
+          đoạn nguồn và gắn link tương ứng.</li>
+        <li><b>Kiểm số liệu</b> trong câu trả lời dựa trên các đoạn đã chọn; mâu thuẫn hoặc
+          thiếu bằng chứng ⇒ abstain.</li>
+        <li><b>Không có model vẫn tra được</b> handbook bằng SQLite FTS5 và trả trích đoạn có nguồn.</li>
+      </ul>
+    </div>
+  </div>
+  <div class="foot">Corpus nguồn và index runtime chia sẻ qua Git; trọng số embedding nằm ngoài Git</div>
+  <div class="num">10</div>
+</section>
+
+<!-- 11 · BENCHMARK STT & TTS -->
+<section class="slide">
+  <div class="eyebrow">Benchmark giọng nói · Jetson AGX Xavier · 16–17/10/2026</div>
+  <h2>STT và TTS trên Jetson đạt yêu cầu rảnh tay</h2>
+  <div class="divider"></div>
+  <div class="grid g4" style="gap:14px; margin-bottom:22px">
+    <div class="card stat" style="padding:16px 12px">
+      <div class="v">109<span style="font-size:22px"> ms</span></div>
+      <div class="l">TTS byte đầu tiên<br>ZeroTTS FP32 · p95 125 ms</div></div>
+    <div class="card stat" style="padding:16px 12px">
+      <div class="v">0,80</div>
+      <div class="l">RTF stream ZeroTTS<br>&lt;1 là kịp phát</div></div>
+    <div class="card stat" style="padding:16px 12px">
+      <div class="v">449<span style="font-size:22px"> ms</span></div>
+      <div class="l">STT câu ngắn<br>Whisper-small xử lý server</div></div>
+    <div class="card stat" style="padding:16px 12px">
+      <div class="v">32,5<span style="font-size:22px">%</span></div>
+      <div class="l">WER whisper-small<br>trên giọng tổng hợp</div></div>
+  </div>
+  <div class="split" style="gap:30px">
+    <table>
+      <thead><tr><th style="width:42%">Phương án đã thử</th><th>Kết quả đo</th><th style="width:21%">Quyết định</th></tr></thead>
+      <tbody>
+        <tr><td class="key">ZeroTTS INT8 TensorRT</td><td>RTF 2,56 · load 113 s · RSS 7,18 GiB</td><td class="no">Bỏ</td></tr>
+        <tr><td class="key">ZeroTTS FP32 GPU, stream</td><td>RTF 0,80 · TTFA 109 ms</td><td class="ok">Đang dùng</td></tr>
+        <tr><td class="key">VieNeu API (cloud)</td><td>TTFA 774 ms · CER 6,3% · hạn mức 50k token/ngày</td><td class="warn">Dự phòng</td></tr>
+        <tr><td class="key">whisper-base</td><td>WER 42,8% · p50 527 ms</td><td class="no">Thay</td></tr>
+        <tr><td class="key">whisper-small</td><td>WER 32,5% · p50 821 ms</td><td class="ok">Đang dùng</td></tr>
+      </tbody>
+    </table>
+    <div>
+      <div class="card rose" style="padding:15px 17px; margin-bottom:12px">
+        <div class="k">Còn yếu</div>
+        <div class="d" style="font-size:14px; line-height:1.55">STT ảo giác trên khoảng lặng dài
+          (7/120 clip thật) — chưa có VAD. WER hiện chỉ đo trên giọng tổng hợp;
+          giọng thật mới có nhãn nháp.</div>
+      </div>
+      <div class="card amber" style="padding:15px 17px">
+        <div class="k">Bài học</div>
+        <div class="d" style="font-size:14px; line-height:1.55">INT8 nhanh gấp đôi trên CPU máy dev
+          nhưng chậm gấp ~3 lần FP32 trên Xavier — <b style="color:var(--ink)">tối ưu phải
+          đo trên đúng phần cứng đích</b>.</div>
+      </div>
+    </div>
+  </div>
+  <div class="foot">Mỗi khâu 1 lượt khởi động rồi lặp 3 lần · p95 nearest-rank, không bỏ lượt lỗi</div>
+  <div class="num">11</div>
+</section>
+
+<!-- 12 · AGENT BENCHMARK -->
+<section class="slide">
+  <div class="eyebrow">Benchmark agent · 834 ca live · 18/10/2026 · rev 9f52179</div>
+  <h2>SLM trên Jetson vs Gemini — cùng corpus, cùng oracle</h2>
+  <div class="divider" style="margin:16px 0 20px"></div>
+  <div class="split" style="grid-template-columns:1.2fr 1fr; gap:30px">
+    <div>
+      <table>
+        <thead>
+          <tr><th style="width:34%">Nhóm tool (số case)</th>
+              <th class="num-c" style="width:22%">Jetson<br><span style="font-size:11px; color:var(--ink-faint); letter-spacing:0">vivi-qwen3-1.7b</span></th>
+              <th class="num-c" style="width:22%">Gemini<br><span style="font-size:11px; color:var(--ink-faint); letter-spacing:0">3.5-flash-lite</span></th>
+              <th class="num-c" style="width:22%">Chênh</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="key">Cabin — cửa, kính, nhạc, điều hòa, body (303)</td>
+              <td class="num-c">298</td><td class="num-c">301</td><td class="num-c">+3</td></tr>
+          <tr><td class="key">vehicle_status (144)</td>
+              <td class="num-c">129</td><td class="num-c">137</td><td class="num-c">+8</td></tr>
+          <tr><td class="key warn">navigation (153)</td>
+              <td class="num-c">104</td><td class="num-c">137</td><td class="num-c warn">+33</td></tr>
+          <tr><td class="key warn">memory (40)</td>
+              <td class="num-c">21</td><td class="num-c">34</td><td class="num-c warn">+13</td></tr>
+          <tr><td class="key">multi_tool (50)</td>
+              <td class="num-c">41</td><td class="num-c">50</td><td class="num-c">+9</td></tr>
+          <tr><td class="key">information + dialogue + hard + adversarial (144)</td>
+              <td class="num-c">126</td><td class="num-c">137</td><td class="num-c">+11</td></tr>
+          <tr><td class="key" style="border-top:1px solid var(--line); padding-top:14px"><b>Tổng (834)</b></td>
+              <td class="num-c"><b>719 · 86,2%</b></td><td class="num-c"><b>796 · 95,4%</b></td><td class="num-c">+77</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div>
+      <table style="margin-bottom:14px">
+        <thead><tr><th></th><th class="num-c">Jetson</th><th class="num-c">Gemini</th></tr></thead>
+        <tbody>
+          <tr><td class="key">Latency p50</td><td class="num-c">2,3 s</td><td class="num-c">1,2 s</td></tr>
+          <tr><td class="key">Latency p95</td><td class="num-c">4,2 s</td><td class="num-c">4,7 s</td></tr>
+          <tr><td class="key">Repair / fallback</td><td class="num-c">13 / 5</td><td class="num-c">4 / 0</td></tr>
+        </tbody>
+      </table>
+      <div class="card violet" style="padding:14px 16px; margin-bottom:11px">
+        <div class="k">Chồng lấn</div>
+        <div class="d" style="font-size:13.5px; line-height:1.55">718 ca cả hai cùng pass · 78 ca chỉ Gemini ·
+          1 ca chỉ Jetson · <b style="color:var(--ink)">37 ca cả hai cùng fail</b> — ứng viên xem lại oracle.</div>
+      </div>
+      <div class="card rose" style="padding:14px 16px">
+        <div class="k">Đọc kết quả có điều kiện</div>
+        <div class="d" style="font-size:13.5px; line-height:1.55">Corpus development, chưa phải holdout review
+          độc lập; test và tool được thiết kế cùng nhau. Mỗi ca 1 lần — chênh vài ca là nhiễu.</div>
+      </div>
+    </div>
+  </div>
+  <div class="foot">20 ca Gemini rơi fallback do timeout/HTTP 503 đã chạy lại (20/20 pass); latency của nhóm này không so trực tiếp</div>
+  <div class="num">12</div>
+</section>
+
+<!-- 13 · CẢM ƠN -->
+<section class="slide" style="display:flex; flex-direction:column; justify-content:center;">
+  <div class="eyebrow">Mã đề DEV-01 · Nhóm P-126</div>
+  <h1 style="font-size:70px">Cảm ơn</h1>
+  <div class="divider" style="width:120px; margin:20px 0 28px"></div>
+  <div class="quote" style="font-size:26px; max-width:1000px; font-weight:600">
+    Rảnh tay bằng giọng nói ·
+    <span style="color:var(--violet)">an toàn khi lái</span> ·
+    <span style="color:var(--amber)">không ngắt quãng khi mạng kém</span>.
+  </div>
+  <div class="sub" style="margin-top:16px; max-width:900px; font-size:18px">
+    Ba điều bản demo phải chứng minh — và là ba điều chúng tôi dám để người khác thử phá.
+  </div>
+  <div style="margin-top:40px">
+    <span class="pill"><b>Live demo</b> p126-vivi.onrender.com</span>
+    <span class="pill"><b>Bàn giao</b> Dockerized prototype</span>
+    <span class="pill"><b>Kèm</b> tài liệu kiến trúc</span>
+    <span class="pill"><b>Kèm</b> báo cáo benchmark</span>
+  </div>
+  <div class="foot">VIVI Cabin Copilot · Prototype độc lập, chưa phải sản phẩm VinFast chính thức</div>
+  <div class="num">13</div>
+</section>
+
+</body>
+</html>
