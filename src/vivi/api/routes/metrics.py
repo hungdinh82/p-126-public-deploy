@@ -36,7 +36,12 @@ def _memory() -> dict:
         total = values["MemTotal"]
         available = values.get("MemAvailable", values.get("MemFree", 0))
         used = total - available
-        return {"total_bytes": total, "used_bytes": used, "free_bytes": available, "percent": round(used / total * 100, 1)}
+        return {
+            "total_bytes": total,
+            "used_bytes": used,
+            "free_bytes": available,
+            "percent": round(used / total * 100, 1),
+        }
     except (OSError, KeyError, ValueError):
         return {"total_bytes": None, "used_bytes": None, "free_bytes": None, "percent": None}
 
@@ -45,13 +50,28 @@ def _query_gpu() -> list[dict]:
     try:
         binary = shutil.which("nvidia-smi") or "/usr/lib/wsl/lib/nvidia-smi"
         result = subprocess.run(
-            [binary, "--query-gpu=name,utilization.gpu,memory.used,memory.total,temperature.gpu", "--format=csv,noheader,nounits"],
-            capture_output=True, text=True, timeout=1, check=True,
+            [
+                binary,
+                "--query-gpu=name,utilization.gpu,memory.used,memory.total,temperature.gpu",
+                "--format=csv,noheader,nounits",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=1,
+            check=True,
         )
         devices = []
         for line in result.stdout.splitlines():
             name, usage, used, total, temperature = [part.strip() for part in line.split(",")]
-            devices.append({"name": name, "usage_percent": float(usage), "memory_used_mb": float(used), "memory_total_mb": float(total), "temperature_c": float(temperature)})
+            devices.append(
+                {
+                    "name": name,
+                    "usage_percent": float(usage),
+                    "memory_used_mb": float(used),
+                    "memory_total_mb": float(total),
+                    "temperature_c": float(temperature),
+                }
+            )
         return devices
     except (OSError, ValueError, subprocess.SubprocessError):
         return []
@@ -168,11 +188,15 @@ def _gpu() -> dict:
     devices = []
     for index, device in enumerate(samples[-1] if samples else []):
         matching = [sample[index] for sample in samples if index < len(sample)]
-        devices.append({
-            **device,
-            "peak_usage_percent_20s": max((item["usage_percent"] for item in matching), default=device["usage_percent"]),
-            "sampled_at": now,
-        })
+        devices.append(
+            {
+                **device,
+                "peak_usage_percent_20s": max(
+                    (item["usage_percent"] for item in matching), default=device["usage_percent"]
+                ),
+                "sampled_at": now,
+            }
+        )
     source = "tegrastats" if devices and "Jetson" in devices[0].get("name", "") else "nvidia-smi" if devices else None
     return {"available": bool(devices), "source": source, "sample_interval_ms": 500, "devices": devices}
 
@@ -191,17 +215,45 @@ def _device(gpu: dict) -> dict:
     devices = gpu.get("devices", [])
     gpu_name = devices[0].get("name", "") if devices else ""
     if model or os.path.exists("/etc/nv_tegra_release") or gpu.get("source") == "tegrastats":
-        return {"kind": "jetson", "name": model or gpu_name or "NVIDIA Jetson", "gpu_backend": "tegrastats" if gpu.get("source") == "tegrastats" or shutil.which("tegrastats") else None}
+        return {
+            "kind": "jetson",
+            "name": model or gpu_name or "NVIDIA Jetson",
+            "gpu_backend": "tegrastats" if gpu.get("source") == "tegrastats" or shutil.which("tegrastats") else None,
+        }
     if gpu_name:
-        return {"kind": "nvidia_rtx" if "RTX" in gpu_name.upper() else "nvidia_gpu", "name": gpu_name, "gpu_backend": "nvidia-smi"}
+        return {
+            "kind": "nvidia_rtx" if "RTX" in gpu_name.upper() else "nvidia_gpu",
+            "name": gpu_name,
+            "gpu_backend": "nvidia-smi",
+        }
     return {"kind": "cpu", "name": platform.machine() or "CPU", "gpu_backend": None}
 
 
 def _pipeline(events: list[dict]) -> dict:
     event = next((entry for entry in reversed(events) if entry.get("event_type") == "turn"), None)
     if not event:
-        return {"status": "chưa có lượt chạy", "command": "", "session_id": None, "turn_id": None, "timings_ms": {}, "received_at": None, "output_at": None, "end_to_end_ms": None}
-    return {"status": event.get("status", "unknown"), "command": event.get("transcript", ""), "session_id": event.get("session_id"), "turn_id": event.get("turn_id"), "timings_ms": event.get("latency_ms", {}), "received_at": event.get("received_at"), "output_at": event.get("output_at"), "end_to_end_ms": event.get("end_to_end_ms"), "input_to_output_ms": event.get("input_to_output_ms"), "input_to_audio_ready_ms": event.get("input_to_audio_ready_ms")}
+        return {
+            "status": "chưa có lượt chạy",
+            "command": "",
+            "session_id": None,
+            "turn_id": None,
+            "timings_ms": {},
+            "received_at": None,
+            "output_at": None,
+            "end_to_end_ms": None,
+        }
+    return {
+        "status": event.get("status", "unknown"),
+        "command": event.get("transcript", ""),
+        "session_id": event.get("session_id"),
+        "turn_id": event.get("turn_id"),
+        "timings_ms": event.get("latency_ms", {}),
+        "received_at": event.get("received_at"),
+        "output_at": event.get("output_at"),
+        "end_to_end_ms": event.get("end_to_end_ms"),
+        "input_to_output_ms": event.get("input_to_output_ms"),
+        "input_to_audio_ready_ms": event.get("input_to_audio_ready_ms"),
+    }
 
 
 def _components() -> dict[str, dict[str, str]]:
@@ -245,9 +297,17 @@ def metrics(request: Request = None):
     return {
         "timestamp": time.time(),
         "uptime_seconds": round(time.monotonic() - _started_at, 1),
-        "host": {"platform": platform.platform(), "cpu_count": os.cpu_count() or 1, "load_1m": round(os.getloadavg()[0], 2) if hasattr(os, "getloadavg") else None},
+        "host": {
+            "platform": platform.platform(),
+            "cpu_count": os.cpu_count() or 1,
+            "load_1m": round(os.getloadavg()[0], 2) if hasattr(os, "getloadavg") else None,
+        },
         "memory": _memory(),
-        "process": {"rss_bytes": usage.ru_maxrss * 1024, "user_seconds": round(usage.ru_utime, 3), "system_seconds": round(usage.ru_stime, 3)},
+        "process": {
+            "rss_bytes": usage.ru_maxrss * 1024,
+            "user_seconds": round(usage.ru_utime, 3),
+            "system_seconds": round(usage.ru_stime, 3),
+        },
         "disk": {"free_bytes": disk.free, "percent": round(disk.used / disk.total * 100, 1)},
         "gpu": gpu,
         "device": _device(gpu),
@@ -266,7 +326,16 @@ def metrics(request: Request = None):
                 "input_to_output_ms": event.get("input_to_output_ms"),
                 "input_to_audio_ready_ms": event.get("input_to_audio_ready_ms"),
                 "timings_ms": event.get("latency_ms", {}),
-                "stt_ms": next((speech.get("latency_ms") for speech in reversed(events) if speech.get("event_type") == "stt" and speech.get("session_id") == event.get("session_id") and speech.get("turn_id") == event.get("turn_id")), None),
+                "stt_ms": next(
+                    (
+                        speech.get("latency_ms")
+                        for speech in reversed(events)
+                        if speech.get("event_type") == "stt"
+                        and speech.get("session_id") == event.get("session_id")
+                        and speech.get("turn_id") == event.get("turn_id")
+                    ),
+                    None,
+                ),
                 "tts": tts_by_turn.get((event.get("session_id", ""), event.get("turn_id", "")), []),
             }
             for event in events

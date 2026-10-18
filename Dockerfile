@@ -3,8 +3,8 @@ FROM python:3.11-slim AS builder
 
 WORKDIR /app
 
-ARG REQUIREMENTS_FILE=requirements-rag.txt
-COPY requirements*.txt ./
+ARG REQUIREMENTS_FILE=requirements/requirements-rag.txt
+COPY requirements/ ./requirements/
 RUN python -m venv /opt/venv \
     && /opt/venv/bin/pip install --no-cache-dir -r ${REQUIREMENTS_FILE}
 

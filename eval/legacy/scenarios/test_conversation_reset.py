@@ -84,8 +84,8 @@ def test_reset_rejects_active_turn(tmp_path):
 
 
 def test_consent_does_not_override_destination_question_or_negation():
-    from src.vivi.dialogue.contracts import PlanDraft, SessionState
     from eval.legacy.grammar import OfflineParser
+    from src.vivi.dialogue.contracts import PlanDraft, SessionState
 
     parser = OfflineParser()
     session = SessionState(navigation_focus='navigation')

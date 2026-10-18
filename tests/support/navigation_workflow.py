@@ -100,4 +100,4 @@ class Maps:
         return Place(ref_id=ref, name="Nhà thuốc TEST", lat=21, lng=105.9)
 
     async def matrix(self, points):
-        raise RuntimeError("test route fallback")
+        raise VietMapError("test route fallback")

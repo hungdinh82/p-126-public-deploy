@@ -44,7 +44,7 @@ Use a Python environment/container compatible with the installed JetPack version
 CPU-only inference avoids depending on JetPack CUDA wheels.
 
 ```bash
-.venv/bin/python -m pip install -r requirements-rag.txt
+.venv/bin/python -m pip install -r requirements/requirements-rag.txt
 .venv/bin/python -m src.vivi.cli.prepare_embeddings
 # If Python HTTPS access is unavailable, the same pinned download can use curl:
 .venv/bin/python -m src.vivi.cli.prepare_embeddings --download-client curl
@@ -60,7 +60,7 @@ LOCAL_LLM_MODEL=YOUR_LOCAL_MODEL LLM_PROVIDER=local bash scripts/run_rag_local.s
 ```
 
 If the existing speech environment already has a working GPU ONNX Runtime, install
-`requirements-rag-base.txt` instead and retain that runtime: the embedding adapter
+`requirements/requirements-rag-base.txt` instead and retain that runtime: the embedding adapter
 still selects `CPUExecutionProvider`. Do not install CPU and GPU distributions over
 each other in the same environment. The dev host already contains both package
 distributions; reports therefore record the imported runtime version and actual
@@ -73,7 +73,7 @@ from the build context (provision them before building). A read-only model mount
 is also supported:
 
 ```bash
-docker build --build-arg REQUIREMENTS_FILE=requirements-rag.txt -t vivi-rag-local .
+docker build --build-arg REQUIREMENTS_FILE=requirements/requirements-rag.txt -t vivi-rag-local .
 docker run --rm -p 127.0.0.1:8787:8787 \
   -v "$PWD/models:/app/models:ro" -v "$PWD/data:/app/data" \
   -e RAG_RETRIEVAL_MODE=sqlite_local -e VIVI_RAG_LOCAL_ONLY=true \

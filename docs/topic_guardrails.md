@@ -96,5 +96,5 @@ Kiểm chứng ngày 14/10/2026:
   thay đổi production code sau lượt chạy đầy đủ này.
 - Ruff, `git diff --check`, syntax `app.js` và frontend information test đều qua.
 - Script `check_local.sh` còn kiểm tra whitespace của commit HEAD; giới hạn ở
-  commit cũ được ghi trong [information review](information_review_2026-10-14.md).
+  commit cũ được ghi trong [information review](archive/information_review_2026-10-14.md).
   Kết quả trên không có nghĩa bước kiểm tra commit HEAD đã qua.

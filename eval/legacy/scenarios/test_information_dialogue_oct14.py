@@ -5,9 +5,9 @@ import json
 import httpx
 import pytest
 
+from eval.legacy.grammar import OfflineParser
 from src.vivi.dialogue.answers import AnswerResolver
 from src.vivi.dialogue.contracts import DialogueTask, QuestionReply, SemanticTurn, SessionState, TaskStep
-from eval.legacy.grammar import OfflineParser
 from src.vivi.dialogue.questions import current_question
 from src.vivi.dialogue.reducer import synchronize_question
 from src.vivi.information.policy import encyclopedia_topic, information_decision

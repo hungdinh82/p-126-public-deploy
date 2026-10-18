@@ -6,8 +6,8 @@ from dataclasses import replace
 
 import pytest
 
-from src.vivi.dialogue.contracts import NavigationState, SemanticTurn, SessionState, TripPlanState
 from eval.legacy.grammar import OfflineParser
+from src.vivi.dialogue.contracts import NavigationState, SemanticTurn, SessionState, TripPlanState
 from src.vivi.dialogue.planner import ModelProvider, SemanticResolver
 from src.vivi.navigation.energy import EnergyPlanner
 from tests.support.dialogue_v2 import build

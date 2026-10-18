@@ -4,8 +4,8 @@ from dataclasses import replace
 
 import pytest
 
-from src.vivi.dialogue.contracts import SessionState
 from eval.legacy.grammar import OfflineParser, place_query_matches
+from src.vivi.dialogue.contracts import SessionState
 from src.vivi.navigation.destinations import landmark_query
 from src.vivi.navigation.energy import EnergyPlanner
 from src.vivi.navigation.selection import exact_destination

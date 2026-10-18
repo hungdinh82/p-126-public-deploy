@@ -15,7 +15,8 @@ TARGETS = (*ZONES, "all", "left", "right", "front", "rear", "same")
 # Spoken phrase first, then value: a small model looks up the phrase it heard.
 TARGET_GUIDE = (
     "targets: chỉ nói bên trái/bên phải=left/right; chỉ nói trước/sau=front/rear; "
-    + "; ".join("/".join(aliases) + "=" + zone for zone, aliases in CABIN_ZONE_ALIASES.items()) + "; "
+    + "; ".join("/".join(aliases) + "=" + zone for zone, aliases in CABIN_ZONE_ALIASES.items())
+    + "; "
     "tất cả/mọi cửa=all; bên đó=same. Không nói vị trí: []. Không tự thêm vị trí. "
     '"hạ hết/mở hết" là mức mở hoàn toàn, không phải all.'
     " Vai trò ghế xác định vị trí cụ thể; không thay vai trò ghế bằng chỉ một phía."
@@ -41,18 +42,50 @@ NUMBER_WORDS = r"(?<!\w)(?:một|hai|ba|bốn|tư|năm|sáu|bảy|tám|chín|mư
 
 # Each read has a fixed backend field; the model never writes a free-text query.
 STATUS_READS = (
-    ("get_cabin_temperature", "temperature", "Đọc nhiệt độ điều hòa cabin hiện tại, đơn vị °C. Chỉ đọc, không đặt/tăng/giảm nhiệt độ."),
-    ("get_battery_level", "battery", "Đọc phần trăm pin còn lại của xe hiện tại. Không tìm web hoặc tra dung lượng thiết kế trong cẩm nang."),
-    ("get_tire_pressure", "tires", "Đọc áp suất hiện tại của bốn lốp xe, đơn vị kPa. Không tra áp suất khuyến nghị trong cẩm nang."),
+    (
+        "get_cabin_temperature",
+        "temperature",
+        "Đọc nhiệt độ điều hòa cabin hiện tại, đơn vị °C. Chỉ đọc, không đặt/tăng/giảm nhiệt độ.",
+    ),
+    (
+        "get_battery_level",
+        "battery",
+        "Đọc phần trăm pin còn lại của xe hiện tại. Không tìm web hoặc tra dung lượng thiết kế trong cẩm nang.",
+    ),
+    (
+        "get_tire_pressure",
+        "tires",
+        "Đọc áp suất hiện tại của bốn lốp xe, đơn vị kPa. Không tra áp suất khuyến nghị trong cẩm nang.",
+    ),
     ("get_remaining_range", "range", "Đọc quãng đường xe dự kiến còn đi được với pin hiện tại, đơn vị km."),
-    ("get_remaining_drive_time", "range_time", "Hỏi số giờ xe còn đi được. Backend báo rõ nếu adapter chưa cung cấp số giờ; không tự tính hoặc đoán."),
-    ("get_body_status", "body", "Đọc trạng thái mở/đóng capo, cốp và mở/đóng, khóa/mở khóa bốn cửa cabin. Chỉ đọc, không điều khiển cửa hoặc kính."),
-    ("get_door_status", "doors", "Đọc trạng thái mở/đóng và khóa/mở khóa bốn cửa cabin. Chỉ đọc cửa, không đọc capo/cốp và không đóng/mở cửa."),
+    (
+        "get_remaining_drive_time",
+        "range_time",
+        "Hỏi số giờ xe còn đi được. Backend báo rõ nếu adapter chưa cung cấp số giờ; không tự tính hoặc đoán.",
+    ),
+    (
+        "get_body_status",
+        "body",
+        "Đọc trạng thái mở/đóng capo, cốp và mở/đóng, khóa/mở khóa bốn cửa cabin. Chỉ đọc, không điều khiển cửa hoặc kính.",
+    ),
+    (
+        "get_door_status",
+        "doors",
+        "Đọc trạng thái mở/đóng và khóa/mở khóa bốn cửa cabin. Chỉ đọc cửa, không đọc capo/cốp và không đóng/mở cửa.",
+    ),
     ("get_window_positions", "windows", "Đọc phần trăm độ mở hiện tại của bốn cửa kính. Chỉ đọc, không nâng/hạ kính."),
     ("get_hood_status", "hood", "Đọc nắp capo đang mở hay đóng. Chỉ đọc, không điều khiển capo."),
     ("get_trunk_status", "trunk", "Đọc cốp sau đang mở hay đóng. Chỉ đọc, không điều khiển cốp."),
-    ("get_vehicle_diagnostics", "diagnostics", "Đọc tình trạng mã lỗi xe. Backend báo rõ nếu adapter chưa cung cấp mã lỗi; không tự chẩn đoán."),
-    ("get_vehicle_overview", "summary", "Đọc tổng quan xe: pin, nhiệt độ điều hòa, cửa/capo/cốp. Hỏi riêng thông số nào thì dùng tool đọc thông số đó; hỏi nhiều thông số thì gọi đủ các tool tương ứng."),
+    (
+        "get_vehicle_diagnostics",
+        "diagnostics",
+        "Đọc tình trạng mã lỗi xe. Backend báo rõ nếu adapter chưa cung cấp mã lỗi; không tự chẩn đoán.",
+    ),
+    (
+        "get_vehicle_overview",
+        "summary",
+        "Đọc tổng quan xe: pin, nhiệt độ điều hòa, cửa/capo/cốp. Hỏi riêng thông số nào thì dùng tool đọc thông số đó; hỏi nhiều thông số thì gọi đủ các tool tương ứng.",
+    ),
 )
 
 
@@ -118,7 +151,10 @@ def operation_variants(function, *, door_filter=False):
             "close_door",
             'Đóng cánh cửa cabin. Các cửa còn lại/đang mở: targets=["remaining"].',
         ),
-        "form_create_door_lock": ("lock_door", "KHÓA chốt cửa cabin; khác MỞ/ĐÓNG cánh cửa. Không dùng open_door để khóa."),
+        "form_create_door_lock": (
+            "lock_door",
+            "KHÓA chốt cửa cabin; khác MỞ/ĐÓNG cánh cửa. Không dùng open_door để khóa.",
+        ),
         "form_create_door_unlock": ("unlock_door", "MỞ KHÓA chốt cửa cabin; không mở cánh cửa."),
         "form_create_trunk_open": ("open_trunk", "Mở cốp sau, không phải cửa ghế sau."),
         "form_create_trunk_close": ("close_trunk", "Đóng cốp sau."),
@@ -139,7 +175,12 @@ def operation_variants(function, *, door_filter=False):
             binding["remaining"] = name.removeprefix("form_create_door_")
         yield title, description, fields, binding
     elif name == "form_create_media_play":
-        yield "play_music", "Bật/phát đoạn nhạc cố định của app. Không dùng để tắt/dừng nhạc; không chọn bài hoặc âm lượng.", {}, {}
+        yield (
+            "play_music",
+            "Bật/phát đoạn nhạc cố định của app. Không dùng để tắt/dừng nhạc; không chọn bài hoặc âm lượng.",
+            {},
+            {},
+        )
     elif name == "form_create_climate_set_temperature":
         yield (
             "set_temperature",
@@ -251,9 +292,13 @@ def generic_variants(function):
             + "; note.*=ghi chú, command.*=nội dung lệnh. Đọc toàn bộ: bỏ trống."
         )
         if "memory_value" in properties:
-            properties["memory_value"]["description"] = "Nội dung/giá trị được yêu cầu lưu, tách khỏi loại thông tin trong memory_key."
+            properties["memory_value"]["description"] = (
+                "Nội dung/giá trị được yêu cầu lưu, tách khỏi loại thông tin trong memory_key."
+            )
     if name == "weather_get_forecast":
-        properties["forecast_day"]["description"] = "today=hôm nay; tomorrow=ngày mai; day_after_tomorrow=ngày kia. Không nói ngày thì bỏ trống."
+        properties["forecast_day"]["description"] = (
+            "today=hôm nay; tomorrow=ngày mai; day_after_tomorrow=ngày kia. Không nói ngày thì bỏ trống."
+        )
     if name == "manual_search":
         for field in properties:
             properties[field]["description"] = {
@@ -263,7 +308,12 @@ def generic_variants(function):
                 "charging_mode": "Chỉ gửi khi người dùng nói AC hoặc DC; không nói thì bỏ trống.",
             }.get(field, properties[field].get("description", ""))
     if name == "conversation_respond":
-        yield "create_content", "Sáng tác nội dung mới theo yêu cầu: truyện, thơ, lời chúc, văn bản. Không tra cứu sự kiện hoặc điều khiển xe.", {}, {"constants": {"mode": "creative"}}
+        yield (
+            "create_content",
+            "Sáng tác nội dung mới theo yêu cầu: truyện, thơ, lời chúc, văn bản. Không tra cứu sự kiện hoặc điều khiển xe.",
+            {},
+            {"constants": {"mode": "creative"}},
+        )
     # Context-bound updates expose the changed values directly, not values/ID/
     # revision wrappers. A waiting-slot form cannot flip the known operation.
     if name == "form_update":
@@ -367,8 +417,11 @@ def simplify_tools(canonical_tools, utterance):
                 "properties": fields,
                 "required": list(fields)
                 if function["name"].startswith("form_create_") or "destination" in fields
-                else [binding.get("rename", {}).get(key, key) for key in function["parameters"].get("required", [])
-                      if binding.get("rename", {}).get(key, key) in fields],
+                else [
+                    binding.get("rename", {}).get(key, key)
+                    for key in function["parameters"].get("required", [])
+                    if binding.get("rename", {}).get(key, key) in fields
+                ],
                 "additionalProperties": False,
             }
             if binding.get("update") or function["name"].startswith("update_"):
@@ -595,7 +648,9 @@ def canonical_calls(calls, tools, utterance, observation=None):
                 # "lên/xuống X độ": the number is a target, resolved downstream;
                 # any amount the model also emitted is spurious, so drop it.
                 values.pop("amount", None)
-            elif values.get("amount") == 2 and not re.search(r"\d|" + NUMBER_WORDS, unicodedata.normalize("NFC", utterance).casefold()):
+            elif values.get("amount") == 2 and not re.search(
+                r"\d|" + NUMBER_WORDS, unicodedata.normalize("NFC", utterance).casefold()
+            ):
                 # The unspoken default restated by the model is no new value.
                 values.pop("amount")
             if "amount" in values:
@@ -614,7 +669,9 @@ def canonical_calls(calls, tools, utterance, observation=None):
         elif binding.get("targets"):
             normalized = normalize_targets(targets, text)
             if targets and not normalized:
-                raise ValueError("Vị trí trong tool call không được câu hiện tại xác định. Chọn đúng vị trí được nói hoặc để targets=[] nếu chưa có vị trí.")
+                raise ValueError(
+                    "Vị trí trong tool call không được câu hiện tại xác định. Chọn đúng vị trí được nói hoặc để targets=[] nếu chưa có vị trí."
+                )
             values.update(decode_targets(normalized))
         if excluded:
             values["excluded_zones"] = excluded

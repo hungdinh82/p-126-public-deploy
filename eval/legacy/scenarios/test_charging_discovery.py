@@ -6,9 +6,9 @@ from types import SimpleNamespace
 import httpx
 import pytest
 
+from eval.legacy.grammar import OfflineParser, charging_poi_info
 from src.vivi.config import Settings
 from src.vivi.dialogue.contracts import NavigationState, SessionState
-from eval.legacy.grammar import OfflineParser, charging_poi_info
 from src.vivi.dialogue.planner import SemanticResolver
 from src.vivi.navigation.charging import VietMapChargingDiscovery, distance, route_context, sample_points
 from src.vivi.navigation.energy import EnergyPlanner

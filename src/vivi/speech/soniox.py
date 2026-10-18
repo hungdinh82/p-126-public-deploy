@@ -18,9 +18,24 @@ _CONTEXT = {
         {"key": "topic", "value": "Điều khiển xe VinFast VF8 bằng tiếng Việt"},
     ],
     "terms": [
-        "ViVi", "VinFast", "VF8", "nắp capo", "cốp sau", "cửa sổ", "cửa kính",
-        "bên tài", "bên phụ", "ghế sau", "sưởi ghế", "điều hoà", "khoá cửa",
-        "mở khoá", "áp suất lốp", "quãng đường", "phần trăm pin", "chỉ đường",
+        "ViVi",
+        "VinFast",
+        "VF8",
+        "nắp capo",
+        "cốp sau",
+        "cửa sổ",
+        "cửa kính",
+        "bên tài",
+        "bên phụ",
+        "ghế sau",
+        "sưởi ghế",
+        "điều hoà",
+        "khoá cửa",
+        "mở khoá",
+        "áp suất lốp",
+        "quãng đường",
+        "phần trăm pin",
+        "chỉ đường",
     ],
 }
 
@@ -41,9 +56,7 @@ class SonioxAdapter:
         self.api_key = config.soniox_api_key
         self.model = config.soniox_model
         self.url = config.soniox_ws_url
-        self.language_hints = [
-            code.strip() for code in config.soniox_language_hints.split(",") if code.strip()
-        ]
+        self.language_hints = [code.strip() for code in config.soniox_language_hints.split(",") if code.strip()]
         self.language_hints_strict = config.soniox_language_hints_strict
         self.endpoint_detection = config.soniox_endpoint_detection
         self.max_endpoint_delay_ms = config.soniox_max_endpoint_delay_ms
@@ -133,9 +146,7 @@ class SonioxAdapter:
             async for raw in socket:
                 response = json.loads(raw)
                 if response.get("error_code"):
-                    raise RuntimeError(
-                        f"Soniox {response['error_code']}: {response.get('error_message', '')}"
-                    )
+                    raise RuntimeError(f"Soniox {response['error_code']}: {response.get('error_message', '')}")
                 interim_tokens: list[str] = []
                 endpoint = False
                 for token in response.get("tokens", []):

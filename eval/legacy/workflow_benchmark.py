@@ -18,8 +18,9 @@ from importlib.metadata import version
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-from eval.benchmark import local_network_only
 from eval.workflow_fixtures import FixtureMaps, FixtureModel, FixtureResolver, energy_profile
+
+from eval.benchmark import local_network_only
 from src.vivi.config import Settings
 from src.vivi.dialogue.planner import ModelProvider
 from src.vivi.domain.models import TurnRequest

@@ -44,7 +44,7 @@ jobs:
       - name: Install validation dependencies
         run: |
           python -m venv .venv
-          .venv/bin/python -m pip install -r requirements-dev.txt
+          .venv/bin/python -m pip install -r requirements/requirements-dev.txt
 
       - name: Validate before publishing
         run: bash scripts/check_local.sh

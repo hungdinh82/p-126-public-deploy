@@ -349,6 +349,17 @@ async def s20_end_by_voice_right_after_start(h):
     assert not h.vehicle.state_for("driver").driving
 
 
+@scenario
+async def s21_first_request_without_location_resumes_after_locate(h):
+    r = await h.turn("chỉ đường tới Phủ Lý", position=None)
+    assert r["pending_question"]["slot"] == "origin"
+    assert {"type": "navigation.locate"} in r["ui_events"]
+    pos = {"lat": ORIGIN[0], "lng": ORIGIN[1], "label": "Vị trí của bạn", "simulated": False}
+    r = await h.turn(navigation_event={**nav_event(r, "position"), "position": pos}, position=None)
+    assert r["pending_question"]["kind"] == "accept_place", r["response_text"]
+    assert r["navigation_workspace"]["draft"]["origin"]["lat"] == ORIGIN[0]
+
+
 SEMANTICS = {
     "chỉ đường tới Phủ Lý": action("navigation.plan", {"query": "Phủ Lý", "purpose": "navigate"}),
     "chỉ đường tới Nam Định": action("navigation.plan", {"query": "Nam Định", "purpose": "navigate"}),

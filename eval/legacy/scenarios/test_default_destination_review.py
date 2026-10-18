@@ -3,9 +3,9 @@ import time
 
 import pytest
 
+from eval.legacy.grammar import OfflineParser
 from src.vivi.config import Settings
 from src.vivi.dialogue.contracts import DialogueTask, NavigationState, SemanticTurn, SessionState, TaskStep
-from eval.legacy.grammar import OfflineParser
 from src.vivi.dialogue.reducer import reduce_turn
 from src.vivi.domain.models import TurnRequest
 from src.vivi.orchestration import LangGraphOrchestrator

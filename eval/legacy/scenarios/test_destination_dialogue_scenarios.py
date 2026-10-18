@@ -4,8 +4,8 @@ from dataclasses import replace
 
 import pytest
 
-from src.vivi.dialogue.contracts import NavigationState, SessionState, TripPlanState
 from eval.legacy.grammar import OfflineParser
+from src.vivi.dialogue.contracts import NavigationState, SessionState, TripPlanState
 from src.vivi.navigation.energy import EnergyPlanner
 from tests.support.dialogue_v2 import ScriptedModel, build, invoke
 from tests.support.long_term_memory import services as services

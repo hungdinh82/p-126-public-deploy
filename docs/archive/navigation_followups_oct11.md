@@ -21,13 +21,13 @@ Trace cũ không giải thích hết thời gian capability. Không quy toàn b�
 ## Kiểm chứng
 
 - 16 test mới trong `tests/test_navigation_followups.py` qua; 67 test frontend qua. Tuyến khứ hồi 10.000 điểm không đi vào checkpoint, vẫn đầy đủ trong snapshot; xe không tự chạy.
-- Lần chạy cuối gồm API trước các fixture navigation để giữ runtime sạch: 154 pass, 3 lỗi charging trùng baseline, không có lỗi mới. [Kết quả regression](../eval/artifacts/navigation-runtime/navigation-followups-regression.json).
+- Lần chạy cuối gồm API trước các fixture navigation để giữ runtime sạch: 154 pass, 3 lỗi charging trùng baseline, không có lỗi mới. [Kết quả regression](../../eval/artifacts/navigation-runtime/navigation-followups-regression.json).
 - Bộ navigation/dialogue/trip liên quan: 149 pass, 5 lỗi trùng baseline. Nhóm charging có 3 lỗi trùng baseline. Không sửa assertion cũ để che vấn đề contract đã ghi ở báo cáo trước.
 - Geometry từ log + semantic fixture: một chiều 389 ms, khứ hồi 1.045 ms. Khứ hồi thiếu trạm trong fixture trả incomplete, không tự đoán trạm.
 - VietMap thật + semantic fixture: một chiều 1.387 ms, khứ hồi 14.311 ms; trả kế hoạch khứ hồi ready và một điểm sạc. Checkpoint khoảng 21/57 KB. Route cộng dồn 17.488 ms gồm request song song, không cộng trực tiếp vào wall time. Hai mẫu này không phải p95.
 - Google thật chưa nghiệm thu. Lần tiếp tục gọi model bị automatic approval review từ chối vì gửi câu hỏi/ngữ cảnh từ log tới dịch vụ ngoài; cần chấp thuận rõ payload. Không coi fallback rules là kết quả Google.
 
-Artifacts: [fixture](../eval/artifacts/navigation-runtime/sam-son-followup-fixture.json), [VietMap thật với semantic fixture](../eval/artifacts/navigation-runtime/sam-son-followup-live-map.json).
+Artifacts: [fixture](../../eval/artifacts/navigation-runtime/sam-son-followup-fixture.json), [VietMap thật với semantic fixture](../../eval/artifacts/navigation-runtime/sam-son-followup-live-map.json).
 
 Replay bằng DB tạm, không gọi backend đang dùng:
 

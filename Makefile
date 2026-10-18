@@ -1,4 +1,4 @@
-.PHONY: run test lint format typecheck check check-docker clean
+.PHONY: run test coverage lint format typecheck check check-docker clean
 
 PYTHON ?= .venv/bin/python
 
@@ -7,6 +7,9 @@ run:
 
 test:
 	$(PYTHON) -m pytest tests/ -v
+
+coverage:
+	$(PYTHON) -m pytest tests/ --cov=src --cov-report=term-missing --cov-fail-under=60
 
 lint:
 	$(PYTHON) -m ruff check src/ vehicle_simulator/ tests/

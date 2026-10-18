@@ -7,10 +7,10 @@ from zoneinfo import ZoneInfo
 import httpx
 import pytest
 
+from eval.legacy.grammar import OfflineParser
 from src.vivi.conversation.context import destination
 from src.vivi.conversation.service import ConversationService
 from src.vivi.dialogue.contracts import DialogueTask, SemanticTurn, SessionState, TaskStep
-from eval.legacy.grammar import OfflineParser
 from src.vivi.dialogue.planner import ModelProvider
 from src.vivi.dialogue.reducer import reduce_turn
 from src.vivi.domain.models import TurnRequest

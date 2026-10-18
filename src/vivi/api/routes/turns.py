@@ -33,9 +33,7 @@ async def turn_status(turn_id: str, session_id: str, request: Request):
     principal = require_conversation(request, session_id)
     ledger = runtime.orchestrator.ledger
     value = (
-        await asyncio.to_thread(
-            ledger.turn_status, f"{principal.account_id}:{session_id}", turn_id, session_id
-        )
+        await asyncio.to_thread(ledger.turn_status, f"{principal.account_id}:{session_id}", turn_id, session_id)
         if ledger
         else None
     )

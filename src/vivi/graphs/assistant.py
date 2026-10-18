@@ -458,7 +458,9 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
                             await domain.reconcile(event.session_id, projection)
                             session = await domain.hydrate(session, event.session_id)
         event_profile = event.profile_id
-        history_session = event.session_id if event_profile == "default" else f"profile:{event_profile}:{event.session_id}"
+        history_session = (
+            event.session_id if event_profile == "default" else f"profile:{event_profile}:{event.session_id}"
+        )
         history = await asyncio.to_thread(services.history.recent, history_session, services.history_turns)
         memory, errors = [], []
         if services.memory:
@@ -515,7 +517,9 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
                 and index is not None
                 and task.steps[index].draft.capability.startswith("navigation.")
                 and task.steps[index].status == "waiting_slot"
-                and (result.get("navigation_update") or result.get("draft_update"))
+                # The first request may fail before any draft exists; the new
+                # origin alone is enough to resume it.
+                and (result.get("navigation_update") or result.get("draft_update") or result.get("domain_applied"))
             ):
                 semantic = SemanticTurn(act="resume", task_ref="active")
         elif event.kind == "action" and event.action:
@@ -1120,7 +1124,9 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
             "spans": [],
             "effective_provider": None,
             "semantic_source": "typed_event",
-            "history_session": event.session_id if event.profile_id == "default" else f"profile:{event.profile_id}:{event.session_id}",
+            "history_session": event.session_id
+            if event.profile_id == "default"
+            else f"profile:{event.profile_id}:{event.session_id}",
         }
         state = {"event": event_data, "session": session.model_dump(mode="json"), "turn": turn}
         state.update(await response(state))

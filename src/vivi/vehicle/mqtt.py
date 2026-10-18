@@ -77,7 +77,9 @@ class MqttVehicleAdapter:
         if reason_code.is_failure:
             logger.error("ViVi MQTT connection refused: %s", reason_code)
             return
-        result, _mid = client.subscribe([(topic(self.vehicle_id, kind), 1) for kind in ("acks", "state", "availability")])
+        result, _mid = client.subscribe(
+            [(topic(self.vehicle_id, kind), 1) for kind in ("acks", "state", "availability")]
+        )
         if result != mqtt.MQTT_ERR_SUCCESS:
             logger.error("ViVi MQTT subscribe failed: %s", result)
 
@@ -140,7 +142,9 @@ class MqttVehicleAdapter:
                 state_sequence = self._state_sequence
                 self._acks.pop(command.command_id, None)
                 self._pending_id = command.command_id
-            info = self.client.publish(topic(self.vehicle_id, "commands"), command.model_dump_json(), qos=1, retain=False)
+            info = self.client.publish(
+                topic(self.vehicle_id, "commands"), command.model_dump_json(), qos=1, retain=False
+            )
             if info.rc != mqtt.MQTT_ERR_SUCCESS:
                 with self._condition:
                     self._pending_id = None
@@ -150,7 +154,12 @@ class MqttVehicleAdapter:
                 while True:
                     ack = self._acks.get(command.command_id)
                     state = self._state
-                    if ack and state and self._state_sequence > state_sequence and state.state_version >= ack.state_version:
+                    if (
+                        ack
+                        and state
+                        and self._state_sequence > state_sequence
+                        and state.state_version >= ack.state_version
+                    ):
                         self._acks.pop(command.command_id, None)
                         self._pending_id = None
                         return ack, state
@@ -195,7 +204,8 @@ class MqttVehicleAdapter:
         session_id: str,
         turn_id: str,
         action: ActionProposal,
-        *, expected_state_version: int | None = None,
+        *,
+        expected_state_version: int | None = None,
     ) -> tuple[VehicleState, str]:
         observed = self._get_state()
         if expected_state_version is not None and observed.state_version != expected_state_version:
@@ -283,8 +293,10 @@ class MqttVehicleAdapter:
             return getattr(state, BODY_PANELS[action.intent][0]) is action.arguments["open"]
         if action.intent == "body.set_open":
             opening = action.arguments["open"]
-            return state.hood_open is opening and state.trunk_open is opening and all(
-                getattr(state.door_states, zone).open is opening for zone in CABIN_ZONES
+            return (
+                state.hood_open is opening
+                and state.trunk_open is opening
+                and all(getattr(state.door_states, zone).open is opening for zone in CABIN_ZONES)
             )
         if action.intent == "seat.set_heat_level":
             return all(

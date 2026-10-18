@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from src.vivi.dialogue.contracts import NavigationState, SemanticTurn, SessionState
 from eval.legacy.grammar import OfflineParser
+from src.vivi.dialogue.contracts import NavigationState, SemanticTurn, SessionState
 from src.vivi.navigation.charging import VietMapChargingDiscovery
 from src.vivi.navigation.destinations import region_for
 from src.vivi.navigation.energy import EnergyPlanner, load_assumptions

@@ -4,8 +4,8 @@ from dataclasses import replace
 
 import pytest
 
-from src.vivi.dialogue.contracts import NavigationState, SemanticTurn, SessionState
 from eval.legacy.grammar import OfflineParser
+from src.vivi.dialogue.contracts import NavigationState, SemanticTurn, SessionState
 from src.vivi.navigation.destinations import administrative_layer
 from src.vivi.navigation.energy import EnergyPlanner
 from src.vivi.navigation.vietmap import Place

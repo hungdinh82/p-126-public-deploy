@@ -31,7 +31,12 @@ def topic_subject(query):
     """
     value = query.strip(" .!?")
     value = re.sub(r"^(?:ở|tại)\s+", "", value, flags=re.I)
-    value = re.sub(r"^(?:giới thiệu|tìm hiểu|thông tin|lịch sử|văn hóa|nguồn gốc|dân số|diện tích)\s+(?:(?:qua|sơ lược)\s+)?(?:(?:cho (?:tôi|mình))\s+)?(?:(?:về|của|ở|tại)\s+)?", "", value, flags=re.I)
+    value = re.sub(
+        r"^(?:giới thiệu|tìm hiểu|thông tin|lịch sử|văn hóa|nguồn gốc|dân số|diện tích)\s+(?:(?:qua|sơ lược)\s+)?(?:(?:cho (?:tôi|mình))\s+)?(?:(?:về|của|ở|tại)\s+)?",
+        "",
+        value,
+        flags=re.I,
+    )
     match = re.match(r"^(.+?)\s+(?:có|rộng|là|được|dân số|diện tích)\b", value, flags=re.I)
     if match:
         value = match[1]

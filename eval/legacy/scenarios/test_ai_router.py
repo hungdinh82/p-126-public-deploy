@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import httpx
 import pytest
-
 from src.vivi.ai_router import JetsonProviderRouter
+
 from src.vivi.config import Settings
 
 

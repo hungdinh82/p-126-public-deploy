@@ -103,9 +103,12 @@ class SQLiteLongTermMemory:
     def list(self, profile_id: str) -> list[dict]:
         self._profile(profile_id)
         with self._connect() as db:
-            return [self._item(row) for row in db.execute(
-                "SELECT * FROM memory_items WHERE profile_id=? ORDER BY updated_at DESC, key", (profile_id,)
-            )]
+            return [
+                self._item(row)
+                for row in db.execute(
+                    "SELECT * FROM memory_items WHERE profile_id=? ORDER BY updated_at DESC, key", (profile_id,)
+                )
+            ]
 
     def remember(self, profile_id: str, item: MemoryValue, *, session_id="api", turn_id="api") -> dict:
         self._profile(profile_id)
@@ -114,22 +117,27 @@ class SQLiteLongTermMemory:
         with self._connect() as db:
             # Serialize the quota check and upsert across workers/processes.
             db.execute("BEGIN IMMEDIATE")
-            previous = db.execute("SELECT * FROM memory_items WHERE profile_id=? AND key=?",
-                                  (profile_id, item.key)).fetchone()
+            previous = db.execute(
+                "SELECT * FROM memory_items WHERE profile_id=? AND key=?", (profile_id, item.key)
+            ).fetchone()
             if previous and previous["value_json"] == encoded and previous["label"] == item.label:
                 return self._item(previous)
             count = db.execute("SELECT COUNT(*) FROM memory_items WHERE profile_id=?", (profile_id,)).fetchone()[0]
             if previous is None and count >= 200:
                 raise ValueError("Bộ nhớ đã đầy. Bạn hãy xoá bớt một ghi chú trước nhé.")
-            db.execute("""
+            db.execute(
+                """
                 INSERT INTO memory_items VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
                 ON CONFLICT(profile_id, key) DO UPDATE SET
                     kind=excluded.kind, value_json=excluded.value_json, label=excluded.label,
                     source_session_id=excluded.source_session_id, source_turn_id=excluded.source_turn_id,
                     updated_at=excluded.updated_at, revision=memory_items.revision+1
-            """, (profile_id, item.key, item.kind, encoded, item.label, session_id, turn_id, now, now))
-            return self._item(db.execute("SELECT * FROM memory_items WHERE profile_id=? AND key=?",
-                                         (profile_id, item.key)).fetchone())
+            """,
+                (profile_id, item.key, item.kind, encoded, item.label, session_id, turn_id, now, now),
+            )
+            return self._item(
+                db.execute("SELECT * FROM memory_items WHERE profile_id=? AND key=?", (profile_id, item.key)).fetchone()
+            )
 
     def forget(self, profile_id: str, key: str) -> bool:
         self._profile(profile_id)

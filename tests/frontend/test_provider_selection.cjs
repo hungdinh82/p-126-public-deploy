@@ -4,7 +4,7 @@ const { join } = require('node:path');
 const { test } = require('node:test');
 const { runInNewContext } = require('node:vm');
 
-const app = readFileSync(join(__dirname, '..', '..', 'app.js'), 'utf8');
+const app = readFileSync(join(__dirname, '..', '..', 'web', 'app.js'), 'utf8');
 const start = app.indexOf('function resolveLlmProvider(');
 const end = app.indexOf('async function checkBackend()', start);
 assert.ok(start >= 0 && end > start);

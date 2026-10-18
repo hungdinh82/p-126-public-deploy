@@ -162,7 +162,7 @@ class SQLiteConversationHistory:
         prefix = f"profile:{profile_id}:"
         if profile_id == "default":
             return [row[0] for row in rows if not row[0].startswith("profile:")]
-        return [row[0][len(prefix):] for row in rows if row[0].startswith(prefix)]
+        return [row[0][len(prefix) :] for row in rows if row[0].startswith(prefix)]
 
     def clear(self, session_ids, profile_id="default") -> int:
         names = [sid if profile_id == "default" else f"profile:{profile_id}:{sid}" for sid in session_ids]

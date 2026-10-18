@@ -1,5 +1,5 @@
 # Exact versions exercised on Python 3.12/Linux during navigation regression.
-# Install with: pip install -r requirements-runtime.lock
+# Install with: pip install -r requirements/requirements-runtime.lock
 # Cross-platform resolution and hashes are not included; Jetson has separate locks.
 aiosqlite==0.22.1
 annotated-doc==0.0.5

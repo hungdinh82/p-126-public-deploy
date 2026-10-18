@@ -71,11 +71,17 @@ class DestinationSpec(BaseModel):
             query = strip_nearest(query)
         parts = [p.strip() for p in query.split(",") if p.strip()]
         category = reconcile_category(parts[0] if parts else query, arguments.get("category"), nearest=nearest)
-        selection = "category" if category else "region" if arguments.get("destination_scope") == "region" else "named_place"
-        return cls(raw_text=query, name=parts[0] if parts else None,
-                   area=AreaConstraint(text=", ".join(parts[1:])) if len(parts) > 1 else None,
-                   selection=selection, entity_type=category or entity_type(query),
-                   nearest=nearest)
+        selection = (
+            "category" if category else "region" if arguments.get("destination_scope") == "region" else "named_place"
+        )
+        return cls(
+            raw_text=query,
+            name=parts[0] if parts else None,
+            area=AreaConstraint(text=", ".join(parts[1:])) if len(parts) > 1 else None,
+            selection=selection,
+            entity_type=category or entity_type(query),
+            nearest=nearest,
+        )
 
     def with_area(self, text, *, question_id=None):
         return self.model_copy(update={"area": AreaConstraint(text=text, source="answer", question_id=question_id)})
@@ -99,10 +105,25 @@ class DestinationSpec(BaseModel):
         if not self.name:
             return False
         value = normalize_text(self.name)
-        return self.selection == "region" or bool(region_for(self.name)) or value not in {
-            "quan ca phe", "quan pho", "nha hang", "khach san", "nha thuoc", "hieu thuoc", "tram sac",
-            "nha toi", "nha minh", "do", "day", "cho do",
-        }
+        return (
+            self.selection == "region"
+            or bool(region_for(self.name))
+            or value
+            not in {
+                "quan ca phe",
+                "quan pho",
+                "nha hang",
+                "khach san",
+                "nha thuoc",
+                "hieu thuoc",
+                "tram sac",
+                "nha toi",
+                "nha minh",
+                "do",
+                "day",
+                "cho do",
+            }
+        )
 
 
 def entity_type(name):
@@ -112,8 +133,12 @@ def entity_type(name):
     for pattern, kind in [
         (r"^(?:pho|duong|ngo|hem)\b", "street"),
         (r"^(?:truong )?(?:tieu hoc|trung hoc|dai hoc|mam non)\b", "school"),
-        (r"^ho\b", "lake"), (r"^quang truong\b", "square"), (r"^cong vien\b", "park"),
-        (r"^den\b", "temple"), (r"^lang\b", "mausoleum"), (r"^ga\b", "station"),
+        (r"^ho\b", "lake"),
+        (r"^quang truong\b", "square"),
+        (r"^cong vien\b", "park"),
+        (r"^den\b", "temple"),
+        (r"^lang\b", "mausoleum"),
+        (r"^ga\b", "station"),
     ]:
         if re.search(pattern, value):
             return kind

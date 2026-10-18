@@ -6,9 +6,9 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from eval.legacy.grammar import OfflineParser
 from src.vivi.config import Settings
 from src.vivi.dialogue.contracts import ActionDraft, DialogueTask, SemanticTurn, SessionState, TaskStep
-from eval.legacy.grammar import OfflineParser
 from src.vivi.dialogue.planner import ModelProvider, SemanticResolver
 from src.vivi.dialogue.reducer import reduce_turn
 from src.vivi.domain.models import TurnRequest

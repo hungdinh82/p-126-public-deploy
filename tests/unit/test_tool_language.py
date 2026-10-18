@@ -4,9 +4,20 @@ from src.vivi.dialogue.tool_language import localized_tools
 
 
 def tools(*names):
-    return [{"type": "function", "function": {"name": name, "parameters": {
-        "type": "object", "properties": {}, "additionalProperties": False,
-    }}} for name in names]
+    return [
+        {
+            "type": "function",
+            "function": {
+                "name": name,
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
+                    "additionalProperties": False,
+                },
+            },
+        }
+        for name in names
+    ]
 
 
 def test_wire_labels_keep_separate_tools_and_roundtrip_identity():

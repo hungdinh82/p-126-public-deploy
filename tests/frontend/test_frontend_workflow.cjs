@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
 const vm = require('node:vm');
 const { test } = require('node:test');
-const source = readFileSync('app.js', 'utf8');
+const source = readFileSync('web/app.js', 'utf8');
 
 function harness(events) {
   const requests = [], speech = [], phases = [], container = {hidden: true, items: [], replaceChildren() {this.items = [];}, append(item) {this.items.push(item);}};
@@ -32,7 +32,7 @@ function harness(events) {
     }
   };
   vm.createContext(sandbox);
-  vm.runInContext(readFileSync('assistant-client.js','utf8').replace(/export /g,''),sandbox);
+  vm.runInContext(readFileSync('web/assistant-client.js','utf8').replace(/export /g,''),sandbox);
   vm.runInContext('let activeTurn = null;\n' + source.slice(source.indexOf('async function runBackendCommand'), source.indexOf('function runCommand')), sandbox);
   return {sandbox, requests, speech, phases, container};
 }

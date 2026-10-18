@@ -30,7 +30,7 @@ if [ -x ".venv/bin/python" ]; then
 elif [ -x ".venv/Scripts/python.exe" ]; then
   PYTHON=".venv/Scripts/python.exe"
 else
-  echo "Missing .venv. Create it and install requirements-dev.txt first." >&2
+  echo "Missing .venv. Create it and install requirements/requirements-dev.txt first." >&2
   exit 1
 fi
 
@@ -70,9 +70,9 @@ root = Path.cwd()
 destination = Path(os.environ["EVIDENCE_DIR"])
 files = [
     "Dockerfile",
-    "requirements.txt",
-    "requirements-ai.txt",
-    "requirements-dev.txt",
+    "requirements/requirements.txt",
+    "requirements/requirements-ai.txt",
+    "requirements/requirements-dev.txt",
     "data/handbooks/handbook.sqlite3",
     "voices/VIVI.zip",
 ]

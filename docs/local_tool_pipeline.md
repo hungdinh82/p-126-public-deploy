@@ -5,8 +5,8 @@
 bộ interpreter một-schema khi cần so sánh/gỡ lỗi. Không cần đổi weights hoặc
 inference server Jetson.
 
-Review mới nhất: [tool/schema vòng 2 + đổi mặc định](investigations/local-tool-schema-v3-2026-10-17.md)
-(nối tiếp [binding và đối chứng model thật](investigations/local-tool-review-2026-10-17.md)).
+Review mới nhất: [tool/schema vòng 2 + đổi mặc định](archive/investigations/local-llm-schema-2026-10-17.md)
+(nối tiếp [binding và đối chứng model thật](archive/investigations/local-model-runtime-2026-10-17.md)).
 
 ## Model thực sự nhận gì?
 
@@ -81,7 +81,7 @@ nói vị trí cụ thể; không tự thêm phạm vi chỉ từ độ mở.
 Chữ ký tool chỉ chứa trường liên quan và đóng bằng additionalProperties=false.
 Trường bắt buộc chỉ áp dụng cho các tham số nghiệp vụ của thao tác đó; không chạy
 strict_schema để bắt model trả mọi slot chung. Mô tả và giới hạn đầy đủ vẫn ở
-[canonical catalog](local_tool_catalog.json). `fresh_session_tools` trong catalog
+canonical catalog. `fresh_session_tools` trong catalog
 là schema model-facing; `canonical_documents` và `bindings` thuộc host, không gửi
 lên model. Native transport cũng bỏ `_binding` trước khi gửi.
 
@@ -157,7 +157,7 @@ local_semantic_transport = "json_schema" # native để so sánh
 ```
 
 Có thể dùng LOCAL_SEMANTIC_CONTRACT/LOCAL_SEMANTIC_TRANSPORT rồi restart backend.
-Kết quả local-operations-3: [review tool/schema 17/10 (vòng 2)](investigations/local-tool-schema-v3-2026-10-17.md).
+Kết quả local-operations-3: [review tool/schema 17/10 (vòng 2)](archive/investigations/local-llm-schema-2026-10-17.md).
 
 ```bash
 PYTHONPATH=. .venv/bin/python scripts/export_local_tools.py

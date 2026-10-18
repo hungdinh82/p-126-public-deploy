@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const {test} = require('node:test');
-const source = fs.readFileSync('monitor.js', 'utf8');
+const source = fs.readFileSync('web/monitor.js', 'utf8');
 
 function setup(fetch) {
   const nodes = new Map();

@@ -2,7 +2,7 @@
 
 Profile này dành cho Jetson Nano đời cũ với JetPack 4.6.6. JetPack 4 dùng Ubuntu 18.04,
 CUDA 10.2 và đã EOL; vì vậy API Python 3.11 chạy trong container, còn llama.cpp và
-whisper.cpp chạy native như sidecar. Không dùng `requirements-ai.txt` trên Nano.
+whisper.cpp chạy native như sidecar. Không dùng `requirements/requirements-ai.txt` trên Nano.
 
 Tham chiếu: [JetPack 4.6](https://developer.nvidia.com/embedded/jetpack-sdk-46),
 [Jetson FAQ](https://developer.nvidia.com/embedded/faq) và
@@ -52,7 +52,7 @@ rag_prompt_max_characters = 4000
 ```
 
 Nano không preload PhoWhisper hoặc ZeroTTS. API, LangGraph, SQLite FTS5 và MQTT dùng
-`requirements.txt`, không kéo PyTorch/Chroma/CUDA 12.
+`requirements/requirements.txt`, không kéo PyTorch/Chroma/CUDA 12.
 
 ## 3. Cài whisper.cpp
 

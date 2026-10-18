@@ -5,10 +5,10 @@ import json
 import httpx
 import pytest
 
+from eval.legacy.grammar import OfflineParser
 from src.vivi.conversation.guardrails import TOPIC_INSTRUCTION, assess_topic
 from src.vivi.conversation.service import ConversationService
 from src.vivi.dialogue.contracts import SessionState
-from eval.legacy.grammar import OfflineParser
 from src.vivi.information.policy import information_decision
 from src.vivi.information.service import InformationService
 from tests.support.open_world import configuration, event, graph_fixture

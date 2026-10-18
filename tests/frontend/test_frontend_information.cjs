@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
 const vm = require('node:vm');
 const { test } = require('node:test');
-const source = readFileSync('app.js', 'utf8');
+const source = readFileSync('web/app.js', 'utf8');
 
 function harness() {
   const classes = new Set();

@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from src.vivi.dialogue.contracts import ActionDraft, DialogueTask, SemanticTurn, SessionState, TaskStep
 from eval.legacy.grammar import OfflineParser
+from src.vivi.dialogue.contracts import ActionDraft, DialogueTask, SemanticTurn, SessionState, TaskStep
 from src.vivi.dialogue.reducer import reduce_turn
 from tests.support.dialogue_v2 import ScriptedModel, build, invoke
 from tests.support.long_term_memory import services as services

@@ -90,18 +90,14 @@ class VehicleState(BaseModel):
         if "power_state" not in migrated:
             migrated["power_state"] = "driving" if migrated.get("driving", False) else "off"
         migrated["driving"] = migrated["power_state"] == "driving"
-        windows = migrated.get("window_positions") or {
-            "driver": migrated.get("window_driver_percent", 0)
-        }
+        windows = migrated.get("window_positions") or {"driver": migrated.get("window_driver_percent", 0)}
         doors = migrated.get("door_states") or {
             "driver": {
                 "open": migrated.get("door_driver_open", False),
                 "locked": migrated.get("door_driver_locked", False),
             }
         }
-        seats = migrated.get("seat_heat_levels") or {
-            "driver": migrated.get("seat_driver_heat_level", 0)
-        }
+        seats = migrated.get("seat_heat_levels") or {"driver": migrated.get("seat_driver_heat_level", 0)}
         if isinstance(windows, BaseModel):
             windows = windows.model_dump()
         if isinstance(doors, BaseModel):

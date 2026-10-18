@@ -8,20 +8,34 @@ from src.vivi.dialogue.proposal_contracts import (
 
 
 def tools(*names):
-    return [{"type": "function", "function": {"name": name, "parameters": {
-        "type": "object", "properties": {}, "additionalProperties": False,
-    }}} for name in names]
+    return [
+        {
+            "type": "function",
+            "function": {
+                "name": name,
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
+                    "additionalProperties": False,
+                },
+            },
+        }
+        for name in names
+    ]
 
 
-@pytest.mark.parametrize(("text", "wrong", "right"), [
-    ("mở khóa cửa sau bên phải", "lock_door", "unlock_door"),
-    ("dong cua phia ghe phu", "open_door", "close_door"),
-    ("nâng kính sau trái", "lower_window", "raise_window"),
-    ("hạ kính phía tài xế", "raise_window", "lower_window"),
-    ("giảm điều hòa bớt 4 độ", "increase_temperature", "decrease_temperature"),
-    ("tắt nhạc giúp bác", "play_music", "pause_music"),
-    ("độ mở kính hiện tại", "lower_window", "get_window_positions"),
-])
+@pytest.mark.parametrize(
+    ("text", "wrong", "right"),
+    [
+        ("mở khóa cửa sau bên phải", "lock_door", "unlock_door"),
+        ("dong cua phia ghe phu", "open_door", "close_door"),
+        ("nâng kính sau trái", "lower_window", "raise_window"),
+        ("hạ kính phía tài xế", "raise_window", "lower_window"),
+        ("giảm điều hòa bớt 4 độ", "increase_temperature", "decrease_temperature"),
+        ("tắt nhạc giúp bác", "play_music", "pause_music"),
+        ("độ mở kính hiện tại", "lower_window", "get_window_positions"),
+    ],
+)
 def test_opposite_or_mutating_proposals_are_rejected(text, wrong, right):
     declared = tools(wrong, right)
     with pytest.raises(ValueError, match="trái"):
@@ -38,8 +52,9 @@ def test_mixed_read_and_write_preserves_both_requested_operations():
 
 def test_two_explicit_directions_remain_representable():
     declared = tools("open_door", "close_door")
-    validate_operation_choices([("open_door", {}), ("close_door", {})], declared,
-                               "mở cửa bên phụ rồi đóng cửa sau trái")
+    validate_operation_choices(
+        [("open_door", {}), ("close_door", {})], declared, "mở cửa bên phụ rồi đóng cửa sau trái"
+    )
 
 
 def test_amount_for_one_window_does_not_remove_other_window_endpoint():
