@@ -69,9 +69,7 @@ class HandbookParser:
             "source_manifest_checksum": manifest["checksum"],
             "chunks_checksum": self._sha256(output.read_bytes()),
         }
-        (parsed_dir / "manifest.json").write_text(
-            json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8"
-        )
+        (parsed_dir / "manifest.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
         return chunks
 
     def _parse_snapshot(self, snapshot: dict, target: CrawlTarget) -> list[HandbookChunk]:
@@ -188,9 +186,7 @@ class HandbookParser:
 
     @staticmethod
     def _source_url(target: CrawlTarget, chapter_id: int) -> str:
-        query = urlencode(
-            {"car": target.vehicle_model.upper(), "year": target.model_year, "lv2": chapter_id}
-        )
+        query = urlencode({"car": target.vehicle_model.upper(), "year": target.model_year, "lv2": chapter_id})
         return f"https://om.vinfastauto.com/{target.locale.lower()}/detail?{query}"
 
     @staticmethod

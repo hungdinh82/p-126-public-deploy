@@ -1,4 +1,4 @@
-> Tài liệu lịch sử. Contract và vận hành hiện hành: [Lõi hội thoại Core v2](langgraph_core_v2.md).
+> Tài liệu lịch sử. Contract và vận hành hiện hành: [Lõi hội thoại Core v2](../langgraph_core_v2.md).
 
 # Navigation runtime và ổn định P/D — unified-6
 
@@ -91,7 +91,7 @@ Client VietMap phía workflow tái sử dụng HTTP pool. Trace tách `navigatio
 
 ## Kiểm chứng và giới hạn nghiệm thu
 
-Máy đo: Linux x86_64, Intel i5-11300H 3.10 GHz, khoảng 5,7 GiB RAM môi trường nhìn thấy, Python 3.12.12; Playwright 1.64.0, Chromium 156.0.8078.4 headless. Dependency runtime đã ghim tại `requirements-runtime.lock`; không thay lock Jetson.
+Máy đo: Linux x86_64, Intel i5-11300H 3.10 GHz, khoảng 5,7 GiB RAM môi trường nhìn thấy, Python 3.12.12; Playwright 1.64.0, Chromium 156.0.8078.4 headless. Dependency runtime đã ghim tại `requirements/requirements-runtime.lock`; không thay lock Jetson.
 
 | Phép đo | Mẫu | p95 |
 | --- | ---: | ---: |
@@ -131,4 +131,4 @@ Trước release: giải quyết 38 regression/contract test hội thoại tồn
 
 Cập nhật 11/10: [chọn đề xuất và timeout Sầm Sơn](navigation_followups_oct11.md), gồm sửa ordinal/handle, batch VietMap, thu gọn checkpoint và phục hồi kế hoạch sau timeout.
 
-Artifact lưu lâu dài: [regression summary](../eval/artifacts/navigation-runtime/regression-summary.json), [số đo backend](../eval/artifacts/navigation-runtime/navigation-backend-performance.json), [số đo UI](../eval/artifacts/navigation-runtime/navigation-performance.json), [map VietMap mobile](../eval/artifacts/navigation-runtime/vietmap-live-390.png). Trace và video lớn giữ ở `/tmp/vivi-ui-check/navigation-*-trace.zip` và `/tmp/vivi-ui-check/videos/`.
+Artifact lưu lâu dài: [regression summary](../../eval/artifacts/navigation-runtime/regression-summary.json), [số đo backend](../../eval/artifacts/navigation-runtime/navigation-backend-performance.json), [số đo UI](../../eval/artifacts/navigation-runtime/navigation-performance.json), [map VietMap mobile](../../eval/artifacts/navigation-runtime/vietmap-live-390.png). Trace và video lớn giữ ở `/tmp/vivi-ui-check/navigation-*-trace.zip` và `/tmp/vivi-ui-check/videos/`.

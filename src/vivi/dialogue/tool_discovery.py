@@ -37,7 +37,10 @@ DISCOVERY_TERMS = {
         "âm lịch",
         "tỷ giá",
         "giá xăng",
-        "tin", "mới nhất", "cập nhật", "tra cứu",
+        "tin",
+        "mới nhất",
+        "cập nhật",
+        "tra cứu",
     ),
     "weather.get_forecast": ("thời tiết", "trời mưa", "dự báo", "nắng không", "có mưa", "mưa không"),
     "knowledge.lookup": ("là gì", "giải thích", "tại sao", "lịch sử"),
@@ -48,11 +51,32 @@ DISCOVERY_TERMS = {
     "manual.search": ("cẩm nang", "hướng dẫn", "thông số", "sạc bao lâu", "cách dùng"),
     # "cửa đang mở" in a command is a door filter, not a status question.
     "vehicle.get_status": (
-        "trạng thái", "tình trạng", "kiểm tra", "pin còn", "pin còn lại", "phần trăm pin",
-        "áp suất", "lốp", "nhiệt độ cabin", "bao nhiêu độ", "đang mở không", "đã đóng chưa",
-        "đi được bao xa", "đi được bao lâu", "quãng đường còn lại", "mã lỗi",
-        "thông tin xe", "thông tin của xe", "tổng quan xe", "tất cả thông tin",
-        "xe", "cabin", "pin", "quãng đường", "di chuyển", "mã lỗi",
+        "trạng thái",
+        "tình trạng",
+        "kiểm tra",
+        "pin còn",
+        "pin còn lại",
+        "phần trăm pin",
+        "áp suất",
+        "lốp",
+        "nhiệt độ cabin",
+        "bao nhiêu độ",
+        "đang mở không",
+        "đã đóng chưa",
+        "đi được bao xa",
+        "đi được bao lâu",
+        "quãng đường còn lại",
+        "mã lỗi",
+        "thông tin xe",
+        "thông tin của xe",
+        "tổng quan xe",
+        "tất cả thông tin",
+        "xe",
+        "cabin",
+        "pin",
+        "quãng đường",
+        "di chuyển",
+        "mã lỗi",
     ),
     "climate.set_temperature": (
         "nhiệt độ",
@@ -61,7 +85,9 @@ DISCOVERY_TERMS = {
         "lạnh",
         "nóng",
         "nực",
-        "oi", "oi bức", "lành lạnh",
+        "oi",
+        "oi bức",
+        "lành lạnh",
         "làm mát",
         "mát hơn",
         "ấm hơn",
@@ -146,7 +172,17 @@ DISCOVERY_TERMS = {
         "hủy hành trình",
         "không đi nữa",
     ),
-    "navigation.plan": ("chỉ đường", "dẫn đường", "đường đến", "đi tới", "đến", "hành trình", "chuyến đi", "khứ hồi", "lập kế hoạch"),
+    "navigation.plan": (
+        "chỉ đường",
+        "dẫn đường",
+        "đường đến",
+        "đi tới",
+        "đến",
+        "hành trình",
+        "chuyến đi",
+        "khứ hồi",
+        "lập kế hoạch",
+    ),
     "navigation.start": ("bắt đầu dẫn đường", "bắt đầu đi", "bắt đầu hành trình"),
     "navigation.stop": ("dừng dẫn đường", "dừng hành trình", "dừng chuyến đi"),
     "navigation.end": (
@@ -169,8 +205,17 @@ DOCUMENT_FAMILIES = (
     frozenset({"memory.remember", "memory.recall", "memory.forget", "memory.reset"}),
 )
 
-READ_CUES = re.compile(r"\b(?:doc|hoi|xem|biet|kiem tra|trang thai|tinh trang|bao nhieu|the nao|hay dong|hay mo|chua|khong)\b")
-VEHICLE_CONTROLS = {"door.set_open", "door.set_lock", "window.set_position", "hood.set_open", "trunk.set_open", "climate.set_temperature"}
+READ_CUES = re.compile(
+    r"\b(?:doc|hoi|xem|biet|kiem tra|trang thai|tinh trang|bao nhieu|the nao|hay dong|hay mo|chua|khong)\b"
+)
+VEHICLE_CONTROLS = {
+    "door.set_open",
+    "door.set_lock",
+    "window.set_position",
+    "hood.set_open",
+    "trunk.set_open",
+    "climate.set_temperature",
+}
 
 
 def discover_capabilities(text, capabilities):

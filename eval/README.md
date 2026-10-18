@@ -53,14 +53,14 @@ Các report live đã chạy nằm ở `results/semantic-holdout-v2.json`,
 được dùng phát triển sau khi thấy lỗi; giữ nguyên điểm và prompt/hash tại thời
 điểm đo. Bộ dependencies đo sau cùng đạt 5/6, còn nhầm purpose ở `deps-new-5`.
 Không gộp điểm giữa các phiên bản prompt hoặc tính lại bộ đã dùng sửa như held-out.
-[Evidence và giới hạn nghiệm thu](../docs/core_v2_acceptance.md) ghi rõ phạm vi.
+[Evidence và giới hạn nghiệm thu](../docs/archive/core_v2_acceptance.md) ghi rõ phạm vi.
 
 Bộ `local_semantic_context_cases.jsonl` kiểm local interpreter trên cùng câu nói ở
 phiên trống và phiên có draft/journey tổng hợp. Có oracle cho số action, slot và
 `blocked` (clarify/unsupported hoặc cờ chặn toàn bộ compound); không có hiệu ứng xe.
 Runner nhận `session`/`history` từ từng fixture và `--repeats N`, dùng budget cấu hình
 production. Corpus này đã được dùng phát triển, không phải held-out. Bằng chứng và
-các lỗi chưa đạt: [Jetson runtime 17/10](../docs/investigations/local-model-runtime-2026-10-17.md).
+các lỗi chưa đạt: [Jetson runtime 17/10](../docs/archive/investigations/local-model-runtime-2026-10-17.md).
 
 Adapter tools/forms từ nhánh Jetson có thể đánh giá riêng, không đổi cấu hình đang chạy:
 
@@ -78,7 +78,7 @@ schema/prompt/example hashes từng lượt, lỗi validation, repairs/discoveri
 [Luồng, catalog và live workflow test](../docs/local_tool_pipeline.md) mô tả cách
 thử với xe bộ nhớ/SQLite tạm và các giới hạn còn lại.
 
-[Review tool/binding và đối chứng Jetson tiếp theo](../docs/investigations/local-tool-review-2026-10-17.md)
+[Review tool/binding và đối chứng Jetson tiếp theo](../docs/archive/investigations/local-model-runtime-2026-10-17.md)
 ghi rõ các lỗi host, raw model calls, probe cửa còn lại và các biến thể không được
 giữ. Corpus context/regression chỉ có 13/14 câu khác nhau, mỗi câu ở hai context;
 không tính thành 54 câu độc lập hoặc dùng lại để tuyên bố đạt holdout.
@@ -86,4 +86,4 @@ không tính thành 54 câu độc lập hoặc dùng lại để tuyên bố đ
 `local_tool_probe_cases.jsonl` có 36 câu mới (polarity, thiếu vị trí, từ lịch sự, câu
 ghép, phủ định/điều kiện/hẹn giờ, vế không hỗ trợ, câu hỏi thông tin), viết trước vòng
 sửa `local-operations-3` nhưng chưa được người review; không phải holdout. Kết quả:
-[tool/schema vòng 2](../docs/investigations/local-tool-schema-v3-2026-10-17.md).
+[tool/schema vòng 2](../docs/archive/investigations/local-llm-schema-2026-10-17.md).

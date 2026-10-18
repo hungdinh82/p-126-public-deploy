@@ -1,4 +1,4 @@
-> Tài liệu lịch sử. Contract và vận hành hiện hành: [Lõi hội thoại Core v2](langgraph_core_v2.md).
+> Tài liệu lịch sử. Contract và vận hành hiện hành: [Lõi hội thoại Core v2](../langgraph_core_v2.md).
 
 > Tài liệu lịch sử v2. Runtime hiện tại đã hợp nhất và xoá builder v1; xem [workflow thống nhất](langgraph_unified_runtime.md).
 
@@ -151,7 +151,7 @@ Runner hiện tại dùng graph chung, SQLite/ledger thật và các dependency 
 kiểm tra receipt, trạng thái xe, draft/journey, restart, replay, provider timeout,
 cancel và P khi model/map còn chờ. Profile model fixture kiểm tra contract và fallback,
 không đo chất lượng model thật. Xem report (file sinh tại máy chạy: `../eval/results/report.md`; không lưu trong Git) và
-[hướng dẫn](../eval/README.md) để biết kết quả revision hiện tại và giới hạn đo.
+[hướng dẫn](../../eval/README.md) để biết kết quả revision hiện tại và giới hạn đo.
 
 Phần v1/v2 còn lại trong tài liệu mô tả lịch sử migration; không dùng số pass cũ
 làm điều kiện phát hành workflow hiện tại. Production, MQTT, STT/TTS và model thật

@@ -68,7 +68,7 @@ local_semantic_contract = "operations_v1"
 # Change only this URL; /v1 and the shared authentication are wired automatically.
 # Docker: use the server's LAN/Tailscale IP, or host.docker.internal for the host PC.
 # Authentication is optional for personal testing on a private network.
-ai_server_url = "http://192.168.55.1:8789"
+ai_server_url = "http://100.123.27.125:8789"
 ai_server_auth_required = false
 jetson_ai_policy = "prefer_local"
 # To use a standalone LM Studio/llama.cpp server instead, set policy = "disabled"
@@ -113,7 +113,7 @@ navigation_default_label = "VinUni"
 
 # Handbook retrieval
 rag_data_dir = "./data/handbooks"
-rag_history_db = "./data/vivi_rag.sqlite3"
+rag_history_db = "./data/vivi_history.sqlite3"
 rag_handbook_db = "./data/handbooks/handbook.sqlite3"
 rag_retrieval_mode = "sqlite_local"
 rag_local_embedding_dir = "./models/multilingual-e5-small-int8"

@@ -9,7 +9,7 @@ và luật, không gọi API, tải model hay chạy embedding.
 
 | Nguồn | Nội dung | Vòng đời và cách sử dụng |
 | --- | --- | --- |
-| Short-term | Câu hỏi/trả lời, intent, kết quả action của phiên | Lấy tối đa `rag_history_turns=6` lượt từ `data/vivi_rag.sqlite3`; prompt model dùng 3 lượt gần nhất đã rút gọn. Khôi phục được khi dùng lại session sau restart. |
+| Short-term | Câu hỏi/trả lời, intent, kết quả action của phiên | Lấy tối đa `rag_history_turns=6` lượt từ `data/vivi_history.sqlite3`; prompt model dùng 3 lượt gần nhất đã rút gọn. Khôi phục được khi dùng lại session sau restart. |
 | Long-term | Tên, sở thích, yêu cầu/ghi chú, lệnh có tên | Theo hồ sơ người lái, dùng qua nhiều session/restart, tồn tại tới khi sửa hoặc xoá. |
 | Trạng thái xe và handbook | Số đo hiện tại, kiến thức kỹ thuật VF8 | Trạng thái đọc từ adapter; kiến thức đọc từ handbook. Memory không thay thế hai nguồn này. |
 
@@ -87,7 +87,7 @@ flowchart LR
 Các cú pháp memory tường minh được xử lý deterministic trước model. Local planner
 còn có các tool memory.recall/remember/forget/reset; executor kiểm tra tham số rồi
 đọc/ghi SQLite. Reset do model đề nghị chờ xác nhận qua task có hạn dùng; câu trả
-lời không tự nhận đã ghi/xoá trước transaction. Xem [dialogue tasks](dialogue_tasks.md).
+lời không tự nhận đã ghi/xoá trước transaction. Xem [dialogue tasks](archive/dialogue_tasks.md).
 Gọi lại một lệnh
 có tên dùng rules để tạo action rồi vào cùng safety graph với lệnh trực tiếp.
 Lệnh tương đối như “tăng điều hoà 2 độ” dùng nhiệt độ mới đọc khi gọi lại, không

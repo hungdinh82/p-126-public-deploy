@@ -7,10 +7,10 @@ import time
 import httpx
 import pytest
 
+from eval.legacy.grammar import OfflineParser
 from src.vivi.conversation.context import resolve_query
 from src.vivi.conversation.service import ConversationService, equivalent_numeric_claims, synthesis_passages
 from src.vivi.dialogue.contracts import SessionState
-from eval.legacy.grammar import OfflineParser
 from src.vivi.dialogue.planner import ModelProvider, SemanticResolver
 from src.vivi.information.policy import encyclopedia_topic, retrieval_query
 from src.vivi.information.service import InformationService

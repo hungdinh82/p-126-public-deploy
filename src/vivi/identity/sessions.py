@@ -117,7 +117,9 @@ class SessionStore:
         with self.connect() as db:
             row = db.execute("SELECT id FROM accounts WHERE phone=?", (normalized,)).fetchone()
             if row:
-                db.execute("UPDATE accounts SET pin_hash=?, role='engineer', status='active' WHERE id=?", (encoded, row["id"]))
+                db.execute(
+                    "UPDATE accounts SET pin_hash=?, role='engineer', status='active' WHERE id=?", (encoded, row["id"])
+                )
             else:
                 db.execute(
                     "INSERT INTO accounts(id,phone,pin_hash,role,status,created_at) VALUES (?,?,?,'engineer','active',?)",
@@ -131,7 +133,9 @@ class SessionStore:
         now = time.time()
         with self.connect() as db:
             db.execute("BEGIN IMMEDIATE")
-            attempt = db.execute("SELECT failures,locked_until FROM login_attempts WHERE phone=?", (normalized,)).fetchone()
+            attempt = db.execute(
+                "SELECT failures,locked_until FROM login_attempts WHERE phone=?", (normalized,)
+            ).fetchone()
             if attempt and attempt["locked_until"] > now:
                 raise ValueError("Số điện thoại hoặc PIN không đúng. Hãy thử lại sau.")
             row = db.execute("SELECT * FROM accounts WHERE phone=?", (normalized,)).fetchone()

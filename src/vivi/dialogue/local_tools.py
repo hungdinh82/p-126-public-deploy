@@ -68,7 +68,8 @@ def local_tool_documents(capabilities):
             # Sparse domain drafts permit missing values for dialogue, whereas
             # these direct model tools need their actual mandatory arguments.
             slots["required"] = [
-                name for name, field in TOOL_REGISTRY[capability].parameters.model_fields.items()
+                name
+                for name, field in TOOL_REGISTRY[capability].parameters.model_fields.items()
                 if field.is_required() and name in slots["properties"]
             ]
         # Nullable unknown targets are explicit in the historical form contract.

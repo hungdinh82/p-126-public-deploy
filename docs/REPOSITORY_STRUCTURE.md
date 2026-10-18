@@ -81,7 +81,7 @@ P-126/
 ├── data/                         # Runtime artifacts; phần lớn không commit
 ├── docs/                         # Product, architecture và setup docs
 ├── scripts/                      # Setup, smoke test và development utilities
-├── app.js / index.html / style.css
+├── web/                          # Frontend tĩnh (HTML/JS/CSS) serve bởi api/routes/web.py
 ├── Dockerfile* / docker-compose.yml
 └── Makefile
 ```
@@ -97,21 +97,21 @@ Yêu cầu Python 3.11 hoặc 3.12. Node.js chỉ cần cho kiểm tra syntax fr
 
 ```bash
 python3 -m venv .venv
-.venv/bin/python -m pip install -r requirements-dev.txt
+.venv/bin/python -m pip install -r requirements/requirements-dev.txt
 cp .env.example .env
 ```
 
 Dependency chỉ còn ba profile có mục đích khác nhau:
 
-- `requirements.txt`: runtime nhẹ cho API/Docker/Nano.
-- `requirements-dev.txt`: runtime + test/lint/handbook ingestion.
-- `requirements-ai.txt`: phần AI nặng tùy chọn cho PC; cài thêm sau dev profile khi cần
+- `requirements/requirements.txt`: runtime nhẹ cho API/Docker/Nano.
+- `requirements/requirements-dev.txt`: runtime + test/lint/handbook ingestion.
+- `requirements/requirements-ai.txt`: phần AI nặng tùy chọn cho PC; cài thêm sau dev profile khi cần
   PhoWhisper, ZeroTTS hoặc cloud SDK.
 
 ```bash
-.venv/bin/python -m pip install -r requirements-dev.txt
+.venv/bin/python -m pip install -r requirements/requirements-dev.txt
 # Tùy chọn trên PC:
-.venv/bin/python -m pip install -r requirements-ai.txt
+.venv/bin/python -m pip install -r requirements/requirements-ai.txt
 ```
 
 `config.toml` giữ cấu hình runtime dùng chung; `.env.example` chỉ liệt kê API keys và
@@ -169,7 +169,7 @@ Lệnh tương đương CI:
 ```bash
 .venv/bin/python -m ruff check src vehicle_simulator tests
 .venv/bin/python -m pytest tests/ -q
-node --check app.js
+node --check web/app.js
 ```
 
 Test cần dùng temporary directory cho SQLite/audio. Không gọi provider online trong unit
@@ -255,7 +255,7 @@ phụ thuộc API embedding.
 ## 10. Khi nào nên tách thêm file
 
 Workflow hiện tại nằm trong `graphs/assistant.py`; reducer, parser và capabilities đã
-được tách riêng. Xem [kiến trúc thống nhất](langgraph_unified_runtime.md) để thay đổi
+được tách riêng. Xem [kiến trúc thống nhất](archive/langgraph_unified_runtime.md) để thay đổi
 state, provider, task lifecycle và execution theo đúng quyền sở hữu.
 
 Một module nên được tách khi có ít nhất một trong các dấu hiệu:

@@ -9,29 +9,43 @@ import re
 from src.vivi.text import normalize_text
 
 FAMILIES = {
-    "door": {"open_door": ("mo",), "close_door": ("dong", "khep"),
-             "lock_door": ("khoa",), "unlock_door": ("mo khoa", "bo khoa", "thao khoa")},
+    "door": {
+        "open_door": ("mo",),
+        "close_door": ("dong", "khep"),
+        "lock_door": ("khoa",),
+        "unlock_door": ("mo khoa", "bo khoa", "thao khoa"),
+    },
     "window": {"lower_window": ("ha", "xuong", "mo"), "raise_window": ("nang", "len", "dong", "khep kin")},
-    "music": {"play_music": ("bat", "mo", "phat", "play", "tiep tuc"),
-              "pause_music": ("tat", "dung", "ngung", "ngung", "stop", "pause")},
+    "music": {
+        "play_music": ("bat", "mo", "phat", "play", "tiep tuc"),
+        "pause_music": ("tat", "dung", "ngung", "ngung", "stop", "pause"),
+    },
     "hood": {"open_hood": ("mo",), "close_hood": ("dong", "khep")},
     "trunk": {"open_trunk": ("mo",), "close_trunk": ("dong", "khep")},
     "body": {"open_body": ("mo",), "close_body": ("dong", "khep")},
-    "temperature": {"increase_temperature": ("tang", "am hon"),
-                    "decrease_temperature": ("giam", "ha", "mat hon", "mat them", "bot")},
+    "temperature": {
+        "increase_temperature": ("tang", "am hon"),
+        "decrease_temperature": ("giam", "ha", "mat hon", "mat them", "bot"),
+    },
 }
 SCOPES = {
-    "window": r"\b(?:kinh|cua so)\b", "music": r"\b(?:nhac|music)\b",
-    "hood": r"\b(?:capo|ca po)\b", "trunk": r"\bcop\b",
+    "window": r"\b(?:kinh|cua so)\b",
+    "music": r"\b(?:nhac|music)\b",
+    "hood": r"\b(?:capo|ca po)\b",
+    "trunk": r"\bcop\b",
     "temperature": r"\b(?:nhiet do|dieu hoa|cabin|do)\b",
 }
 MEASUREMENTS = {
-    "get_battery_level": r"\bpin\b", "get_tire_pressure": r"\b(?:lop|ap suat)\b",
+    "get_battery_level": r"\bpin\b",
+    "get_tire_pressure": r"\b(?:lop|ap suat)\b",
     "get_remaining_range": r"\b(?:quang duong|bao xa)\b",
     "get_remaining_drive_time": r"\b(?:bao lau|so gio|thoi gian|may gio)\b",
-    "get_vehicle_diagnostics": r"\bma loi\b", "get_cabin_temperature": r"\b(?:nhiet do|dieu hoa|cabin|may do)\b",
-    "get_window_positions": r"\b(?:kinh|cua so)\b", "get_hood_status": r"\b(?:capo|ca po)\b",
-    "get_trunk_status": r"\bcop\b", "get_door_status": r"\bcua\b",
+    "get_vehicle_diagnostics": r"\bma loi\b",
+    "get_cabin_temperature": r"\b(?:nhiet do|dieu hoa|cabin|may do)\b",
+    "get_window_positions": r"\b(?:kinh|cua so)\b",
+    "get_hood_status": r"\b(?:capo|ca po)\b",
+    "get_trunk_status": r"\bcop\b",
+    "get_door_status": r"\bcua\b",
 }
 READ_NAMES = set(MEASUREMENTS) | {"get_body_status", "get_vehicle_overview"}
 SEPARATOR = re.compile(r"[,;]|\b(?:va|roi|sau do|xong|dong thoi|nhung)\b")
@@ -40,9 +54,11 @@ SEPARATOR = re.compile(r"[,;]|\b(?:va|roi|sau do|xong|dong thoi|nhung)\b")
 def replacement_text(text):
     """Only an explicit correction limits subsequent slot evidence."""
     folded = normalize_text(text)
-    markers = list(re.finditer(r"\b(?:a khong|thoi doi sang|thoi (?=bat|tat|mo|dong|khoa|nang|ha))\b\s*[,;]?\s*", folded))
+    markers = list(
+        re.finditer(r"\b(?:a khong|thoi doi sang|thoi (?=bat|tat|mo|dong|khoa|nang|ha))\b\s*[,;]?\s*", folded)
+    )
     if markers and len(folded) == len(text):
-        suffix = text[markers[-1].end():].strip()
+        suffix = text[markers[-1].end() :].strip()
         if suffix:
             return suffix
     return text
@@ -50,11 +66,14 @@ def replacement_text(text):
 
 def is_status_question(text):
     value = normalize_text(text)
-    return bool(re.search(
-        r"\b(?:trang thai|tinh trang|kiem tra|cho biet|toi muon xem|doc|do mo|may do|bao nhieu do|bao xa|bao lau|so gio|ma loi)\b"
-        r"|\b(?:cua|kinh|cop|capo)\b.*\b(?:dang|da)\b|\bcua nao\b"
-        r"|\b(?:cop|capo|cua|kinh)\s+(?:co\s+)?(?:mo|dong)\s+(?:khong|chua)\b", value
-    ))
+    return bool(
+        re.search(
+            r"\b(?:trang thai|tinh trang|kiem tra|cho biet|toi muon xem|doc|do mo|may do|bao nhieu do|bao xa|bao lau|so gio|ma loi)\b"
+            r"|\b(?:cua|kinh|cop|capo)\b.*\b(?:dang|da)\b|\bcua nao\b"
+            r"|\b(?:cop|capo|cua|kinh)\s+(?:co\s+)?(?:mo|dong)\s+(?:khong|chua)\b",
+            value,
+        )
+    )
 
 
 def clauses(text):
@@ -78,11 +97,17 @@ def family_clauses(text, family):
 
 
 def recognized_operations(part, operations):
-    hits = [(m.start(), m.end(), name) for name, terms in operations.items() for term in terms
-            for m in re.finditer(r"(?<!\w)" + re.escape(term) + r"(?!\w)", part)]
-    return {name for start, end, name in hits if not any(
-        lo <= start and end <= hi and hi - lo > end - start for lo, hi, _ in hits
-    )}
+    hits = [
+        (m.start(), m.end(), name)
+        for name, terms in operations.items()
+        for term in terms
+        for m in re.finditer(r"(?<!\w)" + re.escape(term) + r"(?!\w)", part)
+    ]
+    return {
+        name
+        for start, end, name in hits
+        if not any(lo <= start and end <= hi and hi - lo > end - start for lo, hi, _ in hits)
+    }
 
 
 def permitted_tools(tools, text):
@@ -92,7 +117,11 @@ def permitted_tools(tools, text):
     for family, operations in FAMILIES.items():
         parts = family_clauses(text, family)
         recognized = [recognized_operations(part, operations) for part in parts]
-        if question and parts and all(is_status_question(part) or not names for part, names in zip(parts, recognized, strict=True)):
+        if (
+            question
+            and parts
+            and all(is_status_question(part) or not names for part, names in zip(parts, recognized, strict=True))
+        ):
             blocked.update(operations)
         elif recognized and all(len(names) == 1 for names in recognized):
             allowed = set().union(*recognized)
@@ -102,9 +131,12 @@ def permitted_tools(tools, text):
         blocked.update({"raise_window", "lower_window"})
     value = normalize_text(text)
     if question:
-        read_parts = [part for part in clauses(text) if is_status_question(part) or not any(
-            recognized_operations(part, operations) for operations in FAMILIES.values()
-        )]
+        read_parts = [
+            part
+            for part in clauses(text)
+            if is_status_question(part)
+            or not any(recognized_operations(part, operations) for operations in FAMILIES.values())
+        ]
         read_value = " ".join(read_parts)
         wanted = {name for name, pattern in MEASUREMENTS.items() if re.search(pattern, read_value)}
         if "get_window_positions" in wanted and not re.search(r"\bcanh cua\b", value):
@@ -115,7 +147,9 @@ def permitted_tools(tools, text):
         body = {"get_door_status", "get_hood_status", "get_trunk_status"}
         if body <= wanted:
             wanted = (wanted - body) | {"get_body_status"}
-        if re.search(r"\b(?:tong quan|thong tin chung|thong tin (?:cua )?xe|tat ca thong tin|toan bo thong tin)\b", value):
+        if re.search(
+            r"\b(?:tong quan|thong tin chung|thong tin (?:cua )?xe|tat ca thong tin|toan bo thong tin)\b", value
+        ):
             wanted.add("get_vehicle_overview")
         if wanted:
             blocked.update(READ_NAMES - wanted)

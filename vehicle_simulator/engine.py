@@ -262,7 +262,13 @@ class VehicleSimulator:
         def selected_zones() -> tuple[str, ...] | None:
             if "zones" in args:
                 zones = args["zones"]
-                if "zone" in args or not isinstance(zones, list) or not zones or any(not isinstance(z, str) or z not in CABIN_ZONES for z in zones) or len(set(zones)) != len(zones):
+                if (
+                    "zone" in args
+                    or not isinstance(zones, list)
+                    or not zones
+                    or any(not isinstance(z, str) or z not in CABIN_ZONES for z in zones)
+                    or len(set(zones)) != len(zones)
+                ):
                     return None
                 return tuple(z for z in CABIN_ZONES if z in zones)
             zone = args.get("zone", "driver")

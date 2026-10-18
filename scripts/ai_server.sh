@@ -15,7 +15,7 @@ fi
 case "$action" in
   setup)
     bash scripts/setup_ai_ui.sh "$@"
-    uv pip install --python .venv/bin/python -r requirements.txt
+    uv pip install --python .venv/bin/python -r requirements/requirements.txt
     ;;
   run)
     [[ -x .venv/bin/python ]] || { echo 'Run: bash scripts/ai_server.sh setup' >&2; exit 1; }

@@ -6,8 +6,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from src.vivi.dialogue.contracts import SemanticTurn, SessionState, TripPlanState
 from eval.legacy.grammar import OfflineParser
+from src.vivi.dialogue.contracts import SemanticTurn, SessionState, TripPlanState
 from src.vivi.navigation.energy import EnergyPlanner
 from src.vivi.navigation.presentation import choice_message
 from src.vivi.navigation.selection import decide_place, distinct_places

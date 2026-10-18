@@ -190,7 +190,7 @@ setup() {
   "$VIVI_VENV/bin/python" -c 'import sys; assert sys.version_info[:3] == (3,12,15)' \
     || fail "Profile venv must use Python 3.12.15"
   uv pip install --python "$VIVI_VENV/bin/python" --only-binary :all: --require-hashes \
-    -r "$VIVI_REPO/requirements-jetson-ai.lock" || fail "Locked dependency install failed"
+    -r "$VIVI_REPO/requirements/requirements-jetson-ai.lock" || fail "Locked dependency install failed"
   "$VIVI_VENV/bin/python" scripts/check_jetson_runtime.py --gpu-only
   download_model
   export PATH="$VIVI_VENV/bin:$PATH"
@@ -201,7 +201,7 @@ setup() {
   # ZeroTTS declares the CPU distribution name; the verified GPU distribution
   # supplies that same Python API. Validate dependencies without installing CPU ORT.
   uv pip install --python "$VIVI_VENV/bin/python" --no-deps --only-binary :all: --require-hashes \
-    -r "$VIVI_REPO/requirements-jetson-zerotts.lock"
+    -r "$VIVI_REPO/requirements/requirements-jetson-zerotts.lock"
   "$VIVI_VENV/bin/python" scripts/check_jetson_runtime.py
   if [[ "$tts_precision" != fp32 ]]; then
     uv pip install --python "$VIVI_VENV/bin/python" --only-binary :all: onnx==1.17.0

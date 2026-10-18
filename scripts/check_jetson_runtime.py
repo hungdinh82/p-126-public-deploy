@@ -10,7 +10,7 @@ from importlib import metadata
 from pathlib import Path
 
 PROFILE = "agx-cu118-ort1201-py312"
-LOCK = Path(__file__).resolve().parents[1] / "requirements-jetson-ai.lock"
+LOCK = Path(__file__).resolve().parents[1] / "requirements" / "requirements-jetson-ai.lock"
 
 
 def gpu_report():

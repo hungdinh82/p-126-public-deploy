@@ -19,7 +19,8 @@ router = APIRouter(prefix="/api/v2/navigation")
 @router.get("/snapshot")
 async def navigation_snapshot(
     request: Request,
-    session_id: str = Query(min_length=1, max_length=100), event_id: str | None = Query(default=None, max_length=100)
+    session_id: str = Query(min_length=1, max_length=100),
+    event_id: str | None = Query(default=None, max_length=100),
 ):
     require_conversation(request, session_id)
     return envelope(await runtime.orchestrator.navigation_snapshot(session_id, event_id))

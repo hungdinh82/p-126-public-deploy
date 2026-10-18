@@ -1,4 +1,4 @@
-> Tài liệu lịch sử. Contract và vận hành hiện hành: [Lõi hội thoại Core v2](langgraph_core_v2.md).
+> Tài liệu lịch sử. Contract và vận hành hiện hành: [Lõi hội thoại Core v2](../langgraph_core_v2.md).
 
 # ViVi: tính năng chỉ đường, trạng thái và giao diện
 

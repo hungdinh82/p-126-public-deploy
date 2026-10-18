@@ -84,7 +84,7 @@ TurnResponse giữ route `conversation`; thêm `answer_kind`, `answer_basis` và
 
 `tests/test_frontend_information.cjs`: nguồn dưới dạng text/link an toàn và xóa nguồn cũ. Regression hiện có kiểm tra dialogue, consent, navigation, provider, API và barge-in.
 
-Lượt review bổ sung: [kết quả ngày 13/10/2026](search_review_2026-10-13.md), với regression tại `tests/test_search_review.py` và smoke API thật bằng câu hỏi công khai.
+Lượt review bổ sung: [kết quả ngày 13/10/2026](archive/search_review_2026-10-13.md), với regression tại `tests/test_search_review.py` và smoke API thật bằng câu hỏi công khai.
 
 Credential Tavily và model thật cần live smoke riêng sau cấu hình. Fixture tests không được tính là kiểm chứng chất lượng tổng hợp của model thật.
 

@@ -1,4 +1,5 @@
 """Compatibility facade over the question-aware evidence selector."""
+
 from src.vivi.rag.evidence import EvidenceSelector
 from src.vivi.rag.schemas import RetrievedChunk
 

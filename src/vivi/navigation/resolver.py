@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import logging
 import math
 from collections import OrderedDict
 from time import monotonic, perf_counter
@@ -22,6 +23,8 @@ from src.vivi.navigation.reads import read_many
 from src.vivi.navigation.selection import destination_rank, distinct_places
 from src.vivi.navigation.vietmap import Place, VietMapError
 from src.vivi.text import normalize_text
+
+logger = logging.getLogger(__name__)
 
 
 def coordinates(place):
@@ -252,8 +255,9 @@ class PlaceResolver:
         if candidates and hasattr(self.client, "matrix"):
             try:
                 distances = await self.client.matrix([coordinates(origin), *map(coordinates, candidates)])
-            except Exception:
-                pass
+            except VietMapError as exc:
+                # Ranking falls back to straight-line order; routes still resolve per place.
+                logger.warning("VietMap matrix failed, using straight-line order: %s", exc)
         indexed = [
             (index, place)
             for index, place in enumerate(candidates)

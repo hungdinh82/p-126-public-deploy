@@ -23,6 +23,7 @@
 - **Development Journal:** [JOURNAL.md](JOURNAL.md) — nhật ký tuần
 - **Worklog:** [WORKLOG.md](WORKLOG.md) — công việc theo ngày
 - **System workflow:** [SYSTEM_WORKFLOW.md](SYSTEM_WORKFLOW.md)
+- **Tài liệu (chỉ mục):** [docs/README.md](docs/README.md) — bản đồ toàn bộ docs
 - **AI logs setup:** [docs/AI_LOG_SETUP.md](docs/AI_LOG_SETUP.md)
 
 ## Screenshot
@@ -45,13 +46,13 @@ Contract LangGraph/navigation, migration và kết quả kiểm chứng hiện t
 
 Hỏi–đáp UI/voice, slot địa điểm và phân giải POI dùng chung: [Conversation generalization](docs/conversation_generalization_runtime.md).
 
-Thời tiết mặc định Hà Nội và cách chọn model knowledge/Wikipedia/web: [Information review 14/10](docs/information_review_2026-10-14.md).
+Thời tiết mặc định Hà Nội và cách chọn model knowledge/Wikipedia/web: [Information review 14/10](docs/archive/information_review_2026-10-14.md).
 
 Chủ đề conversation, giới hạn tư vấn và các điểm kiểm soát an toàn: [Topic guardrails](docs/topic_guardrails.md).
 
-Query tham chiếu, timeout tổng hợp và kiểm chứng đơn vị số liệu: [Search reliability 14/10](docs/search_reliability_2026-10-14.md).
+Query tham chiếu, timeout tổng hợp và kiểm chứng đơn vị số liệu: [Search reliability 14/10](docs/archive/search_review_2026-10-13.md).
 
-Sửa destination, câu dẫn đường kèm giới thiệu và hủy chuỗi thao tác: [Dialogue review — log 1353–1379](docs/dialogue_review_2026-10-14_latest.md).
+Sửa destination, câu dẫn đường kèm giới thiệu và hủy chuỗi thao tác: [Dialogue review — log 1353–1379](docs/archive/dialogue_tasks.md).
 
 > Runtime chuẩn sau khi hợp nhất là `src.vivi.api.app:app`; không còn backend `/assist`
 > hay entrypoint thứ hai. Xem [contract runtime](docs/contracts.md),
@@ -67,7 +68,7 @@ Runtime dùng một workflow LangGraph thống nhất: model trả semantic even
 quản lý task trong checkpoint, scheduler chạy tối đa 5 bước tuần tự qua policy.
 Google là tầng mặc định; khi không khả dụng tự chuyển local rồi parser. Không có
 model vẫn tra handbook bằng SQLite FTS5 và trả trích đoạn có nguồn. Xem
-[kiến trúc, migration và rollback](docs/langgraph_unified_runtime.md).
+[kiến trúc, migration và rollback](docs/langgraph_core_v2.md).
 Setup tải trọng số embedding một lần:
 
 ```bash
@@ -144,8 +145,8 @@ medium nằm tại `models--vinai--PhoWhisper-medium`, còn ZeroTTS nằm tại
 
 Voice ZeroTTS của ViVi nằm trong `voices/VIVI.zip` với ID `VIVI` (`ZEROTTS_VOICE=VIVI`). Pack này chứa giọng community “Mai Chi”; backend nạp trực tiếp từ ZIP, không cần cài voice vào thư mục người dùng.
 
-PC có thể preload speech bằng `requirements-ai.txt`. Profile Nano chỉ cài
-`requirements.txt` và không preload model;
+PC có thể preload speech bằng `requirements/requirements-ai.txt`. Profile Nano chỉ cài
+`requirements/requirements.txt` và không preload model;
 API vẫn khởi động và health báo rõ adapter nào chưa sẵn sàng. `/api/v1/health` trả
 `tts.detail=loaded` khi model đã ở trong bộ nhớ.
 
@@ -257,7 +258,7 @@ Mọi provider và nút điều khiển có kiểu đi qua cùng reducer/schedul
 Cloud → local → fallback giới hạn chỉ khi tầng trước lỗi; câu hỏi làm rõ hay policy từ chối
 không gây fallback. Đổi provider giữ nguyên session và pending task. Local chỉ
 được gọi khi đã cấu hình model; đợt refactor này không tải Qwen. Xem
-[workflow, checkpoints và evaluation](docs/langgraph_unified_runtime.md).
+[workflow, checkpoints và evaluation](docs/langgraph_core_v2.md).
 
 Embedding và database đã có trên máy hiện tại. Máy mới cần chạy setup hoặc chép
 `models/multilingual-e5-small-int8/` trước khi chạy `run.py`; runtime không tự tải model.
@@ -287,7 +288,7 @@ Sau khi chuẩn bị model, `run.py` và `scripts/run_rag_local.sh` đều dùng
 ```sh
 .venv/bin/python -m pytest -q
 .venv/bin/python -m ruff check src vehicle_simulator tests
-node --check app.js
+node --check web/app.js
 ```
 
 ## Kiểm tra local và phát hành
@@ -341,9 +342,9 @@ GitHub CLI. Không cần GitHub Actions. Trong giai đoạn `0.x`, tăng minor c
 
 ## Cấu trúc
 
-- `index.html`: bố cục, điều khiển và thông tin trạng thái.
-- `style.css`: ngôn ngữ thị giác, layout responsive, reduced motion.
-- `app.js`: render không gian, trạng thái hội thoại, Digital Twin trong bộ nhớ, policy demo.
+- `web/index.html`: bố cục, điều khiển và thông tin trạng thái.
+- `web/style.css`: ngôn ngữ thị giác, layout responsive, reduced motion.
+- `web/app.js`: render không gian, trạng thái hội thoại, Digital Twin trong bộ nhớ, policy demo.
 - `src/vivi/`: application package duy nhất, gồm API, LangGraph, domain policy, speech,
   vehicle adapters, RAG và persistence.
 - `vehicle_simulator/`: service mô phỏng xe độc lập, giao tiếp với ViVi qua MQTT.

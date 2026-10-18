@@ -91,7 +91,9 @@ class LocalE5EmbeddingProvider(EmbeddingProvider):
             session = self._load()
             names = {item.name for item in session.get_inputs()}
             for start in range(0, len(texts), self.batch_size):
-                encoded = self.tokenizer.encode_batch([prefix + text for text in texts[start:start + self.batch_size]])
+                encoded = self.tokenizer.encode_batch(
+                    [prefix + text for text in texts[start : start + self.batch_size]]
+                )
                 arrays = {
                     "input_ids": np.asarray([item.ids for item in encoded], dtype=np.int64),
                     "attention_mask": np.asarray([item.attention_mask for item in encoded], dtype=np.int64),

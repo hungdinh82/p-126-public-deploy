@@ -6,20 +6,23 @@ from src.vivi.capabilities.registry import catalog
 from src.vivi.dialogue.local_tools import local_tool_documents, proposal_tools, proposals_to_turn
 
 
-@pytest.mark.parametrize(("name", "field"), [
-    ("get_battery_level", "battery"),
-    ("get_tire_pressure", "tires"),
-    ("get_cabin_temperature", "temperature"),
-    ("get_remaining_range", "range"),
-    ("get_remaining_drive_time", "range_time"),
-    ("get_body_status", "body"),
-    ("get_door_status", "doors"),
-    ("get_window_positions", "windows"),
-    ("get_hood_status", "hood"),
-    ("get_trunk_status", "trunk"),
-    ("get_vehicle_diagnostics", "diagnostics"),
-    ("get_vehicle_overview", "summary"),
-])
+@pytest.mark.parametrize(
+    ("name", "field"),
+    [
+        ("get_battery_level", "battery"),
+        ("get_tire_pressure", "tires"),
+        ("get_cabin_temperature", "temperature"),
+        ("get_remaining_range", "range"),
+        ("get_remaining_drive_time", "range_time"),
+        ("get_body_status", "body"),
+        ("get_door_status", "doors"),
+        ("get_window_positions", "windows"),
+        ("get_hood_status", "hood"),
+        ("get_trunk_status", "trunk"),
+        ("get_vehicle_diagnostics", "diagnostics"),
+        ("get_vehicle_overview", "summary"),
+    ],
+)
 def test_specific_read_is_closed_and_binds_only_its_backend_field(name, field):
     docs = local_tool_documents(catalog())
     text = "kiểm tra xe"
@@ -37,12 +40,21 @@ def test_status_batch_preserves_all_requested_fields_and_actuator_order():
     docs = local_tool_documents(catalog())
     text = "kiểm tra pin và lốp rồi bật nhạc rồi kiểm tra nhiệt độ"
     tools = proposal_tools(docs, {}, text)
-    result = proposals_to_turn([
-        ("get_battery_level", {}), ("get_tire_pressure", {}),
-        ("play_music", {}), ("get_cabin_temperature", {}),
-    ], docs, {}, text, tools)
+    result = proposals_to_turn(
+        [
+            ("get_battery_level", {}),
+            ("get_tire_pressure", {}),
+            ("play_music", {}),
+            ("get_cabin_temperature", {}),
+        ],
+        docs,
+        {},
+        text,
+        tools,
+    )
     assert [(a.capability, a.arguments.query) for a in result.actions] == [
-        ("vehicle.get_status", "battery,tires"), ("media.play", None),
+        ("vehicle.get_status", "battery,tires"),
+        ("media.play", None),
         ("vehicle.get_status", "temperature"),
     ]
 

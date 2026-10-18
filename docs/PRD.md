@@ -185,4 +185,4 @@ Nếu target latency không đạt trên hardware đã chọn, Gate cuối chấ
 - [One-page Brief](BRIEF.md)
 - [Wireframe và UI Flow](UI_FLOW.md)
 - [Kiến trúc hệ thống](architecture_diagram.md)
-- [Kế hoạch năm tuần](project_plan_5_weeks.md)
+- [Kế hoạch năm tuần](archive/project_plan_5_weeks.md)

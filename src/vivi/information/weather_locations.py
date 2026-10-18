@@ -15,8 +15,12 @@ def weather_places(places, location):
     valid = local or valid
     unique = {}
     for p in valid:
-        key = (normalize_text(p.get("name", "")), p.get("country_code"),
-               round(p["latitude"], 5), round(p["longitude"], 5))
+        key = (
+            normalize_text(p.get("name", "")),
+            p.get("country_code"),
+            round(p["latitude"], 5),
+            round(p["longitude"], 5),
+        )
         unique.setdefault(key, p)
     valid = list(unique.values())
     name = normalize_text(geocoding_query(location).split(",")[0])
@@ -38,8 +42,9 @@ def weather_places(places, location):
 
 
 def weather_labels(places):
-    labels = [", ".join(dict.fromkeys(str(p[k]) for k in ("name", "admin2", "admin1", "country") if p.get(k)))
-              for p in places]
+    labels = [
+        ", ".join(dict.fromkeys(str(p[k]) for k in ("name", "admin2", "admin1", "country") if p.get(k))) for p in places
+    ]
     for i, label in enumerate(labels[:]):
         if labels.count(label) > 1:
             kind = "đảo" if places[i].get("feature_code") in {"ISL", "ISLS"} else f"điểm {i + 1}"

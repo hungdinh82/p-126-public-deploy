@@ -7,9 +7,9 @@ from datetime import UTC, datetime
 import httpx
 import pytest
 
+from eval.legacy.grammar import OfflineParser
 from src.vivi.conversation.service import ConversationService, numeric_claims
 from src.vivi.dialogue.contracts import SemanticTurn, SessionState
-from eval.legacy.grammar import OfflineParser
 from src.vivi.dialogue.planner import ModelProvider
 from src.vivi.information.service import InformationService
 from src.vivi.information.time_context import search_time_context

@@ -1,6 +1,6 @@
 # Tổng quát hoá hội thoại và phân giải địa điểm
 
-Trạng thái: đã triển khai nền tảng của các bước 1–5 trên runtime hiện tại ngày 14/10/2026. Bản dưới giữ thiết kế đã thống nhất; xem [contract và giới hạn triển khai](conversation_generalization_runtime.md) để phân biệt phần đã code với mục tiêu đánh giá tiếp theo.
+Trạng thái: đã triển khai nền tảng của các bước 1–5 trên runtime hiện tại ngày 14/10/2026. Bản dưới giữ thiết kế đã thống nhất; xem [contract và giới hạn triển khai](../conversation_generalization_runtime.md) để phân biệt phần đã code với mục tiêu đánh giá tiếp theo.
 
 ## Điểm cần thay đổi
 

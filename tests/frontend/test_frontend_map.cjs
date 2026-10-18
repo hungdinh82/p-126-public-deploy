@@ -13,7 +13,7 @@ function fixture(){
   remove(){this.removed=true;}jumpTo(){this.jumps=(this.jumps || 0)+1;}
  }
  const context={setTimeout:fn=>{timers.push(fn);return timers.length;},clearTimeout(){},ResizeObserver:class{constructor(fn){observer=this;this.fn=fn;}observe(){}disconnect(){this.disconnected=true;}},vietmapgl:{Map:MapSDK,NavigationControl:class{}},document:{createElement:()=>({remove(){}}),head:{append(){}}}};
- vm.createContext(context);vm.runInContext(fs.readFileSync('journey-map.js','utf8').replace('export class','class')+';globalThis.JourneyMap=JourneyMap',context);
+ vm.createContext(context);vm.runInContext(fs.readFileSync('web/journey-map.js','utf8').replace('export class','class')+';globalThis.JourneyMap=JourneyMap',context);
  let renders=0,latest='route:one';const seen=[];
  const map=new context.JourneyMap({fetchConfig:async()=>({available:true,style_url:'fixture',default_center:{lat:21,lng:105}}),notice:text=>notices.push(text),ready:()=>{renders++;seen.push(latest);},attach(){}});
  return {map,maps,timers,notices,seen,get renders(){return renders;},setLatest:value=>latest=value,setLoaded:value=>loaded=value,get observer(){return observer;},get resizes(){return resizes;}};

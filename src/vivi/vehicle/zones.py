@@ -9,7 +9,18 @@ from src.vivi.text import normalize_text
 CABIN_ZONES = ("driver", "front_passenger", "rear_left", "rear_right")
 # Vocabulary for a position, not complete user commands or model answers.
 CABIN_ZONE_ALIASES = {
-    "driver": ("ghế lái", "ghế tài xế", "tài xế", "người lái", "bên tài", "bên lái", "cửa lái", "cửa tài", "trước trái", "trái trước"),
+    "driver": (
+        "ghế lái",
+        "ghế tài xế",
+        "tài xế",
+        "người lái",
+        "bên tài",
+        "bên lái",
+        "cửa lái",
+        "cửa tài",
+        "trước trái",
+        "trái trước",
+    ),
     "front_passenger": ("ghế phụ", "bên phụ", "cửa phụ", "phụ", "hành khách", "trước phải", "phải trước"),
     "rear_left": ("sau trái", "trái sau"),
     "rear_right": ("sau phải", "phải sau"),
@@ -25,7 +36,7 @@ def spoken_zone_aliases(text):
         for alias in aliases:
             value = normalize_text(alias)
             for match in re.finditer(r"(?<!\w)" + re.escape(value) + r"(?!\w)", folded):
-                actual = spelling[match.start():match.end()]
+                actual = spelling[match.start() : match.end()]
                 if len(actual) == len(alias) and any(
                     a != b and a != normalize_text(a) and b != normalize_text(b)
                     for a, b in zip(actual, alias, strict=True)
@@ -33,6 +44,8 @@ def spoken_zone_aliases(text):
                     continue
                 found.add(zone)
     return found
+
+
 ZONE_LABELS = {
     "driver": "bên tài",
     "front_passenger": "bên phụ",
@@ -77,4 +90,8 @@ def zone_label(arguments: Mapping[str, object]) -> str:
 
 
 def zoned_noun(noun: str, arguments: Mapping[str, object]) -> str:
-    return f"tất cả {noun}" if arguments.get("zone") == "all" or arguments.get("zones") == list(CABIN_ZONES) else f"{noun} {zone_label(arguments)}"
+    return (
+        f"tất cả {noun}"
+        if arguments.get("zone") == "all" or arguments.get("zones") == list(CABIN_ZONES)
+        else f"{noun} {zone_label(arguments)}"
+    )

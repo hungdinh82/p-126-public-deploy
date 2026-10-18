@@ -38,11 +38,15 @@ def split_chunk(chunk: HandbookChunk, embeddings: LocalE5EmbeddingProvider) -> l
         if end == start:
             raise ValueError(f"Section heading exceeds embedding budget: {chunk.source_id}")
         content = " ".join(words[start:end])
-        result.append(chunk.model_copy(update={
-            "source_id": f"{chunk.source_id}-p{len(result) + 1}",
-            "content": content,
-            "checksum": hashlib.sha256(content.encode()).hexdigest(),
-        }))
+        result.append(
+            chunk.model_copy(
+                update={
+                    "source_id": f"{chunk.source_id}-p{len(result) + 1}",
+                    "content": content,
+                    "checksum": hashlib.sha256(content.encode()).hexdigest(),
+                }
+            )
+        )
         start = end if end == len(words) else max(start + 1, end - 24)
     return result
 
@@ -53,8 +57,10 @@ def build(source: Path, database: Path, embeddings: LocalE5EmbeddingProvider) ->
         raise ValueError("Build into a separate artifact; source database must remain intact")
     store = SQLiteHandbookStore(source, read_only=True)
     with store._connect() as connection:
-        source_chunks = [HandbookChunk.model_validate(store._to_retrieved(row).model_dump()) for row in
-                         connection.execute("SELECT *, 0 AS rank FROM handbook_chunks ORDER BY id")]
+        source_chunks = [
+            HandbookChunk.model_validate(store._to_retrieved(row).model_dump())
+            for row in connection.execute("SELECT *, 0 AS rank FROM handbook_chunks ORDER BY id")
+        ]
     if not source_chunks:
         raise ValueError("Source handbook is empty")
     chunks = [part for chunk in source_chunks for part in split_chunk(chunk, embeddings)]
@@ -69,19 +75,27 @@ def build(source: Path, database: Path, embeddings: LocalE5EmbeddingProvider) ->
         jsonl.write_text("\n".join(chunk.model_dump_json() for chunk in chunks) + "\n", encoding="utf-8")
         SQLiteHandbookStore(temporary).import_jsonl(jsonl, source_checksum=file_sha256(source))
         with sqlite3.connect(temporary) as connection:
-            connection.execute("CREATE TABLE handbook_vectors (source_id TEXT PRIMARY KEY REFERENCES handbook_chunks(source_id), embedding BLOB NOT NULL)")
+            connection.execute(
+                "CREATE TABLE handbook_vectors (source_id TEXT PRIMARY KEY REFERENCES handbook_chunks(source_id), embedding BLOB NOT NULL)"
+            )
             connection.execute("CREATE TABLE vector_manifest (key TEXT PRIMARY KEY, value TEXT NOT NULL)")
             for start in range(0, len(chunks), embeddings.batch_size):
-                batch = chunks[start:start + embeddings.batch_size]
+                batch = chunks[start : start + embeddings.batch_size]
                 vectors = embeddings.embed_documents([embedding_text(chunk) for chunk in batch])
                 write_vectors(connection, [chunk.source_id for chunk in batch], vectors, embeddings.dimensions)
                 if start % 100 == 0:
                     print(f"Embedded {min(start + len(batch), len(chunks))}/{len(chunks)}", flush=True)
             manifest = {
-                "schema_version": 1, "status": "complete", "source_sha256": file_sha256(source),
-                "embedding_fingerprint": embeddings.fingerprint, "embedding_model": embeddings.manifest,
-                "dimensions": embeddings.dimensions, "source_chunks": len(source_chunks), "chunks": len(chunks),
-                "scope": list(next(iter(scopes))), "chunking": {"max_tokens": 480, "overlap_words": 24},
+                "schema_version": 1,
+                "status": "complete",
+                "source_sha256": file_sha256(source),
+                "embedding_fingerprint": embeddings.fingerprint,
+                "embedding_model": embeddings.manifest,
+                "dimensions": embeddings.dimensions,
+                "source_chunks": len(source_chunks),
+                "chunks": len(chunks),
+                "scope": list(next(iter(scopes))),
+                "chunking": {"max_tokens": 480, "overlap_words": 24},
                 "build_seconds": round(time.perf_counter() - started, 2),
             }
             connection.execute("INSERT INTO vector_manifest VALUES ('manifest', ?)", (json.dumps(manifest),))

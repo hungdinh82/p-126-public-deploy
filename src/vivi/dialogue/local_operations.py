@@ -123,7 +123,9 @@ def select_documents(context):
         names |= INFORMATION_SOURCES
     selected = [c for c in capabilities if c["name"] in names]
     if len(selected) > MAX_TOOL_DOCUMENTS:
-        selected = sorted(selected, key=lambda c: (c["name"] not in current_names, c["name"] not in pending))[:MAX_TOOL_DOCUMENTS]
+        selected = sorted(selected, key=lambda c: (c["name"] not in current_names, c["name"] not in pending))[
+            :MAX_TOOL_DOCUMENTS
+        ]
         index = [{"name": c["name"], "description": c["description"]} for c in capabilities]
     return capabilities, selected, index
 
@@ -237,8 +239,10 @@ def generation_tools(tools, utterance):
     # A specific opening amount requires a value-bearing window tool. Keep
     # endpoint variants for compound requests, which may mix both operations.
     partial_opening = re.search(r"%|\b(?:phan tram|mot nua|phan nua)\b", normalize_text(utterance))
-    if partial_opening and len(action_clauses(utterance)) <= 1 and any(
-        tool["function"]["name"] == "set_window" for tool in result
+    if (
+        partial_opening
+        and len(action_clauses(utterance)) <= 1
+        and any(tool["function"]["name"] == "set_window" for tool in result)
     ):
         result = [tool for tool in result if tool["function"]["name"] not in {"raise_window", "lower_window"}]
     for tool in result:
@@ -265,10 +269,14 @@ def slot_reply_kind(text, tasks, documents):
         # A short positional answer must consist of location vocabulary,
         # not merely contain a location inside a new question/request.
         words = set(re.findall(r"\w+", normalize_text(text)))
-        location_words = set("ghe cua kinh hang ben phia dang tay truoc sau trai phai tai xe lai nguoi phu hanh khach vi tri o la cai nhe nha a thoi cho sua lai va giup minh toi em anh chi bac di het cac bon tat ca toan bo moi".split())
+        location_words = set(
+            "ghe cua kinh hang ben phia dang tay truoc sau trai phai tai xe lai nguoi phu hanh khach vi tri o la cai nhe nha a thoi cho sua lai va giup minh toi em anh chi bac di het cac bon tat ca toan bo moi".split()
+        )
         if words <= location_words and "?" not in text:
             return "targets"
-    if set(form["field_schema"]["properties"]) & {"value_celsius", "position_percent", "level"} and re.search(r"\d|" + NUMBER_WORDS, text.casefold()):
+    if set(form["field_schema"]["properties"]) & {"value_celsius", "position_percent", "level"} and re.search(
+        r"\d|" + NUMBER_WORDS, text.casefold()
+    ):
         return "number"
     return None
 
@@ -301,7 +309,11 @@ async def interpret_operations(client, context, attempts):
         documents = local_tool_documents(selected)
         tools = proposal_tools(documents, tasks, text)
         if stop_tools:
-            tools = [tool for tool in tools if tool["function"]["name"] in stop_tools or tool["function"]["name"].startswith("dialogue_")]
+            tools = [
+                tool
+                for tool in tools
+                if tool["function"]["name"] in stop_tools or tool["function"]["name"].startswith("dialogue_")
+            ]
         if flagged:
             # "đừng mở nữa" may still cancel or answer the live task, never act.
             vetoed = {"dialogue_clarify", "dialogue_unsupported", "dialogue_task", "dialogue_answer"}
@@ -311,9 +323,11 @@ async def interpret_operations(client, context, attempts):
         if reply_kind and not flagged:
             # A field answer cannot silently open a fresh form or query the web.
             # New commands/questions bypass this gate; numeric replies may clarify.
-            permitted = {"update_current_request"} if reply_kind == "targets" else {
-                "update_current_request", "dialogue_clarify", "dialogue_unsupported", "dialogue_find_tools"
-            }
+            permitted = (
+                {"update_current_request"}
+                if reply_kind == "targets"
+                else {"update_current_request", "dialogue_clarify", "dialogue_unsupported", "dialogue_find_tools"}
+            )
             wire_tools = [tool for tool in wire_tools if tool["function"]["name"] in permitted]
             for tool in wire_tools:
                 if tool["function"]["name"] == "update_current_request":
@@ -483,8 +497,7 @@ def check_coverage(result, text, capabilities, *, final):
         return
     if unknown:
         raise HostTurn("unsupported", "Mình chưa hỗ trợ đầy đủ yêu cầu này.", "unsupported_clause: " + unknown[0])
-    missing = [clause for clause, names in zip(clauses, domains, strict=True)
-               if names and not names & proposed_domains]
+    missing = [clause for clause, names in zip(clauses, domains, strict=True) if names and not names & proposed_domains]
     if not missing and capacity < len(clauses):
         missing = clauses[capacity:]
     if missing:

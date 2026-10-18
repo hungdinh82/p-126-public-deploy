@@ -22,24 +22,47 @@ def main() -> None:
 
         revision = HfApi().model_info(repository, revision=args.revision, timeout=15).sha
     else:
-        metadata = subprocess.check_output([
-            "curl", "-fsSL", "--connect-timeout", "10", "--max-time", "30",
-            f"https://huggingface.co/api/models/{repository}/revision/{args.revision}",
-        ], text=True)
+        metadata = subprocess.check_output(
+            [
+                "curl",
+                "-fsSL",
+                "--connect-timeout",
+                "10",
+                "--max-time",
+                "30",
+                f"https://huggingface.co/api/models/{repository}/revision/{args.revision}",
+            ],
+            text=True,
+        )
         revision = json.loads(metadata)["sha"]
     args.directory.mkdir(parents=True, exist_ok=True)
     checksums = {}
     with tempfile.TemporaryDirectory(prefix="vivi-model-") as directory:
-        for source, destination in [("tokenizer.json", "tokenizer.json"), ("onnx/model_quantized.onnx", "model_quantized.onnx")]:
+        for source, destination in [
+            ("tokenizer.json", "tokenizer.json"),
+            ("onnx/model_quantized.onnx", "model_quantized.onnx"),
+        ]:
             target = Path(directory) / destination
             if args.download_client == "hub":
                 cached = hf_hub_download(repository, source, revision=revision)
                 shutil.copyfile(cached, target)
             else:
-                subprocess.run([
-                    "curl", "-fsSL", "--retry", "2", "--connect-timeout", "10", "--max-time", "300",
-                    f"https://huggingface.co/{repository}/resolve/{revision}/{source}", "-o", str(target),
-                ], check=True)
+                subprocess.run(
+                    [
+                        "curl",
+                        "-fsSL",
+                        "--retry",
+                        "2",
+                        "--connect-timeout",
+                        "10",
+                        "--max-time",
+                        "300",
+                        f"https://huggingface.co/{repository}/resolve/{revision}/{source}",
+                        "-o",
+                        str(target),
+                    ],
+                    check=True,
+                )
             checksums[destination] = file_sha256(target)
         for name in checksums:
             shutil.copyfile(Path(directory) / name, args.directory / name)

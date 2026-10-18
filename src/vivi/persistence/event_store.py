@@ -24,17 +24,22 @@ class EventStore:
         self.input_starts: OrderedDict[tuple[str, str], tuple[float, float]] = OrderedDict()
         self.ai_routes: OrderedDict[tuple[str, str], dict[str, Any]] = OrderedDict()
 
-    def start_ai_route(self, session_id: str, turn_id: str, *, transcript: str = "", provider: str | None = None) -> None:
+    def start_ai_route(
+        self, session_id: str, turn_id: str, *, transcript: str = "", provider: str | None = None
+    ) -> None:
         key = (session_id, turn_id)
         with self._lock:
-            route = self.ai_routes.setdefault(key, {
-                "session_id": session_id,
-                "turn_id": turn_id,
-                "started_at": time.time(),
-                "status": "running",
-                "stages": {},
-                "llm_attempts": [],
-            })
+            route = self.ai_routes.setdefault(
+                key,
+                {
+                    "session_id": session_id,
+                    "turn_id": turn_id,
+                    "started_at": time.time(),
+                    "status": "running",
+                    "stages": {},
+                    "llm_attempts": [],
+                },
+            )
             if transcript:
                 route["transcript"] = transcript
             if provider:
@@ -68,7 +73,8 @@ class EventStore:
             value = {**event, "updated_at": time.time()}
             for index, existing in enumerate(route["llm_attempts"]):
                 if (existing.get("phase", "interpret"), existing.get("attempt")) == (
-                    value.get("phase", "interpret"), attempt
+                    value.get("phase", "interpret"),
+                    attempt,
                 ):
                     route["llm_attempts"][index] = value
                     break
@@ -128,7 +134,11 @@ class EventStore:
         with self._lock:
             start = self.input_starts.get((session_id, turn_id))
             for event in reversed(self.recent_events):
-                if event.get("session_id") == session_id and event.get("turn_id") == turn_id and event.get("event_type") == "turn":
+                if (
+                    event.get("session_id") == session_id
+                    and event.get("turn_id") == turn_id
+                    and event.get("event_type") == "turn"
+                ):
                     event.update(values)
                     if start:
                         event["received_at"] = start[1]
@@ -161,12 +171,20 @@ class EventStore:
             if started:
                 measurement["input_to_audio_ready_ms"] = round((time.perf_counter() - started[0]) * 1000, 2)
                 for event in reversed(self.recent_events):
-                    if event.get("event_type") == "turn" and event.get("session_id") == session_id and event.get("turn_id") == turn_id:
+                    if (
+                        event.get("event_type") == "turn"
+                        and event.get("session_id") == session_id
+                        and event.get("turn_id") == turn_id
+                    ):
                         event["input_to_audio_ready_ms"] = measurement["input_to_audio_ready_ms"]
                         break
             else:
                 for event in reversed(self.recent_events):
-                    if event.get("event_type") == "turn" and event.get("session_id") == session_id and event.get("turn_id") == turn_id:
+                    if (
+                        event.get("event_type") == "turn"
+                        and event.get("session_id") == session_id
+                        and event.get("turn_id") == turn_id
+                    ):
                         received_at = event.get("received_at")
                         if received_at is not None:
                             measurement["input_to_audio_ready_ms"] = round((time.time() - received_at) * 1000, 2)
@@ -174,7 +192,9 @@ class EventStore:
                         break
             self.last_tts = measurement
 
-    def metrics_snapshot(self) -> tuple[list[dict[str, Any]], dict[tuple[str, str], list[dict[str, Any]]], dict[str, Any] | None]:
+    def metrics_snapshot(
+        self,
+    ) -> tuple[list[dict[str, Any]], dict[tuple[str, str], list[dict[str, Any]]], dict[str, Any] | None]:
         with self._lock:
             return (
                 list(self.recent_events),
@@ -189,8 +209,14 @@ class EventStore:
         with self._lock:
             for key in [key for key in self.ai_routes if key[0] in sessions]:
                 del self.ai_routes[key]
-            self._erased_turns.update(key for collection in (self.input_starts, self.tts_by_turn) for key in collection if key[0] in sessions)
-            self._erased_turns.update((event.get("session_id"), event.get("turn_id")) for event in self.recent_events if event.get("session_id") in sessions)
+            self._erased_turns.update(
+                key for collection in (self.input_starts, self.tts_by_turn) for key in collection if key[0] in sessions
+            )
+            self._erased_turns.update(
+                (event.get("session_id"), event.get("turn_id"))
+                for event in self.recent_events
+                if event.get("session_id") in sessions
+            )
             for path in self.config.data_dir.glob("????-??-??/turns.jsonl"):
                 lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
                 kept = []
@@ -208,7 +234,11 @@ class EventStore:
             for directory in self.config.data_dir.glob("????-??-??"):
                 prefixes = tuple(self._safe(sid) + "_" for sid in sessions)
                 for path in directory.iterdir():
-                    if path.is_file() and path.suffix in {".wav", ".webm", ".ogg", ".mp3", ".m4a", ".bin"} and path.name.startswith(prefixes):
+                    if (
+                        path.is_file()
+                        and path.suffix in {".wav", ".webm", ".ogg", ".mp3", ".m4a", ".bin"}
+                        and path.name.startswith(prefixes)
+                    ):
                         path.unlink()
             self.recent_events = [event for event in self.recent_events if event.get("session_id") not in sessions]
             self.last_event = self.recent_events[-1] if self.recent_events else None

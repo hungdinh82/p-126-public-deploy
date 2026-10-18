@@ -1,4 +1,4 @@
-> Tài liệu lịch sử. Contract và vận hành hiện hành: [Lõi hội thoại Core v2](langgraph_core_v2.md).
+> Tài liệu lịch sử. Contract và vận hành hiện hành: [Lõi hội thoại Core v2](../langgraph_core_v2.md).
 
 # Quản lý hội thoại theo tác vụ — 07/10/2026
 
@@ -61,7 +61,7 @@ không phải bộ chứng minh ngữ nghĩa cho mọi cách nói tiếng Việt
 Lệnh dừng nhạc tường minh cũng đi thẳng tới media.pause để không phải chờ model.
 
 Rules còn là chế độ offline và fallback. Cấu hình hiện tạm chọn
-[Google Gemini](google_api.md). Khi chọn local, rules không còn chặn
+[Google Gemini](../google_api.md). Khi chọn local, rules không còn chặn
 mọi lượt trước model. Task replies và memory requests tường minh đi thẳng theo
 workflow đã biết. Đây chưa phải bộ thực thi nhiều hành động cùng lúc hay scheduler.
 
@@ -120,7 +120,7 @@ không phải bằng chứng model 1.7B đã đủ năng lực.
 - `tests/test_native_tools.py`: payload native, đúng một tool, validation, timeout.
 - Benchmark voice hỗ trợ episode, bộ nhớ tạm riêng, p50/p95 mỗi lượt và error_count.
   Mạng bên ngoài bị chặn trong eval; xe dùng simulator.
-- Runner và kết quả LangGraph hiện tại: [eval](../eval/README.md),
+- Runner và kết quả LangGraph hiện tại: [eval](../../eval/README.md),
   report (file sinh tại máy chạy: `../eval/results/report.md`; không lưu trong Git). Các snapshot thử model cũ đã dọn;
   có thể tra lịch sử Git nếu cần đối chiếu.
 

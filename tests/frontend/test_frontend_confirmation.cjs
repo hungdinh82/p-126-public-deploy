@@ -1,7 +1,7 @@
 const assert=require('node:assert/strict');
 const {readFileSync}=require('node:fs');
 const {test}=require('node:test');
-const client=import('data:text/javascript;base64,'+Buffer.from(readFileSync('assistant-client.js','utf8')).toString('base64'));
+const client=import('data:text/javascript;base64,'+Buffer.from(readFileSync('web/assistant-client.js','utf8')).toString('base64'));
 const action={capability:'window.set_position',arguments:{zone:'driver',position_percent:50}};
 function response(){return {status:'confirmation_required',action:{intent:action.capability,arguments:{...action.arguments}},
   pending_question:{id:'q:1',purpose:'approve_execution',accepts_yes:true}};}

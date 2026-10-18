@@ -4,11 +4,11 @@ from dataclasses import replace
 
 import pytest
 
+from eval.legacy.grammar import OfflineParser, place_query_matches
 from src.vivi.capabilities.registry import merge_arguments
 from src.vivi.conversation.context import resolve_query, topic_subject
 from src.vivi.dialogue.answers import AnswerResolver
 from src.vivi.dialogue.contracts import ActionDraft, SessionState
-from eval.legacy.grammar import OfflineParser, place_query_matches
 from src.vivi.dialogue.planner import ModelProvider, SemanticResolver
 from src.vivi.dialogue.reducer import synchronize_question
 from src.vivi.navigation.contracts import AreaConstraint, DestinationSpec

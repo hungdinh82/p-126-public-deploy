@@ -13,8 +13,8 @@ function harness({withEnergy=false}={}) {
     command:(...args)=>commands.push(args),event:async value=>events.push(value),setDriving:value=>driving.push(value),announce:text=>announcements.push(text),
   };
   vm.createContext(sandbox);
-  for(const file of ['navigation-state.js','navigation-store.js','journey-map.js','journey-simulation.js','journey-renderer.js'])vm.runInContext(readFileSync(file,'utf8').replace(/^import .*$/gm,'').replace(/export /g,''),sandbox);
-  vm.runInContext(readFileSync('journey.js','utf8').replace(/^import .*$/gm,'').replace(/export /g,''),sandbox);
+  for(const file of ['web/navigation-state.js','web/navigation-store.js','web/journey-map.js','web/journey-simulation.js','web/journey-renderer.js'])vm.runInContext(readFileSync(file,'utf8').replace(/^import .*$/gm,'').replace(/export /g,''),sandbox);
+  vm.runInContext(readFileSync('web/journey.js','utf8').replace(/^import .*$/gm,'').replace(/export /g,''),sandbox);
   vm.runInContext(`map=stubMap; hooks={command,event,setDriving,announce,progress(){},route:reportRoute,travel(){},confirm:grant=>command('confirm',grant)}; realOpenJourney=openJourney; openJourney=async()=>{}; placeMarker=(name,point)=>{markers[name]={point,setRotation(){},remove(){}};return markers[name];}; planRoute=()=>{throw Error('Client must not recompute server route');};`,sandbox);
   return {sandbox,commands,events,driving,announcements,elements,sources,routes};
 }
@@ -159,7 +159,7 @@ test('voice routing obtains origin without opening the map',async()=>{
 test('critical announcement preempts once and other speech waits in the same queue',async()=>{
   const h=harness(),spoken=[];let release;
   Object.assign(h.sandbox,{state:{sound:true,busy:false},makeId:()=> 'id',window:{},currentPlayback:null,stopPlayback(){},say(){},speak:async text=>{spoken.push(text);if(text==='critical')await new Promise(resolve=>release=resolve);}});
-  const app=readFileSync('app.js','utf8');
+  const app=readFileSync('web/app.js','utf8');
   vm.runInContext(app.slice(app.indexOf('const announcementQueue = []'),app.indexOf('async function pollVehicleAlerts')),h.sandbox);
   vm.runInContext("queueAnnouncement('critical',2,'critical'); queueAnnouncement('turn direction',0,'nav')",h.sandbox);
   assert.deepEqual(spoken,['critical']);
@@ -431,7 +431,7 @@ test('clearing removes saved plan and route, and stale responses cannot restore 
 test('gear button uses the journey reducer and does not overwrite a blocked resume',async()=>{
   let click;const phases=[],changes=[],fixtures=[];
   const sandbox={state:{busy:false,driving:false,backendAvailable:true,navigationSynced:true},$:()=>({addEventListener:(type,handler)=>{click=handler;}}),lockControls(){},snapshotOrder:{epoch:'test'},gearController:{request:async target=>{changes.push(target);phases.push('blocked');return true;}},setDemoDriving:async value=>fixtures.push(value),setPhase:phase=>phases.push(phase)};
-  vm.createContext(sandbox);const app=readFileSync('app.js','utf8');
+  vm.createContext(sandbox);const app=readFileSync('web/app.js','utf8');
   vm.runInContext(app.slice(app.indexOf("$('#drive-toggle').addEventListener"),app.indexOf('function setSound')),sandbox);
   await click();assert.deepEqual(changes,["D"]);assert.deepEqual(fixtures,[]);assert.deepEqual(phases,['blocked']);
 });
@@ -448,7 +448,7 @@ test('roundabout presentation leaves server route data unchanged for replay',asy
 test('P remains available during an assistant turn and interrupts it before pausing',async()=>{
   let click,interrupts=0;const changes=[];
   const sandbox={state:{busy:true,driving:true,backendAvailable:true,navigationSynced:true},$:()=>({addEventListener:(type,handler)=>{click=handler;}}),lockControls(){},interruptActiveTurn:()=>{interrupts++;sandbox.state.busy=false;},snapshotOrder:{epoch:'test'},gearController:{request:async target=>{changes.push(target);return true;}},setDemoDriving:async()=>{throw Error('Must pause through the journey reducer');},setPhase(){}};
-  vm.createContext(sandbox);const app=readFileSync('app.js','utf8');
+  vm.createContext(sandbox);const app=readFileSync('web/app.js','utf8');
   vm.runInContext(app.slice(app.indexOf("$('#drive-toggle').addEventListener"),app.indexOf('function setSound')),sandbox);
   await click();assert.equal(interrupts,1);assert.deepEqual(changes,["P"]);
 });
