@@ -16,7 +16,7 @@
 
 ## Tech stack
 
-![LangGraph](https://img.shields.io/badge/LangGraph-orchestration-5b4bd9) ![FastAPI](https://img.shields.io/badge/FastAPI-runtime-0f8f94) ![Jetson](https://img.shields.io/badge/Jetson-edge%20SLM-76b900) ![SQLite_FTS5](https://img.shields.io/badge/SQLite-FTS5-003b57) ![Docker](https://img.shields.io/badge/Docker-deploy-2496ed) ![Render](https://img.shields.io/badge/Render-live-46e3b7)
+[![CI](https://github.com/AI20K-Build-Phase-Cohort-4/P-126/actions/workflows/ci.yml/badge.svg)](https://github.com/AI20K-Build-Phase-Cohort-4/P-126/actions/workflows/ci.yml) [![Deploy](https://github.com/AI20K-Build-Phase-Cohort-4/P-126/actions/workflows/deploy-render.yml/badge.svg?branch=main)](https://github.com/AI20K-Build-Phase-Cohort-4/P-126/actions/workflows/deploy-render.yml) ![LangGraph](https://img.shields.io/badge/LangGraph-orchestration-5b4bd9) ![FastAPI](https://img.shields.io/badge/FastAPI-runtime-0f8f94) ![Jetson](https://img.shields.io/badge/Jetson-edge%20SLM-76b900) ![SQLite_FTS5](https://img.shields.io/badge/SQLite-FTS5-003b57) ![Docker](https://img.shields.io/badge/Docker-deploy-2496ed) ![Render](https://img.shields.io/badge/Render-live-46e3b7)
 
 ## Liên kết nhanh
 
