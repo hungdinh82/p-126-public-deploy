@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import unicodedata
 from copy import deepcopy
 
 from pydantic import ValidationError
@@ -103,11 +104,18 @@ def select_documents(context):
     }
     if fresh_control:
         pending = {name for name in pending if name.split(".")[0] in current_domains}
-    names = {c["name"] for c in selected} | pending
     navigation = tasks.get("navigation") or {}
     use_navigation_context = not fresh_control or "navigation" in current_domains
+    # An open navigation plan or question can always be refined ("đổi về Đồ
+    # Sơn", "chỗ nào gần hơn") even when the reply names no navigation term.
+    # A fresh "chỉ đường tới …" names its own tools; offering refine there made
+    # the model edit the previous plan instead of starting a new one.
+    fresh = current_names & NEW_NAVIGATION
+    if not fresh and use_navigation_context and (question.get("owner") == "navigation" or navigation.get("draft")):
+        pending |= {"navigation.refine"} & {c["name"] for c in capabilities}
+    names = {c["name"] for c in selected} | pending
     if navigation.get("draft") and use_navigation_context:
-        names |= {"navigation.select", "navigation.refine", "navigation.cancel", "navigation.decline"}
+        names |= {"navigation.select", "navigation.cancel", "navigation.decline"}
     if navigation.get("journey") and use_navigation_context:
         names |= {"navigation.stop", "navigation.end"}
     # Either lookup source is offered as the single merged lookup tool.
@@ -365,6 +373,8 @@ async def interpret_operations(client, context, attempts):
             result = proposals_to_turn(
                 calls, documents, tasks, text, tools, observation=context.get("vehicle_observation")
             )
+            result = directions_from_grammar(result, text, capabilities)
+            result = fresh_navigation_request(result, text, capabilities)
             check_coverage(result, text, capabilities, final=bool(attempt))
             entry["validation"] = "accepted"
             return result
@@ -387,6 +397,62 @@ async def interpret_operations(client, context, attempts):
                 raise
             repair, expanded = error, False
     raise ValueError("No local proposal produced")
+
+
+NEW_NAVIGATION = {"navigation.plan", "navigation.search"}
+
+# The whole utterance is "directions to <place>": nothing else is asked, so a
+# model's "please clarify" is a refusal, not an ambiguity.
+DIRECTIONS_GRAMMAR = re.compile(
+    r"^(?:(?:xin |cho (?:mình|tôi) |hãy )?(?:chỉ đường|dẫn đường|tìm đường|đường đi|chỉ|dẫn))"
+    r"(?: giúp| cho)?(?: mình| tôi)?\s+(?:tới|đến|về|tại)\s+(?P<place>[^,;.!?]+)$",
+    re.IGNORECASE,
+)
+CONJUNCTIONS = re.compile(r"\b(?:và|rồi|sau đó|nhưng|hoặc|nếu|khi|xong)\b", re.IGNORECASE)
+
+
+def directions_from_grammar(result, text, capabilities):
+    if result.act != "clarify" or result.actions or "navigation.plan" not in {c["name"] for c in capabilities}:
+        return result
+    match = DIRECTIONS_GRAMMAR.match(unicodedata.normalize("NFC", text).strip())
+    if not match:
+        return result
+    place = " ".join(match["place"].split())
+    if not 1 <= len(place.split()) <= 8 or CONJUNCTIONS.search(place):
+        return result
+    return SemanticTurn.model_validate(
+        {
+            "act": "request",
+            "actions": [{"capability": "navigation.plan", "arguments": {"query": place, "purpose": "navigate"}}],
+        }
+    )
+
+
+def fresh_navigation_request(result, text, capabilities):
+    """A refine proposed for "chỉ đường tới X" is a new plan, not an edit.
+
+    Discovery evidence decides: the utterance names directions or a search and
+    no refinement wording ("đổi về", "chỗ khác").
+    """
+    named = {c["name"] for c in matched_capabilities(text, capabilities)}
+    if result.act != "request" or "navigation.refine" in named or not named & NEW_NAVIGATION:
+        return result
+    if not any(a.capability == "navigation.refine" and a.arguments.query for a in result.actions):
+        return result
+    capability = "navigation.plan" if "navigation.plan" in named else "navigation.search"
+    actions = [
+        {
+            "capability": capability,
+            "arguments": {
+                "query": a.arguments.query,
+                **({"purpose": "navigate"} if capability == "navigation.plan" else {}),
+            },
+        }
+        if a.capability == "navigation.refine" and a.arguments.query
+        else a.model_dump(mode="json")
+        for a in result.actions
+    ]
+    return SemanticTurn.model_validate({"act": "request", "actions": actions})
 
 
 def check_coverage(result, text, capabilities, *, final):

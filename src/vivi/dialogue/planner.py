@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 
 from pydantic import ValidationError
 
@@ -11,7 +12,7 @@ from src.vivi.agents.prompts import VOICE_PERSONA
 from src.vivi.conversation.context import conversation_view
 from src.vivi.conversation.guardrails import TOPIC_INSTRUCTION
 from src.vivi.dialogue.contracts import SemanticTurn, SessionState, semantic_schema
-from src.vivi.dialogue.fallback import LimitedFallback, literal_question_reply
+from src.vivi.dialogue.fallback import LimitedFallback, literal_cancel, literal_nearer, literal_question_reply
 from src.vivi.dialogue.local_schema import (
     LOCAL_EXAMPLES,
     LOCAL_INSTRUCTION,
@@ -185,7 +186,7 @@ def semantic_workspace_context(workspace):
     return {
         "revision": workspace.revision,
         "draft": semantic_navigation_context(workspace.draft) if workspace.draft else None,
-        "journey": semantic_navigation_context(workspace.journey) if workspace.journey else None,
+        "journey": semantic_navigation_context(workspace.visible_journey) if workspace.visible_journey else None,
         "origin": workspace.origin,
     }
 
@@ -231,6 +232,15 @@ class SemanticResolver:
         observation_loader=None,
     ):
         reply = literal_question_reply(text, session)
+        cancel = None if reply else literal_cancel(text, session) or literal_nearer(text, session)
+        if cancel:
+            # A small model guessed "start" for "huỷ"; cancellation is never
+            # delegated to it.
+            return (
+                cancel,
+                None,
+                [{"provider": None, "source": "literal_question_reply", "outcome": "served", "calls": 0}],
+            )
         requested_provider = self.providers.get(self.chain(requested)[0])
         operations = (
             getattr(getattr(requested_provider, "client", None), "local_semantic_contract", "legacy") == "operations_v1"
@@ -319,6 +329,28 @@ class SemanticResolver:
         )
 
     @staticmethod
+    def fill_category_query(action, text):
+        """ "Bệnh viện gần nhất" carries its query in the category itself.
+
+        A small model often sends category/nearest and leaves the query empty;
+        the spoken category is host-known, so ask nothing the user already said.
+        """
+        from src.vivi.navigation.categories import CATEGORIES, category_for_text
+
+        arguments = action.arguments
+        if (
+            action.capability not in {"navigation.search", "navigation.plan"}
+            or arguments.query
+            or arguments.destination
+        ):
+            return
+        key = category_for_text(text)
+        if key is None and arguments.category in CATEGORIES:
+            key = arguments.category
+        if key is not None:
+            arguments.query = CATEGORIES[key].label
+
+    @staticmethod
     def destination_slots(value, text, session):
         """Establish provenance for model-supplied slots without a second parse."""
         from src.vivi.dialogue.questions import current_question
@@ -326,7 +358,25 @@ class SemanticResolver:
 
         utterance = normalize_text(text)
         question = current_question(session)
+        known_origins = {
+            normalize_text(step.draft.arguments.origin_query)
+            for task in [session.active, *session.suspended]
+            if task
+            for step in task.steps
+            if step.draft.arguments.origin_query
+        }
+        round_trip_cue = re.search(r"khu hoi|hai chieu|di (?:va|roi) ve|quay (?:lai|ve)|round trip", utterance)
         for action in value.drafts():
+            SemanticResolver.fill_category_query(action, text)
+            if action.arguments.trip_kind == "round_trip" and not round_trip_cue:
+                # "đổi về Đồ Sơn" is a destination change, not a return trip.
+                action.arguments.trip_kind = "one_way"
+            origin = action.arguments.origin_query
+            if origin and normalize_text(origin) not in utterance and normalize_text(origin) not in known_origins:
+                # A small model copied an earlier destination into the departure
+                # slot ("Phường Lê Chân" -> origin "Phường Đồ Sơn"). Unspoken, it
+                # is dropped so the route starts from the car.
+                action.arguments.origin_query = None
             destination = action.arguments.destination
             if destination is None:
                 continue
@@ -350,7 +400,7 @@ class SemanticResolver:
                 owner = session.navigation_workspace.draft
                 places = [*getattr(owner, "candidates", []), *([owner.selected] if owner and owner.selected else [])]
                 if action.capability == "navigation.plan":
-                    for other in [session.navigation_workspace.journey]:
+                    for other in [session.navigation_workspace.visible_journey]:
                         if other and other.selected:
                             places.append(other.selected)
                 place = next((p for p in places if p.get("handle") == destination.reference), None)

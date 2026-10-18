@@ -10,6 +10,10 @@ from pydantic import BaseModel, Field
 
 from src.vivi.navigation.contracts import DestinationSpec
 
+# A journey owns the map and controls only while it can still move. A finished
+# journey is history: it must never shadow a newer draft or a fresh search.
+LIVE_JOURNEY_STATUSES = frozenset({"running", "charging", "paused"})
+
 
 class RouteSnapshot(BaseModel):
     """An immutable-by-convention calculated route, shared by plans and journeys."""
@@ -147,7 +151,7 @@ class NavigationWorkspace(BaseModel):
             )
             if not draft.offer and previous and previous.draft and previous.draft.revision == draft.revision:
                 draft.offer = previous.draft.offer
-        return cls(
+        workspace = cls(
             revision=nav.revision,
             cleared_at_revision=previous.cleared_at_revision if previous else 0,
             event_sequence=nav.event_sequence,
@@ -159,23 +163,71 @@ class NavigationWorkspace(BaseModel):
             pending_message=pending.get("message", ""),
             applied_events=nav.applied_events,
         )
+        workspace.archive_finished()
+        return workspace
+
+    @property
+    def open_draft(self):
+        """A plan still being chosen or confirmed; a started one is the journey's."""
+        draft = self.draft
+        return draft if draft and draft.started_revision != draft.revision else None
+
+    @property
+    def live_journey(self):
+        journey = self.journey
+        return journey if journey and journey.status in LIVE_JOURNEY_STATUSES else None
+
+    @property
+    def visible_journey(self):
+        """The journey the map shows: live, or an arrival with nothing newer."""
+        journey = self.journey
+        if journey is None:
+            return None
+        if journey.status in LIVE_JOURNEY_STATUSES:
+            return journey
+        return journey if journey.status == "completed" and self.open_draft is None else None
+
+    def archive_finished(self):
+        """Drop a finished journey once history holds it or a new draft exists.
+
+        An arrival stays visible until the next plan; an explicitly ended trip
+        is removed at once. Returns True when the workspace changed.
+        """
+        journey = self.journey
+        if journey is None or journey.status in LIVE_JOURNEY_STATUSES:
+            return False
+        if journey.status == "completed" and self.open_draft is None:
+            return False
+        if journey.route_id and not any(item.get("id") == journey.route_id for item in self.history):
+            self.history = [
+                *self.history[-19:],
+                {
+                    "id": journey.route_id,
+                    "destination": journey.selected,
+                    "status": journey.status,
+                    "distance_m": journey.progress_m,
+                },
+            ]
+        self.journey = None
+        if self.draft is not None and self.open_draft is None:
+            # The plan that started this journey must not reappear as a preview.
+            self.draft = None
+        return True
 
     def snapshot(self):
-        base = self.journey or self.draft
+        journey, draft = self.visible_journey, self.open_draft
+        base = journey or draft
         nav = NavigationState.model_validate(base.model_dump(mode="json") if base else {"origin": self.origin})
         nav.revision, nav.event_sequence = self.revision, self.event_sequence
         nav.applied_events = list(self.applied_events)
-        if self.journey and self.draft:
-            nav.request_id = self.draft.request_id
-            nav.candidates = list(self.draft.candidates)
-            nav.clarification = self.draft.clarification
+        if journey and draft:
+            nav.request_id = draft.request_id
+            nav.candidates = list(draft.candidates)
+            nav.clarification = draft.clarification
             nav.pending = {
-                "status": self.pending_status
-                or ("selecting" if self.draft.clarification or not self.draft.route else "preview"),
+                "status": self.pending_status or ("selecting" if draft.clarification or not draft.route else "preview"),
                 "message": self.pending_message,
-                "navigation": NavigationState.model_validate(self.draft.model_dump(mode="json")).model_dump(
-                    mode="json"
-                ),
+                "navigation": NavigationState.model_validate(draft.model_dump(mode="json")).model_dump(mode="json"),
             }
         elif self.pending_status:
             nav.pending = {"status": self.pending_status, "message": self.pending_message}
@@ -244,12 +296,13 @@ def record_navigation(session, update):
                 *workspace.history[-19:],
                 {"id": nav.route_id, "destination": nav.selected, "status": nav.status, "distance_m": nav.progress_m},
             ]
-    else:
+    elif workspace.draft or nav.route or nav.candidates or nav.clarification or nav.status != "idle":
         old = workspace.draft.model_dump(mode="json") if workspace.draft else {}
         workspace.draft = PlanDraft.model_validate({**old, **update})
     workspace.event_sequence += 1
     workspace.revision = max(workspace.revision, nav.revision)
     workspace.origin = nav.origin or workspace.origin
+    workspace.archive_finished()
     return state
 
 

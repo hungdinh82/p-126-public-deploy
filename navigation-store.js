@@ -41,11 +41,16 @@ export class NavigationStore {
   }
   renderSnapshot(){
     const snapshot=this.current || {}, workspace=snapshot.navigation_workspace || {};
-    const draft=workspace.draft, journey=workspace.journey;
-    const navigation={...(journey || (draft?.purpose!=='itinerary'?draft:null) || {status:'idle'}),
+    const draft=workspace.draft;
+    // Same rules as the backend: a started plan belongs to its journey, and a
+    // finished journey never shadows a newer plan.
+    const open=draft && draft.started_revision!==draft.revision ? draft : null;
+    const live=['running','charging','paused'].includes(workspace.journey?.status);
+    const journey=live || workspace.journey?.status==='completed' && !open ? workspace.journey : null;
+    const navigation={...(journey || (open?.purpose!=='itinerary'?open:null) || {status:'idle'}),
       revision:workspace.revision || 0,event_sequence:workspace.event_sequence || 0,origin:workspace.origin};
-    if(journey && draft?.purpose!=='itinerary' && draft && !draft.started_revision){
-      navigation.pending={status:draft.status,navigation:draft};
+    if(journey && open && open.purpose!=='itinerary'){
+      navigation.pending={status:open.status,navigation:open};
     }
     return {...snapshot,navigation,trip_plan:draft?.purpose==='itinerary'?draft:null};
   }

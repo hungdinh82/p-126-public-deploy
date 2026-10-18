@@ -518,6 +518,21 @@ def build_assistant_graph(services, saver, store=None, provider=None, *, resolve
                 semantic = SemanticTurn(act="resume", task_ref="active")
         elif event.kind == "action" and event.action:
             semantic, served, attempts = SemanticTurn(act="request", actions=[event.action]), None, []
+            question = session.dialogue_question
+            draft = session.navigation_workspace.draft
+            args = semantic.actions[0].arguments
+            if (
+                semantic.actions[0].capability == "navigation.start"
+                and question
+                and question.purpose == "approve_execution"
+                and question.owner == "navigation"
+                and draft
+                and args.plan_id == draft.id
+                and args.route_revision == draft.revision
+            ):
+                # Pressing "Bắt đầu" on this exact plan revision answers the
+                # consent question; a typed UI event is never model output.
+                semantic.consent_question_id = question.id
         else:
 
             async def load_local_observation():

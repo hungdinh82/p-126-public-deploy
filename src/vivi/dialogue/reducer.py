@@ -72,6 +72,26 @@ def reduce_turn(
         answer = AnswerResolver().resolve("", state, act=value.act)
         if answer:
             value = answer
+    # A spoken place answers the question even when a model also echoed a
+    # choice handle that the previous answer already consumed ("Đồ Sơn").
+    stale_choices = [
+        draft
+        for draft in value.drafts()
+        if draft.capability == "navigation.refine"
+        and draft.arguments.choice_handle
+        and (draft.arguments.query or draft.arguments.destination)
+        and not any(
+            choice["handle"] == draft.arguments.choice_handle
+            for choice in (getattr(state.navigation_workspace.draft, "clarification", None) or {}).get("choices", [])
+        )
+    ]
+    if stale_choices:
+        value = value.model_copy(deep=True)
+        for draft in value.drafts():
+            if draft.capability == "navigation.refine" and draft.arguments.choice_handle in {
+                stale.arguments.choice_handle for stale in stale_choices
+            }:
+                draft.arguments.choice_handle = None
     # All tiers, including typed UI, validate references before changing a task.
     for draft in value.drafts():
         if not draft.capability.startswith("navigation."):
@@ -212,6 +232,10 @@ def reduce_turn(
             if state.active:
                 state.suspended.insert(0, state.active)
             state.active = task
+    if value.act in {"deny", "cancel"} and task is None and state.navigation_workspace.open_draft:
+        # The plan outlived its task (e.g. after a misheard turn); still cancel it.
+        state.domain_commands.append({"kind": "cancel_draft", "plan_id": state.navigation_workspace.open_draft.id})
+        return state, "Đã hủy kế hoạch đang chờ."
     if value.act in {"modify", "confirm", "deny", "cancel", "resume", "suspend"} and task is None:
         return state, "Mình đã bỏ qua yêu cầu đó." if value.act in {
             "deny",

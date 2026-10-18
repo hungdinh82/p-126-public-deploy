@@ -11,6 +11,7 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictFloat, StrictInt, model_validator
 
+from src.vivi.navigation.categories import CATEGORY_KEYS
 from src.vivi.navigation.contracts import DestinationSpec
 from src.vivi.navigation.models import (
     ActiveJourney as ActiveJourney,
@@ -30,6 +31,8 @@ from src.vivi.navigation.models import (
 from src.vivi.navigation.models import (
     TripPlanState as TripPlanState,
 )
+
+PoiCategoryKey = Literal[*CATEGORY_KEYS]
 
 
 class Arguments(BaseModel):
@@ -63,7 +66,7 @@ class Arguments(BaseModel):
     choice_handle: str | None = None
     reject_candidates: StrictBool | None = None
     use_search_results: bool | None = None
-    category: Literal["pharmacy", "charging"] | None = None
+    category: PoiCategoryKey | None = None
     nearest: bool | None = None
     destination_scope: Literal["place", "region"] | None = None
     trip_kind: Literal["one_way", "round_trip"] | None = None
