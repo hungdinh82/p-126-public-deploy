@@ -1,5 +1,8 @@
 # Đánh giá Core v2
 
+Bộ benchmark hành vi agent tổng hợp (tool calling, xe, nhiều lượt và model thật):
+[benchmarks/agent](../benchmarks/agent/README.md).
+
 Contract runtime và migration: [langgraph_core_v2.md](../docs/langgraph_core_v2.md).
 
 ```bash
