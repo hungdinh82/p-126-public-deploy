@@ -103,6 +103,7 @@ class StructuredChatClient:
         self.execution_location = execution_location
         self.tools_as_json = tools_as_json
         self.local_semantic_contract = local_semantic_contract
+        self.localized_tool_names = local_semantic_contract == "operations_v1"
         self._completion_metadata = ContextVar(f"completion_metadata_{id(self)}", default=None)
         self._served_model: ContextVar[str | None] = ContextVar(f"served_model_{id(self)}", default=None)
 
