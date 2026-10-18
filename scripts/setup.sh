@@ -49,9 +49,9 @@ source .venv/bin/activate
 
 # Install local RAG and development tooling; retain an existing speech GPU runtime.
 python -m pip install --upgrade pip
-python -m pip install -r requirements-dev.txt
+python -m pip install -r requirements/requirements-dev.txt
 if ! python -c 'import onnxruntime' >/dev/null 2>&1; then
-    python -m pip install -r requirements-rag.txt
+    python -m pip install -r requirements/requirements-rag.txt
 fi
 if [ ! -f models/multilingual-e5-small-int8/manifest.json ]; then
     python -m src.vivi.cli.prepare_embeddings

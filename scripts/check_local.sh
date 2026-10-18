@@ -12,7 +12,7 @@ if [ -x ".venv/bin/python" ]; then
 elif [ -x ".venv/Scripts/python.exe" ]; then
   PYTHON=".venv/Scripts/python.exe"
 else
-  echo "Missing .venv. Create it and install requirements-dev.txt first." >&2
+  echo "Missing .venv. Create it and install requirements/requirements-dev.txt first." >&2
   exit 1
 fi
 

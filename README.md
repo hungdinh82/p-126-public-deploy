@@ -103,8 +103,8 @@ medium nằm tại `models--vinai--PhoWhisper-medium`, còn ZeroTTS nằm tại
 
 Voice ZeroTTS của ViVi nằm trong `voices/VIVI.zip` với ID `VIVI` (`ZEROTTS_VOICE=VIVI`). Pack này chứa giọng community “Mai Chi”; backend nạp trực tiếp từ ZIP, không cần cài voice vào thư mục người dùng.
 
-PC có thể preload speech bằng `requirements-ai.txt`. Profile Nano chỉ cài
-`requirements.txt` và không preload model;
+PC có thể preload speech bằng `requirements/requirements-ai.txt`. Profile Nano chỉ cài
+`requirements/requirements.txt` và không preload model;
 API vẫn khởi động và health báo rõ adapter nào chưa sẵn sàng. `/api/v1/health` trả
 `tts.detail=loaded` khi model đã ở trong bộ nhớ.
 

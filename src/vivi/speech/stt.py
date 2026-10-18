@@ -43,7 +43,7 @@ class PhoWhisperAdapter:
             import torch  # noqa: F401
             import transformers  # noqa: F401
         except ImportError:
-            return False, "Cài requirements-ai.txt để dùng PhoWhisper"
+            return False, "Cài requirements/requirements-ai.txt để dùng PhoWhisper"
         if shutil.which(self.config.ffmpeg_binary) is None:
             return False, (
                 f"Không tìm thấy ffmpeg trong PATH (FFMPEG_BINARY={self.config.ffmpeg_binary!r}). "

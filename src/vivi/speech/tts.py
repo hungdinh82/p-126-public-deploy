@@ -98,7 +98,7 @@ class ZeroTTSAdapter:
             import numpy  # noqa: F401
             import zerotts  # noqa: F401
         except ImportError:
-            return False, "Cài requirements-ai.txt để dùng ZeroTTS"
+            return False, "Cài requirements/requirements-ai.txt để dùng ZeroTTS"
         return True, "ready-to-load"
 
     async def ensure_loaded(self) -> None:

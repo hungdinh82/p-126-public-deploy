@@ -91,7 +91,7 @@ Client VietMap phía workflow tái sử dụng HTTP pool. Trace tách `navigatio
 
 ## Kiểm chứng và giới hạn nghiệm thu
 
-Máy đo: Linux x86_64, Intel i5-11300H 3.10 GHz, khoảng 5,7 GiB RAM môi trường nhìn thấy, Python 3.12.12; Playwright 1.64.0, Chromium 156.0.8078.4 headless. Dependency runtime đã ghim tại `requirements-runtime.lock`; không thay lock Jetson.
+Máy đo: Linux x86_64, Intel i5-11300H 3.10 GHz, khoảng 5,7 GiB RAM môi trường nhìn thấy, Python 3.12.12; Playwright 1.64.0, Chromium 156.0.8078.4 headless. Dependency runtime đã ghim tại `requirements/requirements-runtime.lock`; không thay lock Jetson.
 
 | Phép đo | Mẫu | p95 |
 | --- | ---: | ---: |

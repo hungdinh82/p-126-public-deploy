@@ -63,9 +63,9 @@ Chỉ chạy API, rules, SQLite handbook và simulator:
 ```bash
 python3.12 -m venv .venv
 .venv/bin/python -m pip install --upgrade pip
-.venv/bin/python -m pip install -r requirements-dev.txt
+.venv/bin/python -m pip install -r requirements/requirements-dev.txt
 # Máy mới chưa có ONNX Runtime; giữ runtime GPU nếu đã cài cho speech.
-.venv/bin/python -m pip install -r requirements-rag.txt
+.venv/bin/python -m pip install -r requirements/requirements-rag.txt
 .venv/bin/python -m src.vivi.cli.prepare_embeddings
 cp .env.example .env
 ```
@@ -73,7 +73,7 @@ cp .env.example .env
 Cài thêm PhoWhisper và ZeroTTS trên PC:
 
 ```bash
-.venv/bin/python -m pip install -r requirements-ai.txt
+.venv/bin/python -m pip install -r requirements/requirements-ai.txt
 ```
 
 Sau đó bật các component cần dùng trong `config.toml`:
