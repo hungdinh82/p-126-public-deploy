@@ -56,6 +56,7 @@ class Settings(BaseSettings):
     auth_session_hours: int = Field(default=8, ge=1, le=168, validation_alias="VIVI_AUTH_SESSION_HOURS")
     engineer_phone: str = Field(default="", validation_alias="VIVI_ENGINEER_PHONE")
     engineer_pin: str = Field(default="", validation_alias="VIVI_ENGINEER_PIN")
+    demo_mode: bool = Field(default=False, validation_alias="VIVI_DEMO_MODE")
 
     data_dir: Path = Field(default=Path("./data"), validation_alias="VIVI_DATA_DIR")
     turn_timeout_seconds: float = Field(default=120, ge=1, le=180)
