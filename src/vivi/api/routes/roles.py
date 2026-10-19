@@ -85,6 +85,32 @@ async def login(value: LoginRequest, response: Response):
     }
 
 
+@router.get("/session/demo-config")
+async def demo_config():
+    enabled = bool(
+        runtime.settings.demo_mode
+        and runtime.settings.engineer_phone
+        and runtime.settings.engineer_pin
+    )
+    return {"enabled": enabled}
+
+
+@router.post("/session/demo-login")
+async def demo_login(response: Response):
+    if not runtime.settings.demo_mode:
+        raise HTTPException(status_code=404, detail="Không tìm thấy endpoint.")
+    phone = runtime.settings.engineer_phone
+    pin = runtime.settings.engineer_pin
+    if not phone or not pin:
+        raise HTTPException(status_code=503, detail="Tài khoản demo kỹ sư chưa được cấu hình.")
+    try:
+        token, principal = runtime.sessions.login(phone, pin)
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    _set_cookie(response, token)
+    return {"role": principal.role, "redirect": "/engineer"}
+
+
 @router.get("/session")
 async def current_session(request: Request):
     principal = require_principal(request)

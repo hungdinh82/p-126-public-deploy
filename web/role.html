@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#04050a">
   <meta name="description" content="VIVI Cabin Copilot — prototype trợ lý cabin tiếng Việt an toàn và offline-first của nhóm P-126.">
   <title>ViVi Cabin Copilot — Nhóm P-126</title>
-  <link rel="stylesheet" href="/role.css?v=4">
+  <link rel="stylesheet" href="/role.css?v=5">
 </head>
 <body class="role-page">
   <svg class="control-icon-library" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
@@ -81,6 +81,18 @@
           <button type="submit"><span>Đăng nhập / Tạo tài khoản</span><span class="role-arrow" aria-hidden="true">&#8599;</span></button>
           <small>Tài khoản mới được tạo với quyền Tài xế. Quyền Kỹ sư do người vận hành cấu hình.</small>
         </form>
+        <div id="demo-shortcut" class="demo-shortcut" hidden>
+          <span class="demo-divider" aria-hidden="true"><i></i><em>HOẶC</em><i></i></span>
+          <button id="demo-login" type="button" class="demo-button">
+            <span class="demo-tag">DEMO</span>
+            <span class="demo-label">
+              <b>Vào nhanh với vai Kỹ sư</b>
+              <small>Dùng tài khoản thử — không cần nhập SĐT/PIN</small>
+            </span>
+            <span class="role-arrow" aria-hidden="true">&#8599;</span>
+          </button>
+          <small class="demo-note">Phiên demo dùng chung giữa người xem — không lưu dữ liệu riêng của bạn.</small>
+        </div>
         <p id="role-status" role="status" aria-live="polite"></p>
       </section>
     </div>
@@ -365,6 +377,6 @@
     </footer>
   </main>
 
-  <script src="/role.js?v=3"></script>
+  <script src="/role.js?v=4"></script>
 </body>
 </html>
